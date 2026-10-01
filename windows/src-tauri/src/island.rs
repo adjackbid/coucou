@@ -312,10 +312,6 @@ pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
                     Ok(s) => (s.width as f64 / scale, s.height as f64 / scale),
                     Err(_) => (PANEL_W, PANEL_H),
                 };
-                if (x - last.0).abs() < 1.0 && (y - last.1).abs() < 1.0 {
-                    continue;
-                }
-                last = (x, y);
 
                 // Click-through: the window only takes the mouse over the island
                 // shape. A small entry margin means the flag is already off by the
@@ -336,12 +332,25 @@ pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
                 // the mouse, which also makes the drop zone as forgiving as the Mac's.
                 // A press may be the start of a drag: make sure the drop target is
                 // ours before the file arrives.
+                //
+                // Read before the "cursor has not moved" shortcut below: a click is
+                // a press, not a move, and must never be skipped for standing still.
                 let down = left_button_down();
                 if down && !was_down {
                     let handle = app.clone();
                     let _ = app.run_on_main_thread(move || unblock_webview_drops(&handle));
+                    // A press anywhere but on the island shuts it, like any popup.
+                    // The window never has focus, so this is the only way to know.
+                    if !on_island {
+                        let _ = win.emit("click-outside", ());
+                    }
                 }
                 was_down = down;
+
+                if (x - last.0).abs() < 1.0 && (y - last.1).abs() < 1.0 {
+                    continue;
+                }
+                last = (x, y);
 
                 let dragging = down
                     && x >= 0.0

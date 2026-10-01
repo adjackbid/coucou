@@ -73,6 +73,10 @@ async function main() {
     }
   });
 
+  // A press anywhere but on the island (Rust's cursor poll sees it; the window
+  // itself never has focus, so there is no blur to listen for).
+  await onEvent<null>("click-outside", () => island.clickOutside());
+
   await onEvent<null>("screen-changed", () => {
     void Bridge.reposition();
     // A display with another scale, or a changed text size, lands here too.

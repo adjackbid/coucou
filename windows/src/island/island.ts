@@ -249,7 +249,8 @@ export class Island {
           if (!this.wasInIsland) this.fsm.mouseLeft();
           break;
         case "home":
-          this.expand(State.defaultView());
+          // A request still waiting for an answer comes back first.
+          this.expand(State.pendingApproval ? "approval" : State.defaultView());
           if (!this.wasInIsland) this.fsm.mouseLeft();
           break;
         case "coucou":
@@ -332,6 +333,19 @@ export class Island {
     // back left it thinking the island was still open, and a click on the compact
     // island then did nothing — the island could never be reopened.
     this.fsm.forcePetit();
+  }
+
+  /**
+   * The user clicked somewhere else: shut the island like any popup, instead of
+   * leaving it open across the top of the screen until the countdown runs out.
+   * A pending approval is not lost — the island reopens on that card, and the
+   * request keeps waiting for the terminal's own timeout.
+   */
+  clickOutside() {
+    if (State.mode !== "expanded") return;
+    // A file drag starts with a press elsewhere; the drop zone must stay open.
+    if (State.fileDragOver) return;
+    this.collapse();
   }
 
   /** Alert from the hook server: open on this view. Pinned alerts never auto-close. */
