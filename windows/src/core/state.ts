@@ -3,7 +3,19 @@
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
 
-export type AgentSource = "claudeCode" | "n8n";
+export type AgentSource = "claudeCode" | "copilot" | "n8n";
+
+/** A pill that stands for a coding agent fed by hooks, rather than a poller. */
+export function isAgentSource(source: AgentSource): boolean {
+  return source === "claudeCode" || source === "copilot";
+}
+
+/** What the "who" line calls each source. */
+export const SOURCE_LABELS: Record<AgentSource, string> = {
+  claudeCode: "Claude Code",
+  copilot: "Copilot CLI",
+  n8n: "n8n",
+};
 export type PillBadge = "approval" | "finished" | "error";
 
 export interface AgentTask {
@@ -30,6 +42,8 @@ export interface ApprovalSection {
 export interface ApprovalInfo {
   requestId: string;
   sessionId: string;
+  /** The pill (agent) the request belongs to. */
+  taskId: string;
   tool: string;
   /** One line: the tool and the file, URL or pattern it is aimed at. */
   command: string;
@@ -76,6 +90,7 @@ const task = (
 /** AgentTask.integrationAgents — same ids, names and colours as macOS. */
 export const INTEGRATION_AGENTS: AgentTask[] = [
   task("integration_claude", "VS Code", "#F5F6F8", "claudeCode"),
+  task("integration_copilot", "Copilot", "#7EE787", "copilot"),
   task("integration_resend", "Resend", "#22C55E", "n8n"),
   task("integration_n8n", "n8n", "#F29B38", "n8n"),
   task("integration_vercel", "Vercel", "#7C5CFF", "n8n"),
@@ -123,6 +138,7 @@ export interface Settings {
   screen: "primary" | "cursor";
   autostart: boolean;
   hooksInstalled: boolean;
+  copilotHooksInstalled: boolean;
   /** Pre-provider builds' model; Rust turns it into the first provider. */
   model: string;
   /** Global shortcut that opens and shuts the island; empty disables it. */
@@ -154,6 +170,7 @@ export const DEFAULT_SETTINGS: Settings = {
   screen: "primary",
   autostart: false,
   hooksInstalled: false,
+  copilotHooksInstalled: false,
   model: "claude-opus-5",
   hotkey: "Ctrl+Shift+Space",
   providers: [DEFAULT_PROVIDER],
@@ -258,24 +275,43 @@ class AppState {
     this.notify();
   }
 
-  /** loadIntegrationTasks() — VS Code always on, the rest opt-in (max 4). */
+  /**
+   * loadIntegrationTasks() — VS Code always on, Copilot once its hooks are
+   * installed (or the moment it speaks, see ensureTask), the rest opt-in (max 4).
+   */
   loadIntegrationTasks() {
     for (const proto of INTEGRATION_AGENTS) {
       const shouldLoad =
-        proto.id === "integration_claude" || this.settings.activeIntegrations.includes(proto.id);
+        proto.id === "integration_claude" ||
+        (proto.id === "integration_copilot" && this.settings.copilotHooksInstalled) ||
+        this.settings.activeIntegrations.includes(proto.id);
       const idx = this.tasks.findIndex((t) => t.id === proto.id);
       if (shouldLoad && idx < 0) this.tasks.push({ ...proto, steps: [] });
-      if (!shouldLoad && idx >= 0) this.tasks.splice(idx, 1);
+      // A pill that is talking stays, whatever the settings say.
+      if (!shouldLoad && idx >= 0 && !this.tasks[idx].steps.length) this.tasks.splice(idx, 1);
     }
-    // Keep the declared order so pills never shuffle.
-    const order = INTEGRATION_AGENTS.map((t) => t.id);
-    this.tasks.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    this.sortTasks();
     if (!this.focusId) this.focusId = "integration_claude";
     this.notify();
   }
 
+  /** Makes sure a pill exists for an agent that just sent an event. */
+  ensureTask(id: string) {
+    if (this.tasks.some((t) => t.id === id)) return;
+    const proto = INTEGRATION_AGENTS.find((t) => t.id === id);
+    if (!proto) return;
+    this.tasks.push({ ...proto, steps: [] });
+    this.sortTasks();
+  }
+
+  /** Keep the declared order so pills never shuffle. */
+  private sortTasks() {
+    const order = INTEGRATION_AGENTS.map((t) => t.id);
+    this.tasks.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  }
+
   toggleIntegration(id: string) {
-    if (id === "integration_claude") return;
+    if (id === "integration_claude" || id === "integration_copilot") return;
     const active = this.settings.activeIntegrations;
     if (active.includes(id)) {
       this.settings.activeIntegrations = active.filter((x) => x !== id);

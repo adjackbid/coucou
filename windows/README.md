@@ -81,6 +81,17 @@ in time, Coucou stays quiet and Claude Code asks in the terminal as usual.
 
 It works from any terminal — Windows Terminal, PowerShell, VS Code, Git Bash.
 
+## Copilot CLI
+
+**Settings… → Copilot CLI → Install hooks…** does the same for GitHub Copilot
+CLI (`copilot`, or a wrapper function around it): it writes one file of
+Coucou's own, `%USERPROFILE%\.copilot\hooks\coucou.json`, and nothing else.
+Copilot's PascalCase hook events send the same payloads as Claude Code, so the
+same relay serves both; `--agent copilot` on the command line tells the island
+which CLI is talking, and Copilot sessions get their own pill next to Mochi.
+Permission requests reach the island too, unless the session runs with
+`--yolo`, which approves everything before any hook sees it.
+
 ## Chat and keys
 
 **Settings… → Chat providers** is where the chat sends its questions. Out of the

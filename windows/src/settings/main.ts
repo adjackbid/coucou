@@ -3,7 +3,7 @@
 // integrations land here too in a later stage.
 
 import "./settings.css";
-import { Bridge, onEvent, type HookStatus } from "../core/bridge";
+import { Bridge, onEvent, type HookAgent, type HookStatus } from "../core/bridge";
 import { DEFAULT_PROVIDER, DEFAULT_SETTINGS, type Provider, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
 
@@ -41,37 +41,58 @@ function renderDiff(text: string): HTMLElement {
   return box;
 }
 
-// ── Claude Code section ───────────────────────────────────────────────────────
+// ── CLI hook sections (Claude Code, Copilot CLI) ──────────────────────────────
 
-function claudeSection(status: HookStatus): HTMLElement {
+interface AgentCopy {
+  agent: HookAgent;
+  title: string;
+  /** The file the hooks go into, as the row label. */
+  file: string;
+  installed: string;
+  missing: string;
+}
+
+const AGENT_COPY: AgentCopy[] = [
+  {
+    agent: "claude",
+    title: "Claude Code",
+    file: "settings.json",
+    installed: "Coucou is hooked into your Claude Code sessions. Tool calls, questions and permission requests show up in the island, and you can answer them there.",
+    missing: "Install the hooks to see your Claude Code sessions in the island and approve permissions without leaving what you are doing.",
+  },
+  {
+    agent: "copilot",
+    title: "Copilot CLI",
+    file: "coucou.json",
+    installed: "Coucou is hooked into your Copilot CLI sessions (the `copilot` command, or a wrapper such as `cg`). Steps show up on the Copilot pill; permission requests reach the island unless the session runs with --yolo.",
+    missing: "Install the hooks to see your Copilot CLI sessions in the island. This writes one file of Coucou's own into your .copilot\\hooks folder and touches nothing else.",
+  },
+];
+
+function agentSection(copy: AgentCopy, status: HookStatus): HTMLElement {
   const body = h("div", { style: "display:flex;flex-direction:column;gap:12px" });
   const section = h(
     "section",
     {},
-    h("h2", {}, statusDot(status.installed), h("span", { text: "Claude Code" })),
+    h("h2", {}, statusDot(status.installed), h("span", { text: copy.title })),
     body,
   );
 
   const rebuild = async () => {
-    const fresh = await Bridge.hooksStatus();
+    const fresh = await Bridge.hooksStatus(copy.agent);
     if (fresh) Object.assign(status, fresh);
     clear(body);
     draw();
     const head = section.querySelector("h2")!;
     clear(head);
-    head.append(statusDot(status.installed), h("span", { text: "Claude Code" }));
+    head.append(statusDot(status.installed), h("span", { text: copy.title }));
   };
 
   function draw() {
     body.append(
-      h("div", {
-        class: "hint",
-        text: status.installed
-          ? "Coucou is hooked into your Claude Code sessions. Tool calls, questions and permission requests show up in the island, and you can answer them there."
-          : "Install the hooks to see your Claude Code sessions in the island and approve permissions without leaving what you are doing.",
-      }),
+      h("div", { class: "hint", text: status.installed ? copy.installed : copy.missing }),
       h("div", { class: "row" },
-        h("label", { text: "settings.json" }),
+        h("label", { text: copy.file }),
         h("span", { class: "path", text: status.settingsPath }),
       ),
       h("div", { class: "row" },
@@ -114,7 +135,7 @@ function claudeSection(status: HookStatus): HTMLElement {
   async function showPreview(install: boolean) {
     let preview;
     try {
-      preview = await Bridge.hooksPreview(install);
+      preview = await Bridge.hooksPreview(copy.agent, install);
     } catch (err) {
       // An unreadable or invalid settings.json stops here rather than being
       // treated as empty and written over.
@@ -134,7 +155,7 @@ function claudeSection(status: HookStatus): HTMLElement {
       h("div", {
         class: "hint",
         text: install
-          ? "This is exactly what will change in your settings.json. Your own hooks are left untouched."
+          ? `This is exactly what will change in your ${copy.file}. Your own hooks are left untouched.`
           : "This removes Coucou's entries only. Your own hooks are left untouched.",
       }),
       renderDiff(preview.diff),
@@ -149,11 +170,11 @@ function claudeSection(status: HookStatus): HTMLElement {
     confirm.addEventListener("click", async () => {
       confirm.disabled = true;
       try {
-        const backup = await Bridge.hooksApply(install, preview.fingerprint);
+        const backup = await Bridge.hooksApply(copy.agent, install, preview.fingerprint);
         clear(body);
         body.append(h("div", {
           class: "notice ok",
-          text: `Done. Previous settings saved as ${backup}. Open a new Claude Code session to pick the hooks up.`,
+          text: `Done. Previous file saved as ${backup}. Open a new ${copy.title} session to pick the hooks up.`,
         }));
         window.setTimeout(() => void rebuild(), 2600);
       } catch (err) {
@@ -606,9 +627,12 @@ async function main() {
     settings = { ...settings, ...boot.settings };
     version = boot.version;
   }
-  const status = (await Bridge.hooksStatus()) ?? {
-    installed: false, settingsPath: "", hookPath: "", hookReady: false,
-  };
+  const statuses: HookStatus[] = [];
+  for (const copy of AGENT_COPY) {
+    statuses.push((await Bridge.hooksStatus(copy.agent)) ?? {
+      installed: false, settingsPath: "", hookPath: "", hookReady: false,
+    });
+  }
 
   const keys = [
     "stripe-api-key", "github-token", "vercel-token",
@@ -626,7 +650,7 @@ async function main() {
   clear(root);
   root.append(
     h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
-    claudeSection(status),
+    ...AGENT_COPY.map((copy, i) => agentSection(copy, statuses[i])),
     providersSection(present),
     integrationsSection(present),
     generalSection(),

@@ -1,13 +1,21 @@
-// Claude Code hook installation.
+// Hook installation for the CLIs the island watches.
 //
 // The rule from CLAUDE.md is strict and is followed to the letter:
-// read %USERPROFILE%\.claude\settings.json, take a dated backup, merge without
-// touching anybody else's hooks, show the diff, and write only after an explicit
-// click. Uninstall removes Coucou's entries and nothing else.
+// read the config, take a dated backup, merge without touching anybody else's
+// hooks, show the diff, and write only after an explicit click. Uninstall
+// removes Coucou's entries and nothing else.
 //
-// The command is only the quoted exe path in forward slashes plus the event name:
-// on Windows Claude Code runs hook commands through Git Bash, and anything with
-// PowerShell or cmd in it breaks.
+// Claude Code: %USERPROFILE%\.claude\settings.json, merged entry by entry. The
+// command is only the quoted exe path in forward slashes plus the event name:
+// on Windows Claude Code runs hook commands through Git Bash, and anything
+// with PowerShell or cmd in it breaks.
+//
+// Copilot CLI: %USERPROFILE%\.copilot\hooks\coucou.json, a file of our own in
+// a folder Copilot reads whole, so there is nothing to merge — install writes
+// it, uninstall removes it. Its PascalCase event names make Copilot send the
+// same snake_case payloads as Claude Code, with the tool names mapped, which
+// is why one relay serves both; the `--agent copilot` argument is what tells
+// the island (and the relay's answer shape) apart.
 
 use std::path::{Path, PathBuf};
 
@@ -35,8 +43,51 @@ pub const HOOK_EVENTS: &[(&str, u64)] = &[
     ("SubagentStop", 10),
 ];
 
+/// Copilot CLI's PascalCase events — the Claude-compatible ones — plus the
+/// lowercase `notification`, whose `message` field is all the island reads.
+/// Copilot kills a hook at its timeout and carries on (fail-open), so the
+/// permission one gets the decision budget with room to spare.
+pub const COPILOT_EVENTS: &[(&str, u64)] = &[
+    ("SessionStart", 10),
+    ("SessionEnd", 10),
+    ("UserPromptSubmit", 10),
+    ("PreToolUse", 10),
+    ("PostToolUse", 10),
+    ("PostToolUseFailure", 10),
+    ("PermissionRequest", 120),
+    ("notification", 10),
+    ("Stop", 10),
+    ("SubagentStop", 10),
+    ("ErrorOccurred", 10),
+];
+
 /// Marker that identifies a Coucou entry inside settings.json.
 const MARKER: &str = "coucou-hook";
+
+/// The CLIs whose hooks Coucou can install.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Agent {
+    Claude,
+    Copilot,
+}
+
+impl Agent {
+    pub fn parse(name: &str) -> Option<Agent> {
+        match name {
+            "claude" | "" => Some(Agent::Claude),
+            "copilot" => Some(Agent::Copilot),
+            _ => None,
+        }
+    }
+
+    /// The file this agent's hooks live in.
+    pub fn config_path(self) -> PathBuf {
+        match self {
+            Agent::Claude => settings_path(),
+            Agent::Copilot => home().join(".copilot").join("hooks").join("coucou.json"),
+        }
+    }
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -204,9 +255,43 @@ fn stamp() -> String {
     )
 }
 
-fn backup_path() -> PathBuf {
-    let p = settings_path();
-    p.with_file_name(format!("settings.json.bak-{}", stamp()))
+fn backup_path(agent: Agent) -> PathBuf {
+    let p = agent.config_path();
+    let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    p.with_file_name(format!("{name}.bak-{}", stamp()))
+}
+
+/// The whole of Copilot's hook file: one entry per event, `exec` + `args` so
+/// no shell ever sees the path.
+fn copilot_file() -> Value {
+    let exe = settings::hook_exe_path().to_string_lossy().to_string();
+    let mut hooks = Map::new();
+    for (event, timeout) in COPILOT_EVENTS {
+        hooks.insert(
+            (*event).to_string(),
+            json!([{
+                "type": "command",
+                "exec": exe,
+                "args": ["--agent", "copilot", event],
+                "timeoutSec": timeout,
+            }]),
+        );
+    }
+    json!({ "version": 1, "hooks": hooks })
+}
+
+/// Copilot's file as text, or empty when it is not there. Unreadable is an
+/// error, for the same reason as `read_settings`.
+fn read_copilot_file() -> Result<String, String> {
+    let path = Agent::Copilot.config_path();
+    match std::fs::read(&path) {
+        Ok(bytes) => {
+            let text = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&bytes);
+            Ok(String::from_utf8_lossy(text).to_string())
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(err) => Err(format!("Can't read {}: {err}", path.display())),
+    }
 }
 
 /// Identifies the exact bytes a preview was computed from. FNV-1a is plenty:
@@ -220,8 +305,8 @@ fn fingerprint(bytes: &[u8]) -> String {
     format!("{hash:016x}")
 }
 
-fn current_fingerprint() -> String {
-    match std::fs::read(settings_path()) {
+fn current_fingerprint(agent: Agent) -> String {
+    match std::fs::read(agent.config_path()) {
         Ok(bytes) => fingerprint(&bytes),
         Err(_) => fingerprint(b""),
     }
@@ -229,71 +314,98 @@ fn current_fingerprint() -> String {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-pub fn status() -> HookStatus {
-    let current = read_settings_lossy();
-    let installed = current
-        .get("hooks")
-        .and_then(Value::as_object)
-        .map(|hooks| {
-            hooks
-                .values()
-                .filter_map(Value::as_array)
-                .flatten()
-                .any(entry_is_ours)
-        })
-        .unwrap_or(false);
+pub fn status(agent: Agent) -> HookStatus {
+    let installed = match agent {
+        Agent::Claude => read_settings_lossy()
+            .get("hooks")
+            .and_then(Value::as_object)
+            .map(|hooks| {
+                hooks
+                    .values()
+                    .filter_map(Value::as_array)
+                    .flatten()
+                    .any(entry_is_ours)
+            })
+            .unwrap_or(false),
+        Agent::Copilot => read_copilot_file().map(|t| t.contains(MARKER)).unwrap_or(false),
+    };
     let hook_path = settings::hook_exe_path();
     HookStatus {
         installed,
-        settings_path: settings_path().to_string_lossy().to_string(),
+        settings_path: agent.config_path().to_string_lossy().to_string(),
         hook_ready: hook_path.exists(),
         hook_path: hook_path.to_string_lossy().to_string(),
     }
 }
 
-pub fn preview(install: bool) -> Result<HookPreview, String> {
-    let current = read_settings()?;
-    let next = if install { merged(&current) } else { without_ours(&current) };
+/// The file's text before and after, which is all a preview or a write needs.
+fn before_and_after(agent: Agent, install: bool) -> Result<(String, String), String> {
+    match agent {
+        Agent::Claude => {
+            let current = read_settings()?;
+            let next = if install { merged(&current) } else { without_ours(&current) };
+            Ok((pretty(&current), pretty(&next)))
+        }
+        Agent::Copilot => {
+            let current = read_copilot_file()?;
+            let next = if install { pretty(&copilot_file()) } else { String::new() };
+            Ok((current, next))
+        }
+    }
+}
+
+pub fn preview(agent: Agent, install: bool) -> Result<HookPreview, String> {
+    let (before, after) = before_and_after(agent, install)?;
     Ok(HookPreview {
-        diff: unified_diff(&pretty(&current), &pretty(&next)),
-        backup: backup_path().to_string_lossy().to_string(),
-        settings_path: settings_path().to_string_lossy().to_string(),
-        fingerprint: current_fingerprint(),
+        diff: unified_diff(&before, &after),
+        backup: backup_path(agent).to_string_lossy().to_string(),
+        settings_path: agent.config_path().to_string_lossy().to_string(),
+        fingerprint: current_fingerprint(agent),
     })
 }
 
-/// Writes the merged (or cleaned) settings after taking a dated backup.
+/// Writes the merged (or cleaned) config after taking a dated backup. For
+/// Copilot, "cleaned" means the file is gone.
 ///
 /// `fingerprint` is the one the preview was computed from. If the file changed
 /// in between — another tool, another window, the user's own editor — we stop
 /// and make them look at a fresh diff, because the only thing worse than not
 /// installing the hooks is silently reverting somebody else's edit.
-pub fn write(install: bool, fingerprint: &str) -> Result<String, String> {
-    let path = settings_path();
+pub fn write(agent: Agent, install: bool, fingerprint: &str) -> Result<String, String> {
+    let path = agent.config_path();
     let dir = path.parent().unwrap_or(Path::new("."));
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
 
     // Read before the backup: an unreadable file must abort before we touch
     // anything at all.
-    let current = read_settings()?;
-    if current_fingerprint() != fingerprint {
+    let (_, after) = before_and_after(agent, install)?;
+    if current_fingerprint(agent) != fingerprint {
         return Err(format!(
             "{} changed since the preview. Nothing was written — review the new diff.",
             path.display()
         ));
     }
 
-    let backup = backup_path();
+    let backup = backup_path(agent);
     if path.exists() {
         std::fs::copy(&path, &backup).map_err(|e| format!("backup failed: {e}"))?;
     }
 
-    let next = if install { merged(&current) } else { without_ours(&current) };
-    let mut text = pretty(&next);
+    if after.is_empty() {
+        // Copilot uninstall: the file was ours alone.
+        match std::fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => return Err(format!("remove failed: {err}")),
+        }
+        return Ok(backup.to_string_lossy().to_string());
+    }
+
+    let mut text = after;
     text.push('\n');
 
     // Write beside the target and rename over it: a crash or a full disk leaves
-    // the original settings.json intact rather than half a file.
+    // the original file intact rather than half a file.
     let temp = path.with_extension(format!("json.coucou-{}", std::process::id()));
     std::fs::write(&temp, text.as_bytes()).map_err(|e| format!("write failed: {e}"))?;
     if let Err(err) = std::fs::rename(&temp, &path) {
@@ -530,9 +642,9 @@ mod tests {
         std::fs::write(&path, &bytes).unwrap();
 
         // Install.
-        let plan = preview(true).expect("a BOM must not stop the preview");
+        let plan = preview(Agent::Claude, true).expect("a BOM must not stop the preview");
         assert!(plan.diff.contains("coucou-hook"), "the diff must show what changes");
-        let backup = write(true, &plan.fingerprint).expect("install should succeed");
+        let backup = write(Agent::Claude, true, &plan.fingerprint).expect("install should succeed");
 
         // The backup holds the original bytes, BOM and all.
         assert_eq!(std::fs::read(&backup).unwrap(), bytes);
@@ -544,21 +656,38 @@ mod tests {
         assert_eq!(after["tui"]["x"], 1);
         let pre = after["hooks"]["PreToolUse"].as_array().unwrap();
         assert!(pre.iter().any(|e| serde_json::to_string(e).unwrap().contains("other-tool.exe")));
-        assert!(status().installed);
+        assert!(status(Agent::Claude).installed);
 
         // A file that moved since the preview is refused, and left alone.
-        let stale = preview(false).unwrap();
+        let stale = preview(Agent::Claude, false).unwrap();
         std::fs::write(&path, br#"{"model":"someone-else-edited-this"}"#).unwrap();
-        let err = write(false, &stale.fingerprint).unwrap_err();
+        let err = write(Agent::Claude, false, &stale.fingerprint).unwrap_err();
         assert!(err.contains("changed since the preview"), "got: {err}");
         let untouched: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(untouched["model"], "someone-else-edited-this");
 
         // Content we cannot parse is refused before anything is written.
         std::fs::write(&path, b"{ broken").unwrap();
-        assert!(preview(true).is_err());
-        assert!(write(true, "whatever").is_err());
+        assert!(preview(Agent::Claude, true).is_err());
+        assert!(write(Agent::Claude, true, "whatever").is_err());
         assert_eq!(std::fs::read(&path).unwrap(), b"{ broken");
+
+        // Copilot: a file of our own, created, then removed, in the hooks folder.
+        assert!(!status(Agent::Copilot).installed);
+        let plan = preview(Agent::Copilot, true).unwrap();
+        assert!(plan.diff.contains("--agent"), "the diff must show the relay entries");
+        write(Agent::Copilot, true, &plan.fingerprint).expect("copilot install should succeed");
+        let file = Agent::Copilot.config_path();
+        assert!(file.starts_with(&tmp));
+        let written: Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+        assert_eq!(written["version"], 1);
+        assert_eq!(written["hooks"]["PermissionRequest"][0]["args"], json!(["--agent", "copilot", "PermissionRequest"]));
+        assert_eq!(written["hooks"]["PermissionRequest"][0]["timeoutSec"], 120);
+        assert!(status(Agent::Copilot).installed);
+        let plan = preview(Agent::Copilot, false).unwrap();
+        write(Agent::Copilot, false, &plan.fingerprint).expect("copilot uninstall should succeed");
+        assert!(!file.exists());
+        assert!(!status(Agent::Copilot).installed);
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

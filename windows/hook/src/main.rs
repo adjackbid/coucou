@@ -13,7 +13,10 @@
 //!   island is the whole point. No answer means empty stdout, and Claude Code
 //!   asks in the terminal exactly as if Coucou were not installed.
 //!
-//! Usage: `coucou-hook <EventName>` (the name is also read from the JSON).
+//! Usage: `coucou-hook [--agent claude|copilot] <EventName>` (the name is also
+//! read from the JSON). The agent tags the payload so the island knows which
+//! CLI is talking, and picks the shape of the answer written back: Claude Code
+//! wants `hookSpecificOutput`, Copilot CLI a bare `behavior`.
 
 use std::io::{Read, Write};
 use std::sync::mpsc;
@@ -82,8 +85,28 @@ fn connect() -> Option<std::fs::File> {
     }
 }
 
+/// `[--agent <name>] [<EventName>]`, in either order.
+fn parse_args() -> (String, String) {
+    let mut agent = "claude".to_string();
+    let mut event = String::new();
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "--agent" {
+            if let Some(name) = args.next() {
+                agent = name;
+            }
+        } else if let Some(name) = arg.strip_prefix("--agent=") {
+            agent = name.to_string();
+        } else if event.is_empty() {
+            event = arg;
+        }
+    }
+    (agent, event)
+}
+
 fn main() {
-    let Some((payload, event)) = read_event() else { std::process::exit(0) };
+    let (agent, arg_event) = parse_args();
+    let Some((payload, event)) = read_event(&agent, &arg_event) else { std::process::exit(0) };
 
     let waits_for_answer = event == "PermissionRequest";
     let budget = if waits_for_answer { DECISION_BUDGET } else { FIRE_AND_FORGET_BUDGET };
@@ -98,7 +121,7 @@ fn main() {
     });
 
     if let Ok(Some(decision)) = rx.recv_timeout(budget) {
-        if let Some(json) = decision_json(&decision) {
+        if let Some(json) = decision_json(&decision, &agent) {
             let mut out = std::io::stdout();
             let _ = writeln!(out, "{json}");
             let _ = out.flush();
@@ -110,22 +133,27 @@ fn main() {
 
 /// The documented PermissionRequest output. Anything we do not recognise prints
 /// nothing at all rather than guessing — silence is the safe answer.
-/// See https://code.claude.com/docs/en/hooks
-fn decision_json(decision: &str) -> Option<String> {
+/// Claude Code: https://code.claude.com/docs/en/hooks — the decision sits
+/// inside `hookSpecificOutput`. Copilot CLI: the hooks reference wants the
+/// bare `{"behavior": …}` object.
+fn decision_json(decision: &str, agent: &str) -> Option<String> {
     let behavior = match decision.trim() {
         // "always" still answers a plain allow; remembering it is the island's
-        // business, not Claude Code's.
+        // business, not the CLI's.
         "allow" | "always" => r#"{"behavior":"allow"}"#.to_string(),
         "deny" => r#"{"behavior":"deny","message":"Denied from Coucou"}"#.to_string(),
         _ => return None,
     };
+    if agent == "copilot" {
+        return Some(behavior);
+    }
     Some(format!(
         r#"{{"hookSpecificOutput":{{"hookEventName":"PermissionRequest","decision":{behavior}}}}}"#
     ))
 }
 
 /// Reads stdin and returns the payload to forward plus the event name.
-fn read_event() -> Option<(String, String)> {
+fn read_event(agent: &str, arg_event: &str) -> Option<(String, String)> {
     let mut raw = Vec::new();
     if std::io::stdin().read_to_end(&mut raw).is_err() || raw.is_empty() {
         return None;
@@ -138,16 +166,18 @@ fn read_event() -> Option<(String, String)> {
     let mut payload = serde_json::from_slice::<serde_json::Value>(&raw).ok()?;
     let map = payload.as_object_mut()?;
 
-    // The event name is passed as argv[1] by the hook command; the JSON usually
-    // carries it too. Trust argv when the JSON is missing it.
-    let arg_event = std::env::args().nth(1).unwrap_or_default();
+    // The event name is passed on the command line by the hook entry; the JSON
+    // usually carries it too. Trust the argument when the JSON is missing it.
     let event = map
         .get("hook_event_name")
         .and_then(|v| v.as_str())
         .map(str::to_string)
         .filter(|s| !s.is_empty())
-        .unwrap_or(arg_event);
+        .unwrap_or_else(|| arg_event.to_string());
     map.insert("hook_event_name".into(), serde_json::Value::String(event.clone()));
+    // Which CLI is talking. Copilot's PascalCase hooks send Claude-shaped
+    // payloads, so this is the one field that tells them apart.
+    map.insert("agent".into(), serde_json::Value::String(agent.to_string()));
 
     for field in DROPPED_FIELDS {
         map.remove(*field);
@@ -266,23 +296,33 @@ mod tests {
     #[test]
     fn decision_json_matches_the_documented_shape() {
         assert_eq!(
-            decision_json("allow").unwrap(),
+            decision_json("allow", "claude").unwrap(),
             r#"{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}"#
         );
         assert_eq!(
-            decision_json("deny").unwrap(),
+            decision_json("deny", "claude").unwrap(),
             r#"{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"Denied from Coucou"}}}"#
         );
         // "always" is an island concept; Claude Code just gets an allow.
-        assert!(decision_json("always").unwrap().contains(r#""behavior":"allow""#));
+        assert!(decision_json("always", "claude").unwrap().contains(r#""behavior":"allow""#));
+    }
+
+    #[test]
+    fn copilot_gets_the_bare_behavior_object() {
+        assert_eq!(decision_json("allow", "copilot").unwrap(), r#"{"behavior":"allow"}"#);
+        assert_eq!(
+            decision_json("deny", "copilot").unwrap(),
+            r#"{"behavior":"deny","message":"Denied from Coucou"}"#
+        );
     }
 
     #[test]
     fn anything_unrecognised_prints_nothing() {
-        assert!(decision_json("").is_none());
-        assert!(decision_json("maybe").is_none());
+        assert!(decision_json("", "claude").is_none());
+        assert!(decision_json("maybe", "claude").is_none());
+        assert!(decision_json("maybe", "copilot").is_none());
         // The shape the app used to send must not be mistaken for a decision.
-        assert!(decision_json(r#"{"permissionDecision":"allow"}"#).is_none());
+        assert!(decision_json(r#"{"permissionDecision":"allow"}"#, "claude").is_none());
     }
 
     #[test]

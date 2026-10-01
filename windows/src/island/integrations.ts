@@ -32,11 +32,15 @@ export async function refreshConfigured() {
     const info = State.integrations[id] ?? { data: {}, error: null, loaded: false, configured: false };
     State.integrations[id] = { ...info, configured: present };
   }
-  const hooks = State.settings.hooksInstalled;
-  const claude = State.integrations.integration_claude ?? {
-    data: {}, error: null, loaded: false, configured: false,
-  };
-  State.integrations.integration_claude = { ...claude, configured: hooks };
+  // The agent pills are "configured" once their hooks are in place.
+  const agents: [string, boolean][] = [
+    ["integration_claude", State.settings.hooksInstalled],
+    ["integration_copilot", State.settings.copilotHooksInstalled],
+  ];
+  for (const [id, hooks] of agents) {
+    const info = State.integrations[id] ?? { data: {}, error: null, loaded: false, configured: false };
+    State.integrations[id] = { ...info, configured: hooks };
+  }
   State.notify();
 }
 

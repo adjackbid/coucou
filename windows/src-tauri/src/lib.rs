@@ -24,7 +24,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 use files::DroppedFile;
 use llm::{Chat, ChatContext, ChatReply, Provider};
-use hooks::{HookPreview, HookStatus};
+use hooks::{Agent, HookPreview, HookStatus};
 use island::{PollGate, ScreenInfo};
 use pipe::Pending;
 use settings::Settings;
@@ -51,8 +51,9 @@ pub struct BootInfo {
 #[tauri::command]
 fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
     let mut settings = shared.settings.lock().unwrap().clone();
-    // The real state of ~/.claude/settings.json wins over whatever we stored.
-    settings.hooks_installed = hooks::status().installed;
+    // The real state of the hook files wins over whatever we stored.
+    settings.hooks_installed = hooks::status(Agent::Claude).installed;
+    settings.copilot_hooks_installed = hooks::status(Agent::Copilot).installed;
     let screen = island::screen_info(&app, &settings.screen);
     BootInfo {
         settings,
@@ -234,15 +235,19 @@ fn set_paused(paused: bool) {
 
 // ── Claude Code hooks ─────────────────────────────────────────────────────────
 
+fn agent(name: &str) -> Result<Agent, String> {
+    Agent::parse(name).ok_or_else(|| format!("unknown agent {name}"))
+}
+
 #[tauri::command]
-fn hooks_status() -> HookStatus {
-    hooks::status()
+fn hooks_status(agent_name: String) -> Result<HookStatus, String> {
+    Ok(hooks::status(agent(&agent_name)?))
 }
 
 /// Returns the diff the user has to look at before anything is written.
 #[tauri::command]
-fn hooks_preview(install: bool) -> Result<HookPreview, String> {
-    hooks::preview(install)
+fn hooks_preview(agent_name: String, install: bool) -> Result<HookPreview, String> {
+    hooks::preview(agent(&agent_name)?, install)
 }
 
 /// Only ever called from an explicit click in the settings window.
@@ -250,15 +255,20 @@ fn hooks_preview(install: bool) -> Result<HookPreview, String> {
 fn hooks_apply(
     app: AppHandle,
     shared: State<Shared>,
+    agent_name: String,
     install: bool,
     fingerprint: String,
 ) -> Result<String, String> {
+    let which = agent(&agent_name)?;
     // The fingerprint comes from the preview the user actually looked at, so a
-    // settings.json that changed in between is refused rather than overwritten.
-    let backup = hooks::write(install, &fingerprint)?;
+    // file that changed in between is refused rather than overwritten.
+    let backup = hooks::write(which, install, &fingerprint)?;
     let updated = {
         let mut current = shared.settings.lock().unwrap();
-        current.hooks_installed = install;
+        match which {
+            Agent::Claude => current.hooks_installed = install,
+            Agent::Copilot => current.copilot_hooks_installed = install,
+        }
         let _ = settings::save(&current);
         current.clone()
     };

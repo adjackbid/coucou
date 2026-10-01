@@ -18,6 +18,8 @@ pub struct Settings {
     pub screen: String,
     pub autostart: bool,
     pub hooks_installed: bool,
+    #[serde(default)]
+    pub copilot_hooks_installed: bool,
     /// The model of the pre-provider builds. Kept so an older settings.json
     /// still loads; `migrate` turns it into the first provider.
     #[serde(default = "default_model")]
@@ -82,6 +84,7 @@ impl Default for Settings {
             screen: "primary".into(),
             autostart: false,
             hooks_installed: false,
+            copilot_hooks_installed: false,
             model: default_model(),
             hotkey: default_hotkey(),
             providers: vec![Provider::anthropic(&default_model())],
