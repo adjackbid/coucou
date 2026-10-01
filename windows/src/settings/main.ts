@@ -264,18 +264,27 @@ function providersSection(present: Record<string, boolean>): HTMLElement {
     const card = h("div", { class: "provider" });
     const feedback = h("div", {});
     const isAnthropic = () => p.kind === "anthropic";
+    // Every save makes Rust echo the settings back, and that echo replaces
+    // `settings` — including its provider objects. Editing the `p` this card
+    // was built with would then change a copy nobody saves (the endpoint and
+    // model typed in looked saved, tested fine, and were blank on disk), so
+    // every edit goes to whichever object currently carries this id.
+    const live = (): Provider => settings.providers.find((x) => x.id === p.id) ?? p;
 
-    // Which one the chat talks to.
+    // Which one the chat talks to — said in words too, because a filled-in
+    // card that is not the one in use is the easiest thing to misread here.
     const use = h("input", { type: "radio", name: "active-provider", title: "Use this provider" }) as HTMLInputElement;
+    const inUse = h("span", { class: "hint", text: settings.activeProvider === p.id ? "in use" : "" });
     use.checked = settings.activeProvider === p.id;
     use.addEventListener("change", () => {
       if (!use.checked) return;
       settings.activeProvider = p.id;
       void save();
+      redraw();
     });
 
     const name = h("input", { type: "text", value: p.name, style: "width:160px", spellcheck: "false" }) as HTMLInputElement;
-    name.addEventListener("change", () => { p.name = name.value.trim() || p.id; void save(); });
+    name.addEventListener("change", () => { live().name = name.value.trim() || p.id; void save(); });
 
     const kind = h("select", {}) as HTMLSelectElement;
     kind.append(
@@ -284,7 +293,7 @@ function providersSection(present: Record<string, boolean>): HTMLElement {
     );
     kind.value = p.kind;
     kind.addEventListener("change", () => {
-      p.kind = kind.value as Provider["kind"];
+      live().kind = kind.value as Provider["kind"];
       void save();
       redraw();
     });
@@ -304,10 +313,30 @@ function providersSection(present: Record<string, boolean>): HTMLElement {
     }
 
     const baseUrl = h("input", { type: "text", value: p.baseUrl, placeholder: "https://…", style: "flex:1 1 auto;min-width:0", spellcheck: "false" }) as HTMLInputElement;
-    baseUrl.addEventListener("change", () => { p.baseUrl = baseUrl.value.trim(); void save(); });
+    baseUrl.addEventListener("change", () => { live().baseUrl = baseUrl.value.trim(); void save(); });
 
-    const model = h("input", { type: "text", value: p.model, placeholder: "model id", style: "width:220px", spellcheck: "false" }) as HTMLInputElement;
-    model.addEventListener("change", () => { p.model = model.value.trim(); void save(); });
+    // Typed or picked: the input takes any id, and the datalist beside it is
+    // filled from the endpoint's own /v1/models on request.
+    const listId = `models-${p.id}`;
+    const modelList = h("datalist", { id: listId });
+    const model = h("input", { type: "text", value: p.model, placeholder: "model id", list: listId, style: "width:220px", spellcheck: "false" }) as HTMLInputElement;
+    model.addEventListener("change", () => { live().model = model.value.trim(); void save(); });
+    const listModels = h("button", { text: "List models", title: "Ask the endpoint which models it has" });
+    listModels.addEventListener("click", async () => {
+      listModels.disabled = true;
+      clear(feedback);
+      try {
+        const ids = await Bridge.providerModels(live());
+        clear(modelList);
+        for (const id of ids) modelList.append(h("option", { value: id }));
+        feedback.append(h("div", { class: "notice ok", text: `${ids.length} models — open the Model field's drop-down to pick one.` }));
+        model.focus();
+      } catch (err) {
+        feedback.append(h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }));
+      } finally {
+        listModels.disabled = false;
+      }
+    });
 
     const wire = h("select", {}) as HTMLSelectElement;
     wire.append(
@@ -315,7 +344,7 @@ function providersSection(present: Record<string, boolean>): HTMLElement {
       h("option", { value: "responses", text: "Responses (/v1/responses)" }),
     );
     wire.value = p.wireApi ?? "chat";
-    wire.addEventListener("change", () => { p.wireApi = wire.value as Provider["wireApi"]; void save(); });
+    wire.addEventListener("change", () => { live().wireApi = wire.value as Provider["wireApi"]; void save(); });
 
     // How the key travels. "header:<name>" is what Azure's api-key wants.
     const authMode = p.auth.startsWith("header:") ? "header" : (p.auth || (isAnthropic() ? "x-api-key" : "bearer"));
@@ -332,7 +361,7 @@ function providersSection(present: Record<string, boolean>): HTMLElement {
     function applyAuth() {
       headerName.style.display = auth.value === "header" ? "" : "none";
       keyRow.style.display = auth.value === "none" ? "none" : "";
-      p.auth = auth.value === "header" ? `header:${headerName.value.trim()}` : auth.value;
+      live().auth = auth.value === "header" ? `header:${headerName.value.trim()}` : auth.value;
       void save();
     }
     auth.addEventListener("change", applyAuth);
@@ -386,7 +415,8 @@ function providersSection(present: Record<string, boolean>): HTMLElement {
       const current = p.capabilities?.[field];
       sel.value = current == null ? "auto" : current ? "yes" : "no";
       sel.addEventListener("change", () => {
-        p.capabilities = { ...(p.capabilities ?? {}), [field]: sel.value === "auto" ? null : sel.value === "yes" };
+        const target = live();
+        target.capabilities = { ...(target.capabilities ?? {}), [field]: sel.value === "auto" ? null : sel.value === "yes" };
         void save();
       });
       caps.append(sel);
@@ -398,7 +428,7 @@ function providersSection(present: Record<string, boolean>): HTMLElement {
       clear(feedback);
       feedback.append(h("div", { class: "hint", text: "Asking the model for one word…" }));
       try {
-        const reply = await Bridge.providerTest(p);
+        const reply = await Bridge.providerTest(live());
         clear(feedback);
         feedback.append(h("div", { class: "notice ok", text: reply }));
       } catch (err) {
@@ -410,13 +440,13 @@ function providersSection(present: Record<string, boolean>): HTMLElement {
     });
 
     card.append(
-      h("div", { class: "row" }, use, name, kind, h("span", { class: "spacer" }), remove),
+      h("div", { class: "row" }, use, name, kind, inUse, h("span", { class: "spacer" }), remove),
       h("div", { class: "row" }, h("label", { text: "Endpoint" }), baseUrl),
-      h("div", { class: "row" }, h("label", { text: "Model" }), model, isAnthropic() ? null : wire),
+      h("div", { class: "row" }, h("label", { text: "Model" }), model, modelList, listModels, isAnthropic() ? null : wire),
       h("div", { class: "row" }, h("label", { text: "Auth" }), auth, headerName),
       keyRow,
       caps,
-      h("div", { class: "row" }, test, h("span", { class: "path", text: p.id })),
+      h("div", { class: "row" }, test, h("span", { class: "path", text: p.id }), settings.activeProvider === p.id ? null : h("span", { class: "hint", text: "The chat uses the provider marked \"in use\"; select the circle to switch." })),
       feedback,
     );
     return card;

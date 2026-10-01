@@ -104,6 +104,8 @@ export const Bridge = {
 
   /** One tiny round trip to a provider as the form describes it. The key stays in Rust. */
   providerTest: (provider: Provider) => callOrThrow<string>("provider_test", { provider }),
+  /** The model ids the endpoint lists (`GET /v1/models`). */
+  providerModels: (provider: Provider) => callOrThrow<string[]>("provider_models", { provider }),
 };
 
 export interface IntegrationUpdate {

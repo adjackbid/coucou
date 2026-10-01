@@ -46,7 +46,20 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     spellcheck: "false",
   }) as HTMLInputElement;
   const send = h("button", { class: "send-btn", title: "Send" }, svg(ICONS.arrowUp, 11));
-  const bar = h("div", { class: "chat-bar" }, input, send);
+  // Which provider the next question goes to; a click moves to the next one.
+  // Spelled out here because a filled-in card in Settings is not necessarily
+  // the one in use, and "builder error" from the wrong endpoint says nothing.
+  const provider = h("button", { class: "provider-btn", title: "Switch provider" });
+  provider.addEventListener("click", () => {
+    const list = State.settings.providers;
+    if (list.length < 2) return;
+    const idx = list.findIndex((p) => p.id === State.settings.activeProvider);
+    State.settings.activeProvider = list[(idx + 1) % list.length].id;
+    void Bridge.saveSettings(State.settings);
+    Sound.play("blip");
+    State.notify();
+  });
+  const bar = h("div", { class: "chat-bar" }, provider, input, send);
 
   const el = h(
     "div",
@@ -124,6 +137,13 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
 
       input.placeholder = State.chatHistory.length === 0 ? "Ask me anything…" : "Continue…";
       input.disabled = sending;
+
+      const active = State.settings.providers.find((p) => p.id === State.settings.activeProvider)
+        ?? State.settings.providers[0];
+      provider.textContent = active ? active.name : "No provider";
+      provider.title = active
+        ? `${active.name} · ${active.model}${State.settings.providers.length > 1 ? " — click to switch" : ""}`
+        : "Add a provider in Settings";
     },
     focus() {
       input.focus();

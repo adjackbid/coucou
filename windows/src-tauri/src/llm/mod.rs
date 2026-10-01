@@ -133,11 +133,14 @@ impl Provider {
     }
 
     /// The key, or the pre-provider "anthropic-api-key" entry for the default
-    /// Claude provider, so an existing install keeps working untouched.
+    /// Claude provider, so an existing install keeps working untouched. A key
+    /// pasted with a stray newline or space would make an invalid header and
+    /// fail every request with an opaque "builder error", so it is cleaned.
     fn secret(&self) -> Option<String> {
-        secrets::get(&self.secret_key()).or_else(|| {
-            (self.id == "anthropic").then(|| secrets::get("anthropic-api-key")).flatten()
-        })
+        secrets::get(&self.secret_key())
+            .or_else(|| (self.id == "anthropic").then(|| secrets::get("anthropic-api-key")).flatten())
+            .map(|k| k.chars().filter(|c| !c.is_control()).collect::<String>().trim().to_string())
+            .filter(|k| !k.is_empty())
     }
 
     /// `base_url` + `/v1/<path>`, tolerating a base that already ends in `/v1`
@@ -284,6 +287,7 @@ pub async fn send(
     chat.push(Message { role: Role::User, parts });
 
     let history = chat.snapshot();
+    crate::log::line(format!("chat via {} ({}) model {}", provider.name, provider.id, provider.model));
     let result = if provider.is_anthropic() {
         anthropic::send(provider, key.as_deref(), &history, &caps).await
     } else {
@@ -327,6 +331,44 @@ pub async fn test(provider: &Provider) -> Result<String, String> {
     Ok(format!("{} answered: {snippet}", provider.model))
 }
 
+/// The models the endpoint offers, for the settings window's drop-down. Both
+/// shapes answer `GET /v1/models` with `{"data":[{"id":…}]}`.
+pub async fn models(provider: &Provider) -> Result<Vec<String>, String> {
+    let key = provider.secret();
+    if key.is_none() && provider.needs_key() {
+        return Err("Save the API key first.".into());
+    }
+    let url = provider.endpoint("models");
+    check_url(provider, &url)?;
+    let mut req = client()?.get(&url);
+    if provider.is_anthropic() {
+        req = req.header("anthropic-version", anthropic::ANTHROPIC_VERSION);
+    }
+    req = provider.authorize(req, key.as_deref());
+    let response = req.send().await.map_err(|e| describe(provider, &url, e))?;
+    let status = response.status();
+    let text = response.text().await.map_err(|e| e.to_string())?;
+    if !status.is_success() {
+        let detail = serde_json::from_str::<Value>(&text)
+            .ok()
+            .and_then(|v| error_message(&v))
+            .unwrap_or_else(|| text.chars().take(200).collect());
+        return Err(format!("{} {status}: {detail}", provider.name));
+    }
+    let v: Value = serde_json::from_str(&text).map_err(|e| format!("Bad response from {}: {e}", provider.name))?;
+    let mut ids: Vec<String> = v
+        .get("data")
+        .and_then(Value::as_array)
+        .map(|items| items.iter().filter_map(|m| m.get("id").and_then(Value::as_str)).map(str::to_string).collect())
+        .unwrap_or_default();
+    if ids.is_empty() {
+        return Err(format!("{} listed no models.", provider.name));
+    }
+    ids.sort();
+    ids.dedup();
+    Ok(ids)
+}
+
 // ── Shared plumbing ───────────────────────────────────────────────────────────
 
 pub(super) fn client() -> Result<reqwest::Client, String> {
@@ -334,6 +376,30 @@ pub(super) fn client() -> Result<reqwest::Client, String> {
         .timeout(TIMEOUT)
         .build()
         .map_err(|e| e.to_string())
+}
+
+/// A URL that cannot be parsed would surface later as an opaque "builder
+/// error"; say what is wrong while the words still mean something.
+fn check_url(provider: &Provider, url: &str) -> Result<(), String> {
+    reqwest::Url::parse(url)
+        .map(|_| ())
+        .map_err(|e| format!("{}'s endpoint URL \"{}\" is not valid: {e}", provider.name, provider.base_url))
+}
+
+/// Turns a reqwest error into a sentence, and leaves a line in the log with
+/// the provider and URL, which the island's note view does not have room for.
+fn describe(provider: &Provider, url: &str, err: reqwest::Error) -> String {
+    let what = if err.is_builder() {
+        "could not build the request — check the endpoint URL, the key and any custom header for stray characters".to_string()
+    } else if err.is_timeout() {
+        "timed out".to_string()
+    } else if err.is_connect() {
+        format!("could not connect ({err})")
+    } else {
+        format!("network error: {err}")
+    };
+    crate::log::line(format!("llm {} {url}: {what}", provider.name));
+    format!("{}: {what}", provider.name)
 }
 
 /// POSTs JSON, authorised, and returns the parsed body or a readable error.
@@ -344,6 +410,7 @@ pub(super) async fn post_json(
     extra_headers: &[(&str, &str)],
     body: &Value,
 ) -> Result<Value, String> {
+    check_url(provider, url)?;
     let mut req = client()?.post(url).header("content-type", "application/json");
     for (name, value) in extra_headers {
         req = req.header(*name, *value);
@@ -354,7 +421,7 @@ pub(super) async fn post_json(
         .json(body)
         .send()
         .await
-        .map_err(|e| format!("Network error: {e}"))?;
+        .map_err(|e| describe(provider, url, e))?;
 
     let status = response.status();
     let text = response.text().await.map_err(|e| e.to_string())?;
@@ -364,6 +431,7 @@ pub(super) async fn post_json(
             .ok()
             .and_then(|v| error_message(&v))
             .unwrap_or_else(|| text.chars().take(200).collect());
+        crate::log::line(format!("llm {} {url}: HTTP {status}: {detail}", provider.name));
         return Err(format!("{} {status}: {detail}", provider.name));
     }
     serde_json::from_str(&text).map_err(|e| format!("Bad response from {}: {e}", provider.name))

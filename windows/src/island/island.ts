@@ -345,8 +345,8 @@ export class Island {
    * request keeps waiting for the terminal's own timeout.
    */
   clickOutside() {
-    void Bridge.log(`click outside mode=${State.mode}`);
     if (State.mode !== "expanded") return;
+    void Bridge.log("click outside — shutting the island");
     // A file drag starts with a press elsewhere; the drop zone must stay open.
     if (State.fileDragOver) return;
     this.collapse();

@@ -7,7 +7,7 @@ use super::{Caps, Message, Part, Provider, Role, SYSTEM_PROMPT};
 
 pub const DEFAULT_MODEL: &str = "claude-opus-5";
 
-const ANTHROPIC_VERSION: &str = "2023-06-01";
+pub const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// Server-side fallback: on a policy decline the API retries the same request on
 /// a fallback model inside the same call, so the island never shows a dead end.
 const FALLBACK_BETA: &str = "server-side-fallback-2026-07-01";

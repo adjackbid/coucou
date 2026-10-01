@@ -324,6 +324,12 @@ async fn provider_test(provider: Provider) -> Result<String, String> {
     llm::test(&provider).await
 }
 
+/// The models an endpoint offers, for the drop-down next to the model field.
+#[tauri::command]
+async fn provider_models(provider: Provider) -> Result<Vec<String>, String> {
+    llm::models(&provider).await
+}
+
 #[tauri::command]
 fn chat_reset(chat: State<Chat>) {
     chat.reset();
@@ -492,6 +498,7 @@ pub fn run() {
             set_paused,
             hotkey_status,
             provider_test,
+            provider_models,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
