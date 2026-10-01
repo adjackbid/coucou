@@ -361,8 +361,10 @@ class AppState {
    */
   loadIntegrationTasks() {
     for (const proto of INTEGRATION_AGENTS) {
+      // A standing agent pill is there only when its hooks are installed and
+      // no session of it is live; with nothing installed the island is empty.
       const shouldLoad =
-        (proto.id === "integration_claude" && this.sessionsOf("claudeCode").length === 0) ||
+        (proto.id === "integration_claude" && this.settings.hooksInstalled && this.sessionsOf("claudeCode").length === 0) ||
         (proto.id === "integration_copilot" && this.settings.copilotHooksInstalled && this.sessionsOf("copilot").length === 0) ||
         this.settings.activeIntegrations.includes(proto.id);
       const idx = this.tasks.findIndex((t) => t.id === proto.id);

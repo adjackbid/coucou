@@ -308,21 +308,22 @@ function handleHook(island: Island, payload: HookPayload) {
         State.appendTranscript(CLAUDE_ID, { role: "assistant", text: full });
       }
       Sound.play("finish");
-      if (focused) {
-        surface("finished", true);
-      } else {
+      if (!focused) {
         // Another pill has the screen. This one stays "unread" — badge, glow,
-        // finished pose — until it is looked at, and the island shows itself
-        // so there is something to notice. A badge that fades in five seconds
-        // was gone by the time the first card's OK was pressed.
+        // finished pose, a card of its own — until it is looked at. A badge
+        // that faded in five seconds was gone before anyone saw it.
         const t = State.tasks.find((x) => x.id === CLAUDE_ID);
         if (t) t.unread = true;
         State.setPillBadge(CLAUDE_ID, "finished");
-        // And it gets a card of its own on the overview, so the island opens
-        // there — unless someone is typing in the chat, which must not be
-        // yanked away; the lit pill waits for them.
-        if (State.mode === "expanded" && State.view === "prompt") island.reveal();
-        else island.alert("overview");
+      }
+      // Finished or not, nothing takes the whole island: the overview shows
+      // every session side by side, and a card opens the full conversation.
+      // Someone typing in the chat, or reading a session, is not yanked away;
+      // the island just makes sure it is on screen.
+      if (State.mode === "expanded" && (State.view === "prompt" || State.view === "session")) {
+        island.reveal();
+      } else {
+        island.alert("overview");
       }
       window.setTimeout(() => {
         const t = State.tasks.find((x) => x.id === CLAUDE_ID);
