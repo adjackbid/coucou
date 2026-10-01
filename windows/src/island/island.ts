@@ -498,7 +498,7 @@ export class Island {
   private targetSize(): { w: number; h: number; r: number } {
     const { w, h } = islandSize(
       State.mode, State.view, State.chatHistory.length, State.pendingApproval?.lines ?? 0,
-      Math.min(State.otherTasks.length, MAX_PILLS),
+      Math.min(State.pillTasks.length, MAX_PILLS), State.extraCards.length,
     );
     const r = State.mode === "expanded" ? EXPANDED_CORNER : ROUNDED_CORNER;
     return { w, h, r };

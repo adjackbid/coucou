@@ -49,9 +49,11 @@ export interface ViewLayout {
   agentMode: AgentLayoutMode;
 }
 
-// The window is a fixed 720×320 (largest view) like the macOS panel; the island is
-// drawn inside it, glued to the top edge and horizontally centred.
-export const PANEL_W = 720;
+// The window is a fixed 1320×320 (largest view); the island is drawn inside it,
+// glued to the top edge and horizontally centred. Wider than the macOS panel
+// because the overview grows a card per unread session (src-tauri/src/island.rs
+// must agree).
+export const PANEL_W = 1320;
 export const PANEL_H = 320;
 
 // No notch on a PC: these are the hidden/compact sizes from docs/SPEC.md.
@@ -120,6 +122,13 @@ export function approvalHeight(lines: number): number {
 
 /** A row of pills in the overview's right card. */
 const PILL_ROW_H = 32;
+/** One extra session card in the overview, gap included. */
+export const SESSION_CARD_W = 280;
+
+/** The overview widens by a card for every unread session shown beside the focused one. */
+export function overviewWidth(extraCards: number): number {
+  return EXPANDED_W + Math.max(0, extraCards) * SESSION_CARD_W;
+}
 
 /**
  * The overview grows by a row of pills past the second: with several
@@ -136,6 +145,7 @@ export function islandSize(
   chatCount = 0,
   approvalLines = 0,
   pillCount = 0,
+  extraCards = 0,
 ): { w: number; h: number } {
   switch (mode) {
     case "hidden":
@@ -150,7 +160,8 @@ export function islandSize(
         : view === "approval" ? approvalHeight(approvalLines)
         : view === "overview" ? overviewHeight(pillCount)
         : VIEW_LAYOUTS[view].height;
-      return { w: EXPANDED_W, h };
+      const w = view === "overview" ? overviewWidth(extraCards) : EXPANDED_W;
+      return { w, h };
     }
   }
 }

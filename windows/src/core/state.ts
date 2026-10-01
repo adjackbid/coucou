@@ -43,6 +43,8 @@ export interface AgentTask {
    * it since. The badge, the glow and the finished pose all stay until then.
    */
   unread?: boolean;
+  /** performance.now() of the last hook event, to order cards by recency. */
+  lastEvent?: number;
   emote?: BotEmoteName | null;
   miniEye?: EyeShape | null;
   pillBadge?: PillBadge | null;
@@ -173,6 +175,8 @@ export interface Settings {
   hotkey: string;
   providers: Provider[];
   activeProvider: string;
+  /** Sessions shown as cards side by side in the overview (the focused one included), 1–3. */
+  maxSessionCards: number;
 }
 
 export const DEFAULT_PROVIDER: Provider = {
@@ -203,6 +207,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hotkey: "Ctrl+Shift+Space",
   providers: [DEFAULT_PROVIDER],
   activeProvider: "anthropic",
+  maxSessionCards: 2,
 };
 
 type Listener = () => void;
@@ -292,6 +297,24 @@ class AppState {
   /** The pills that replied while something else had the screen. */
   get unreadTasks(): AgentTask[] {
     return this.tasks.filter((t) => t.unread);
+  }
+
+  /**
+   * The unread sessions that get a card of their own beside the focused one,
+   * newest first, as many as the setting allows. The rest stay pills.
+   */
+  get extraCards(): AgentTask[] {
+    const room = Math.max(1, Math.min(3, Math.round(this.settings.maxSessionCards || 2))) - 1;
+    return this.unreadTasks
+      .filter((t) => t.id !== this.focusId)
+      .sort((a, b) => (b.lastEvent ?? 0) - (a.lastEvent ?? 0))
+      .slice(0, room);
+  }
+
+  /** Everything that is neither the focused pill nor shown as a card. */
+  get pillTasks(): AgentTask[] {
+    const cards = new Set(this.extraCards.map((t) => t.id));
+    return this.tasks.filter((t) => t.id !== this.focusId && !cards.has(t.id));
   }
 
   updateTask(id: string, state: BotStateName) {

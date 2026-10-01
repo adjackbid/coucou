@@ -33,6 +33,13 @@ pub struct Settings {
     pub providers: Vec<Provider>,
     #[serde(default)]
     pub active_provider: String,
+    /// Sessions shown as cards side by side in the overview, 1–3.
+    #[serde(default = "default_max_cards")]
+    pub max_session_cards: u32,
+}
+
+fn default_max_cards() -> u32 {
+    2
 }
 
 fn default_model() -> String {
@@ -89,6 +96,7 @@ impl Default for Settings {
             hotkey: default_hotkey(),
             providers: vec![Provider::anthropic(&default_model())],
             active_provider: "anthropic".into(),
+            max_session_cards: default_max_cards(),
         }
     }
 }

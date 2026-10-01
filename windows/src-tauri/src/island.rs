@@ -23,8 +23,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_TOOLWINDOW,
 };
 
-/// Logical size of the full window — the largest island view, like the macOS panel.
-pub const PANEL_W: f64 = 720.0;
+/// Logical size of the full window — the largest island view. Wider than the
+/// macOS panel: the overview grows a card per unread session, up to three
+/// (640 + 2 × 280, plus a margin). Everything outside the island shape is
+/// transparent and click-through, so the width costs nothing.
+pub const PANEL_W: f64 = 1320.0;
 pub const PANEL_H: f64 = 320.0;
 /// Logical size of the invisible strip that wakes the island when it is hidden.
 pub const STRIP_W: f64 = 240.0;

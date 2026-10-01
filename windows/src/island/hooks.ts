@@ -228,6 +228,8 @@ function handleHook(island: Island, payload: HookPayload) {
   const projectName = aliasProjectName(raw || "Session");
   const CLAUDE_ID = taskFor(payload, projectName, cwd);
   const focused = State.focusId === CLAUDE_ID;
+  const own = State.tasks.find((x) => x.id === CLAUDE_ID);
+  if (own) own.lastEvent = performance.now();
 
   /** Alerts force the island open; work events only reveal the compact island. */
   const surface = (view: Parameters<Island["alert"]>[0], isAlert: boolean) => {
@@ -316,7 +318,11 @@ function handleHook(island: Island, payload: HookPayload) {
         const t = State.tasks.find((x) => x.id === CLAUDE_ID);
         if (t) t.unread = true;
         State.setPillBadge(CLAUDE_ID, "finished");
-        island.reveal();
+        // And it gets a card of its own on the overview, so the island opens
+        // there — unless someone is typing in the chat, which must not be
+        // yanked away; the lit pill waits for them.
+        if (State.mode === "expanded" && State.view === "prompt") island.reveal();
+        else island.alert("overview");
       }
       window.setTimeout(() => {
         const t = State.tasks.find((x) => x.id === CLAUDE_ID);

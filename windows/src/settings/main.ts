@@ -583,6 +583,19 @@ function generalSection(): HTMLElement {
     void save();
   });
 
+  // How many finished sessions may sit side by side as cards before the rest
+  // go to the pills; the island widens by one card each.
+  const cards = h("input", {
+    type: "number", min: "1", max: "3", step: "1",
+    value: String(settings.maxSessionCards || 2),
+    style: "width:72px",
+  }) as HTMLInputElement;
+  cards.addEventListener("change", () => {
+    settings.maxSessionCards = Math.max(1, Math.min(3, Number(cards.value) || 2));
+    cards.value = String(settings.maxSessionCards);
+    void save();
+  });
+
   // Written as the global-shortcut plugin reads it: modifiers and a key joined
   // by "+", e.g. Ctrl+Shift+Space, Ctrl+Alt+F12. Empty turns it off.
   const hotkey = h("input", {
@@ -635,6 +648,11 @@ function generalSection(): HTMLElement {
     h("div", { class: "row" },
       h("label", { text: "Island lives on" }),
       screen,
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Session cards" }),
+      cards,
+      h("span", { class: "hint", text: "sessions shown side by side (1–3); the rest become pills" }),
     ),
     h("div", { class: "row" },
       h("label", { text: "Shortcut" }),

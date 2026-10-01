@@ -389,6 +389,48 @@ body {
   flex: 1 1 auto;
 }
 
+/* Extra session cards between the focused card and the pills. */
+.overview > .extras {
+  display: flex;
+  gap: 10px;
+}
+
+.session-card-shell {
+  flex: 0 0 270px;
+  width: 270px;
+  cursor: default;
+}
+
+.session-card-shell:hover {
+  filter: brightness(1.08);
+}
+
+.session-card {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 0 14px;
+}
+
+.session-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.session-reply {
+  font: 400 12px/15px var(--font);
+  color: #c5c8cd;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .card-body {
   position: relative;
   z-index: 1;

@@ -139,13 +139,17 @@ function buildOverview(actions: ViewActions): ViewHost {
   });
   const pills = h("div", { class: "pills" });
   const right = card(null, pills);
+  // One card per unread session beside the focused one; the island widens for them.
+  const extras = h("div", { class: "extras" });
 
   const el = h("div", { class: "view overview" },
     h("div", { class: "left" }, left),
+    extras,
     h("div", { class: "right" }, right),
   );
 
   let pillIds = "";
+  let extrasKey = "";
   let detailOpen = false;
   let lastFocus: string | null = null;
   let mode: "ticker" | "card" | null = null;
@@ -225,7 +229,17 @@ function buildOverview(actions: ViewActions): ViewHost {
 
       jump.style.display = detailOpen ? "none" : "";
 
-      const others = State.otherTasks.slice(0, MAX_PILLS);
+      const cards = State.extraCards;
+      const cardsKey = cards.map((t) => `${t.id}:${t.transcript.length}:${t.state}`).join("|");
+      if (cardsKey !== extrasKey) {
+        extrasKey = cardsKey;
+        clear(extras);
+        for (const t of cards) extras.append(sessionCard(t, actions));
+        pruneMiniBots();
+      }
+      extras.style.display = cards.length ? "" : "none";
+
+      const others = State.pillTasks.slice(0, MAX_PILLS);
       const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}:${t.unread ? 1 : 0}`).join("|");
       if (pillKey !== pillIds) {
         pillIds = pillKey;
@@ -235,6 +249,32 @@ function buildOverview(actions: ViewActions): ViewHost {
       }
     },
   };
+}
+
+/**
+ * A finished session that has not been looked at, as a card of its own: its
+ * Mochi, its name, what it said. A click makes it the focused one.
+ */
+function sessionCard(task: AgentTask, actions: ViewActions): HTMLElement {
+  const reply = [...task.transcript].reverse().find((e) => e.role === "assistant")?.text
+    ?? task.steps.at(-1) ?? "Finished.";
+  const body = h("div", { class: "session-card" },
+    createMiniBot(task, 40),
+    h("div", { class: "session-text" },
+      h("div", { class: "who-row" },
+        dot(task.color, 7),
+        h("span", { class: "n", text: task.name }),
+        // The colour and the Mochi already say which agent; the width is short.
+        h("span", { text: "finished" }),
+      ),
+      h("div", { class: "session-reply", title: SOURCE_LABELS[task.source], text: reply.replace(/\s+/g, " ").trim() }),
+    ),
+  );
+  const el = card("green", body);
+  el.classList.add("session-card-shell");
+  el.title = "Show this session";
+  el.addEventListener("click", () => actions.setFocus(task.id));
+  return el;
 }
 
 function buildPill(task: AgentTask, actions: ViewActions): HTMLElement {
