@@ -48,6 +48,9 @@ pub struct Settings {
     /// Coding agents the island can start and talk to over ACP.
     #[serde(default)]
     pub agents: Vec<AgentProfile>,
+    /// Names the person gave to project folders, by lower-cased path.
+    #[serde(default)]
+    pub session_names: std::collections::BTreeMap<String, String>,
 }
 
 fn default_max_cards() -> u32 {
@@ -132,6 +135,7 @@ impl Default for Settings {
             always_visible: false,
             hide_after: default_hide_after(),
             agents: vec![AgentProfile::copilot()],
+            session_names: Default::default(),
         }
     }
 }

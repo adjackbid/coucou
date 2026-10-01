@@ -5,7 +5,7 @@
 
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { INTEGRATION_AGENTS, State, type AgentSource, type ApprovalSection } from "../core/state";
+import { INTEGRATION_AGENTS, State, sessionKey, type AgentSource, type ApprovalSection } from "../core/state";
 import type { Island } from "./island";
 
 /** Which agent each `--agent` of the relay is. Anything unknown is Claude Code. */
@@ -239,7 +239,8 @@ function handleHook(island: Island, payload: HookPayload) {
   const name = payload.hook_event_name ?? "";
   const cwd = payload.cwd ?? "";
   const raw = lastPathComponent(cwd);
-  const projectName = aliasProjectName(raw || "Session");
+  // The name the person gave this folder, if any; else the folder's own.
+  const projectName = State.settings.sessionNames?.[sessionKey(cwd)] || aliasProjectName(raw || "Session");
   const CLAUDE_ID = taskFor(payload, projectName, cwd);
   const focused = State.focusId === CLAUDE_ID;
   const own = State.tasks.find((x) => x.id === CLAUDE_ID);

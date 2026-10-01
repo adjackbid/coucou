@@ -224,6 +224,13 @@ export interface Settings {
   hideAfter: number;
   /** Coding agents the island can start and talk to over ACP. */
   agents: AgentProfile[];
+  /** Names the person gave to project folders, by `sessionKey(cwd)`. */
+  sessionNames: Record<string, string>;
+}
+
+/** A folder as a key: no trailing slash, and case-blind like Windows paths. */
+export function sessionKey(cwd: string): string {
+  return cwd.replace(/[\\/]+$/, "").toLowerCase();
 }
 
 export const DEFAULT_PROVIDER: Provider = {
@@ -259,6 +266,7 @@ export const DEFAULT_SETTINGS: Settings = {
   alwaysVisible: false,
   hideAfter: 60,
   agents: [DEFAULT_AGENT],
+  sessionNames: {},
 };
 
 type Listener = () => void;

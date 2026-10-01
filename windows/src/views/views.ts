@@ -5,7 +5,7 @@
 import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { Ticker } from "./ticker";
-import { MAX_PILLS, SOURCE_LABELS, State, isAgentSource, type AgentTask } from "../core/state";
+import { MAX_PILLS, SOURCE_LABELS, State, isAgentSource, sessionKey, type AgentTask } from "../core/state";
 import { Bridge } from "../core/bridge";
 import { washRGBA, type IslandViewName, type Wash } from "../core/layout";
 import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
@@ -506,8 +506,51 @@ function buildFinished(actions: ViewActions): ViewHost {
 function buildSession(actions: ViewActions): ViewHost {
   const who = h("div");
   const log = h("div", { class: "chat-log session-log" });
+
+  // A name of the person's own for this folder: with several sessions open,
+  // "api" and "api-v2" are easier told apart as "billing" and "the rewrite".
+  // Kept per folder, so it is there again next time.
+  let renaming = false;
+  const nameInput = h("input", { type: "text", class: "chat-input session-name", spellcheck: "false" }) as HTMLInputElement;
+  function startRename() {
+    const task = State.focusTask;
+    if (!task?.sessionCwd) return;
+    renaming = true;
+    nameInput.value = task.name;
+    State.notify();
+    void Bridge.focusWindow(true);
+    window.setTimeout(() => { nameInput.focus(); nameInput.select(); }, 120);
+  }
+  function endRename(save: boolean) {
+    if (!renaming) return;
+    renaming = false;
+    const task = State.focusTask;
+    if (save && task?.sessionCwd) {
+      const key = sessionKey(task.sessionCwd);
+      const name = nameInput.value.trim();
+      const names = { ...State.settings.sessionNames };
+      if (name) names[key] = name;
+      else delete names[key];
+      State.settings.sessionNames = names;
+      void Bridge.saveSettings(State.settings);
+      // An empty name gives the folder its own back.
+      task.name = name || task.sessionCwd.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || task.name;
+    }
+    // The island only keeps the keyboard while there is something to type into.
+    if (!State.focusTask?.pty) void Bridge.focusWindow(false);
+    State.notify();
+  }
+  nameInput.addEventListener("keydown", (e) => {
+    const key = (e as KeyboardEvent).key;
+    if (key === "Enter") endRename(true);
+    else if (key === "Escape") endRename(false);
+    e.stopPropagation();
+  });
+  nameInput.addEventListener("blur", () => endRename(true));
+
   const row = h("div", { class: "actions" },
     btn("Open terminal", "primary", () => actions.openTerminal()),
+    btn("Rename", "secondary", () => startRename()),
     btn("Back", "secondary", () => actions.setView("overview")),
   );
   // Typing into the session's own terminal — there only when the CLI was
@@ -556,8 +599,16 @@ function buildSession(actions: ViewActions): ViewHost {
       bar.style.display = task?.pty ? "" : "none";
       input.disabled = busy();
       input.placeholder = busy() ? "Busy — wait for it to finish…" : `Type into ${task?.name ?? "the"} terminal…`;
-      clear(who);
-      who.append(agentWho(task, task ? SOURCE_LABELS[task.source] : ""));
+      if (renaming) {
+        // Left alone while it is being typed in.
+        if (nameInput.parentElement !== who) {
+          clear(who);
+          who.append(nameInput);
+        }
+      } else {
+        clear(who);
+        who.append(agentWho(task, task ? SOURCE_LABELS[task.source] : ""));
+      }
       const entries = task?.transcript ?? [];
       const key = `${task?.id}|${entries.length}|${entries.at(-1)?.text.length ?? 0}`;
       if (key === renderedKey) return;

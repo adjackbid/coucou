@@ -661,6 +661,16 @@ body {
   padding-right: 6px;
 }
 
+/* The session's name, while it is being changed. */
+.session-name {
+  flex: 0 0 auto;
+  width: 240px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.09);
+  font: 600 12px var(--font);
+}
+
 .session-tool {
   font: 400 11px var(--mono);
   color: var(--dim-3);
