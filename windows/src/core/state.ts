@@ -3,17 +3,18 @@
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
 
-export type AgentSource = "claudeCode" | "copilot" | "n8n";
+export type AgentSource = "claudeCode" | "copilot" | "antigravity" | "n8n";
 
 /** A pill that stands for a coding agent fed by hooks, rather than a poller. */
 export function isAgentSource(source: AgentSource): boolean {
-  return source === "claudeCode" || source === "copilot";
+  return source !== "n8n";
 }
 
 /** What the "who" line calls each source. */
 export const SOURCE_LABELS: Record<AgentSource, string> = {
   claudeCode: "Claude Code",
   copilot: "Copilot CLI",
+  antigravity: "Antigravity",
   n8n: "n8n",
 };
 export type PillBadge = "approval" | "finished" | "error";
@@ -152,12 +153,14 @@ export const MAX_PILLS = 6;
 const AGENT_PILLS: Record<string, string> = {
   claudeCode: "integration_claude",
   copilot: "integration_copilot",
+  antigravity: "integration_antigravity",
 };
 
 /** AgentTask.integrationAgents — same ids, names and colours as macOS. */
 export const INTEGRATION_AGENTS: AgentTask[] = [
   task("integration_claude", "VS Code", "#F5F6F8", "claudeCode"),
   task("integration_copilot", "Copilot", "#7EE787", "copilot"),
+  task("integration_antigravity", "Antigravity", "#8AB4F8", "antigravity"),
   task("integration_resend", "Resend", "#22C55E", "n8n"),
   task("integration_n8n", "n8n", "#F29B38", "n8n"),
   task("integration_vercel", "Vercel", "#7C5CFF", "n8n"),
@@ -206,6 +209,7 @@ export interface Settings {
   autostart: boolean;
   hooksInstalled: boolean;
   copilotHooksInstalled: boolean;
+  antigravityHooksInstalled: boolean;
   /** Pre-provider builds' model; Rust turns it into the first provider. */
   model: string;
   /** Global shortcut that opens and shuts the island; empty disables it. */
@@ -246,6 +250,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autostart: false,
   hooksInstalled: false,
   copilotHooksInstalled: false,
+  antigravityHooksInstalled: false,
   model: "claude-opus-5",
   hotkey: "Ctrl+Shift+Space",
   providers: [DEFAULT_PROVIDER],
@@ -422,6 +427,7 @@ class AppState {
       const shouldLoad =
         (proto.id === "integration_claude" && this.settings.hooksInstalled && this.sessionsOf("claudeCode").length === 0) ||
         (proto.id === "integration_copilot" && this.settings.copilotHooksInstalled && this.sessionsOf("copilot").length === 0) ||
+        (proto.id === "integration_antigravity" && this.settings.antigravityHooksInstalled && this.sessionsOf("antigravity").length === 0) ||
         this.settings.activeIntegrations.includes(proto.id);
       const idx = this.tasks.findIndex((t) => t.id === proto.id);
       if (shouldLoad && idx < 0) this.tasks.push({ ...proto, steps: [], transcript: [] });
@@ -497,7 +503,7 @@ class AppState {
   }
 
   toggleIntegration(id: string) {
-    if (id === "integration_claude" || id === "integration_copilot") return;
+    if (Object.values(AGENT_PILLS).includes(id)) return;
     const active = this.settings.activeIntegrations;
     if (active.includes(id)) {
       this.settings.activeIntegrations = active.filter((x) => x !== id);

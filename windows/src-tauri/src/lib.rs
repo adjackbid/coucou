@@ -56,6 +56,7 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
     // The real state of the hook files wins over whatever we stored.
     settings.hooks_installed = hooks::status(Agent::Claude).installed;
     settings.copilot_hooks_installed = hooks::status(Agent::Copilot).installed;
+    settings.antigravity_hooks_installed = hooks::status(Agent::Antigravity).installed;
     let screen = island::screen_info(&app, &settings.screen);
     BootInfo {
         settings,
@@ -270,6 +271,7 @@ fn hooks_apply(
         match which {
             Agent::Claude => current.hooks_installed = install,
             Agent::Copilot => current.copilot_hooks_installed = install,
+            Agent::Antigravity => current.antigravity_hooks_installed = install,
         }
         let _ = settings::save(&current);
         current.clone()

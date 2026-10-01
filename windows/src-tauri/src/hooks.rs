@@ -64,11 +64,20 @@ pub const COPILOT_EVENTS: &[(&str, u64)] = &[
 /// Marker that identifies a Coucou entry inside settings.json.
 const MARKER: &str = "coucou-hook";
 
+/// Antigravity's events that cannot change what the agent does: no
+/// PreToolUse (its answer decides permissions) and no PostInvocation (its
+/// answer can force the loop on). The relay prints `{}` for each of these.
+pub const ANTIGRAVITY_EVENTS: &[&str] = &["PreInvocation", "PostToolUse", "Stop"];
+
+/// The name of Coucou's entry in Antigravity's hooks.json.
+const ANTIGRAVITY_KEY: &str = "coucou";
+
 /// The CLIs whose hooks Coucou can install.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Agent {
     Claude,
     Copilot,
+    Antigravity,
 }
 
 impl Agent {
@@ -76,6 +85,7 @@ impl Agent {
         match name {
             "claude" | "" => Some(Agent::Claude),
             "copilot" => Some(Agent::Copilot),
+            "antigravity" => Some(Agent::Antigravity),
             _ => None,
         }
     }
@@ -85,6 +95,8 @@ impl Agent {
         match self {
             Agent::Claude => settings_path(),
             Agent::Copilot => home().join(".copilot").join("hooks").join("coucou.json"),
+            // The global customization root, shared by the CLI, the app and the IDE.
+            Agent::Antigravity => home().join(".gemini").join("config").join("hooks.json"),
         }
     }
 }
@@ -280,10 +292,55 @@ fn copilot_file() -> Value {
     json!({ "version": 1, "hooks": hooks })
 }
 
-/// Copilot's file as text, or empty when it is not there. Unreadable is an
-/// error, for the same reason as `read_settings`.
-fn read_copilot_file() -> Result<String, String> {
-    let path = Agent::Copilot.config_path();
+/// Coucou's named hook in Antigravity's hooks.json. The command runs through
+/// `cmd /c`, so it is the quoted path and plain arguments, nothing a shell
+/// could read as syntax. Tool events are grouped under a matcher; the others
+/// are flat lists.
+fn antigravity_entry() -> Value {
+    let exe = settings::hook_exe_path().to_string_lossy().to_string();
+    let handler = |event: &str| {
+        json!({
+            "type": "command",
+            "command": format!("\"{exe}\" --agent antigravity {event}"),
+            "timeout": 10,
+        })
+    };
+    let mut entry = Map::new();
+    for event in ANTIGRAVITY_EVENTS {
+        let value = if *event == "PostToolUse" {
+            json!([{ "matcher": "*", "hooks": [handler(event)] }])
+        } else {
+            json!([handler(event)])
+        };
+        entry.insert((*event).to_string(), value);
+    }
+    Value::Object(entry)
+}
+
+/// Antigravity's hooks.json with Coucou's entry set or removed; every other
+/// named hook is left exactly as it was. Empty text means "no file".
+fn antigravity_file(current: &str, install: bool) -> Result<String, String> {
+    let path = Agent::Antigravity.config_path().display().to_string();
+    let mut root = parse_settings(current.as_bytes(), &path)?
+        .as_object()
+        .cloned()
+        .unwrap_or_default();
+    if install {
+        root.insert(ANTIGRAVITY_KEY.into(), antigravity_entry());
+    } else {
+        root.remove(ANTIGRAVITY_KEY);
+    }
+    if root.is_empty() {
+        return Ok(String::new());
+    }
+    Ok(pretty(&Value::Object(root)))
+}
+
+/// A hook file of the kind Coucou may create or remove, as text; empty when
+/// it is not there. Unreadable is an error, for the same reason as
+/// `read_settings`.
+fn read_hook_file(agent: Agent) -> Result<String, String> {
+    let path = agent.config_path();
     match std::fs::read(&path) {
         Ok(bytes) => {
             let text = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&bytes);
@@ -327,7 +384,12 @@ pub fn status(agent: Agent) -> HookStatus {
                     .any(entry_is_ours)
             })
             .unwrap_or(false),
-        Agent::Copilot => read_copilot_file().map(|t| t.contains(MARKER)).unwrap_or(false),
+        Agent::Copilot => read_hook_file(agent).map(|t| t.contains(MARKER)).unwrap_or(false),
+        Agent::Antigravity => read_hook_file(agent)
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .map(|v| v.get(ANTIGRAVITY_KEY).is_some())
+            .unwrap_or(false),
     };
     let hook_path = settings::hook_exe_path();
     HookStatus {
@@ -347,8 +409,13 @@ fn before_and_after(agent: Agent, install: bool) -> Result<(String, String), Str
             Ok((pretty(&current), pretty(&next)))
         }
         Agent::Copilot => {
-            let current = read_copilot_file()?;
+            let current = read_hook_file(agent)?;
             let next = if install { pretty(&copilot_file()) } else { String::new() };
+            Ok((current, next))
+        }
+        Agent::Antigravity => {
+            let current = read_hook_file(agent)?;
+            let next = antigravity_file(&current, install)?;
             Ok((current, next))
         }
     }
@@ -392,7 +459,8 @@ pub fn write(agent: Agent, install: bool, fingerprint: &str) -> Result<String, S
     }
 
     if after.is_empty() {
-        // Copilot uninstall: the file was ours alone.
+        // Nothing of anyone's is left in it: the file goes (Copilot's was
+        // ours alone; Antigravity's held only our entry).
         match std::fs::remove_file(&path) {
             Ok(()) => {}
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
@@ -691,6 +759,35 @@ mod tests {
         write(Agent::Copilot, false, &plan.fingerprint).expect("copilot uninstall should succeed");
         assert!(!file.exists());
         assert!(!status(Agent::Copilot).installed);
+
+        // Antigravity: one named entry merged into a hooks.json that may hold
+        // other people's hooks, which survive both install and uninstall.
+        let agy = Agent::Antigravity.config_path();
+        assert!(agy.starts_with(&tmp));
+        std::fs::create_dir_all(agy.parent().unwrap()).unwrap();
+        let theirs = r#"{"lint-checker":{"PostToolUse":[{"matcher":"run_command","hooks":[{"command":"./lint.sh"}]}]}}"#;
+        std::fs::write(&agy, theirs).unwrap();
+        assert!(!status(Agent::Antigravity).installed);
+        let plan = preview(Agent::Antigravity, true).unwrap();
+        assert!(plan.diff.contains("--agent antigravity"));
+        write(Agent::Antigravity, true, &plan.fingerprint).expect("antigravity install should succeed");
+        let written: Value = serde_json::from_slice(&std::fs::read(&agy).unwrap()).unwrap();
+        assert!(written["lint-checker"].is_object(), "another hook was dropped");
+        assert!(written["coucou"]["PreToolUse"].is_null(), "PreToolUse decides permissions and must not be hooked");
+        assert_eq!(written["coucou"]["PostToolUse"][0]["matcher"], "*");
+        assert!(written["coucou"]["Stop"][0]["command"].as_str().unwrap().ends_with("--agent antigravity Stop"));
+        assert!(status(Agent::Antigravity).installed);
+        let plan = preview(Agent::Antigravity, false).unwrap();
+        write(Agent::Antigravity, false, &plan.fingerprint).expect("antigravity uninstall should succeed");
+        let cleaned: Value = serde_json::from_slice(&std::fs::read(&agy).unwrap()).unwrap();
+        assert_eq!(cleaned, serde_json::from_str::<Value>(theirs).unwrap());
+        // With only our entry in it, uninstalling removes the file.
+        std::fs::write(&agy, "{}").unwrap();
+        let plan = preview(Agent::Antigravity, true).unwrap();
+        write(Agent::Antigravity, true, &plan.fingerprint).unwrap();
+        let plan = preview(Agent::Antigravity, false).unwrap();
+        write(Agent::Antigravity, false, &plan.fingerprint).unwrap();
+        assert!(!agy.exists());
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

@@ -175,7 +175,7 @@ export interface DroppedFile {
 }
 
 /** The CLIs whose hooks Coucou can install; same names as `hooks::Agent` in Rust. */
-export type HookAgent = "claude" | "copilot";
+export type HookAgent = "claude" | "copilot" | "antigravity";
 
 export interface HookStatus {
   installed: boolean;

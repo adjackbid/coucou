@@ -36,6 +36,7 @@ export async function refreshConfigured() {
   const agents: [string, boolean][] = [
     ["integration_claude", State.settings.hooksInstalled],
     ["integration_copilot", State.settings.copilotHooksInstalled],
+    ["integration_antigravity", State.settings.antigravityHooksInstalled],
   ];
   for (const [id, hooks] of agents) {
     const info = State.integrations[id] ?? { data: {}, error: null, loaded: false, configured: false };

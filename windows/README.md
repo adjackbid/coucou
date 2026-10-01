@@ -92,6 +92,17 @@ which CLI is talking, and Copilot sessions get their own pill next to Mochi.
 Permission requests reach the island too, unless the session runs with
 `--yolo`, which approves everything before any hook sees it.
 
+## Antigravity
+
+**Settings… → Antigravity → Install hooks…** adds one named entry, `coucou`, to
+`%USERPROFILE%\.gemini\config\hooks.json` — the global file the `agy` CLI, the
+app and the IDE all read — and leaves every other hook in it alone. Only three
+events are hooked, the ones that cannot change what the agent does:
+`PreInvocation`, `PostToolUse` and `Stop`. `PreToolUse` is deliberately left
+out, because its answer decides permissions, and those stay in Antigravity.
+Its payloads say when rather than what, so the relay reads the prompt, the tool
+that ran and the final reply out of Antigravity's own transcript.
+
 ## Typing into a terminal you opened yourself
 
 An agent already running in your own PowerShell cannot be taken over through

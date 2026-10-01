@@ -67,6 +67,13 @@ const AGENT_COPY: AgentCopy[] = [
     installed: "Coucou is hooked into your Copilot CLI sessions (the `copilot` command, or a wrapper such as `cg`). Steps show up on the Copilot pill; permission requests reach the island unless the session runs with --yolo.",
     missing: "Install the hooks to see your Copilot CLI sessions in the island. This writes one file of Coucou's own into your .copilot\\hooks folder and touches nothing else.",
   },
+  {
+    agent: "antigravity",
+    title: "Antigravity",
+    file: "hooks.json",
+    installed: "Coucou is hooked into Antigravity (the agy CLI, the app and the IDE share this file). Prompts, tool steps and replies show up on the Antigravity pill. Permissions stay in Antigravity: Coucou hooks only the events that cannot change what the agent does.",
+    missing: "Install the hooks to see your Antigravity sessions in the island. This adds one named entry, \"coucou\", to your global hooks.json and leaves every other hook as it is. It never answers a permission for you.",
+  },
 ];
 
 function agentSection(copy: AgentCopy, status: HookStatus): HTMLElement {

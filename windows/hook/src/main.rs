@@ -47,6 +47,8 @@ const MAX_REPLY_LEN: usize = 6_000;
 /// little and look again — a few times, well inside the fire-and-forget budget.
 const REPLY_RETRIES: u32 = 8;
 const REPLY_RETRY_WAIT: Duration = Duration::from_millis(150);
+/// Longest prompt lifted out of a transcript.
+const MAX_FIELD_FALLBACK: usize = 2_000;
 /// Longest string forwarded for any single field. The island shows the whole
 /// thing — a Write's content, an Edit's old and new strings — so this has to
 /// hold a real file, not a headline. Past it the field is cut and the payload
@@ -115,9 +117,21 @@ fn parse_args() -> (String, String) {
     (agent, event)
 }
 
+/// Antigravity reads a JSON object from every hook's stdout. An empty one
+/// changes nothing: no decision, no injected steps, the agent stops when it
+/// meant to. The other CLIs want silence, which they get.
+fn finish(agent: &str) -> ! {
+    if agent == "antigravity" {
+        let mut out = std::io::stdout();
+        let _ = writeln!(out, "{{}}");
+        let _ = out.flush();
+    }
+    std::process::exit(0)
+}
+
 fn main() {
     let (agent, arg_event) = parse_args();
-    let Some((payload, event)) = read_event(&agent, &arg_event) else { std::process::exit(0) };
+    let Some((payload, event)) = read_event(&agent, &arg_event) else { finish(&agent) };
 
     let waits_for_answer = event == "PermissionRequest";
     let budget = if waits_for_answer { DECISION_BUDGET } else { FIRE_AND_FORGET_BUDGET };
@@ -139,7 +153,82 @@ fn main() {
         }
     }
     // Nothing printed: Claude Code asks in the terminal, as if we were not here.
-    std::process::exit(0);
+    finish(&agent);
+}
+
+/// Antigravity's payload, put into the words every other agent uses: its
+/// camelCase ids become `session_id` / `cwd` / `transcript_path`, and its
+/// events get the names the island knows. Returns the event name.
+///
+/// Only events that cannot change what the agent does are hooked at all —
+/// PreInvocation, PostToolUse, Stop — so there is no PreToolUse here: its
+/// answer decides permissions, and Coucou must never do that unasked.
+fn normalize_antigravity(map: &mut serde_json::Map<String, serde_json::Value>, arg_event: &str) -> String {
+    if let Some(id) = map.remove("conversationId") {
+        map.insert("session_id".into(), id);
+    }
+    let cwd = map
+        .get("workspacePaths")
+        .and_then(|v| v.as_array())
+        .and_then(|a| a.first())
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    if let Some(cwd) = cwd {
+        map.insert("cwd".into(), serde_json::Value::String(cwd));
+    }
+    if let Some(path) = map.remove("transcriptPath") {
+        map.insert("transcript_path".into(), path);
+    }
+    let failed = map
+        .get("error")
+        .and_then(|v| v.as_str())
+        .map(|e| !e.is_empty())
+        .unwrap_or(false);
+    match arg_event {
+        // The tool has run; its name is not in the payload (see read_event).
+        "PostToolUse" => "ToolUsed",
+        "Stop" if failed => "ErrorOccurred",
+        other => other,
+    }
+    .to_string()
+}
+
+/// The person's request out of Antigravity's wrapper:
+/// `<USER_REQUEST>…</USER_REQUEST><ADDITIONAL_METADATA>…`.
+fn strip_user_request(content: &str) -> String {
+    let inner = match (content.find("<USER_REQUEST>"), content.find("</USER_REQUEST>")) {
+        (Some(a), Some(b)) if a + 14 <= b => &content[a + 14..b],
+        _ => content,
+    };
+    inner.trim().chars().take(MAX_FIELD_FALLBACK).collect()
+}
+
+/// The newest line of the transcript tail for which `pick` finds something.
+fn newest<T>(path: &std::path::Path, pick: impl Fn(&serde_json::Value) -> Option<T>) -> Option<T> {
+    let tail = read_tail(path)?;
+    tail.lines()
+        .rev()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line.trim()).ok())
+        .find_map(|v| pick(&v))
+}
+
+/// Antigravity: what the person last asked.
+fn last_prompt(path: &std::path::Path) -> Option<String> {
+    newest(path, |v| {
+        (v.get("type")?.as_str()? == "USER_INPUT")
+            .then(|| v.get("content").and_then(|c| c.as_str()).map(strip_user_request))
+            .flatten()
+            .filter(|s| !s.is_empty())
+    })
+}
+
+/// Antigravity: the tool the agent last called, with its arguments.
+fn last_tool_call(path: &std::path::Path) -> Option<(String, serde_json::Value)> {
+    newest(path, |v| {
+        let call = v.get("tool_calls")?.as_array()?.last()?;
+        let name = call.get("name")?.as_str()?.to_string();
+        Some((name, call.get("args").cloned().unwrap_or(serde_json::Value::Null)))
+    })
 }
 
 /// The documented PermissionRequest output. Anything we do not recognise prints
@@ -179,13 +268,39 @@ fn read_event(agent: &str, arg_event: &str) -> Option<(String, String)> {
 
     // The event name is passed on the command line by the hook entry; the JSON
     // usually carries it too. Trust the argument when the JSON is missing it.
-    let event = map
-        .get("hook_event_name")
-        .and_then(|v| v.as_str())
-        .map(str::to_string)
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| arg_event.to_string());
+    let event = if agent == "antigravity" {
+        normalize_antigravity(map, arg_event)
+    } else {
+        map.get("hook_event_name")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| arg_event.to_string())
+    };
     map.insert("hook_event_name".into(), serde_json::Value::String(event.clone()));
+
+    // Antigravity's payloads say when, not what: the prompt and the tool that
+    // ran are in its transcript, so they are read from there.
+    if agent == "antigravity" {
+        let transcript = map
+            .get("transcript_path")
+            .and_then(|v| v.as_str())
+            .map(std::path::PathBuf::from);
+        match (event.as_str(), transcript) {
+            ("PreInvocation", Some(path)) => {
+                if let Some(prompt) = last_prompt(&path) {
+                    map.insert("prompt".into(), serde_json::Value::String(prompt));
+                }
+            }
+            ("ToolUsed", Some(path)) => {
+                if let Some((name, args)) = last_tool_call(&path) {
+                    map.insert("tool_name".into(), serde_json::Value::String(name));
+                    map.insert("tool_input".into(), args);
+                }
+            }
+            _ => {}
+        }
+    }
     // Which CLI is talking. Copilot's PascalCase hooks send Claude-shaped
     // payloads, so this is the one field that tells them apart.
     map.insert("agent".into(), serde_json::Value::String(agent.to_string()));
@@ -328,7 +443,8 @@ fn line_kind(line: &str) -> Line {
     let Ok(v) = serde_json::from_str::<serde_json::Value>(line.trim()) else { return Line::Other };
     let kind = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
     match kind {
-        "user.message" => return Line::Prompt,
+        // Copilot CLI, Antigravity.
+        "user.message" | "USER_INPUT" => return Line::Prompt,
         // Claude Code also files tool results under "user"; only a prompt —
         // plain string content, or text blocks — counts as one.
         "user" => {
@@ -362,6 +478,9 @@ fn reply_in_value(v: &serde_json::Value, kind: &str) -> Option<String> {
             .collect::<Vec<_>>()
             .join("\n"),
         "assistant.message" => v.get("data")?.get("content")?.as_str()?.to_string(),
+        // Antigravity: a planner step that says something (the ones that only
+        // call tools have no content and are skipped below).
+        "PLANNER_RESPONSE" => v.get("content")?.as_str()?.to_string(),
         _ => return None,
     };
     let text = text.trim();
@@ -589,6 +708,58 @@ mod tests {
             Found::Fresh(r) => assert_eq!(r, "Done."),
             _ => panic!("the final text after a tool round trip is fresh"),
         }
+    }
+
+    #[test]
+    fn antigravity_is_put_into_the_islands_words() {
+        let mut v = serde_json::json!({
+            "conversationId": "ec33", "workspacePaths": ["D:\\Code\\FPS", "D:\\other"],
+            "transcriptPath": "C:\\t\\transcript.jsonl", "stepIdx": 5
+        });
+        let event = normalize_antigravity(v.as_object_mut().unwrap(), "PostToolUse");
+        assert_eq!(event, "ToolUsed");
+        assert_eq!(v["session_id"], "ec33");
+        assert_eq!(v["cwd"], "D:\\Code\\FPS");
+        assert_eq!(v["transcript_path"], "C:\\t\\transcript.jsonl");
+        assert!(v.get("conversationId").is_none());
+
+        let mut stop = serde_json::json!({ "conversationId": "x", "terminationReason": "error", "error": "boom" });
+        assert_eq!(normalize_antigravity(stop.as_object_mut().unwrap(), "Stop"), "ErrorOccurred");
+        let mut ok = serde_json::json!({ "conversationId": "x", "terminationReason": "model_stop", "error": "" });
+        assert_eq!(normalize_antigravity(ok.as_object_mut().unwrap(), "Stop"), "Stop");
+        let mut pre = serde_json::json!({ "conversationId": "x", "invocationNum": 1 });
+        assert_eq!(normalize_antigravity(pre.as_object_mut().unwrap(), "PreInvocation"), "PreInvocation");
+    }
+
+    #[test]
+    fn antigravity_transcripts_give_the_prompt_the_tool_and_the_reply() {
+        let dir = std::env::temp_dir().join(format!("coucou-agy-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("transcript.jsonl");
+        std::fs::write(
+            &path,
+            concat!(
+                "{\"step_index\":0,\"source\":\"USER_EXPLICIT\",\"type\":\"USER_INPUT\",\"status\":\"DONE\",\"content\":\"<USER_REQUEST>\\nlist the files\\n</USER_REQUEST>\\n<ADDITIONAL_METADATA>x</ADDITIONAL_METADATA>\"}\n",
+                "{\"step_index\":1,\"source\":\"MODEL\",\"type\":\"PLANNER_RESPONSE\",\"status\":\"DONE\",\"tool_calls\":[{\"name\":\"list_dir\",\"args\":{\"DirectoryPath\":\"D:\\\\Code\"}}]}\n",
+                "{\"step_index\":2,\"source\":\"MODEL\",\"type\":\"GENERIC\",\"status\":\"DONE\",\"content\":\"a.txt\"}\n",
+            ),
+        )
+        .unwrap();
+        assert_eq!(last_prompt(&path).unwrap(), "list the files");
+        let (name, args) = last_tool_call(&path).unwrap();
+        assert_eq!(name, "list_dir");
+        assert_eq!(args["DirectoryPath"], "D:\\Code");
+        // No planner step has spoken yet: the tail ends on the prompt, so stale with nothing.
+        assert!(matches!(reply_in_tail(&std::fs::read_to_string(&path).unwrap()), Found::Stale(None)));
+
+        let mut text = std::fs::read_to_string(&path).unwrap();
+        text.push_str("{\"step_index\":3,\"source\":\"MODEL\",\"type\":\"PLANNER_RESPONSE\",\"status\":\"DONE\",\"content\":\"There is one file: a.txt\"}\n");
+        match reply_in_tail(&text) {
+            Found::Fresh(r) => assert_eq!(r, "There is one file: a.txt"),
+            _ => panic!("the planner's answer after the prompt is fresh"),
+        }
+        assert_eq!(strip_user_request("plain"), "plain");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -12,6 +12,7 @@ import type { Island } from "./island";
 const AGENT_SOURCES: Record<string, { source: AgentSource; standing: string }> = {
   claude: { source: "claudeCode", standing: "integration_claude" },
   copilot: { source: "copilot", standing: "integration_copilot" },
+  antigravity: { source: "antigravity", standing: "integration_antigravity" },
 };
 
 /**
@@ -44,6 +45,8 @@ interface HookPayload {
   last_reply?: string;
   /** Added by the relay when the CLI runs inside coucou-pty: the pipe to type through. */
   pty?: string;
+  /** Antigravity: why a tool or the whole run failed; empty when it did not. */
+  error?: string;
   tool_name?: string;
   tool_input?: Record<string, unknown>;
   /** Set by coucou-hook when it had to cut a field: the input is not whole. */
@@ -66,36 +69,45 @@ function lastPathComponent(p: string): string {
   return idx >= 0 ? cleaned.slice(idx + 1) : cleaned;
 }
 
-/** frenchStep() — same labels as the macOS app. */
+/** A verb per tool, for the ticker: Claude Code's names, then Antigravity's. */
 const TOOL_LABELS: Record<string, string> = {
-  Bash: "Exécute",
-  Read: "Lit",
-  Write: "Écrit",
-  Edit: "Modifie",
-  Glob: "Cherche",
-  Grep: "Recherche",
-  WebSearch: "Recherche web",
-  WebFetch: "Récupère",
-  TodoWrite: "Tâches",
+  Bash: "Run",
+  Read: "Read",
+  Write: "Write",
+  Edit: "Edit",
+  Glob: "Find",
+  Grep: "Search",
+  WebSearch: "Web search",
+  WebFetch: "Fetch",
+  TodoWrite: "Tasks",
   Task: "Agent",
-  LS: "Liste",
-  MultiEdit: "Modifie",
+  LS: "List",
+  MultiEdit: "Edit",
   NotebookEdit: "Notebook",
-  PowerShell: "Exécute",
+  PowerShell: "Run",
+  run_command: "Run",
+  view_file: "Read",
+  list_dir: "List",
+  write_to_file: "Write",
+  replace_file_content: "Edit",
+  grep_search: "Search",
+  find_by_name: "Find",
+  search_web: "Web search",
+  read_url_content: "Fetch",
 };
 
 function stepLabel(tool: string, input: Record<string, unknown>): string {
   const label = TOOL_LABELS[tool] ?? tool;
   const str = (k: string) => (typeof input[k] === "string" ? (input[k] as string) : null);
-  const cmd = str("command");
+  const cmd = str("command") ?? str("CommandLine");
   if (cmd) return `${label} · ${cmd.slice(0, 40)}`;
-  const path = str("path");
+  const path = str("path") ?? str("file_path") ?? str("AbsolutePath") ?? str("TargetFile") ?? str("DirectoryPath");
   if (path) return `${label} · ${lastPathComponent(path)}`;
-  const file = str("file_path");
-  if (file) return `${label} · ${lastPathComponent(file)}`;
-  const query = str("query");
+  const query = str("query") ?? str("Query");
   if (query) return `${label} · ${query.slice(0, 40)}`;
-  return label;
+  // A tool nobody listed still says what it was aimed at.
+  const first = Object.values(input).find((v) => typeof v === "string" && v.trim()) as string | undefined;
+  return first ? `${label} · ${first.slice(0, 40)}` : label;
 }
 
 /**
@@ -274,13 +286,34 @@ function handleHook(island: Island, payload: HookPayload) {
       break;
     }
 
-    case "PreToolUse": {
+    // Antigravity has no "prompt submitted" event: the model is about to be
+    // called, and the relay lifted the prompt out of the transcript. It fires
+    // before every model call of a turn, so the prompt is noted once.
+    case "PreInvocation": {
+      upsert(CLAUDE_ID, projectName, cwd);
+      const asked = payload.prompt?.trim();
+      const lastAsked = [...(own?.transcript ?? [])].reverse().find((e) => e.role === "user")?.text;
+      if (asked && asked !== lastAsked) {
+        if (own) State.markRead(own);
+        State.appendStep(CLAUDE_ID, asked.slice(0, 60));
+        State.appendTranscript(CLAUDE_ID, { role: "user", text: asked });
+      }
+      State.updateTask(CLAUDE_ID, "thinking");
+      surface("overview", false);
+      break;
+    }
+
+    // ToolUsed is Antigravity's: the tool has already run (its PreToolUse
+    // would decide permissions, so it is not hooked).
+    case "PreToolUse":
+    case "ToolUsed": {
       upsert(CLAUDE_ID, projectName, cwd);
       State.updateTask(CLAUDE_ID, "working");
       const tool = payload.tool_name ?? "Tool";
       const label = stepLabel(tool, payload.tool_input ?? {});
       State.appendStep(CLAUDE_ID, label);
       State.appendTranscript(CLAUDE_ID, { role: "tool", text: label });
+      if (payload.error) State.appendStep(CLAUDE_ID, "⚠ failed");
       surface("overview", false);
       break;
     }
