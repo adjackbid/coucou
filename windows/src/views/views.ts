@@ -5,7 +5,7 @@
 import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { Ticker } from "./ticker";
-import { SOURCE_LABELS, State, isAgentSource, type AgentTask } from "../core/state";
+import { MAX_PILLS, SOURCE_LABELS, State, isAgentSource, type AgentTask } from "../core/state";
 import { washRGBA, type IslandViewName, type Wash } from "../core/layout";
 import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
 import { buildPrompt } from "./chat";
@@ -130,6 +130,13 @@ function buildOverview(actions: ViewActions): ViewHost {
     svg(ICONS.arrowUpRight, 8),
   );
   const left = card(null, leftBody, jump);
+  // The ticker shows one line at a time; the card opens the whole session.
+  left.title = "Show the whole conversation";
+  left.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    const task = State.focusTask;
+    if (task && isAgentSource(task.source) && task.transcript.length > 0) actions.setView("session");
+  });
   const pills = h("div", { class: "pills" });
   const right = card(null, pills);
 
@@ -178,7 +185,8 @@ function buildOverview(actions: ViewActions): ViewHost {
       // An agent pill with a live session keeps the ticker; every other pill
       // shows its own card, exactly like IntegrationCardView.
       const sessionActive =
-        task != null && isAgentSource(task.source) && (task.state !== "idle" || task.steps.length > 0);
+        task != null && isAgentSource(task.source) &&
+        (task.isSession || task.state !== "idle" || task.steps.length > 0);
 
       if (task && sessionActive) {
         if (mode !== "ticker") {
@@ -217,7 +225,7 @@ function buildOverview(actions: ViewActions): ViewHost {
 
       jump.style.display = detailOpen ? "none" : "";
 
-      const others = State.otherTasks.slice(0, 4);
+      const others = State.otherTasks.slice(0, MAX_PILLS);
       const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}`).join("|");
       if (pillKey !== pillIds) {
         pillIds = pillKey;
@@ -230,8 +238,11 @@ function buildOverview(actions: ViewActions): ViewHost {
 }
 
 function buildPill(task: AgentTask, actions: ViewActions): HTMLElement {
-  // Agent pills keep a fixed label; the project name is on the card.
-  const label = task.id === "integration_claude" ? "VS Code" : task.source === "copilot" ? "Copilot" : task.name;
+  // A session pill is named after its project folder — with several sessions
+  // open that is the one thing telling them apart. Standing pills keep theirs.
+  const label = task.isSession ? task.name
+    : task.id === "integration_claude" ? "VS Code"
+    : task.source === "copilot" ? "Copilot" : task.name;
   const canvas = createMiniBot(task, 24);
   const pill = h(
     "div",
@@ -417,6 +428,46 @@ function buildFinished(actions: ViewActions): ViewHost {
   };
 }
 
+// ── Session ───────────────────────────────────────────────────────────────────
+
+/** Everything the focused agent said and did this session, in full. */
+function buildSession(actions: ViewActions): ViewHost {
+  const who = h("div");
+  const log = h("div", { class: "chat-log session-log" });
+  const row = h("div", { class: "actions" },
+    btn("Open terminal", "primary", () => actions.openTerminal()),
+    btn("Back", "secondary", () => actions.setView("overview")),
+  );
+  const body = h("div", { class: "stack session-stack" }, who, log, row);
+  body.style.padding = "4px 16px 4px 100px";
+  const el = h("div", { class: "view" }, card(null, body));
+  let renderedKey = "";
+  return {
+    el,
+    sync() {
+      const task = State.focusTask;
+      clear(who);
+      who.append(agentWho(task, task ? SOURCE_LABELS[task.source] : ""));
+      const entries = task?.transcript ?? [];
+      const key = `${task?.id}|${entries.length}|${entries.at(-1)?.text.length ?? 0}`;
+      if (key === renderedKey) return;
+      renderedKey = key;
+      clear(log);
+      for (const entry of entries) {
+        if (entry.role === "user") {
+          log.append(h("div", { class: "chat-row user" }, h("div", { class: "bubble", text: entry.text })));
+        } else if (entry.role === "assistant") {
+          log.append(h("div", { class: "chat-row" }, h("div", { class: "reply", text: entry.text })));
+        } else {
+          log.append(h("div", { class: "session-tool", text: entry.text }));
+        }
+      }
+      if (entries.length === 0) log.append(h("div", { class: "sub", text: "Nothing yet this session." }));
+      log.scrollTop = log.scrollHeight;
+    },
+  };
+}
+
 // ── Confused ──────────────────────────────────────────────────────────────────
 
 function buildConfused(): ViewHost {
@@ -531,6 +582,7 @@ export function buildViews(
   map.set("question", buildQuestion());
   map.set("error", buildError(actions));
   map.set("finished", buildFinished(actions));
+  map.set("session", buildSession(actions));
   map.set("confused", buildConfused());
   map.set("note", buildNote());
   map.set("settings", buildSettings(actions));

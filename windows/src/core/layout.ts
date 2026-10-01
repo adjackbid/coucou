@@ -21,6 +21,7 @@ export type IslandViewName =
   | "result"
   | "note"
   | "settings"
+  | "session"
   | "greeting";
 
 export type BotStateName =
@@ -86,6 +87,8 @@ export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   result: { height: 160, botX: 52, botY: null, botDiameter: 44, agentMode: "column" },
   note: { height: 160, botX: 60, botY: null, botDiameter: 50, agentMode: "column" },
   settings: { height: 160, botX: 54, botY: null, botDiameter: 46, agentMode: "none" },
+  // The whole conversation of the focused agent, scrolling; as tall as the chat.
+  session: { height: 300, botX: 52, botY: 90, botDiameter: 44, agentMode: "column" },
   greeting: { height: 150, botX: 320, botY: 90, botDiameter: 0, agentMode: "none" },
 };
 
@@ -115,11 +118,24 @@ export function approvalHeight(lines: number): number {
   return Math.min(APPROVAL_MAX_H, APPROVAL_MIN_H + Math.round(Math.max(0, lines - 1) * CODE_LINE_H));
 }
 
+/** A row of pills in the overview's right card. */
+const PILL_ROW_H = 32;
+
+/**
+ * The overview grows by a row of pills past the second: with several
+ * sessions open the right card would otherwise clip the ones that matter.
+ */
+export function overviewHeight(pillCount: number): number {
+  const rows = Math.ceil(Math.max(0, pillCount) / 2);
+  return VIEW_LAYOUTS.overview.height + Math.max(0, rows - 2) * PILL_ROW_H;
+}
+
 export function islandSize(
   mode: IslandMode,
   view: IslandViewName,
   chatCount = 0,
   approvalLines = 0,
+  pillCount = 0,
 ): { w: number; h: number } {
   switch (mode) {
     case "hidden":
@@ -132,6 +148,7 @@ export function islandSize(
       const h =
         view === "prompt" ? chatPromptHeight(chatCount)
         : view === "approval" ? approvalHeight(approvalLines)
+        : view === "overview" ? overviewHeight(pillCount)
         : VIEW_LAYOUTS[view].height;
       return { w: EXPANDED_W, h };
     }

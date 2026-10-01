@@ -5,19 +5,26 @@
 
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { INTEGRATION_AGENTS, State, type ApprovalSection } from "../core/state";
+import { INTEGRATION_AGENTS, State, type AgentSource, type ApprovalSection } from "../core/state";
 import type { Island } from "./island";
 
-/** Which pill each `--agent` of the relay feeds. Anything unknown is Claude Code. */
-const AGENT_TASKS: Record<string, string> = {
-  claude: "integration_claude",
-  copilot: "integration_copilot",
+/** Which agent each `--agent` of the relay is. Anything unknown is Claude Code. */
+const AGENT_SOURCES: Record<string, { source: AgentSource; standing: string }> = {
+  claude: { source: "claudeCode", standing: "integration_claude" },
+  copilot: { source: "copilot", standing: "integration_copilot" },
 };
 
-function taskFor(agent: string | undefined): string {
-  const id = AGENT_TASKS[agent ?? "claude"] ?? "integration_claude";
-  State.ensureTask(id);
-  return id;
+/**
+ * The pill an event belongs to: its session's own pill, named after the
+ * project, so two Copilots in two folders are two pills. Without a session id
+ * the agent's standing pill takes it.
+ */
+function taskFor(payload: HookPayload, projectName: string, cwd: string): string {
+  const agent = AGENT_SOURCES[payload.agent ?? "claude"] ?? AGENT_SOURCES.claude;
+  const sessionId = (payload.session_id ?? "").trim();
+  if (sessionId) return State.ensureSessionTask(agent.source, sessionId, projectName, cwd);
+  State.ensureTask(agent.standing);
+  return agent.standing;
 }
 
 /** Clears the approval card if no decision was made before the hook gave up. */
@@ -190,6 +197,7 @@ function clearSession(taskId: string) {
   const t = State.tasks.find((x) => x.id === taskId);
   if (!t) return;
   t.steps = [];
+  t.transcript = [];
   t.stepIndex = 0;
   t.name = INTEGRATION_AGENTS.find((x) => x.id === taskId)?.name ?? t.name;
   t.pillBadge = null;
@@ -218,7 +226,7 @@ function handleHook(island: Island, payload: HookPayload) {
   const cwd = payload.cwd ?? "";
   const raw = lastPathComponent(cwd);
   const projectName = aliasProjectName(raw || "Session");
-  const CLAUDE_ID = taskFor(payload.agent);
+  const CLAUDE_ID = taskFor(payload, projectName, cwd);
   const focused = State.focusId === CLAUDE_ID;
 
   /** Alerts force the island open; work events only reveal the compact island. */
@@ -244,7 +252,10 @@ function handleHook(island: Island, payload: HookPayload) {
       State.updateTask(CLAUDE_ID, "thinking");
       // The field is `prompt`; reading `message` meant this step was always blank.
       const asked = payload.prompt ?? payload.message;
-      if (asked) State.appendStep(CLAUDE_ID, asked.slice(0, 60));
+      if (asked) {
+        State.appendStep(CLAUDE_ID, asked.slice(0, 60));
+        State.appendTranscript(CLAUDE_ID, { role: "user", text: asked });
+      }
       surface("overview", false);
       break;
     }
@@ -253,7 +264,9 @@ function handleHook(island: Island, payload: HookPayload) {
       upsert(CLAUDE_ID, projectName, cwd);
       State.updateTask(CLAUDE_ID, "working");
       const tool = payload.tool_name ?? "Tool";
-      State.appendStep(CLAUDE_ID, stepLabel(tool, payload.tool_input ?? {}));
+      const label = stepLabel(tool, payload.tool_input ?? {});
+      State.appendStep(CLAUDE_ID, label);
+      State.appendTranscript(CLAUDE_ID, { role: "tool", text: label });
       surface("overview", false);
       break;
     }
@@ -286,8 +299,12 @@ function handleHook(island: Island, payload: HookPayload) {
       State.updateTask(CLAUDE_ID, "finished");
       // What the agent said, on one line for the ticker; the finished card
       // shows the same text with room to wrap.
-      const said = (payload.last_reply ?? payload.message ?? "").replace(/\s+/g, " ").trim();
-      if (said) State.appendStep(CLAUDE_ID, said.length > 240 ? `${said.slice(0, 240)}…` : said);
+      const full = (payload.last_reply ?? payload.message ?? "").trim();
+      const said = full.replace(/\s+/g, " ");
+      if (said) {
+        State.appendStep(CLAUDE_ID, said.length > 240 ? `${said.slice(0, 240)}…` : said);
+        State.appendTranscript(CLAUDE_ID, { role: "assistant", text: full });
+      }
       Sound.play("finish");
       if (focused) surface("finished", true);
       else State.setPillBadge(CLAUDE_ID, "finished");
@@ -309,7 +326,14 @@ function handleHook(island: Island, payload: HookPayload) {
 
     case "SessionEnd":
       State.updateTask(CLAUDE_ID, "idle");
-      clearSession(CLAUDE_ID);
+      if (CLAUDE_ID.startsWith("session:")) {
+        // The pill was the session; the standing one comes back if it was the last.
+        if (State.pendingApproval?.taskId === CLAUDE_ID) State.pendingApproval = null;
+        if (State.view === "session" && State.focusId === CLAUDE_ID) island.setView(State.defaultView());
+        State.endSession(CLAUDE_ID);
+      } else {
+        clearSession(CLAUDE_ID);
+      }
       break;
 
     case "SubagentStart":

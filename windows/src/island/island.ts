@@ -10,7 +10,7 @@ import {
   type IslandMode, type IslandViewName,
 } from "../core/layout";
 import { Sound } from "../core/sound";
-import { State, isAgentSource } from "../core/state";
+import { MAX_PILLS, State, isAgentSource } from "../core/state";
 import { BotEngine, hexToRGB } from "../mochi/engine";
 import { Greeting } from "../mochi/greeting";
 import { createMiniBot, pruneMiniBots, syncMiniBotStates, tickMiniBots } from "../mochi/minibots";
@@ -346,9 +346,11 @@ export class Island {
    */
   clickOutside() {
     if (State.mode !== "expanded") return;
+    // A file drag starts with a press elsewhere — on the file, in Explorer —
+    // so while the drop zone is up a press outside is the drag beginning, not
+    // a dismissal. The × and the shortcut still close it.
+    if (State.fileDragOver || UPLOAD_VIEWS.has(State.view)) return;
     void Bridge.log("click outside — shutting the island");
-    // A file drag starts with a press elsewhere; the drop zone must stay open.
-    if (State.fileDragOver) return;
     this.collapse();
   }
 
@@ -496,6 +498,7 @@ export class Island {
   private targetSize(): { w: number; h: number; r: number } {
     const { w, h } = islandSize(
       State.mode, State.view, State.chatHistory.length, State.pendingApproval?.lines ?? 0,
+      Math.min(State.otherTasks.length, MAX_PILLS),
     );
     const r = State.mode === "expanded" ? EXPANDED_CORNER : ROUNDED_CORNER;
     return { w, h, r };

@@ -39,8 +39,14 @@ const DROPPED_FIELDS: &[&str] = &["tool_response", "transcript_path"];
 /// How much of the end of a transcript is read to find the last reply. A
 /// transcript can be megabytes; the last turn is in the final few kilobytes.
 const TRANSCRIPT_TAIL: u64 = 256 * 1024;
-/// Longest reply forwarded as `last_reply`.
-const MAX_REPLY_LEN: usize = 1_500;
+/// Longest reply forwarded as `last_reply`. The island shows the whole thing
+/// in its session view, so this is a real page, not a headline.
+const MAX_REPLY_LEN: usize = 6_000;
+/// The Stop hook can fire before the CLI has appended the reply it is
+/// stopping on. When the transcript still ends on the user's prompt, wait a
+/// little and look again — a few times, well inside the fire-and-forget budget.
+const REPLY_RETRIES: u32 = 8;
+const REPLY_RETRY_WAIT: Duration = Duration::from_millis(150);
 /// Longest string forwarded for any single field. The island shows the whole
 /// thing — a Write's content, an Edit's old and new strings — so this has to
 /// hold a real file, not a headline. Past it the field is cut and the payload
@@ -256,23 +262,92 @@ fn copilot_transcript(agent: &str, session_id: Option<&str>) -> Option<std::path
 /// The last thing the assistant said, from the tail of a JSONL transcript —
 /// Claude Code's (`type: "assistant"`, text blocks in `message.content`) or
 /// Copilot CLI's (`type: "assistant.message"`, a string in `data.content`).
+///
+/// Retries while the transcript still ends on the user's prompt: the reply
+/// being stopped on is usually appended a moment after the hook fires, and
+/// the previous turn's answer is worse than a short wait.
 fn last_reply(path: &std::path::Path) -> Option<String> {
+    let mut stale: Option<String> = None;
+    for attempt in 0..=REPLY_RETRIES {
+        match reply_in_tail(&read_tail(path)?) {
+            Found::Fresh(reply) => return Some(reply),
+            Found::Stale(reply) => stale = reply,
+        }
+        if attempt < REPLY_RETRIES {
+            std::thread::sleep(REPLY_RETRY_WAIT);
+        }
+    }
+    stale
+}
+
+fn read_tail(path: &std::path::Path) -> Option<String> {
     use std::io::{Seek, SeekFrom};
     let mut file = std::fs::File::open(path).ok()?;
     let len = file.metadata().ok()?.len();
-    let start = len.saturating_sub(TRANSCRIPT_TAIL);
-    file.seek(SeekFrom::Start(start)).ok()?;
+    file.seek(SeekFrom::Start(len.saturating_sub(TRANSCRIPT_TAIL))).ok()?;
     let mut tail = Vec::new();
     file.read_to_end(&mut tail).ok()?;
-    let text = String::from_utf8_lossy(&tail);
-    // Reading from the end: the first complete line that is a reply wins. A
-    // cut first line (we started mid-line) fails to parse and is skipped.
-    text.lines().rev().find_map(|line| reply_in_line(line))
+    Some(String::from_utf8_lossy(&tail).to_string())
 }
 
-fn reply_in_line(line: &str) -> Option<String> {
-    let v: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
-    let kind = v.get("type").and_then(|t| t.as_str())?;
+enum Found {
+    /// The newest reply, and it comes after the newest prompt.
+    Fresh(String),
+    /// The transcript ends on a prompt: the reply is not written yet. Carries
+    /// the previous reply, if any, as the fallback.
+    Stale(Option<String>),
+}
+
+/// Reading from the end: the first complete line that is a reply or a prompt
+/// decides. A cut first line (we started mid-line) fails to parse and is
+/// skipped.
+fn reply_in_tail(text: &str) -> Found {
+    let mut saw_prompt = false;
+    for line in text.lines().rev() {
+        match line_kind(line) {
+            Line::Reply(reply) => {
+                return if saw_prompt { Found::Stale(Some(reply)) } else { Found::Fresh(reply) };
+            }
+            Line::Prompt => saw_prompt = true,
+            Line::Other => {}
+        }
+    }
+    Found::Stale(None)
+}
+
+enum Line {
+    Reply(String),
+    Prompt,
+    Other,
+}
+
+fn line_kind(line: &str) -> Line {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(line.trim()) else { return Line::Other };
+    let kind = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
+    match kind {
+        "user.message" => return Line::Prompt,
+        // Claude Code also files tool results under "user"; only a prompt —
+        // plain string content, or text blocks — counts as one.
+        "user" => {
+            let content = v.get("message").and_then(|m| m.get("content"));
+            let is_prompt = match content {
+                Some(serde_json::Value::String(_)) => true,
+                Some(serde_json::Value::Array(blocks)) => {
+                    blocks.iter().any(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
+                }
+                _ => false,
+            };
+            return if is_prompt { Line::Prompt } else { Line::Other };
+        }
+        _ => {}
+    }
+    match reply_in_value(&v, kind) {
+        Some(reply) => Line::Reply(reply),
+        None => Line::Other,
+    }
+}
+
+fn reply_in_value(v: &serde_json::Value, kind: &str) -> Option<String> {
     let text = match kind {
         "assistant" => v
             .get("message")?
@@ -296,6 +371,14 @@ fn reply_in_line(line: &str) -> Option<String> {
         out.push('…');
     }
     Some(out)
+}
+
+#[cfg(test)]
+fn reply_in_line(line: &str) -> Option<String> {
+    match line_kind(line) {
+        Line::Reply(r) => Some(r),
+        _ => None,
+    }
 }
 
 /// Two cuts: a generous one, then the short one if the line would still be too
@@ -475,8 +558,39 @@ mod tests {
     }
 
     #[test]
+    fn a_reply_written_before_the_newest_prompt_is_stale() {
+        // Copilot: the Stop hook fired before the answer to "say hi" landed.
+        let early = concat!(
+            "{\"type\":\"user.message\",\"data\":{\"content\":\"test\"}}\n",
+            "{\"type\":\"assistant.message\",\"data\":{\"content\":\"Works.\"}}\n",
+            "{\"type\":\"user.message\",\"data\":{\"content\":\"say hi\"}}\n",
+        );
+        match reply_in_tail(early) {
+            Found::Stale(Some(r)) => assert_eq!(r, "Works."),
+            _ => panic!("the previous answer must be reported as stale"),
+        }
+        let late = format!("{early}{{\"type\":\"assistant.message\",\"data\":{{\"content\":\"Hi there!\"}}}}\n");
+        match reply_in_tail(&late) {
+            Found::Fresh(r) => assert_eq!(r, "Hi there!"),
+            _ => panic!("the answer after the prompt is fresh"),
+        }
+
+        // Claude Code: a tool_result "user" line is not a prompt.
+        let claude = concat!(
+            "{\"type\":\"user\",\"message\":{\"content\":\"do it\"}}\n",
+            "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"Bash\"}]}}\n",
+            "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"content\":\"ok\"}]}}\n",
+            "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"Done.\"}]}}\n",
+        );
+        match reply_in_tail(claude) {
+            Found::Fresh(r) => assert_eq!(r, "Done."),
+            _ => panic!("the final text after a tool round trip is fresh"),
+        }
+    }
+
+    #[test]
     fn a_long_reply_is_cut_with_an_ellipsis() {
-        let line = format!(r#"{{"type":"assistant.message","data":{{"content":"{}"}}}}"#, "x".repeat(5000));
+        let line = format!(r#"{{"type":"assistant.message","data":{{"content":"{}"}}}}"#, "x".repeat(MAX_REPLY_LEN + 1000));
         let out = reply_in_line(&line).unwrap();
         assert!(out.ends_with('…'));
         assert!(out.chars().count() == MAX_REPLY_LEN + 1);

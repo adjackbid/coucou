@@ -18,15 +18,26 @@ export const SOURCE_LABELS: Record<AgentSource, string> = {
 };
 export type PillBadge = "approval" | "finished" | "error";
 
+/** One line of a session as the island saw it: a prompt, a tool, a reply. */
+export interface TranscriptEntry {
+  role: "user" | "assistant" | "tool";
+  text: string;
+}
+
 export interface AgentTask {
   id: string;
   name: string;
   color: string;
   state: BotStateName;
   stepIndex: number;
+  /** One short line per event, for the ticker. */
   steps: string[];
+  /** The same events in full, for the session view. */
+  transcript: TranscriptEntry[];
   source: AgentSource;
   isIntegration: boolean;
+  /** A live CLI session (one pill per session), as opposed to the agent's standing pill. */
+  isSession?: boolean;
   emote?: BotEmoteName | null;
   miniEye?: EyeShape | null;
   pillBadge?: PillBadge | null;
@@ -84,8 +95,20 @@ export interface SearchResult {
 const task = (
   id: string, name: string, color: string, source: AgentSource,
 ): AgentTask => ({
-  id, name, color, state: "idle", stepIndex: 0, steps: [], source, isIntegration: true,
+  id, name, color, state: "idle", stepIndex: 0, steps: [], transcript: [], source, isIntegration: true,
 });
+
+/** How much of a session the island remembers for the session view. */
+const MAX_TRANSCRIPT = 60;
+
+/** Pills shown next to the focused card: three rows of two. */
+export const MAX_PILLS = 6;
+
+/** The standing pill each hook agent falls back to when it has no session. */
+const AGENT_PILLS: Record<string, string> = {
+  claudeCode: "integration_claude",
+  copilot: "integration_copilot",
+};
 
 /** AgentTask.integrationAgents — same ids, names and colours as macOS. */
 export const INTEGRATION_AGENTS: AgentTask[] = [
@@ -268,6 +291,14 @@ class AppState {
     this.notify();
   }
 
+  appendTranscript(id: string, entry: TranscriptEntry) {
+    const t = this.tasks.find((x) => x.id === id);
+    if (!t) return;
+    t.transcript.push(entry);
+    if (t.transcript.length > MAX_TRANSCRIPT) t.transcript.shift();
+    this.notify();
+  }
+
   setPillBadge(id: string, badge: PillBadge | null) {
     const t = this.tasks.find((x) => x.id === id);
     if (!t) return;
@@ -275,39 +306,94 @@ class AppState {
     this.notify();
   }
 
+  /** The live sessions of one agent. */
+  sessionsOf(source: AgentSource): AgentTask[] {
+    return this.tasks.filter((t) => t.isSession && t.source === source);
+  }
+
   /**
-   * loadIntegrationTasks() — VS Code always on, Copilot once its hooks are
-   * installed (or the moment it speaks, see ensureTask), the rest opt-in (max 4).
+   * loadIntegrationTasks() — the standing VS Code pill while no Claude Code
+   * session is live, the standing Copilot pill likewise once its hooks are
+   * installed, the integrations opt-in (max 4). Session pills are never
+   * touched here; they come and go with their sessions.
    */
   loadIntegrationTasks() {
     for (const proto of INTEGRATION_AGENTS) {
       const shouldLoad =
-        proto.id === "integration_claude" ||
-        (proto.id === "integration_copilot" && this.settings.copilotHooksInstalled) ||
+        (proto.id === "integration_claude" && this.sessionsOf("claudeCode").length === 0) ||
+        (proto.id === "integration_copilot" && this.settings.copilotHooksInstalled && this.sessionsOf("copilot").length === 0) ||
         this.settings.activeIntegrations.includes(proto.id);
       const idx = this.tasks.findIndex((t) => t.id === proto.id);
-      if (shouldLoad && idx < 0) this.tasks.push({ ...proto, steps: [] });
+      if (shouldLoad && idx < 0) this.tasks.push({ ...proto, steps: [], transcript: [] });
       // A pill that is talking stays, whatever the settings say.
       if (!shouldLoad && idx >= 0 && !this.tasks[idx].steps.length) this.tasks.splice(idx, 1);
     }
     this.sortTasks();
-    if (!this.focusId) this.focusId = "integration_claude";
+    if (!this.focusId || !this.tasks.some((t) => t.id === this.focusId)) {
+      this.focusId = this.tasks[0]?.id ?? "integration_claude";
+    }
     this.notify();
   }
 
-  /** Makes sure a pill exists for an agent that just sent an event. */
+  /** Makes sure a standing pill exists for an agent that just sent an event. */
   ensureTask(id: string) {
     if (this.tasks.some((t) => t.id === id)) return;
     const proto = INTEGRATION_AGENTS.find((t) => t.id === id);
     if (!proto) return;
-    this.tasks.push({ ...proto, steps: [] });
+    this.tasks.push({ ...proto, steps: [], transcript: [] });
     this.sortTasks();
   }
 
-  /** Keep the declared order so pills never shuffle. */
+  /**
+   * One pill per session: the first event from a session creates it, named
+   * after the project folder, in the agent's colour. The agent's standing
+   * pill steps aside while it has live sessions.
+   */
+  ensureSessionTask(source: AgentSource, sessionId: string, name: string, cwd: string): string {
+    const id = `session:${source}:${sessionId}`;
+    if (!this.tasks.some((t) => t.id === id)) {
+      const standing = INTEGRATION_AGENTS.find((t) => t.id === AGENT_PILLS[source]);
+      this.tasks.push({
+        id,
+        name,
+        color: standing?.color ?? "#F5F6F8",
+        state: "idle",
+        stepIndex: 0,
+        steps: [],
+        transcript: [],
+        source,
+        isIntegration: false,
+        isSession: true,
+        sessionCwd: cwd || null,
+      });
+      const standingIdx = this.tasks.findIndex((t) => t.id === AGENT_PILLS[source]);
+      if (standingIdx >= 0) {
+        if (this.focusId === AGENT_PILLS[source]) this.focusId = id;
+        this.tasks.splice(standingIdx, 1);
+      }
+      this.sortTasks();
+      this.notify();
+    }
+    return id;
+  }
+
+  /** The session is over: its pill goes, and the standing pill may return. */
+  endSession(id: string) {
+    const idx = this.tasks.findIndex((t) => t.id === id);
+    if (idx < 0) return;
+    const source = this.tasks[idx].source;
+    this.tasks.splice(idx, 1);
+    if (this.focusId === id) {
+      this.focusId = this.sessionsOf(source)[0]?.id ?? null;
+    }
+    this.loadIntegrationTasks();
+  }
+
+  /** Sessions first, in the order they appeared; then the declared pills, so nothing shuffles. */
   private sortTasks() {
     const order = INTEGRATION_AGENTS.map((t) => t.id);
-    this.tasks.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    const rank = (t: AgentTask) => (t.isSession ? -1 : order.indexOf(t.id));
+    this.tasks.sort((a, b) => rank(a) - rank(b));
   }
 
   toggleIntegration(id: string) {
