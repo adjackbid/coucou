@@ -256,6 +256,8 @@ function handleHook(island: Island, payload: HookPayload) {
 
     case "UserPromptSubmit": {
       upsert(CLAUDE_ID, projectName, cwd);
+      // Typing the next prompt means the last reply was seen.
+      if (own) State.markRead(own);
       State.updateTask(CLAUDE_ID, "thinking");
       // The field is `prompt`; reading `message` meant this step was always blank.
       const asked = payload.prompt ?? payload.message;
@@ -313,14 +315,14 @@ function handleHook(island: Island, payload: HookPayload) {
         State.appendTranscript(CLAUDE_ID, { role: "assistant", text: full });
       }
       Sound.play("finish");
-      if (!focused) {
-        // Another pill has the screen. This one stays "unread" — badge, glow,
-        // finished pose, a card of its own — until it is looked at. A badge
-        // that faded in five seconds was gone before anyone saw it.
-        const t = State.tasks.find((x) => x.id === CLAUDE_ID);
-        if (t) t.unread = true;
-        State.setPillBadge(CLAUDE_ID, "finished");
-      }
+      // Every reply starts unread — glow, finished pose, a card of its own —
+      // until the person shows they saw it: a click on its pill or card, the
+      // mouse coming onto the open island, or the next prompt in that session.
+      // Focus alone is not a look: a shut island follows the busy session by
+      // itself, and a reply that arrived while nobody was watching must still
+      // light the island up once it has closed again.
+      if (own) own.unread = true;
+      if (!focused) State.setPillBadge(CLAUDE_ID, "finished");
       // Finished or not, nothing takes the whole island: the overview shows
       // every session side by side, and a card opens the full conversation.
       // Someone typing in the chat, or reading a session, is not yanked away;

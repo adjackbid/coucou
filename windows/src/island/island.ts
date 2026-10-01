@@ -605,6 +605,11 @@ export class Island {
         this.fsm.click();
         return;
       }
+      // A click on the open island is a look at what it shows.
+      if (State.focusTask?.unread) {
+        State.markRead(State.focusTask);
+        State.notify();
+      }
       if (this.isBotHit(e.clientX / State.zoom, e.clientY / State.zoom)) {
         this.cancelBotHover();
         this.engine.slap();
@@ -679,6 +684,11 @@ export class Island {
       if (this.fsm.state === "coucou") this.greeting.hover();
       this.fsm.mouseEntered();
       this.homeCollapseAt = null;
+      // Coming onto the open island counts as looking at what it shows.
+      if (State.mode === "expanded" && State.focusTask?.unread) {
+        State.markRead(State.focusTask);
+        State.notify();
+      }
     }
     if (!inIsland && this.wasInIsland) {
       this.fsm.mouseLeft();
