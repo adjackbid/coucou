@@ -6,6 +6,7 @@ import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { Ticker } from "./ticker";
 import { MAX_PILLS, SOURCE_LABELS, State, isAgentSource, type AgentTask } from "../core/state";
+import { Bridge } from "../core/bridge";
 import { washRGBA, type IslandViewName, type Wash } from "../core/layout";
 import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
 import { buildPrompt } from "./chat";
@@ -509,14 +510,52 @@ function buildSession(actions: ViewActions): ViewHost {
     btn("Open terminal", "primary", () => actions.openTerminal()),
     btn("Back", "secondary", () => actions.setView("overview")),
   );
-  const body = h("div", { class: "stack session-stack" }, who, log, row);
+  // Typing into the session's own terminal — there only when the CLI was
+  // started through coucou-pty, and only while it is not in the middle of a
+  // turn: this is keystrokes into a TUI, and a busy one would mangle them.
+  const input = h("input", { type: "text", class: "chat-input", spellcheck: "false" }) as HTMLInputElement;
+  const send = h("button", { class: "send-btn", title: "Type it into the terminal" }, svg(ICONS.arrowUp, 11));
+  const bar = h("div", { class: "chat-bar" }, input, send);
+  const BUSY = new Set(["working", "thinking", "searching", "approval"]);
+  const busy = () => BUSY.has(State.focusTask?.state ?? "idle");
+  async function submit() {
+    const task = State.focusTask;
+    const text = input.value.trim();
+    if (!task?.pty || !text || busy()) return;
+    input.value = "";
+    try {
+      await Bridge.ptySend(task.pty, text);
+      actions.blip();
+    } catch (err) {
+      // The terminal is gone: say so where the person is looking, and stop offering it.
+      State.appendTranscript(task.id, { role: "tool", text: String(err).replace(/^Error:\s*/, "") });
+      task.pty = null;
+      State.notify();
+    }
+  }
+  send.addEventListener("click", () => void submit());
+  input.addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter") {
+      e.preventDefault();
+      void submit();
+    }
+    e.stopPropagation();
+  });
+
+  const body = h("div", { class: "stack session-stack" }, who, log, bar, row);
   body.style.padding = "4px 16px 4px 100px";
   const el = h("div", { class: "view" }, card(null, body));
   let renderedKey = "";
   return {
     el,
+    focus() {
+      if (State.focusTask?.pty) input.focus();
+    },
     sync() {
       const task = State.focusTask;
+      bar.style.display = task?.pty ? "" : "none";
+      input.disabled = busy();
+      input.placeholder = busy() ? "Busy — wait for it to finish…" : `Type into ${task?.name ?? "the"} terminal…`;
       clear(who);
       who.append(agentWho(task, task ? SOURCE_LABELS[task.source] : ""));
       const entries = task?.transcript ?? [];

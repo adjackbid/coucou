@@ -230,6 +230,9 @@ fn read_event(agent: &str, arg_event: &str) -> Option<(String, String)> {
         ("term_session_id", "TERM_SESSION_ID"),
         ("vscode_pid", "VSCODE_PID"),
         ("session_pid", "CLAUDE_CODE_SSE_PORT"),
+        // Set by coucou-pty when the CLI runs inside it: the pipe the island
+        // can type into this very terminal through.
+        ("pty", "COUCOU_PTY"),
     ] {
         if !map.contains_key(key) {
             let value = std::env::var(var).unwrap_or_default();

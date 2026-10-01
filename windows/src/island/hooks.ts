@@ -42,6 +42,8 @@ interface HookPayload {
   prompt?: string;
   /** Added by the relay on Stop: the assistant's last message, from the transcript. */
   last_reply?: string;
+  /** Added by the relay when the CLI runs inside coucou-pty: the pipe to type through. */
+  pty?: string;
   tool_name?: string;
   tool_input?: Record<string, unknown>;
   /** Set by coucou-hook when it had to cut a field: the input is not whole. */
@@ -229,7 +231,10 @@ function handleHook(island: Island, payload: HookPayload) {
   const CLAUDE_ID = taskFor(payload, projectName, cwd);
   const focused = State.focusId === CLAUDE_ID;
   const own = State.tasks.find((x) => x.id === CLAUDE_ID);
-  if (own) own.lastEvent = performance.now();
+  if (own) {
+    own.lastEvent = performance.now();
+    if (payload.pty) own.pty = payload.pty;
+  }
   // A shut island's Mochi follows whoever is busy, so work is visible.
   State.followActivity(CLAUDE_ID);
 

@@ -192,6 +192,46 @@ function agentSection(copy: AgentCopy, status: HookStatus): HTMLElement {
   return section;
 }
 
+// ── Terminal section (coucou-pty) ─────────────────────────────────────────────
+
+/**
+ * How to start a CLI so the island can type into its terminal. Shown, never
+ * applied: the profile is the person's own file.
+ */
+function terminalSection(hookPath: string): HTMLElement {
+  const pty = hookPath.replace(/coucou-hook\.exe$/i, "coucou-pty.exe");
+  const snippet = [
+    "# Start the CLI through coucou-pty and the island can type into this terminal.",
+    "# In a wrapper function such as cg, replace the last line:",
+    "#     copilot --yolo @args",
+    "# with:",
+    `$pty = "${pty}"`,
+    "if (Test-Path $pty) { & $pty -- copilot --yolo @args } else { copilot --yolo @args }",
+  ].join("\n");
+  const code = h("div", { class: "diff", text: snippet });
+  const feedback = h("span", { class: "hint" });
+  const copy = h("button", { text: "Copy" });
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(snippet);
+      feedback.textContent = "Copied.";
+    } catch {
+      feedback.textContent = "Select the text above and copy it.";
+    }
+  });
+  return h(
+    "section",
+    {},
+    h("h2", {}, h("span", { text: "Typing into your own terminals" })),
+    h("div", {
+      class: "hint",
+      text: "A CLI you start yourself in PowerShell can take instructions from the island too. Start it through coucou-pty: it looks and behaves the same, and its session in the island gets a text field that types into that terminal once the CLI is idle. Works with copilot, claude, or any other terminal CLI whose hooks are installed above.",
+    }),
+    code,
+    h("div", { class: "row" }, copy, feedback),
+  );
+}
+
 // ── Providers section ─────────────────────────────────────────────────────────
 
 /** Credential Manager key of a provider; the default Claude entry also honours the pre-provider key. */
@@ -876,6 +916,7 @@ async function main() {
   root.append(
     h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
     ...AGENT_COPY.map((copy, i) => agentSection(copy, statuses[i])),
+    terminalSection(statuses[0]?.hookPath ?? ""),
     providersSection(present),
     agentsSection(present),
     integrationsSection(present),

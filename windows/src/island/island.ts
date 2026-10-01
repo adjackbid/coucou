@@ -1000,15 +1000,18 @@ export class Island {
       if (on) view.sync();
     }
 
-    // The chat is the only view with a text field, so it is the only time the
-    // island is allowed to take keyboard focus.
+    // Only a view with a text field may take keyboard focus: the chat, and a
+    // session whose terminal the island can type into.
+    const typing = (v: IslandViewName | null) =>
+      v === "prompt" || (v === "session" && !!State.focusTask?.pty);
     if (this.lastSyncedView !== State.view) {
-      const wasChat = this.lastSyncedView === "prompt";
+      const wasTyping = typing(this.lastSyncedView);
       this.lastSyncedView = State.view;
-      if (State.view === "prompt") {
+      if (typing(State.view)) {
+        const view = State.view;
         void Bridge.focusWindow(true);
-        window.setTimeout(() => this.views.get("prompt")?.focus?.(), 120);
-      } else if (wasChat) {
+        window.setTimeout(() => this.views.get(view)?.focus?.(), 120);
+      } else if (wasTyping) {
         void Bridge.focusWindow(false);
       }
     }

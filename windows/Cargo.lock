@@ -595,6 +595,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "coucou-pty"
+version = "0.1.1"
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"

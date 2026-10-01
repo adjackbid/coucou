@@ -45,6 +45,11 @@ export interface AgentTask {
   unread?: boolean;
   /** performance.now() of the last hook event, to order cards by recency. */
   lastEvent?: number;
+  /**
+   * The pipe of the coucou-pty wrapping this session's terminal, when the CLI
+   * was started through it: the island can type into that terminal.
+   */
+  pty?: string | null;
   emote?: BotEmoteName | null;
   miniEye?: EyeShape | null;
   pillBadge?: PillBadge | null;

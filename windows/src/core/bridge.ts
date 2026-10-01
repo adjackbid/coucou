@@ -117,6 +117,9 @@ export const Bridge = {
   /** The model ids the endpoint lists (`GET /v1/models`). */
   providerModels: (provider: Provider) => callOrThrow<string[]>("provider_models", { provider }),
 
+  /** Types text into a terminal wrapped by coucou-pty, and submits it. */
+  ptySend: (pipe: string, text: string) => callOrThrow<void>("pty_send", { pipe, text }),
+
   // ── ACP agents ────────────────────────────────────────────────────────────
   /** One prompt to an agent; the reply streams in as `acp-update` events. */
   acpSend: (agentId: string, text: string) =>

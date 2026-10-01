@@ -332,6 +332,40 @@ async fn provider_models(provider: Provider) -> Result<Vec<String>, String> {
     llm::models(&provider).await
 }
 
+// ── Terminals wrapped by coucou-pty ───────────────────────────────────────────
+
+/// Only ever a pipe coucou-pty made: `\\.\pipe\coucou-pty-<pid>`. The name
+/// arrives from a hook payload, so it is checked rather than trusted.
+fn is_pty_pipe(name: &str) -> bool {
+    name.strip_prefix(r"\\.\pipe\coucou-pty-")
+        .map(|pid| !pid.is_empty() && pid.len() <= 10 && pid.bytes().all(|b| b.is_ascii_digit()))
+        .unwrap_or(false)
+}
+
+/// Types `text` into the terminal behind `pipe` and submits it. Only ever
+/// called from an explicit send in the island's session view.
+#[tauri::command]
+fn pty_send(pipe: String, text: String) -> Result<(), String> {
+    use std::io::Write;
+    if !is_pty_pipe(&pipe) {
+        return Err("That is not a Coucou terminal.".into());
+    }
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(());
+    }
+    if text.len() > 16 * 1024 {
+        return Err("That is too long to type into a terminal.".into());
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&pipe)
+        .map_err(|_| "That terminal is gone, or was not started through coucou-pty.".to_string())?;
+    file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+    log::line(format!("pty {pipe}: sent {} characters", text.chars().count()));
+    Ok(())
+}
+
 // ── ACP agents ────────────────────────────────────────────────────────────────
 
 /// One prompt to the agent named in settings, starting it if need be. The
@@ -435,7 +469,17 @@ fn percent_decode(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::percent_decode;
+    use super::{is_pty_pipe, percent_decode};
+
+    #[test]
+    fn only_a_coucou_pty_pipe_is_ever_written_to() {
+        assert!(is_pty_pipe(r"\\.\pipe\coucou-pty-12345"));
+        assert!(!is_pty_pipe(r"\\.\pipe\coucou-pty-"));
+        assert!(!is_pty_pipe(r"\\.\pipe\coucou-pty-12a"));
+        assert!(!is_pty_pipe(r"\\.\pipe\something-else"));
+        assert!(!is_pty_pipe(r"C:\Users\x\notes.txt"));
+        assert!(!is_pty_pipe(r"\\server\pipe\coucou-pty-1"));
+    }
 
     #[test]
     fn file_names_survive_the_header() {
@@ -606,6 +650,7 @@ pub fn run() {
             hotkey_status,
             provider_test,
             provider_models,
+            pty_send,
             acp_send,
             acp_permission,
             acp_cancel,

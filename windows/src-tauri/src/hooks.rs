@@ -425,33 +425,36 @@ pub fn write(agent: Agent, install: bool, fingerprint: &str) -> Result<String, S
 /// the relay was simply never installed. It only looked healthy on a developer
 /// machine, where a leftover copy from `tauri dev` was already sitting in bin/.
 pub fn ensure_hook_exe(app: &AppHandle) {
-    let dest = settings::hook_exe_path();
+    ensure_exe(app, "coucou-hook.exe", "hooks cannot work");
+    // The terminal wrapper rides along the same way: `coucou-pty -- copilot …`.
+    ensure_exe(app, "coucou-pty.exe", "the island cannot type into terminals");
+}
+
+fn ensure_exe(app: &AppHandle, name: &str, consequence: &str) {
+    let dest = settings::local_dir().join("bin").join(name);
     let Some(dir) = dest.parent() else { return };
     if std::fs::create_dir_all(dir).is_err() {
         return;
     }
 
     let mut candidates: Vec<PathBuf> = Vec::new();
-    if let Ok(p) = app.path().resolve("coucou-hook.exe", tauri::path::BaseDirectory::Resource) {
+    if let Ok(p) = app.path().resolve(name, tauri::path::BaseDirectory::Resource) {
         candidates.push(p);
     }
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
             // Installed build, then `tauri dev` (target/debug) next to the
-            // release hook the pre-build step produces.
-            candidates.push(parent.join("coucou-hook.exe"));
-            candidates.push(parent.join("../release/coucou-hook.exe"));
+            // release build the pre-build step produces.
+            candidates.push(parent.join(name));
+            candidates.push(parent.join("../release").join(name));
             // Belt and braces: where the old glob form used to land it.
-            candidates.push(parent.join("_up_/target/release/coucou-hook.exe"));
+            candidates.push(parent.join("_up_/target/release").join(name));
         }
     }
 
     let tried: Vec<String> = candidates.iter().map(|p| p.display().to_string()).collect();
     let Some(src) = candidates.into_iter().find(|p| p.exists()) else {
-        crate::log::line(format!(
-            "coucou-hook.exe not found — Claude Code hooks cannot work. Looked in: {}",
-            tried.join(", ")
-        ));
+        crate::log::line(format!("{name} not found — {consequence}. Looked in: {}", tried.join(", ")));
         return;
     };
 
@@ -462,11 +465,11 @@ pub fn ensure_hook_exe(app: &AppHandle) {
     if same {
         return;
     }
-    // A hook may be running right now and hold the file open; keeping the old
-    // copy is fine, it is the same relay.
+    // It may be running right now and hold the file open; keeping the old
+    // copy is fine, it is the same program.
     if let Err(err) = std::fs::copy(&src, &dest) {
         if !dest.exists() {
-            crate::log::line(format!("could not install coucou-hook.exe: {err}"));
+            crate::log::line(format!("could not install {name}: {err}"));
         }
     }
 }

@@ -92,6 +92,25 @@ which CLI is talking, and Copilot sessions get their own pill next to Mochi.
 Permission requests reach the island too, unless the session runs with
 `--yolo`, which approves everything before any hook sees it.
 
+## Typing into a terminal you opened yourself
+
+An agent already running in your own PowerShell cannot be taken over through
+ACP, so Coucou ships a small wrapper, `coucou-pty.exe` (copied next to the relay
+in `%LOCALAPPDATA%\Coucou\bin\`). Start the CLI through it:
+
+```powershell
+& "$env:LOCALAPPDATA\Coucou\bin\coucou-pty.exe" -- copilot --yolo @args
+```
+
+It runs the CLI inside a Windows pseudo console and relays the screen, every
+key, pastes and resizes untouched, so nothing looks different. What it adds is a
+named pipe only your account can write to; the hook relay tells the island which
+session lives in which terminal, and that session's view gets a text field.
+What you type there is typed into the terminal and submitted — only while the
+CLI is idle, because these are keystrokes into a TUI and a busy one would
+mangle them. With no console to wrap (redirected output, CI) it just runs the
+command. **Settings… → Typing into your own terminals** has the line to paste.
+
 ## Agents you drive from the island
 
 **Settings… → Agents** lists coding agents Coucou starts itself and talks to
