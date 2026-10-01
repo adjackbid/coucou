@@ -371,15 +371,39 @@ function generalSection(): HTMLElement {
   });
 
   const autoClose = h("input", {
-    type: "number", min: "5", max: "120", step: "1",
+    type: "number", min: "3", max: "120", step: "1",
     value: String(Math.round(settings.autoCloseInterval)),
     style: "width:72px",
   }) as HTMLInputElement;
   autoClose.addEventListener("change", () => {
-    settings.autoCloseInterval = Math.max(5, Math.min(120, Number(autoClose.value) || 15));
+    settings.autoCloseInterval = Math.max(3, Math.min(120, Number(autoClose.value) || 15));
     autoClose.value = String(settings.autoCloseInterval);
     void save();
   });
+
+  // Written as the global-shortcut plugin reads it: modifiers and a key joined
+  // by "+", e.g. Ctrl+Shift+Space, Ctrl+Alt+F12. Empty turns it off.
+  const hotkey = h("input", {
+    type: "text",
+    value: settings.hotkey,
+    placeholder: "Ctrl+Shift+Space",
+    spellcheck: "false",
+    style: "width:180px",
+  }) as HTMLInputElement;
+  const hotkeyNote = h("div", {});
+  // A key another program already owns registers nothing and says nothing on
+  // its own; this is where it gets said.
+  async function checkHotkey() {
+    const error = await Bridge.hotkeyStatus();
+    clear(hotkeyNote);
+    if (error) hotkeyNote.append(h("div", { class: "notice warn", text: error }));
+  }
+  hotkey.addEventListener("change", async () => {
+    settings.hotkey = hotkey.value.trim();
+    await save();
+    await checkHotkey();
+  });
+  void checkHotkey();
 
   const screen = h("select", {}) as HTMLSelectElement;
   screen.append(
@@ -410,6 +434,12 @@ function generalSection(): HTMLElement {
       h("label", { text: "Island lives on" }),
       screen,
     ),
+    h("div", { class: "row" },
+      h("label", { text: "Shortcut" }),
+      hotkey,
+      h("span", { class: "hint", text: "opens and closes the island from anywhere" }),
+    ),
+    hotkeyNote,
     h("div", { class: "row" },
       h("label", { text: "Launch at startup" }),
       toggle(settings.autostart, (v) => { settings.autostart = v; void save(); }),

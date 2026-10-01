@@ -20,10 +20,22 @@ pub struct Settings {
     /// Defaulted explicitly so a settings.json written by an older build still loads.
     #[serde(default = "default_model")]
     pub model: String,
+    /// Global shortcut that opens and shuts the island, e.g. "Ctrl+Alt+Space".
+    /// Empty disables it.
+    #[serde(default = "default_hotkey")]
+    pub hotkey: String,
 }
 
 fn default_model() -> String {
     crate::claude::DEFAULT_MODEL.to_string()
+}
+
+/// Ctrl+Alt+Space and Ctrl+Alt+M looked obvious but were both already taken on
+/// the first machine this ran on (input-method switchers, among others), and
+/// a key that fails to register is a key that silently does nothing. The
+/// settings window says so when it happens.
+pub fn default_hotkey() -> String {
+    "Ctrl+Shift+Space".to_string()
 }
 
 impl Default for Settings {
@@ -43,6 +55,7 @@ impl Default for Settings {
             autostart: false,
             hooks_installed: false,
             model: default_model(),
+            hotkey: default_hotkey(),
         }
     }
 }

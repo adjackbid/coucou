@@ -44,8 +44,14 @@ installs for the current user only — no admin prompt.
 | Click Mochi | It gets annoyed. Three times in a row and it goes dizzy |
 | Rest the pointer on Mochi for two seconds | Hearts |
 | Drag a file onto the island | Mochi turns into a box, swallows it, then offers to answer questions about it |
-| `Esc` | Closes the island |
+| Click anywhere else, or the × in the corner | The island shuts at once |
+| `Ctrl+Shift+Space` (changeable in Settings) | Opens or hides the island from any app |
+| `Esc` | Closes the island (chat view) |
 | Tray icon | Open, Settings…, Pause, Quit |
+
+A Mochi that only peeked out because the mouse brushed the top edge goes away
+1.5 s after the mouse leaves; one you opened on purpose waits for the auto-close
+countdown instead.
 
 Everything else happens on its own: a Claude Code permission request opens the
 island with **Deny / Allow**, a finished session shows what it did, and

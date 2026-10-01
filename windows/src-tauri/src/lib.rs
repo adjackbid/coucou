@@ -20,6 +20,7 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 use claude::{Chat, ChatContext, ChatReply};
 use files::DroppedFile;
@@ -34,6 +35,8 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 pub struct Shared {
     pub settings: Mutex<Settings>,
     pub gate: Arc<PollGate>,
+    /// Why the global shortcut is not active, for the settings window to show.
+    pub hotkey_error: Mutex<Option<String>>,
 }
 
 #[derive(Serialize)]
@@ -59,15 +62,60 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
     }
 }
 
+/// Registers the island's global shortcut, replacing whatever was registered
+/// before. The window never has focus, so this is the one key that always
+/// reaches it. A key that cannot be parsed or is taken by another app is
+/// logged and left unregistered rather than crashing or stealing anything.
+fn apply_hotkey(app: &AppHandle, hotkey: &str) {
+    let shortcuts = app.global_shortcut();
+    let _ = shortcuts.unregister_all();
+    let hotkey = hotkey.trim();
+    let result = if hotkey.is_empty() {
+        Ok(())
+    } else {
+        hotkey
+            .parse::<Shortcut>()
+            .map_err(|err| format!("'{hotkey}' is not a shortcut I understand: {err}"))
+            .and_then(|parsed| {
+                shortcuts.register(parsed).map_err(|err| {
+                    // The plugin's wording names its own types; say it plainly.
+                    let taken = err.to_string().contains("already registered");
+                    if taken {
+                        format!("{hotkey} is already taken by another program.")
+                    } else {
+                        format!("{hotkey} could not be registered: {err}")
+                    }
+                })
+            })
+    };
+    match &result {
+        Ok(()) => log::line(format!("hotkey {}", if hotkey.is_empty() { "off" } else { hotkey })),
+        Err(err) => log::line(format!("hotkey: {err}")),
+    }
+    if let Some(shared) = app.try_state::<Shared>() {
+        *shared.hotkey_error.lock().unwrap() = result.err();
+    }
+}
+
+/// Why the shortcut is not active — `None` when it is.
+#[tauri::command]
+fn hotkey_status(shared: State<Shared>) -> Option<String> {
+    shared.hotkey_error.lock().unwrap().clone()
+}
+
 #[tauri::command]
 fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
-    let (screen_changed, autostart_changed) = {
+    let (screen_changed, autostart_changed, hotkey_changed) = {
         let mut current = shared.settings.lock().unwrap();
         let screen_changed = current.screen != settings.screen;
         let autostart_changed = current.autostart != settings.autostart;
+        let hotkey_changed = current.hotkey != settings.hotkey;
         *current = settings.clone();
-        (screen_changed, autostart_changed)
+        (screen_changed, autostart_changed, hotkey_changed)
     };
+    if hotkey_changed {
+        apply_hotkey(&app, &settings.hotkey);
+    }
     if let Err(err) = settings::save(&settings) {
         eprintln!("[coucou] could not save settings: {err}");
     }
@@ -374,9 +422,20 @@ pub fn run() {
             let _ = app.emit_to(island::WINDOW_LABEL, "tray", "open".to_string());
         }))
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    // Only the one key is ever registered, so no need to match it.
+                    if event.state() == ShortcutState::Pressed {
+                        let _ = app.emit_to(island::WINDOW_LABEL, "hotkey", ());
+                    }
+                })
+                .build(),
+        )
         .manage(Shared {
             settings: Mutex::new(loaded.clone()),
             gate: gate.clone(),
+            hotkey_error: Mutex::new(None),
         })
         .manage(Pending::default())
         .manage(Chat::default())
@@ -407,6 +466,7 @@ pub fn run() {
             open_n8n,
             open_settings_window,
             set_paused,
+            hotkey_status,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -424,6 +484,7 @@ pub fn run() {
             island::spawn_cursor_poll(handle.clone(), gate.clone());
 
             log::line(format!("--- Coucou {} started ---", env!("CARGO_PKG_VERSION")));
+            apply_hotkey(&handle, &loaded.hotkey);
             hooks::ensure_hook_exe(&handle);
             pipe::start(handle.clone());
             integrations::start(handle.clone());

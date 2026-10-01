@@ -97,6 +97,9 @@ export const Bridge = {
 
   /** Tray → Pause. Stops the integration pollers, not just the island. */
   setPaused: (paused: boolean) => call<void>("set_paused", { paused }),
+
+  /** Why the global shortcut is not active; null when it is. */
+  hotkeyStatus: () => call<string | null>("hotkey_status"),
 };
 
 export interface IntegrationUpdate {

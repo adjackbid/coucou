@@ -10,8 +10,16 @@ export class IslandStateMachine {
 
   /** home → petit delay, seconds. */
   homeToPetitDelay = 15;
-  /** petit → hidden delay, seconds. */
+  /** petit → hidden delay, seconds, after the island was opened or shut on purpose. */
   petitToHiddenDelay = 60;
+  /**
+   * petit → hidden delay after a mere peek: the cursor brushed the top of the
+   * screen and the island came out on its own. Nobody asked for it, so it
+   * leaves as soon as the cursor does, like a tooltip.
+   */
+  peekToHiddenDelay = 1.5;
+  /** True while the current petit state was reached by hovering, not by a click. */
+  private peeked = false;
   /** coucou → petit once the greeting animation ends (no hover). */
   greetAutoCollapseDelay = 0.6;
   /** coucou → petit while the mouse hovers the greeting. */
@@ -34,6 +42,7 @@ export class IslandStateMachine {
     switch (this.state) {
       case "hidden":
         this.cancelTimers();
+        this.peeked = true;
         this.transition("petit");
         break;
       case "petit":
@@ -82,6 +91,8 @@ export class IslandStateMachine {
     if (this.state !== "hidden") return;
     this.cancelTimers();
     this.transition("petit");
+    // Shown to be looked at, not brushed into view: it stays the full while.
+    this.peeked = false;
     this.schedulePetitHide();
   }
 
@@ -106,10 +117,11 @@ export class IslandStateMachine {
 
   private schedulePetitHide() {
     this.clear("petitHide");
+    const delay = this.peeked ? this.peekToHiddenDelay : this.petitToHiddenDelay;
     this.petitHide = window.setTimeout(() => {
       this.petitHide = null;
       if (this.state === "petit") this.transition("hidden");
-    }, this.petitToHiddenDelay * 1000);
+    }, delay * 1000);
   }
 
   private scheduleHomeCollapse() {
@@ -145,6 +157,8 @@ export class IslandStateMachine {
     if (next === this.state) return;
     const from = this.state;
     this.state = next;
+    // Anything but a hover peek is deliberate; the next petit then lingers.
+    if (next !== "petit" || from !== "hidden") this.peeked = false;
     this.onTransition?.(from, next);
   }
 }

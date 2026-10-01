@@ -358,7 +358,12 @@ pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
                     && y >= 0.0
                     && y <= size.1;
 
-                let accept = on_island || dragging;
+                // Once the window has shrunk to the wake strip, the strip is all
+                // there is and it must take the mouse, whatever the stale island
+                // rect says. Without this the poll's last tick could land after
+                // set_collapsed had cleared the flag and set it right back —
+                // leaving a strip nothing could ever wake.
+                let accept = on_island || dragging || gate.collapsed.load(Ordering::Relaxed);
                 if gate.ignoring.load(Ordering::Relaxed) == accept {
                     gate.ignoring.store(!accept, Ordering::Relaxed);
                     let _ = win.set_ignore_cursor_events(!accept);

@@ -77,6 +77,11 @@ async function main() {
   // itself never has focus, so there is no blur to listen for).
   await onEvent<null>("click-outside", () => island.clickOutside());
 
+  await onEvent<null>("hotkey", () => {
+    setPaused(false);
+    island.toggle();
+  });
+
   await onEvent<null>("screen-changed", () => {
     void Bridge.reposition();
     // A display with another scale, or a changed text size, lands here too.

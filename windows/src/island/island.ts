@@ -237,6 +237,9 @@ export class Island {
   private wireFsm() {
     this.fsm.homeToPetitDelay = State.settings.autoCloseInterval;
     this.fsm.onTransition = (from, to) => {
+      // One line per transition in coucou.log: the island's whole life, for
+      // when "it did not close" has to be answered after the fact.
+      void Bridge.log(`island ${from} → ${to}`);
       switch (to) {
         case "hidden":
           this.setMode("hidden");
@@ -342,10 +345,26 @@ export class Island {
    * request keeps waiting for the terminal's own timeout.
    */
   clickOutside() {
+    void Bridge.log(`click outside mode=${State.mode}`);
     if (State.mode !== "expanded") return;
     // A file drag starts with a press elsewhere; the drop zone must stay open.
     if (State.fileDragOver) return;
     this.collapse();
+  }
+
+  /**
+   * The global shortcut: open the island, or put it away entirely. It is the
+   * one input that reaches a window which never has keyboard focus.
+   */
+  toggle() {
+    void Bridge.log(`hotkey mode=${State.mode} fsm=${this.fsm.state}`);
+    if (State.mode === "expanded") {
+      State.isPinned = false;
+      this.fsm.pinned = false;
+      this.fsm.forceHidden();
+    } else {
+      this.alert(State.pendingApproval ? "approval" : State.defaultView());
+    }
   }
 
   /** Alert from the hook server: open on this view. Pinned alerts never auto-close. */
