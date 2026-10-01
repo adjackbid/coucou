@@ -1,10 +1,11 @@
 // Entry point: boot the bridge, wire the island, start the greeting.
 
 import "./style.css";
-import { Bridge, IS_TAURI, onEvent } from "./core/bridge";
+import { Bridge, IS_TAURI, onEvent, type AcpPermission, type AcpUpdate } from "./core/bridge";
 import { Sound } from "./core/sound";
 import { State, type Settings } from "./core/state";
 import { Island } from "./island/island";
+import { onAcpUpdate } from "./views/chat";
 import { registerHookHandlers } from "./island/hooks";
 import { registerIntegrationHandlers, refreshConfigured } from "./island/integrations";
 
@@ -80,6 +81,20 @@ async function main() {
   await onEvent<null>("hotkey", () => {
     setPaused(false);
     island.toggle();
+  });
+
+  // An ACP agent talking: its text and tool calls feed the chat; a permission
+  // request becomes the island's approval card, answered through the agent.
+  await onEvent<AcpUpdate>("acp-update", (u) => onAcpUpdate(u.update));
+  await onEvent<AcpPermission>("acp-permission", (p) => island.askAcpPermission(p));
+  await onEvent<string>("acp-exit", (agentId) => {
+    if (State.pendingApproval?.acp?.agentId === agentId) {
+      State.pendingApproval = null;
+      State.isPinned = false;
+      island.dropPin();
+      if (State.view === "approval") island.setView(State.defaultView());
+      State.notify();
+    }
   });
 
   await onEvent<null>("screen-changed", () => {

@@ -75,12 +75,44 @@ export interface ApprovalInfo {
   lines: number;
   /** The relay cut something: what is on screen is not the whole request. */
   truncated: boolean;
+  /**
+   * An ACP agent's request rather than a hook's: answered with one of the
+   * option ids it offered, through the agent's own connection.
+   */
+  acp?: { agentId: string; requestId: unknown; allowOption: string | null; denyOption: string | null };
 }
 
 export interface ChatMessage {
   id: number;
   role: "user" | "assistant";
   content: string;
+  /** A tool the agent ran, shown small; or a reply still streaming in. */
+  kind?: "tool" | "streaming";
+}
+
+/** A coding agent the island can start and talk to over ACP — mirror of acp::AgentProfile. */
+export interface AgentProfile {
+  id: string;
+  name: string;
+  command: string;
+  args: string[];
+  /** "{secret}" in a value becomes the key from the Credential Manager, in Rust. */
+  env: Record<string, string>;
+  cwd: string;
+}
+
+export const DEFAULT_AGENT: AgentProfile = {
+  id: "copilot",
+  name: "Copilot CLI",
+  command: "copilot",
+  args: ["--acp", "--stdio"],
+  env: {},
+  cwd: "",
+};
+
+/** What the chat talks to: a provider id, or `agent:<id>` for an ACP agent. */
+export function activeAgentId(settings: Settings): string | null {
+  return settings.activeProvider.startsWith("agent:") ? settings.activeProvider.slice(6) : null;
 }
 
 export type PromptContext =
@@ -179,6 +211,8 @@ export interface Settings {
   maxSessionCards: number;
   /** Never hide: the island stays at least compact at the top of the screen. */
   alwaysVisible: boolean;
+  /** Coding agents the island can start and talk to over ACP. */
+  agents: AgentProfile[];
 }
 
 export const DEFAULT_PROVIDER: Provider = {
@@ -211,6 +245,7 @@ export const DEFAULT_SETTINGS: Settings = {
   activeProvider: "anthropic",
   maxSessionCards: 2,
   alwaysVisible: false,
+  agents: [DEFAULT_AGENT],
 };
 
 type Listener = () => void;

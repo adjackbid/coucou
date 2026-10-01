@@ -1,5 +1,6 @@
 // Coucou for Windows — app wiring and the commands the island calls.
 
+mod acp;
 mod files;
 mod hooks;
 mod integrations;
@@ -22,6 +23,7 @@ use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder
 use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
+use acp::{AcpOutcome, AgentProfile, Agents};
 use files::DroppedFile;
 use llm::{Chat, ChatContext, ChatReply, Provider};
 use hooks::{Agent, HookPreview, HookStatus};
@@ -207,7 +209,7 @@ fn open_in_vscode(path: Option<String>) -> bool {
 /// Our own `where`: walks %PATH% against %PATHEXT%, no shell involved.
 /// Rust quotes arguments correctly for `.cmd`/`.bat` targets since 1.77, so
 /// spawning `code.cmd` directly is safe.
-fn find_on_path(stem: &str) -> Option<std::path::PathBuf> {
+pub(crate) fn find_on_path(stem: &str) -> Option<std::path::PathBuf> {
     let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
     let dirs = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&dirs) {
@@ -328,6 +330,60 @@ async fn provider_test(provider: Provider) -> Result<String, String> {
 #[tauri::command]
 async fn provider_models(provider: Provider) -> Result<Vec<String>, String> {
     llm::models(&provider).await
+}
+
+// ── ACP agents ────────────────────────────────────────────────────────────────
+
+/// One prompt to the agent named in settings, starting it if need be. The
+/// reply streams in as `acp-update` events; this returns when the turn ends.
+#[tauri::command]
+async fn acp_send(
+    app: AppHandle,
+    shared: State<'_, Shared>,
+    agents: State<'_, Agents>,
+    agent_id: String,
+    text: String,
+) -> Result<AcpOutcome, String> {
+    let profile = shared
+        .settings
+        .lock()
+        .unwrap()
+        .agent(&agent_id)
+        .cloned()
+        .ok_or_else(|| "That agent is not in settings any more.".to_string())?;
+    agents.prompt(&app, &profile, text).await
+}
+
+/// The island's answer to an agent's permission request: one of the option
+/// ids the agent offered, or nothing for "cancelled".
+#[tauri::command]
+async fn acp_permission(
+    agents: State<'_, Agents>,
+    agent_id: String,
+    request_id: serde_json::Value,
+    option_id: Option<String>,
+) -> Result<(), String> {
+    agents.answer_permission(&agent_id, request_id, option_id).await
+}
+
+#[tauri::command]
+async fn acp_cancel(agents: State<'_, Agents>, agent_id: String) -> Result<(), String> {
+    agents.cancel(&agent_id).await
+}
+
+/// "New" in the chat while an agent is the target: the next prompt starts a
+/// fresh session.
+#[tauri::command]
+async fn acp_reset(agents: State<'_, Agents>, agent_id: String) -> Result<(), String> {
+    agents.reset(&agent_id).await;
+    Ok(())
+}
+
+/// The settings window's "Test": start the agent as the form describes it,
+/// shake hands, open a session, stop it.
+#[tauri::command]
+async fn acp_test(app: AppHandle, agents: State<'_, Agents>, profile: AgentProfile) -> Result<String, String> {
+    agents.test(&app, &profile).await
 }
 
 #[tauri::command]
@@ -518,6 +574,7 @@ pub fn run() {
         })
         .manage(Pending::default())
         .manage(Chat::default())
+        .manage(Agents::default())
         .invoke_handler(tauri::generate_handler![
             boot,
             save_settings,
@@ -549,6 +606,11 @@ pub fn run() {
             hotkey_status,
             provider_test,
             provider_models,
+            acp_send,
+            acp_permission,
+            acp_cancel,
+            acp_reset,
+            acp_test,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -572,6 +634,13 @@ pub fn run() {
             integrations::start(handle.clone());
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Coucou");
+        .build(tauri::generate_context!())
+        .expect("error while running Coucou")
+        .run(|app, event| {
+            // Agents the island started must not outlive it.
+            if let tauri::RunEvent::Exit = event {
+                let agents = app.state::<Agents>();
+                tauri::async_runtime::block_on(agents.shutdown());
+            }
+        });
 }

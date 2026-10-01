@@ -5,7 +5,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import type { Provider, Settings } from "./state";
+import type { AgentProfile, Provider, Settings } from "./state";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -116,7 +116,43 @@ export const Bridge = {
   providerTest: (provider: Provider) => callOrThrow<string>("provider_test", { provider }),
   /** The model ids the endpoint lists (`GET /v1/models`). */
   providerModels: (provider: Provider) => callOrThrow<string[]>("provider_models", { provider }),
+
+  // ── ACP agents ────────────────────────────────────────────────────────────
+  /** One prompt to an agent; the reply streams in as `acp-update` events. */
+  acpSend: (agentId: string, text: string) =>
+    callOrThrow<{ stopReason: string }>("acp_send", { agentId, text }),
+  /** The island's answer to the agent's permission request. */
+  acpPermission: (agentId: string, requestId: unknown, optionId: string | null) =>
+    call<void>("acp_permission", { agentId, requestId, optionId }),
+  acpCancel: (agentId: string) => call<void>("acp_cancel", { agentId }),
+  /** The next prompt starts a fresh session. */
+  acpReset: (agentId: string) => call<void>("acp_reset", { agentId }),
+  /** Starts the agent as the form describes it, shakes hands, stops it. */
+  acpTest: (profile: AgentProfile) => callOrThrow<string>("acp_test", { profile }),
 };
+
+/** A `session/update` from an agent. */
+export interface AcpUpdate {
+  agentId: string;
+  update: {
+    sessionUpdate: string;
+    content?: { type: string; text?: string };
+    title?: string;
+    kind?: string;
+    status?: string;
+    toolCallId?: string;
+  };
+}
+
+/** A `session/request_permission` from an agent. */
+export interface AcpPermission {
+  agentId: string;
+  requestId: unknown;
+  title: string;
+  kind: string;
+  rawInput: unknown;
+  options: { optionId: string; name: string; kind: string }[];
+}
 
 export interface IntegrationUpdate {
   id: string;

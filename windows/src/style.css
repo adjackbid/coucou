@@ -957,6 +957,16 @@ input[type="range"]::-webkit-slider-thumb {
   user-select: text;
 }
 
+/* A tool the agent ran, as one small line in the chat. */
+.chat-tool {
+  font: 400 11px var(--mono);
+  color: var(--dim-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
 .typing {
   display: flex;
   gap: 4px;

@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use crate::acp::AgentProfile;
 use crate::llm::Provider;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +40,9 @@ pub struct Settings {
     /// Never hide: the island stays at least compact at the top of the screen.
     #[serde(default)]
     pub always_visible: bool,
+    /// Coding agents the island can start and talk to over ACP.
+    #[serde(default)]
+    pub agents: Vec<AgentProfile>,
 }
 
 fn default_max_cards() -> u32 {
@@ -50,12 +54,23 @@ fn default_model() -> String {
 }
 
 impl Settings {
-    /// The provider the chat uses: the active one, else the first.
+    /// The provider the chat uses: the active one, else the first. An active
+    /// target naming an agent (`agent:<id>`) is not a provider.
     pub fn active(&self) -> Option<&Provider> {
         self.providers
             .iter()
             .find(|p| p.id == self.active_provider)
             .or_else(|| self.providers.first())
+    }
+
+    /// The agent the chat talks to, when `active_provider` is `agent:<id>`.
+    pub fn active_agent(&self) -> Option<&AgentProfile> {
+        let id = self.active_provider.strip_prefix("agent:")?;
+        self.agents.iter().find(|a| a.id == id)
+    }
+
+    pub fn agent(&self, id: &str) -> Option<&AgentProfile> {
+        self.agents.iter().find(|a| a.id == id)
     }
 
     /// Brings a settings.json from before providers existed up to date: the
@@ -64,7 +79,11 @@ impl Settings {
         if self.providers.is_empty() {
             self.providers.push(Provider::anthropic(&self.model));
         }
-        if !self.providers.iter().any(|p| p.id == self.active_provider) {
+        if self.agents.is_empty() {
+            self.agents.push(AgentProfile::copilot());
+        }
+        let is_agent = self.active_agent().is_some();
+        if !is_agent && !self.providers.iter().any(|p| p.id == self.active_provider) {
             self.active_provider = self.providers[0].id.clone();
         }
     }
@@ -101,6 +120,7 @@ impl Default for Settings {
             active_provider: "anthropic".into(),
             max_session_cards: default_max_cards(),
             always_visible: false,
+            agents: vec![AgentProfile::copilot()],
         }
     }
 }

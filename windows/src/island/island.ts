@@ -2,7 +2,7 @@
 // Mirrors IslandRootView.swift + IslandWindowController.swift.
 
 import { Tracked, Spring, clamp } from "../core/anim";
-import { Bridge, IS_TAURI, onDragDrop, type DroppedFile } from "../core/bridge";
+import { Bridge, IS_TAURI, onDragDrop, type AcpPermission, type DroppedFile } from "../core/bridge";
 import {
   EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
   ROUNDED_CORNER, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition, chatPromptHeight,
@@ -155,7 +155,13 @@ export class Island {
         // never offers Allow for a cut request, but a stale click must not
         // become one either.
         const d = choice === "allow" && req.truncated ? "terminal" : choice;
-        if (d === "terminal") {
+        if (req.acp) {
+          // An agent the island started: the answer goes back down its own
+          // connection, as one of the options it offered.
+          Sound.play(d === "allow" ? "approve" : "blip");
+          const option = d === "allow" ? req.acp.allowOption : req.acp.denyOption;
+          void Bridge.acpPermission(req.acp.agentId, req.acp.requestId, option);
+        } else if (d === "terminal") {
           // Hand the request back untouched: the relay prints nothing and
           // Claude Code asks in the terminal, exactly as if Coucou were closed.
           Sound.play("blip");
@@ -400,6 +406,43 @@ export class Island {
   /** An alert stopped waiting for an answer: let the island auto-close again. */
   dropPin() {
     this.fsm.pinned = false;
+  }
+
+  /**
+   * An agent the island started asks before a tool call. Same card as a
+   * hook's permission request; the answer is one of the agent's own options.
+   */
+  askAcpPermission(p: AcpPermission) {
+    const pick = (kinds: string[]) =>
+      kinds.map((k) => p.options.find((o) => o.kind === k)?.optionId).find((id) => id != null) ?? null;
+    const allowOption = pick(["allow_once", "allow_always"]);
+    const denyOption = pick(["reject_once", "reject_always"]);
+    if (State.pendingApproval) {
+      // One card at a time; a second request is declined rather than hidden.
+      void Bridge.acpPermission(p.agentId, p.requestId, denyOption);
+      return;
+    }
+    const agent = State.settings.agents.find((a) => a.id === p.agentId);
+    const input = (p.rawInput && typeof p.rawInput === "object" ? p.rawInput : {}) as Record<string, unknown>;
+    const sections = Object.entries(input)
+      .filter(([, v]) => v != null)
+      .map(([label, v]) => ({ label, value: typeof v === "string" ? v : JSON.stringify(v, null, 2) }));
+    const command = `${agent?.name ?? p.agentId} · ${p.title}`;
+    State.pendingApproval = {
+      requestId: `acp:${p.agentId}`,
+      sessionId: "",
+      taskId: `acp:${p.agentId}`,
+      tool: p.title,
+      command,
+      sections,
+      lines: 2 + sections.reduce((n, s) => n + s.value.split("\n").length, 0),
+      truncated: false,
+      acp: { agentId: p.agentId, requestId: p.requestId, allowOption, denyOption },
+    };
+    State.isPinned = true;
+    Sound.play("approval");
+    this.alert("approval");
+    State.notify();
   }
 
   // ── File drop ───────────────────────────────────────────────────────────────

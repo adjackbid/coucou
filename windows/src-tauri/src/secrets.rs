@@ -19,17 +19,20 @@ pub const KNOWN_KEYS: &[&str] = &[
     "calcom-api-key",
 ];
 
-const PROVIDER_PREFIX: &str = "provider:";
+/// `provider:<id>` holds an LLM provider's key, `agent:<id>` an ACP agent's.
+const PREFIXES: &[&str] = &["provider:", "agent:"];
 
 fn allowed(key: &str) -> bool {
     if KNOWN_KEYS.contains(&key) {
         return true;
     }
-    // A provider id is what the user typed in settings; keep it to characters
-    // that cannot turn into something else in a credential name.
-    key.strip_prefix(PROVIDER_PREFIX)
-        .map(|id| !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
-        .unwrap_or(false)
+    // An id is what the user typed in settings; keep it to characters that
+    // cannot turn into something else in a credential name.
+    PREFIXES.iter().any(|prefix| {
+        key.strip_prefix(prefix)
+            .map(|id| !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+            .unwrap_or(false)
+    })
 }
 
 fn entry(key: &str) -> Option<Entry> {
@@ -73,6 +76,8 @@ mod tests {
         assert!(allowed("anthropic-api-key"));
         assert!(allowed("provider:anthropic"));
         assert!(allowed("provider:local_ollama-2"));
+        assert!(allowed("agent:copilot"));
+        assert!(!allowed("agent:"));
         assert!(!allowed("provider:"));
         assert!(!allowed("provider:a b"));
         assert!(!allowed("provider:../x"));
