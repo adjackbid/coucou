@@ -23,34 +23,18 @@ pub fn inbox_dir() -> PathBuf {
     settings::local_dir().join("inbox")
 }
 
+/// A file the OS handed us by path (Tauri's own drag events).
 pub fn ingest(source: &str) -> Result<DroppedFile, String> {
     let src = Path::new(source);
     let meta = std::fs::metadata(src).map_err(|e| format!("cannot read {source}: {e}"))?;
     if meta.is_dir() {
         return Err("Folders can't be dropped yet.".into());
     }
-
-    let dir = inbox_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-
     let name = src
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "file".into());
-
-    let mut dest = dir.join(&name);
-    if dest.exists() {
-        let stem = src.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
-        let ext = src.extension().map(|s| format!(".{}", s.to_string_lossy())).unwrap_or_default();
-        for i in 2..1000 {
-            let candidate = dir.join(format!("{stem} ({i}){ext}"));
-            if !candidate.exists() {
-                dest = candidate;
-                break;
-            }
-        }
-    }
-
+    let (dir, dest) = unique_dest(&name)?;
     std::fs::copy(src, &dest).map_err(|e| format!("cannot copy: {e}"))?;
     // CopyFileEx carries the source's timestamps across, so a file last edited
     // three years ago would arrive already older than the sweep window and be
@@ -59,12 +43,43 @@ pub fn ingest(source: &str) -> Result<DroppedFile, String> {
         let _ = file.set_modified(SystemTime::now());
     }
     sweep(&dir);
+    Ok(DroppedFile { name, path: dest.to_string_lossy().to_string(), size: meta.len() })
+}
 
-    Ok(DroppedFile {
-        name,
-        path: dest.to_string_lossy().to_string(),
-        size: meta.len(),
-    })
+/// A file the page handed us by content (an HTML5 drop in the webview, which
+/// knows the name and the bytes but never the path).
+pub fn ingest_bytes(name: &str, bytes: &[u8]) -> Result<DroppedFile, String> {
+    // The name came from the browser: keep it a file name, never a path.
+    let name = Path::new(name)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .filter(|n| !n.is_empty() && n != "." && n != "..")
+        .unwrap_or_else(|| "file".into());
+    let (dir, dest) = unique_dest(&name)?;
+    std::fs::write(&dest, bytes).map_err(|e| format!("cannot write: {e}"))?;
+    sweep(&dir);
+    Ok(DroppedFile { name, path: dest.to_string_lossy().to_string(), size: bytes.len() as u64 })
+}
+
+/// The inbox, created, and a path in it that does not clobber an earlier drop
+/// of the same name.
+fn unique_dest(name: &str) -> Result<(PathBuf, PathBuf), String> {
+    let dir = inbox_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let mut dest = dir.join(name);
+    if dest.exists() {
+        let p = Path::new(name);
+        let stem = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+        let ext = p.extension().map(|s| format!(".{}", s.to_string_lossy())).unwrap_or_default();
+        for i in 2..1000 {
+            let candidate = dir.join(format!("{stem} ({i}){ext}"));
+            if !candidate.exists() {
+                dest = candidate;
+                break;
+            }
+        }
+    }
+    Ok((dir, dest))
 }
 
 /// Drops anything copied here more than a week ago. `ingest` stamps every copy
@@ -123,6 +138,17 @@ mod tests {
             "a file copied just now was swept as if it were a week old"
         );
         let _ = std::fs::remove_file(&aged.path);
+
+        // Bytes from the page land the same way, under a tame name.
+        let third = ingest_bytes("note.txt", b"from the page").unwrap();
+        assert_ne!(third.path, first.path);
+        assert_eq!(std::fs::read(&third.path).unwrap(), b"from the page");
+        assert_eq!(third.size, 13);
+        let sneaky = ingest_bytes("..\\..\\evil.txt", b"x").unwrap();
+        assert!(Path::new(&sneaky.path).starts_with(inbox_dir()));
+        assert_eq!(sneaky.name, "evil.txt");
+        let _ = std::fs::remove_file(&third.path);
+        let _ = std::fs::remove_file(&sneaky.path);
 
         let _ = std::fs::remove_file(&first.path);
         let _ = std::fs::remove_file(&second.path);

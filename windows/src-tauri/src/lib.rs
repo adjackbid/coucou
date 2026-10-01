@@ -341,6 +341,55 @@ fn ingest_file(path: String) -> Result<DroppedFile, String> {
     files::ingest(&path)
 }
 
+/// Writes a file the page received through an HTML5 drop into the inbox. The
+/// bytes travel as the raw request body; the name rides in a header, URL-
+/// encoded by the page so any Unicode file name survives the trip.
+#[tauri::command]
+fn ingest_bytes(request: tauri::ipc::Request<'_>) -> Result<DroppedFile, String> {
+    let name = request
+        .headers()
+        .get("x-file-name")
+        .and_then(|v| v.to_str().ok())
+        .map(percent_decode)
+        .unwrap_or_else(|| "file".into());
+    match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => files::ingest_bytes(&name, bytes),
+        _ => Err("expected the file's bytes".into()),
+    }
+}
+
+/// `%XX` → byte, for the file name header. Anything malformed is kept as is.
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::percent_decode;
+
+    #[test]
+    fn file_names_survive_the_header() {
+        assert_eq!(percent_decode("note.txt"), "note.txt");
+        assert_eq!(percent_decode("%E5%9C%96%E7%89%87.png"), "圖片.png");
+        assert_eq!(percent_decode("a%20b%"), "a b%");
+        assert_eq!(percent_decode("%zz"), "%zz");
+    }
+}
+
 /// The island may only ask whether a key exists — never read it.
 #[tauri::command]
 fn secret_present(key: String) -> bool {
@@ -489,6 +538,7 @@ pub fn run() {
             chat_send,
             chat_reset,
             ingest_file,
+            ingest_bytes,
             secret_present,
             secret_set,
             secret_clear,

@@ -2,7 +2,7 @@
 // Mirrors IslandRootView.swift + IslandWindowController.swift.
 
 import { Tracked, Spring, clamp } from "../core/anim";
-import { Bridge, IS_TAURI, onDragDrop } from "../core/bridge";
+import { Bridge, IS_TAURI, onDragDrop, type DroppedFile } from "../core/bridge";
 import {
   EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
   ROUNDED_CORNER, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition, chatPromptHeight,
@@ -21,6 +21,18 @@ import { h } from "../views/dom";
 import { IslandStateMachine } from "./fsm";
 
 const BOT_OVERHANG = 40;
+
+/** Largest file taken through an HTML5 drop; the bytes cross the IPC bridge. */
+const MAX_DROP_BYTES = 64 * 1024 * 1024;
+
+/** Reads a dropped File and hands it to Rust, which writes it into the inbox. */
+async function readDropped(file: File): Promise<DroppedFile> {
+  if (file.size > MAX_DROP_BYTES) {
+    throw new Error(`${file.name} is over 64 MB — too big to drop here.`);
+  }
+  const bytes = await file.arrayBuffer();
+  return Bridge.ingestBytes(file.name, bytes);
+}
 /** Same margin as the Rust hit test (src-tauri/src/island.rs). */
 const HIT_MARGIN = 14;
 
@@ -419,7 +431,7 @@ export class Island {
           this.setView(State.defaultView());
           return;
         }
-        this.swallow(path);
+        this.swallow(path.split(/[\\/]/).pop() || "file", Bridge.ingestFile(path));
         break;
       }
     }
@@ -430,8 +442,9 @@ export class Island {
    * the inbox runs in the background and swaps the path in when it lands, so a
    * slow disk can never stall the animation — same as FileDropHandler on macOS.
    */
-  private swallow(path: string) {
-    const name = path.split(/[\\/]/).pop() || "file";
+  private swallow(name: string, ingest: Promise<DroppedFile>) {
+    const path = "";
+    State.fileDragOver = false;
     State.droppedFile = { name, path };
     State.promptContext = { kind: "file", name, path };
     State.chatHistory = [];
@@ -450,7 +463,7 @@ export class Island {
     this.setView("uploading");
     this.ensureRunning();
 
-    void Bridge.ingestFile(path)
+    void ingest
       .then((file) => {
         State.droppedFile = { name: file.name, path: file.path };
         State.promptContext = { kind: "file", name: file.name, path: file.path };
@@ -599,6 +612,38 @@ export class Island {
     });
 
     void onDragDrop((e) => this.onDragDrop(e));
+
+    // Files arrive through the webview's own HTML5 drag and drop: WebView2
+    // keeps the window OLE finds first in its own process, where wry's drop
+    // target cannot reach, so Tauri's drag events never fire here. The page
+    // sees enter/over/leave/drop instead, and the file comes as bytes.
+    let depth = 0;
+    window.addEventListener("dragenter", (e) => {
+      e.preventDefault();
+      if (depth++ === 0) this.onDragDrop({ type: "enter" });
+    });
+    window.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    });
+    window.addEventListener("dragleave", (e) => {
+      e.preventDefault();
+      if (--depth <= 0) {
+        depth = 0;
+        this.onDragDrop({ type: "leave" });
+      }
+    });
+    window.addEventListener("drop", (e) => {
+      e.preventDefault();
+      depth = 0;
+      const file = e.dataTransfer?.files?.[0];
+      void Bridge.log(`drop (html5) ${file ? file.name : "no file"}`);
+      if (!file) {
+        this.onDragDrop({ type: "drop" });
+        return;
+      }
+      this.swallow(file.name, readDropped(file));
+    });
 
     // Outside Tauri (plain browser) drive the cursor from DOM events so the
     // island can be inspected with `npm run dev`.

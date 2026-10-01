@@ -86,6 +86,16 @@ export const Bridge = {
   chatReset: () => call<void>("chat_reset"),
   /** Copies a dropped file into the inbox. */
   ingestFile: (path: string) => callOrThrow<DroppedFile>("ingest_file", { path }),
+  /**
+   * Writes a file the page got from an HTML5 drop into the inbox. The bytes go
+   * as the raw request body; the name, URL-encoded, in a header.
+   */
+  ingestBytes: (name: string, bytes: ArrayBuffer) => {
+    if (!IS_TAURI) throw new Error("not running inside Coucou");
+    return invoke<DroppedFile>("ingest_bytes", new Uint8Array(bytes), {
+      headers: { "x-file-name": encodeURIComponent(name) },
+    });
+  },
   /** Only ever tells you whether a key exists — never its value. */
   secretPresent: (key: string) => call<boolean>("secret_present", { key }),
   secretSet: (key: string, value: string) => callOrThrow<void>("secret_set", { key, value }),
