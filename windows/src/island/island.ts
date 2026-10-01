@@ -551,7 +551,7 @@ export class Island {
         this.fsm.click();
         return;
       }
-      if (this.isBotHit(e.clientX, e.clientY)) {
+      if (this.isBotHit(e.clientX / State.zoom, e.clientY / State.zoom)) {
         this.cancelBotHover();
         this.engine.slap();
       }
@@ -567,7 +567,9 @@ export class Island {
     // Outside Tauri (plain browser) drive the cursor from DOM events so the
     // island can be inspected with `npm run dev`.
     if (!IS_TAURI) {
-      window.addEventListener("mousemove", (e) => this.onCursor(e.clientX, e.clientY));
+      window.addEventListener("mousemove", (e) =>
+        this.onCursor(e.clientX / State.zoom, e.clientY / State.zoom),
+      );
     }
   }
 

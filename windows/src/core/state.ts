@@ -144,6 +144,13 @@ class AppState {
   isPinned = false;
   paused = false;
 
+  /**
+   * CSS zoom on #root that maps the webview's pixels onto window-logical ones
+   * (main.ts, fitToWindow). DOM event coordinates arrive unzoomed and are
+   * divided by this; everything from Rust is already logical.
+   */
+  zoom = 1;
+
   uploadProgress = 0;
   uploadDuration = 2.4;
   fileDragOver = false;
