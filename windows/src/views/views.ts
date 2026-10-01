@@ -226,7 +226,7 @@ function buildOverview(actions: ViewActions): ViewHost {
       jump.style.display = detailOpen ? "none" : "";
 
       const others = State.otherTasks.slice(0, MAX_PILLS);
-      const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}`).join("|");
+      const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}:${t.unread ? 1 : 0}`).join("|");
       if (pillKey !== pillIds) {
         pillIds = pillKey;
         clear(pills);
@@ -259,10 +259,17 @@ function buildPill(task: AgentTask, actions: ViewActions): HTMLElement {
   });
   pill.addEventListener("mouseleave", () => {
     pill.style.background = "";
-    pill.style.borderColor = `${task.color}24`;
-    pill.style.boxShadow = "";
+    pill.style.borderColor = task.unread ? `${task.color}b3` : `${task.color}24`;
+    pill.style.boxShadow = task.unread ? `0 0 10px ${task.color}66` : "";
     (pill.querySelector(".lbl") as HTMLElement).style.color = "";
   });
+
+  if (task.unread) {
+    // Lit up until looked at — the badge alone was easy to miss.
+    pill.classList.add("unread");
+    pill.style.borderColor = `${task.color}b3`;
+    pill.style.boxShadow = `0 0 10px ${task.color}66`;
+  }
 
   if (task.pillBadge) {
     const colors = { approval: "#F5A524", finished: "#22C55E", error: "#F4505E" } as const;
@@ -412,18 +419,42 @@ function buildFinished(actions: ViewActions): ViewHost {
   const who = h("div");
   // The agent's last words, wrapped to a few lines rather than one.
   const title = h("div", { class: "title reply-text" });
-  const row = h("div", { class: "actions" },
-    btn("Open terminal", "primary", () => actions.openTerminal()),
-    btn("OK", "secondary", () => actions.collapse()),
-  );
-  const el = h("div", { class: "view" }, card("green", stack(116, 16, who, title, row)));
+  // The sessions that replied meanwhile; OK becomes Next while there are any.
+  const more = h("div", { class: "sub" });
+  const row = h("div", { class: "actions" });
+  const el = h("div", { class: "view" }, card("green", stack(116, 16, who, title, more, row)));
+  let rowKey = "";
   return {
     el,
     sync() {
       const task = State.focusTask;
+      // Being on screen is being read.
+      if (task) State.markRead(task);
       clear(who);
       who.append(agentWho(task, `${task ? SOURCE_LABELS[task.source] : "Claude Code"} finished`));
       title.textContent = task?.steps.at(-1) ?? "Session finished";
+
+      const others = State.unreadTasks.filter((t) => t.id !== task?.id);
+      more.textContent = others.length === 0 ? ""
+        : others.length === 1 ? `${others[0].name} also replied`
+        : `${others.length} more replied: ${others.map((t) => t.name).join(", ")}`;
+      more.style.display = others.length ? "" : "none";
+
+      // Rebuilt only when the choice changes, never between a press and a release.
+      const key = others[0]?.id ?? "";
+      if (key === rowKey) return;
+      rowKey = key;
+      clear(row);
+      row.append(btn("Open terminal", "primary", () => actions.openTerminal()));
+      if (others.length) {
+        const next = others[0];
+        row.append(btn("Next", "secondary", () => {
+          actions.setFocus(next.id);
+          actions.setView("finished");
+        }, "→"));
+      } else {
+        row.append(btn("OK", "secondary", () => actions.collapse()));
+      }
     },
   };
 }

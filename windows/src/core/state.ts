@@ -38,6 +38,11 @@ export interface AgentTask {
   isIntegration: boolean;
   /** A live CLI session (one pill per session), as opposed to the agent's standing pill. */
   isSession?: boolean;
+  /**
+   * It finished while another pill had the screen, and nobody has looked at
+   * it since. The badge, the glow and the finished pose all stay until then.
+   */
+  unread?: boolean;
   emote?: BotEmoteName | null;
   miniEye?: EyeShape | null;
   pillBadge?: PillBadge | null;
@@ -271,8 +276,22 @@ class AppState {
     const t = this.tasks.find((x) => x.id === id);
     if (!t) return;
     this.focusId = id;
-    t.pillBadge = null;
+    this.markRead(t);
     this.notify();
+  }
+
+  /** Looking at a pill is reading it: badge off, pose back to rest. */
+  markRead(t: AgentTask) {
+    t.pillBadge = null;
+    if (t.unread) {
+      t.unread = false;
+      if (t.state === "finished") t.state = "idle";
+    }
+  }
+
+  /** The pills that replied while something else had the screen. */
+  get unreadTasks(): AgentTask[] {
+    return this.tasks.filter((t) => t.unread);
   }
 
   updateTask(id: string, state: BotStateName) {

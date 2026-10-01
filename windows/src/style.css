@@ -549,6 +549,11 @@ body {
   filter: brightness(1.06);
 }
 
+/* A reply nobody has looked at yet: the label brightens along with the border. */
+.pill.unread .lbl {
+  color: var(--ink-2);
+}
+
 .pill-badge {
   position: absolute;
   top: -3px;

@@ -306,9 +306,21 @@ function handleHook(island: Island, payload: HookPayload) {
         State.appendTranscript(CLAUDE_ID, { role: "assistant", text: full });
       }
       Sound.play("finish");
-      if (focused) surface("finished", true);
-      else State.setPillBadge(CLAUDE_ID, "finished");
+      if (focused) {
+        surface("finished", true);
+      } else {
+        // Another pill has the screen. This one stays "unread" — badge, glow,
+        // finished pose — until it is looked at, and the island shows itself
+        // so there is something to notice. A badge that fades in five seconds
+        // was gone by the time the first card's OK was pressed.
+        const t = State.tasks.find((x) => x.id === CLAUDE_ID);
+        if (t) t.unread = true;
+        State.setPillBadge(CLAUDE_ID, "finished");
+        island.reveal();
+      }
       window.setTimeout(() => {
+        const t = State.tasks.find((x) => x.id === CLAUDE_ID);
+        if (!t || t.unread) return;
         State.updateTask(CLAUDE_ID, "idle");
         State.setPillBadge(CLAUDE_ID, null);
       }, 5200);
