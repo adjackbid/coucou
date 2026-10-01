@@ -59,7 +59,21 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     Sound.play("blip");
     State.notify();
   });
-  const bar = h("div", { class: "chat-bar" }, provider, input, send);
+  // A fresh conversation: the history, the file and the context all go, so a
+  // long chat does not drag its whole past into every next question.
+  const fresh = h("button", { class: "chat-new", title: "Start a new conversation", text: "New" });
+  fresh.addEventListener("click", () => {
+    if (sending) return;
+    State.chatHistory = [];
+    State.droppedFile = null;
+    State.promptContext = null;
+    void Bridge.chatReset();
+    Sound.play("blip");
+    State.notify();
+    onHeightChange();
+    input.focus();
+  });
+  const bar = h("div", { class: "chat-bar" }, provider, input, fresh, send);
 
   const el = h(
     "div",
@@ -137,6 +151,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
 
       input.placeholder = State.chatHistory.length === 0 ? "Ask me anything…" : "Continue…";
       input.disabled = sending;
+      fresh.style.display = State.chatHistory.length > 0 || State.droppedFile ? "" : "none";
 
       const active = State.settings.providers.find((p) => p.id === State.settings.activeProvider)
         ?? State.settings.providers[0];

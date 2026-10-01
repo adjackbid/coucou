@@ -997,6 +997,48 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--ink-2);
 }
 
+/* "New": wipes the conversation. Same shape as the provider chip. */
+.chat-new {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--dim);
+  font: 500 11px var(--font);
+  cursor: default;
+}
+
+.chat-new:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--ink-2);
+}
+
+/* The compact island's one line of status, between Mochi and the mini grid. */
+#compact-status {
+  position: absolute;
+  left: 60px;
+  right: 62px;
+  top: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  font: 500 11px var(--font);
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  transition: opacity 0.25s ease-in-out;
+}
+
+#compact-status .n {
+  color: var(--ink-2);
+  margin-right: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .chat-input {
   flex: 1 1 auto;
   min-width: 0;

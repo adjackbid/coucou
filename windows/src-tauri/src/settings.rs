@@ -36,6 +36,9 @@ pub struct Settings {
     /// Sessions shown as cards side by side in the overview, 1–3.
     #[serde(default = "default_max_cards")]
     pub max_session_cards: u32,
+    /// Never hide: the island stays at least compact at the top of the screen.
+    #[serde(default)]
+    pub always_visible: bool,
 }
 
 fn default_max_cards() -> u32 {
@@ -97,6 +100,7 @@ impl Default for Settings {
             providers: vec![Provider::anthropic(&default_model())],
             active_provider: "anthropic".into(),
             max_session_cards: default_max_cards(),
+            always_visible: false,
         }
     }
 }

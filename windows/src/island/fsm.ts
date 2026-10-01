@@ -26,6 +26,8 @@ export class IslandStateMachine {
   greetHoverCollapseDelay = 10;
   /** An alert waiting for an answer stays open, even when the mouse leaves. */
   pinned = false;
+  /** The setting: petit never becomes hidden on its own. */
+  alwaysVisible = false;
 
   private petitHide: number | null = null;
   private homeCollapse: number | null = null;
@@ -86,8 +88,16 @@ export class IslandStateMachine {
     if (this.greetCollapse == null) this.scheduleGreetCollapse(this.greetAutoCollapseDelay);
   }
 
-  /** Non-alert work event: show compact from hidden. */
+  /**
+   * Non-alert work event: show compact from hidden, and keep a compact island
+   * up while events keep coming — a session at work must not vanish mid-way.
+   */
   reveal() {
+    if (this.state === "petit") {
+      this.peeked = false;
+      this.schedulePetitHide();
+      return;
+    }
     if (this.state !== "hidden") return;
     this.cancelTimers();
     this.transition("petit");
@@ -117,6 +127,7 @@ export class IslandStateMachine {
 
   private schedulePetitHide() {
     this.clear("petitHide");
+    if (this.alwaysVisible) return;
     const delay = this.peeked ? this.peekToHiddenDelay : this.petitToHiddenDelay;
     this.petitHide = window.setTimeout(() => {
       this.petitHide = null;

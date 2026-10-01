@@ -7,7 +7,7 @@ import {
   EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
   ROUNDED_CORNER, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition, chatPromptHeight,
   islandSize,
-  type IslandMode, type IslandViewName,
+  type BotStateName, type IslandMode, type IslandViewName,
 } from "../core/layout";
 import { Sound } from "../core/sound";
 import { MAX_PILLS, State, isAgentSource } from "../core/state";
@@ -58,6 +58,7 @@ export class Island {
   private miniGrid!: HTMLElement;
   private countdown!: HTMLElement;
   private wakeStrip!: HTMLElement;
+  private compactStatus!: HTMLElement;
 
   private header!: ViewHost;
   private views!: Map<IslandViewName, ViewHost>;
@@ -198,6 +199,7 @@ export class Island {
     this.greetingCanvas = h("canvas", { id: "greeting-canvas" });
     this.miniGrid = h("div", { id: "mini-grid" });
     this.countdown = h("div", { id: "countdown" });
+    this.compactStatus = h("div", { id: "compact-status" });
 
     this.header = buildHeader(actions);
     this.views = buildViews(actions, () => this.animateGeometry(false));
@@ -231,6 +233,7 @@ export class Island {
       this.botGlow,
       this.botCanvas,
       this.miniGrid,
+      this.compactStatus,
       this.countdown,
     );
 
@@ -375,7 +378,9 @@ export class Island {
     if (State.mode === "expanded") {
       State.isPinned = false;
       this.fsm.pinned = false;
-      this.fsm.forceHidden();
+      // "Always visible" means never gone: the shortcut then only shuts it.
+      if (State.settings.alwaysVisible) this.fsm.forcePetit();
+      else this.fsm.forceHidden();
     } else {
       this.alert(State.pendingApproval ? "approval" : State.defaultView());
     }
@@ -945,9 +950,28 @@ export class Island {
       }
     }
 
-    // Compact mini grid
+    // Compact mini grid, and the one line that says what Mochi is up to —
+    // without it a shut island showed nothing of a session at work.
     const showGrid = State.mode === "compact";
     this.miniGrid.style.opacity = showGrid ? "1" : "0";
+    this.compactStatus.style.opacity = showGrid ? "1" : "0";
+    if (showGrid) {
+      const t = State.focusTask;
+      const words: Partial<Record<BotStateName, string>> = {
+        working: "is working…", thinking: "is thinking…", searching: "is searching…",
+        approval: "needs permission", question: "has a question", finished: "replied",
+        error: "stopped on an error", ratelimit: "hit a rate limit",
+      };
+      const word = t ? words[t.state] : undefined;
+      const key = `${t?.id}|${t?.name}|${word ?? ""}`;
+      if (this.compactStatus.dataset.key !== key) {
+        this.compactStatus.dataset.key = key;
+        this.compactStatus.replaceChildren();
+        if (t && word) {
+          this.compactStatus.append(h("span", { class: "n", text: t.name }), h("span", { text: word }));
+        }
+      }
+    }
     if (showGrid) {
       const others = State.otherTasks.slice(0, 4);
       const key = others.map((t) => t.id).join("|");
@@ -970,6 +994,10 @@ export class Island {
     Sound.setEnabled(State.settings.soundEnabled);
     Sound.setVolume(State.settings.soundVolume);
     this.fsm.homeToPetitDelay = State.settings.autoCloseInterval;
+    this.fsm.alwaysVisible = State.settings.alwaysVisible;
+    // Switching it on brings a hidden island out; it then stays.
+    if (State.settings.alwaysVisible && this.fsm.state === "hidden") this.fsm.reveal();
+    if (State.settings.alwaysVisible && this.fsm.state === "petit") this.fsm.reveal();
     State.notify();
   }
 

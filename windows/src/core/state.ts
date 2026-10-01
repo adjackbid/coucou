@@ -177,6 +177,8 @@ export interface Settings {
   activeProvider: string;
   /** Sessions shown as cards side by side in the overview (the focused one included), 1–3. */
   maxSessionCards: number;
+  /** Never hide: the island stays at least compact at the top of the screen. */
+  alwaysVisible: boolean;
 }
 
 export const DEFAULT_PROVIDER: Provider = {
@@ -208,6 +210,7 @@ export const DEFAULT_SETTINGS: Settings = {
   providers: [DEFAULT_PROVIDER],
   activeProvider: "anthropic",
   maxSessionCards: 2,
+  alwaysVisible: false,
 };
 
 type Listener = () => void;
@@ -283,6 +286,16 @@ class AppState {
     this.focusId = id;
     this.markRead(t);
     this.notify();
+  }
+
+  /**
+   * While the island is shut, the compact Mochi follows whichever session is
+   * doing something, so "working" is visible without opening anything. An
+   * open island is being looked at and keeps its focus.
+   */
+  followActivity(id: string) {
+    if (this.mode === "expanded") return;
+    if (this.tasks.some((t) => t.id === id)) this.focusId = id;
   }
 
   /** Looking at a pill is reading it: badge off, pose back to rest. */

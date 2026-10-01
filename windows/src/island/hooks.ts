@@ -230,14 +230,19 @@ function handleHook(island: Island, payload: HookPayload) {
   const focused = State.focusId === CLAUDE_ID;
   const own = State.tasks.find((x) => x.id === CLAUDE_ID);
   if (own) own.lastEvent = performance.now();
+  // A shut island's Mochi follows whoever is busy, so work is visible.
+  State.followActivity(CLAUDE_ID);
 
-  /** Alerts force the island open; work events only reveal the compact island. */
+  /**
+   * Alerts force the island open; work events only reveal the compact island
+   * — and keep it there while they keep coming.
+   */
   const surface = (view: Parameters<Island["alert"]>[0], isAlert: boolean) => {
     if (State.mode === "expanded") {
       if (isAlert) island.setView(view);
     } else if (isAlert) {
       island.alert(view);
-    } else if (State.mode === "hidden") {
+    } else {
       island.reveal();
     }
   };
