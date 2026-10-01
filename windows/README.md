@@ -92,6 +92,18 @@ which CLI is talking, and Copilot sessions get their own pill next to Mochi.
 Permission requests reach the island too, unless the session runs with
 `--yolo`, which approves everything before any hook sees it.
 
+## Agents you drive from the island
+
+**Settings… → Agents** lists coding agents Coucou starts itself and talks to
+over the [Agent Client Protocol](https://agentclientprotocol.com): Copilot CLI
+(`copilot --acp --stdio`) out of the box, with a BYOK preset for a provider of
+your own, or any other ACP-speaking agent by command. Pick one in the chat
+bar (the chip at the left cycles through providers and agents) and your
+question goes to it: the reply streams in as it speaks, its tool calls show
+as small lines, and whatever it needs permission for asks on the island, like
+a hook's request. **New** starts a fresh session. The agent's process is
+stopped when you reset it and when Coucou quits.
+
 ## Chat and keys
 
 **Settings… → Chat providers** is where the chat sends its questions. Out of the

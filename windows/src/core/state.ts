@@ -211,6 +211,8 @@ export interface Settings {
   maxSessionCards: number;
   /** Never hide: the island stays at least compact at the top of the screen. */
   alwaysVisible: boolean;
+  /** Seconds the compact bar stays after the mouse leaves before hiding. */
+  hideAfter: number;
   /** Coding agents the island can start and talk to over ACP. */
   agents: AgentProfile[];
 }
@@ -245,6 +247,7 @@ export const DEFAULT_SETTINGS: Settings = {
   activeProvider: "anthropic",
   maxSessionCards: 2,
   alwaysVisible: false,
+  hideAfter: 60,
   agents: [DEFAULT_AGENT],
 };
 

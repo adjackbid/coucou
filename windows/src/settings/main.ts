@@ -737,6 +737,18 @@ function generalSection(): HTMLElement {
     void save();
   });
 
+  // The second countdown: how long the small bar lingers before vanishing.
+  const hideAfter = h("input", {
+    type: "number", min: "3", max: "600", step: "1",
+    value: String(Math.round(settings.hideAfter || 60)),
+    style: "width:72px",
+  }) as HTMLInputElement;
+  hideAfter.addEventListener("change", () => {
+    settings.hideAfter = Math.max(3, Math.min(600, Number(hideAfter.value) || 60));
+    hideAfter.value = String(settings.hideAfter);
+    void save();
+  });
+
   // How many finished sessions may sit side by side as cards before the rest
   // go to the pills; the island widens by one card each.
   const cards = h("input", {
@@ -802,6 +814,11 @@ function generalSection(): HTMLElement {
     h("div", { class: "row" },
       h("label", { text: "Island lives on" }),
       screen,
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Hide after" }),
+      hideAfter,
+      h("span", { class: "hint", text: "seconds the small bar stays once the mouse leaves" }),
     ),
     h("div", { class: "row" },
       h("label", { text: "Always visible" }),

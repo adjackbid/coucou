@@ -40,6 +40,9 @@ pub struct Settings {
     /// Never hide: the island stays at least compact at the top of the screen.
     #[serde(default)]
     pub always_visible: bool,
+    /// Seconds the compact bar stays after the mouse leaves before hiding.
+    #[serde(default = "default_hide_after")]
+    pub hide_after: f64,
     /// Coding agents the island can start and talk to over ACP.
     #[serde(default)]
     pub agents: Vec<AgentProfile>,
@@ -47,6 +50,10 @@ pub struct Settings {
 
 fn default_max_cards() -> u32 {
     2
+}
+
+fn default_hide_after() -> f64 {
+    60.0
 }
 
 fn default_model() -> String {
@@ -120,6 +127,7 @@ impl Default for Settings {
             active_provider: "anthropic".into(),
             max_session_cards: default_max_cards(),
             always_visible: false,
+            hide_after: default_hide_after(),
             agents: vec![AgentProfile::copilot()],
         }
     }
