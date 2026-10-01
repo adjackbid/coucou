@@ -604,18 +604,59 @@ body {
   color: var(--ink);
 }
 
+/* The approval headline: tool and target, on as many lines as the path needs. */
+.code-head {
+  font: 600 12px/16px var(--mono);
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* The approval body: the whole request. It wraps rather than hides behind an
+   ellipsis, and once the island has grown as far as it may (layout.ts,
+   approvalHeight) it scrolls — with a scrollbar you can see, so a command
+   that goes on below the fold is never mistaken for one that ends there. */
 .code {
-  font: 400 12px var(--mono);
+  font: 400 12px/16px var(--mono);
   color: #e8e9ec;
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 10px;
   padding: 5px 10px;
   max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+  scrollbar-gutter: stable;
   user-select: text;
+}
+
+.code::-webkit-scrollbar {
+  width: 8px;
+}
+
+.code::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+}
+
+/* Field labels inside the body (old / new / description…), only when there is
+   more than one field to tell apart. */
+.code-k {
+  font: 600 10.5px/14px var(--font);
+  color: var(--dim);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 6px;
+}
+
+.code-k:first-child {
+  margin-top: 0;
 }
 
 .stack {

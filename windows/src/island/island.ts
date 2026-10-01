@@ -134,12 +134,23 @@ export class Island {
       openUrl: (url) => {
         if (url) void Bridge.openUrl(url);
       },
-      decide: (d) => {
+      decide: (choice) => {
         const req = State.pendingApproval;
-        void Bridge.log(`decide ${d} req=${req?.requestId ?? "none"}`);
+        void Bridge.log(`decide ${choice} req=${req?.requestId ?? "none"}`);
         if (!req) return;
-        Sound.play(d === "deny" ? "blip" : "approve");
-        void Bridge.approvalDecision(req.requestId, d);
+        // Nothing gets allowed from here that could not be read here. The card
+        // never offers Allow for a cut request, but a stale click must not
+        // become one either.
+        const d = choice === "allow" && req.truncated ? "terminal" : choice;
+        if (d === "terminal") {
+          // Hand the request back untouched: the relay prints nothing and
+          // Claude Code asks in the terminal, exactly as if Coucou were closed.
+          Sound.play("blip");
+          void Bridge.approvalDecline(req.requestId);
+        } else {
+          Sound.play(d === "deny" ? "blip" : "approve");
+          void Bridge.approvalDecision(req.requestId, d);
+        }
         State.pendingApproval = null;
         State.isPinned = false;
         this.fsm.pinned = false;
@@ -450,7 +461,9 @@ export class Island {
   // ── Geometry ────────────────────────────────────────────────────────────────
 
   private targetSize(): { w: number; h: number; r: number } {
-    const { w, h } = islandSize(State.mode, State.view, State.chatHistory.length);
+    const { w, h } = islandSize(
+      State.mode, State.view, State.chatHistory.length, State.pendingApproval?.lines ?? 0,
+    );
     const r = State.mode === "expanded" ? EXPANDED_CORNER : ROUNDED_CORNER;
     return { w, h, r };
   }

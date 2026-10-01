@@ -51,6 +51,13 @@ Everything else happens on its own: a Claude Code permission request opens the
 island with **Deny / Allow**, a finished session shows what it did, and
 your integrations sit in the coloured pills next to Mochi.
 
+The permission card shows the whole request, not a headline: the full command,
+the content a Write will put on disk, the old and new strings of an Edit, the
+arguments of an MCP tool. The card grows to fit and scrolls past 300 px. If a
+request is too large for the relay to carry whole (over 64 KB in a single
+field), the card says so and offers **Ask in terminal** instead of Allow — you
+can always deny from the island, but never approve something you could not read.
+
 ## Claude Code
 
 <img src="screenshots/settings.png" width="562" alt="The settings window">

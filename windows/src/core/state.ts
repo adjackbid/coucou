@@ -21,11 +21,28 @@ export interface AgentTask {
   sessionCwd?: string | null;
 }
 
+/** One field of a tool's input, laid out for reading on the approval card. */
+export interface ApprovalSection {
+  label: string;
+  value: string;
+}
+
 export interface ApprovalInfo {
   requestId: string;
   sessionId: string;
   tool: string;
+  /** One line: the tool and the file, URL or pattern it is aimed at. */
   command: string;
+  /**
+   * Everything else the tool was handed, in full: a Write's content, an Edit's
+   * old and new strings, an MCP tool's arguments. Empty when the headline says
+   * it all (a Read of one file).
+   */
+  sections: ApprovalSection[];
+  /** Estimated lines of text on the card, which is what sets its height. */
+  lines: number;
+  /** The relay cut something: what is on screen is not the whole request. */
+  truncated: boolean;
 }
 
 export interface ChatMessage {

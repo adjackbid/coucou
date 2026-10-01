@@ -69,7 +69,8 @@ export const WAKE_STRIP_H = 6;
 export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   overview: { height: 160, botX: 68, botY: null, botDiameter: 58, agentMode: "pills" },
   empty: { height: 160, botX: 70, botY: null, botDiameter: 62, agentMode: "none" },
-  approval: { height: 160, botX: 62, botY: null, botDiameter: 56, agentMode: "column" },
+  // The nominal (largest) height; the real one follows the request, see approvalHeight.
+  approval: { height: 300, botX: 62, botY: null, botDiameter: 56, agentMode: "column" },
   question: { height: 160, botX: 62, botY: null, botDiameter: 56, agentMode: "column" },
   error: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "column" },
   finished: { height: 160, botX: 62, botY: null, botDiameter: 58, agentMode: "column" },
@@ -97,10 +98,28 @@ export function chatPromptHeight(messageCount: number): number {
   return Math.min(300, 240 + messageCount * 40);
 }
 
+/** The one-line card, as every other alert view. */
+export const APPROVAL_MIN_H = 160;
+/** Past this the request scrolls inside the card rather than growing it. */
+export const APPROVAL_MAX_H = VIEW_LAYOUTS.approval.height;
+/** Line height of the card's monospace text. */
+const CODE_LINE_H = 16;
+
+/**
+ * The approval card grows with the request so a whole command or an Edit's
+ * old and new strings can be read before they are allowed; one line of text
+ * is the familiar 160 pt card, and the cap keeps the island a card rather
+ * than a window.
+ */
+export function approvalHeight(lines: number): number {
+  return Math.min(APPROVAL_MAX_H, APPROVAL_MIN_H + Math.round(Math.max(0, lines - 1) * CODE_LINE_H));
+}
+
 export function islandSize(
   mode: IslandMode,
   view: IslandViewName,
   chatCount = 0,
+  approvalLines = 0,
 ): { w: number; h: number } {
   switch (mode) {
     case "hidden":
@@ -110,7 +129,10 @@ export function islandSize(
     case "compact":
       return { w: COMPACT_W, h: NOTCH_H };
     case "expanded": {
-      const h = view === "prompt" ? chatPromptHeight(chatCount) : VIEW_LAYOUTS[view].height;
+      const h =
+        view === "prompt" ? chatPromptHeight(chatCount)
+        : view === "approval" ? approvalHeight(approvalLines)
+        : VIEW_LAYOUTS[view].height;
       return { w: EXPANDED_W, h };
     }
   }

@@ -20,7 +20,8 @@ export interface ViewActions {
   /** The ↗ button: opens whatever the focused pill points at. */
   openTarget(): void;
   openUrl(url: string): void;
-  decide(d: "allow" | "deny"): void;
+  /** `terminal` gives the request back unanswered, for Claude Code to ask itself. */
+  decide(d: "allow" | "deny" | "terminal"): void;
   toggleSound(): void;
   setVolume(v: number): void;
   setAutoClose(seconds: number): void;
@@ -290,28 +291,59 @@ function buildEmpty(actions: ViewActions): ViewHost {
 
 function buildApproval(actions: ViewActions): ViewHost {
   const who = h("div");
-  const code = h("div", { class: "code" });
+  const head = h("div", { class: "code-head" });
+  const body = h("div", { class: "code" });
+  const note = h("div", { class: "sub" });
   const row = h("div", { class: "actions" });
-  const el = h("div", { class: "view" }, card("amber", stack(116, 16, who, code, row)));
+  const el = h("div", { class: "view" }, card("amber", stack(116, 16, who, head, body, note, row)));
+  // Null so the first sync always lays the body out, even with no request.
+  let bodyKey: string | null = null;
   let rowKey = "";
   return {
     el,
     sync() {
+      const req = State.pendingApproval;
       clear(who);
       who.append(agentWho(State.focusTask, "needs permission"));
-      // The whole point of approving here rather than in the terminal: this line
-      // is the command, the file path or the URL being authorised, not just the
-      // name of the tool asking.
-      code.textContent = State.pendingApproval?.command || State.pendingApproval?.tool || "…";
-      // Two buttons, built once. Rebuilding them between a mouse-down and a
-      // mouse-up would swallow the click, and there is nothing left to vary:
-      // "Always" is gone until the remembered-rules list exists to back it.
-      if (rowKey === "built") return;
-      rowKey = "built";
+      // The whole point of approving here rather than in the terminal: the
+      // headline is the file, the URL or the pattern being authorised, and the
+      // body is the rest of the request in full — the command, the content a
+      // Write will put on disk, the strings an Edit swaps — never cut to one
+      // line with an ellipsis over the part that mattered.
+      head.textContent = req?.command || req?.tool || "…";
+      const key = req ? `${req.requestId}|${req.truncated}` : "";
+      if (key !== bodyKey) {
+        bodyKey = key;
+        clear(body);
+        const sections = req?.sections ?? [];
+        for (const s of sections) {
+          // One section needs no label: it is obviously the command or the content.
+          if (sections.length > 1) {
+            body.append(h("div", { class: "code-k", text: s.label.replace(/_/g, " ") }));
+          }
+          body.append(h("div", { class: "code-v", text: s.value }));
+        }
+        body.style.display = sections.length ? "" : "none";
+        body.scrollTop = 0;
+        note.textContent = req?.truncated
+          ? "Too long to show in full here. The terminal has all of it."
+          : "";
+        note.style.display = req?.truncated ? "" : "none";
+      }
+      // Built once per shape. Rebuilding the buttons between a mouse-down and a
+      // mouse-up would swallow the click, and the shape only changes with the
+      // request: Deny / Allow, or Deny / Ask in terminal when the relay had to
+      // cut the request — nobody can allow what nobody could read. "Always" is
+      // gone until the remembered-rules list exists to back it.
+      const shape = req?.truncated ? "terminal" : "allow";
+      if (rowKey === shape) return;
+      rowKey = shape;
       clear(row);
       row.append(
         btn("Deny", "secondary", () => actions.decide("deny"), "N"),
-        btn("Allow", "primary", () => actions.decide("allow"), "Y"),
+        shape === "terminal"
+          ? btn("Ask in terminal", "primary", () => actions.decide("terminal"))
+          : btn("Allow", "primary", () => actions.decide("allow"), "Y"),
       );
     },
   };

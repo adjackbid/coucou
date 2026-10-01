@@ -33,9 +33,20 @@ const ERROR_PIPE_BUSY: i32 = 231;
 /// Fields that are pointless to forward and can be enormous (a whole file read,
 /// a full command output). The island never shows them.
 const DROPPED_FIELDS: &[&str] = &["tool_response", "transcript_path"];
-/// Longest string forwarded for any single field; the island truncates to far
-/// less than this anyway.
-const MAX_FIELD_LEN: usize = 2_000;
+/// Longest string forwarded for any single field. The island shows the whole
+/// thing — a Write's content, an Edit's old and new strings — so this has to
+/// hold a real file, not a headline. Past it the field is cut and the payload
+/// flagged, and the island offers "Ask in terminal" instead of an Allow for
+/// something nobody could read.
+const MAX_FIELD_LEN: usize = 64 * 1024;
+/// Ceiling for the whole line on the pipe (Coucou stops reading at 1 MiB). A
+/// MultiEdit with dozens of 64 KB edits would blow past it, so the fields are
+/// re-cut to this much shorter length and the payload flagged, rather than the
+/// event being lost on the way.
+const MAX_LINE_LEN: usize = 512 * 1024;
+const FALLBACK_FIELD_LEN: usize = 2_000;
+/// Set to `true` on the payload when any string was cut.
+const TRUNCATED_FLAG: &str = "coucou_truncated";
 
 mod win;
 
@@ -171,30 +182,49 @@ fn read_event() -> Option<(String, String)> {
         }
     }
 
-    truncate_strings(&mut payload);
+    cap_payload(&mut payload);
 
     let mut line = payload.to_string();
     line.push('\n');
     Some((line, event))
 }
 
-/// Caps every string in the payload. A single Write can carry a whole file.
-fn truncate_strings(value: &mut serde_json::Value) {
+/// Two cuts: a generous one, then the short one if the line would still be too
+/// long for the pipe. Either way the payload says when it is no longer whole.
+fn cap_payload(payload: &mut serde_json::Value) {
+    let mut cut = truncate_strings(payload, MAX_FIELD_LEN);
+    if payload.to_string().len() > MAX_LINE_LEN {
+        cut |= truncate_strings(payload, FALLBACK_FIELD_LEN);
+    }
+    if cut {
+        payload[TRUNCATED_FLAG] = serde_json::Value::Bool(true);
+    }
+}
+
+/// Caps every string in the payload at `limit` bytes. A single Write can carry
+/// a whole file. Returns whether anything was cut.
+fn truncate_strings(value: &mut serde_json::Value, limit: usize) -> bool {
     match value {
         serde_json::Value::String(s) => {
-            if s.len() > MAX_FIELD_LEN {
-                // Cut on a char boundary; a lone byte index can split UTF-8.
-                let mut end = MAX_FIELD_LEN;
-                while end > 0 && !s.is_char_boundary(end) {
-                    end -= 1;
-                }
-                s.truncate(end);
-                s.push('…');
+            if s.len() <= limit {
+                return false;
             }
+            // Cut on a char boundary; a lone byte index can split UTF-8.
+            let mut end = limit;
+            while end > 0 && !s.is_char_boundary(end) {
+                end -= 1;
+            }
+            s.truncate(end);
+            s.push('…');
+            true
         }
-        serde_json::Value::Array(items) => items.iter_mut().for_each(truncate_strings),
-        serde_json::Value::Object(map) => map.values_mut().for_each(truncate_strings),
-        _ => {}
+        serde_json::Value::Array(items) => items
+            .iter_mut()
+            .fold(false, |cut, item| truncate_strings(item, limit) || cut),
+        serde_json::Value::Object(map) => map
+            .values_mut()
+            .fold(false, |cut, item| truncate_strings(item, limit) || cut),
+        _ => false,
     }
 }
 
@@ -257,10 +287,62 @@ mod tests {
 
     #[test]
     fn long_strings_are_cut_on_a_char_boundary() {
-        let mut v = serde_json::json!({ "tool_input": { "content": "é".repeat(4000) } });
-        truncate_strings(&mut v);
+        let mut v = serde_json::json!({ "tool_input": { "content": "é".repeat(40_000) } });
+        assert!(truncate_strings(&mut v, MAX_FIELD_LEN));
         let s = v["tool_input"]["content"].as_str().unwrap();
         assert!(s.len() <= MAX_FIELD_LEN + 4);
         assert!(s.ends_with('…'));
+    }
+
+    #[test]
+    fn a_whole_file_goes_through_untouched() {
+        // 2 000 bytes used to be the cap, which turned every real Write into a
+        // headline. A 50 KB file is what the island is there to show.
+        let content = "x".repeat(50_000);
+        let mut v = serde_json::json!({ "tool_input": { "content": content.clone() } });
+        assert!(!truncate_strings(&mut v, MAX_FIELD_LEN));
+        assert_eq!(v["tool_input"]["content"].as_str().unwrap(), content);
+    }
+
+    #[test]
+    fn a_payload_that_is_whole_is_not_flagged() {
+        let mut v = serde_json::json!({ "tool_input": { "content": "x".repeat(50_000) } });
+        cap_payload(&mut v);
+        assert!(v.get(TRUNCATED_FLAG).is_none());
+    }
+
+    #[test]
+    fn a_cut_payload_is_flagged() {
+        let mut v = serde_json::json!({ "tool_input": { "content": "x".repeat(70_000) } });
+        cap_payload(&mut v);
+        assert_eq!(v[TRUNCATED_FLAG], true);
+        assert!(v["tool_input"]["content"].as_str().unwrap().len() <= MAX_FIELD_LEN + 4);
+    }
+
+    #[test]
+    fn too_many_big_fields_fall_back_to_the_short_cut() {
+        // Twenty 60 KB edits pass the per-field cap and still make a 1.2 MB line,
+        // which Coucou would drop unread — and Claude Code would then wait the
+        // full decision budget for an answer that can never come.
+        let edits: Vec<_> = (0..20)
+            .map(|_| serde_json::json!({ "old_string": "a", "new_string": "b".repeat(60_000) }))
+            .collect();
+        let mut v = serde_json::json!({ "tool_input": { "edits": edits } });
+        cap_payload(&mut v);
+        assert_eq!(v[TRUNCATED_FLAG], true);
+        assert!(v.to_string().len() <= MAX_LINE_LEN);
+        for edit in v["tool_input"]["edits"].as_array().unwrap() {
+            assert!(edit["new_string"].as_str().unwrap().len() <= FALLBACK_FIELD_LEN + 4);
+        }
+    }
+
+    #[test]
+    fn the_cut_is_reported_through_nested_values() {
+        let mut v = serde_json::json!({
+            "tool_input": { "edits": [ { "old_string": "a", "new_string": "b".repeat(70_000) } ] }
+        });
+        assert!(truncate_strings(&mut v, MAX_FIELD_LEN));
+        assert_eq!(v["tool_input"]["edits"][0]["old_string"], "a");
+        assert!(v["tool_input"]["edits"][0]["new_string"].as_str().unwrap().ends_with('…'));
     }
 }

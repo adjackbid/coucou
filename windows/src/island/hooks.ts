@@ -3,9 +3,9 @@
 // Difference from macOS: no terminal filter. On Windows the hook fires from any
 // terminal (Windows Terminal, VS Code, PowerShell…) and all of them are handled.
 
-import { Bridge, onEvent } from "../core/bridge";
+import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { State } from "../core/state";
+import { State, type ApprovalSection } from "../core/state";
 import type { Island } from "./island";
 
 const CLAUDE_ID = "integration_claude";
@@ -23,6 +23,8 @@ interface HookPayload {
   prompt?: string;
   tool_name?: string;
   tool_input?: Record<string, unknown>;
+  /** Set by coucou-hook when it had to cut a field: the input is not whole. */
+  coucou_truncated?: boolean;
 }
 
 const PROJECT_ALIASES: Record<string, string> = {
@@ -80,25 +82,87 @@ function stepLabel(tool: string, input: Record<string, unknown>): string {
  *
  * Ordered by how specific the field is, so an unfamiliar tool still shows
  * whatever identifying string it carries instead of falling back to its name.
+ * A command is not here on purpose: it is the body of the card, in full, not a
+ * headline cut to one line.
  */
 const APPROVAL_FIELDS = [
-  "command", // Bash, PowerShell
-  "file_path", // Write, Edit, MultiEdit, NotebookEdit
+  "file_path", // Write, Edit, MultiEdit
+  "notebook_path", // NotebookEdit
   "path", // Read, LS
   "url", // WebFetch
   "query", // WebSearch
   "pattern", // Glob, Grep
-  "prompt", // Task
 ] as const;
 
-function approvalTarget(tool: string, input: Record<string, unknown>): string {
+function approvalTargetField(input: Record<string, unknown>): string | null {
   for (const field of APPROVAL_FIELDS) {
     const value = input[field];
-    if (typeof value === "string" && value.trim()) {
-      return `${tool} · ${value.trim()}`;
-    }
+    if (typeof value === "string" && value.trim()) return field;
   }
-  return tool;
+  return null;
+}
+
+function approvalTarget(tool: string, input: Record<string, unknown>): string {
+  const field = approvalTargetField(input);
+  return field ? `${tool} · ${(input[field] as string).trim()}` : tool;
+}
+
+/**
+ * The order a human reads the rest of the input in: what runs or what is
+ * written first, then what it replaces, then the flags. Anything a tool adds
+ * that is not listed — every MCP tool's arguments — follows as it came.
+ */
+const DETAIL_ORDER = [
+  "command", // Bash, PowerShell
+  "content", // Write
+  "old_string", // Edit
+  "new_string",
+  "edits", // MultiEdit
+  "new_source", // NotebookEdit
+  "prompt", // Task
+  "description",
+] as const;
+
+/**
+ * Everything the tool was handed, minus the headline, as labelled sections. A
+ * string is shown as it is; anything else (an edits array, a boolean flag, an
+ * MCP tool's nested arguments) is pretty-printed JSON, so nothing is ever
+ * summarised into something it is not.
+ */
+function approvalSections(input: Record<string, unknown>): ApprovalSection[] {
+  const headline = approvalTargetField(input);
+  const known: string[] = DETAIL_ORDER.filter((k) => k in input);
+  const rest = Object.keys(input).filter((k) => !known.includes(k));
+  const sections: ApprovalSection[] = [];
+  for (const key of [...known, ...rest]) {
+    if (key === headline) continue;
+    const value = input[key];
+    if (value == null) continue;
+    const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+    if (!text.trim()) continue;
+    sections.push({ label: key, value: text });
+  }
+  return sections;
+}
+
+/** Characters of monospace text per line on the card, give or take. */
+const CODE_COLS = 64;
+
+/**
+ * How many lines of text the card needs — the island grows to fit, up to its
+ * cap. Fractions stand for the chrome around the text: the body's padding,
+ * border and gap, and a label's smaller type plus its margin.
+ */
+function approvalLines(headline: string, sections: ApprovalSection[]): number {
+  const count = (text: string) =>
+    text.split("\n").reduce((n, line) => n + Math.max(1, Math.ceil(line.length / CODE_COLS)), 0);
+  let lines = count(headline);
+  if (sections.length) lines += 1.4;
+  for (const s of sections) {
+    // Each label is a line of its own once there is more than one section.
+    lines += count(s.value) + (sections.length > 1 ? 1.25 : 0);
+  }
+  return lines;
 }
 
 function upsert(projectName: string, cwd: string) {
@@ -119,6 +183,12 @@ function clearSession() {
 
 export function registerHookHandlers(island: Island) {
   void onEvent<HookPayload>("hook", (payload) => handleHook(island, payload));
+  // In a plain browser there is no relay. `coucouHook({...})` in the console
+  // plays one event, so a card can be looked at with `npm run dev` alone.
+  if (!IS_TAURI) {
+    (window as unknown as { coucouHook: (p: HookPayload) => void }).coucouHook = (p) =>
+      handleHook(island, p);
+  }
 }
 
 function handleHook(island: Island, payload: HookPayload) {
@@ -240,11 +310,16 @@ function handleHook(island: Island, payload: HookPayload) {
       if (pendingTimeout != null) window.clearTimeout(pendingTimeout);
       const tool = payload.tool_name ?? "Tool";
       const input = payload.tool_input ?? {};
+      const command = approvalTarget(tool, input);
+      const sections = approvalSections(input);
       State.pendingApproval = {
         requestId,
         sessionId: payload.session_id ?? "",
         tool,
-        command: approvalTarget(tool, input),
+        command,
+        sections,
+        lines: approvalLines(command, sections),
+        truncated: payload.coucou_truncated === true,
       };
       // The relay's short ack window closes in 800 ms; everything below this
       // line is synchronous, so the card really is up by the time it lands.
