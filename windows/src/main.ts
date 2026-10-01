@@ -5,7 +5,7 @@ import { Bridge, IS_TAURI, onEvent, type AcpPermission, type AcpUpdate } from ".
 import { Sound } from "./core/sound";
 import { State, type Settings } from "./core/state";
 import { Island } from "./island/island";
-import { onAcpUpdate } from "./views/chat";
+import { onAcpUpdate, onChatDelta } from "./views/chat";
 import { registerHookHandlers } from "./island/hooks";
 import { registerIntegrationHandlers, refreshConfigured } from "./island/integrations";
 
@@ -85,6 +85,7 @@ async function main() {
 
   // An ACP agent talking: its text and tool calls feed the chat; a permission
   // request becomes the island's approval card, answered through the agent.
+  await onEvent<string>("chat-delta", (piece) => onChatDelta(piece));
   await onEvent<AcpUpdate>("acp-update", (u) => onAcpUpdate(u.update));
   await onEvent<AcpPermission>("acp-permission", (p) => island.askAcpPermission(p));
   await onEvent<string>("acp-exit", (agentId) => {

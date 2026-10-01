@@ -77,6 +77,14 @@ export function onAcpUpdate(update: AcpUpdate["update"]) {
   State.notify();
 }
 
+/** A piece of a provider's reply, as it is written. */
+export function onChatDelta(piece: string) {
+  const last = State.chatHistory.at(-1);
+  if (last?.kind !== "streaming") return;
+  last.content += piece;
+  State.notify();
+}
+
 export function buildPrompt(onHeightChange: () => void): ViewHost {
   const chipRow = h("div", { class: "chip-row" });
   const log = h("div", { class: "chat-log" });
@@ -158,8 +166,13 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
           if (!last.content.trim()) last.content = `(${outcome.stopReason})`;
         }
       } else {
+        // A provider: the reply streams in through chat-delta (see main.ts)
+        // into the message opened here; the call returns the whole of it.
+        const open: ChatMessage = { id: nextId++, role: "assistant", content: "", kind: "streaming" };
+        State.chatHistory.push(open);
         const reply = await Bridge.chatSend(query, context);
-        State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text });
+        open.content = reply.text;
+        open.kind = undefined;
       }
       State.stateOverride = null;
       Sound.play("finish");

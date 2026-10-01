@@ -305,6 +305,7 @@ fn approval_decline(app: AppHandle, request_id: String) {
 /// One chat turn. The API key and any file bytes stay on the Rust side.
 #[tauri::command]
 async fn chat_send(
+    app: AppHandle,
     shared: State<'_, Shared>,
     chat: State<'_, Chat>,
     query: String,
@@ -317,7 +318,12 @@ async fn chat_send(
         .active()
         .cloned()
         .ok_or_else(|| "No provider configured. Open settings.".to_string())?;
-    llm::send(&chat, &provider, query, context).await
+    // The reply reaches the island piece by piece as it is written; the
+    // command's own result is the whole of it, for the history.
+    let emit = move |piece: &str| {
+        let _ = app.emit_to(island::WINDOW_LABEL, "chat-delta", piece.to_string());
+    };
+    llm::send(&chat, &provider, query, context, Some(&emit)).await
 }
 
 /// The settings window's "Test" button. The provider comes from the form as

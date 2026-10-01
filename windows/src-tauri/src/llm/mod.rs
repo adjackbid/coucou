@@ -22,7 +22,15 @@ use crate::secrets;
 
 /// Text and code files are inlined; anything larger is skipped, as on macOS.
 const MAX_INLINE_TEXT: u64 = 200_000;
+/// Longest silence tolerated — between connecting and the first byte, and
+/// between any two chunks of a streamed reply. Not a cap on the whole reply:
+/// a local model may talk for minutes.
 const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// Called with each piece of the reply as it arrives. `None` asks for the
+/// whole reply at once (the settings window's connection test).
+pub type OnDelta<'a> = Option<&'a (dyn Fn(&str) + Send + Sync)>;
 
 pub const SYSTEM_PROMPT: &str = "You are Mochi, a personal AI assistant living at the top of the user's screen. \
 You can help with absolutely anything — research, coding, finding places, recommendations, tasks, questions. \
@@ -257,6 +265,7 @@ pub async fn send(
     provider: &Provider,
     query: String,
     context: Option<ChatContext>,
+    on_delta: OnDelta<'_>,
 ) -> Result<ChatReply, String> {
     let key = provider.secret();
     if key.is_none() && provider.needs_key() {
@@ -289,9 +298,9 @@ pub async fn send(
     let history = chat.snapshot();
     crate::log::line(format!("chat via {} ({}) model {}", provider.name, provider.id, provider.model));
     let result = if provider.is_anthropic() {
-        anthropic::send(provider, key.as_deref(), &history, &caps).await
+        anthropic::send(provider, key.as_deref(), &history, &caps, on_delta).await
     } else {
-        openai::send(provider, key.as_deref(), &history).await
+        openai::send(provider, key.as_deref(), &history, on_delta).await
     };
 
     match result {
@@ -323,9 +332,9 @@ pub async fn test(provider: &Provider) -> Result<String, String> {
     }];
     let caps = Caps { images: false, pdf: false, web_search: false };
     let text = if provider.is_anthropic() {
-        anthropic::send(provider, key.as_deref(), &history, &caps).await?
+        anthropic::send(provider, key.as_deref(), &history, &caps, None).await?
     } else {
-        openai::send(provider, key.as_deref(), &history).await?
+        openai::send(provider, key.as_deref(), &history, None).await?
     };
     let snippet: String = text.trim().chars().take(80).collect();
     Ok(format!("{} answered: {snippet}", provider.model))
@@ -373,7 +382,8 @@ pub async fn models(provider: &Provider) -> Result<Vec<String>, String> {
 
 pub(super) fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
-        .timeout(TIMEOUT)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .read_timeout(TIMEOUT)
         .build()
         .map_err(|e| e.to_string())
 }
@@ -402,14 +412,18 @@ fn describe(provider: &Provider, url: &str, err: reqwest::Error) -> String {
     format!("{}: {what}", provider.name)
 }
 
-/// POSTs JSON, authorised, and returns the parsed body or a readable error.
-pub(super) async fn post_json(
+/// POSTs JSON, authorised. A server-sent-event reply is fed to `on_event` one
+/// JSON event at a time and `None` comes back; a plain JSON reply — the
+/// request did not ask to stream, or the server does not know how — comes
+/// back whole as `Some`. Errors are readable either way.
+pub(super) async fn post(
     provider: &Provider,
     key: Option<&str>,
     url: &str,
     extra_headers: &[(&str, &str)],
     body: &Value,
-) -> Result<Value, String> {
+    on_event: &mut (dyn FnMut(&Value) -> Result<(), String> + Send),
+) -> Result<Option<Value>, String> {
     check_url(provider, url)?;
     let mut req = client()?.post(url).header("content-type", "application/json");
     for (name, value) in extra_headers {
@@ -417,24 +431,89 @@ pub(super) async fn post_json(
     }
     req = provider.authorize(req, key);
 
-    let response = req
+    let mut response = req
         .json(body)
         .send()
         .await
         .map_err(|e| describe(provider, url, e))?;
 
     let status = response.status();
-    let text = response.text().await.map_err(|e| e.to_string())?;
-    if !status.is_success() {
-        // Surface the API's own message, which is what makes a bad key obvious.
-        let detail = serde_json::from_str::<Value>(&text)
-            .ok()
-            .and_then(|v| error_message(&v))
-            .unwrap_or_else(|| text.chars().take(200).collect());
-        crate::log::line(format!("llm {} {url}: HTTP {status}: {detail}", provider.name));
-        return Err(format!("{} {status}: {detail}", provider.name));
+    let streamed = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.contains("event-stream"))
+        .unwrap_or(false);
+
+    if !status.is_success() || !streamed {
+        let text = response.text().await.map_err(|e| e.to_string())?;
+        if !status.is_success() {
+            // Surface the API's own message, which is what makes a bad key obvious.
+            let detail = serde_json::from_str::<Value>(&text)
+                .ok()
+                .and_then(|v| error_message(&v))
+                .unwrap_or_else(|| text.chars().take(200).collect());
+            crate::log::line(format!("llm {} {url}: HTTP {status}: {detail}", provider.name));
+            return Err(format!("{} {status}: {detail}", provider.name));
+        }
+        return serde_json::from_str(&text)
+            .map(Some)
+            .map_err(|e| format!("Bad response from {}: {e}", provider.name));
     }
-    serde_json::from_str(&text).map_err(|e| format!("Bad response from {}: {e}", provider.name))
+
+    let mut pending: Vec<u8> = Vec::new();
+    loop {
+        let chunk = response.chunk().await.map_err(|e| describe(provider, url, e))?;
+        let done = chunk.is_none();
+        if let Some(bytes) = chunk {
+            pending.extend_from_slice(&bytes);
+        }
+        for data in sse_events(&mut pending, done) {
+            // "[DONE]" and keep-alives are not JSON and carry nothing.
+            if let Ok(event) = serde_json::from_str::<Value>(&data) {
+                on_event(&event)?;
+            }
+        }
+        if done {
+            return Ok(None);
+        }
+    }
+}
+
+/// Takes every complete server-sent event out of `pending` and returns their
+/// `data:` payloads (several data lines of one event joined by newlines).
+/// What is left is the start of an event still arriving; `flush` takes that
+/// too, for a stream that ended without its closing blank line.
+fn sse_events(pending: &mut Vec<u8>, flush: bool) -> Vec<String> {
+    let mut out = Vec::new();
+    loop {
+        // An event ends at a blank line, in either line-ending convention.
+        let lf = pending.windows(2).position(|w| w == b"\n\n").map(|i| (i, 2));
+        let crlf = pending.windows(4).position(|w| w == b"\r\n\r\n").map(|i| (i, 4));
+        let cut = match (lf, crlf) {
+            (Some(a), Some(b)) => Some(if a.0 <= b.0 { a } else { b }),
+            (a, b) => a.or(b),
+        };
+        let block: Vec<u8> = match cut {
+            Some((at, len)) => {
+                let block = pending[..at].to_vec();
+                pending.drain(..at + len);
+                block
+            }
+            None if flush && !pending.is_empty() => std::mem::take(pending),
+            None => break,
+        };
+        let text = String::from_utf8_lossy(&block);
+        let data: Vec<&str> = text
+            .lines()
+            .filter_map(|line| line.strip_prefix("data:"))
+            .map(|d| d.strip_prefix(' ').unwrap_or(d))
+            .collect();
+        if !data.is_empty() {
+            out.push(data.join("\n"));
+        }
+    }
+    out
 }
 
 /// `{"error":{"message":…}}`, `{"error":"…"}` and `{"message":"…"}` all occur.
@@ -567,6 +646,132 @@ mod tests {
         assert!(!p.needs_key());
         p.auth = "header:api-key".into();
         assert!(p.needs_key());
+    }
+
+    #[test]
+    fn server_sent_events_come_out_whole_however_they_are_cut() {
+        // Two events and the start of a third, split mid-event across reads.
+        let mut pending = b"event: a\ndata: {\"x\":1}\n\ndata: {\"x\":".to_vec();
+        assert_eq!(sse_events(&mut pending, false), vec![r#"{"x":1}"#]);
+        assert_eq!(pending, b"data: {\"x\":");
+        pending.extend_from_slice(b"2}\r\n\r\ndata: [DONE]\n\n");
+        assert_eq!(sse_events(&mut pending, false), vec![r#"{"x":2}"#, "[DONE]"]);
+        assert!(pending.is_empty());
+
+        // Several data lines are one payload; comments and other fields are not data.
+        let mut multi = b": keep-alive\n\nid: 7\ndata: line one\ndata:line two\n\n".to_vec();
+        assert_eq!(sse_events(&mut multi, false), vec!["line one\nline two"]);
+
+        // A stream that ends without the closing blank line still gives its last event.
+        let mut tail = b"data: {\"last\":true}".to_vec();
+        assert!(sse_events(&mut tail, false).is_empty());
+        assert_eq!(sse_events(&mut tail, true), vec![r#"{"last":true}"#]);
+    }
+
+    /// A one-shot HTTP server on localhost: reads one request, then writes
+    /// `head` and each of `chunks` with a pause between, and closes.
+    fn serve_once(head: &'static str, chunks: Vec<&'static str>) -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/v1", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            // The whole request, body included, or the client sees a reset.
+            let mut request = Vec::new();
+            let mut buf = [0u8; 4096];
+            loop {
+                let n = stream.read(&mut buf).unwrap_or(0);
+                if n == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buf[..n]);
+                let text = String::from_utf8_lossy(&request).to_string();
+                if let Some(end) = text.find("\r\n\r\n") {
+                    let length = text
+                        .lines()
+                        .find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0)))
+                        .unwrap_or(0);
+                    if request.len() >= end + 4 + length {
+                        break;
+                    }
+                }
+            }
+            let _ = stream.write_all(head.as_bytes());
+            for chunk in chunks {
+                let _ = stream.write_all(chunk.as_bytes());
+                let _ = stream.flush();
+                std::thread::sleep(std::time::Duration::from_millis(30));
+            }
+        });
+        url
+    }
+
+    fn local_provider(base_url: String, wire: &str) -> Provider {
+        let mut p = Provider::anthropic("test-model");
+        p.id = "local".into();
+        p.kind = "openai".into();
+        p.base_url = base_url;
+        p.wire_api = wire.into();
+        p.auth = "none".into();
+        p
+    }
+
+    fn ask(provider: &Provider, streaming: bool) -> (Result<String, String>, Vec<String>) {
+        let pieces = std::sync::Arc::new(Mutex::new(Vec::<String>::new()));
+        let sink = pieces.clone();
+        let collect = move |piece: &str| sink.lock().unwrap().push(piece.to_string());
+        let history = vec![Message { role: Role::User, parts: vec![Part::Text("hi".into())] }];
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let on_delta: OnDelta = if streaming { Some(&collect) } else { None };
+        let result = runtime.block_on(openai::send(provider, None, &history, on_delta));
+        let got = pieces.lock().unwrap().clone();
+        (result, got)
+    }
+
+    const SSE_HEAD: &str = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n";
+    const JSON_HEAD: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n";
+
+    #[test]
+    fn a_chat_completion_streams_piece_by_piece_over_a_real_socket() {
+        // Events cut in the middle on purpose: the pieces must still come out whole.
+        let url = serve_once(SSE_HEAD, vec![
+            "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"cont",
+            "ent\":\"Hel\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"lo \u{6e2c}\"}}]}\n\ndata: [DONE]\n\n",
+        ]);
+        let (result, pieces) = ask(&local_provider(url, "chat"), true);
+        assert_eq!(result.unwrap(), "Hello 測");
+        assert_eq!(pieces, vec!["Hel", "lo 測"]);
+    }
+
+    #[test]
+    fn a_response_streams_too_and_a_failure_in_the_stream_is_an_error() {
+        let url = serve_once(SSE_HEAD, vec![
+            "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"O\"}\n\n",
+            "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"K\"}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\"}\n\n",
+        ]);
+        let (result, pieces) = ask(&local_provider(url, "responses"), true);
+        assert_eq!(result.unwrap(), "OK");
+        assert_eq!(pieces, vec!["O", "K"]);
+
+        let url = serve_once(SSE_HEAD, vec![
+            "data: {\"type\":\"response.output_text.delta\",\"delta\":\"par\"}\n\n",
+            "data: {\"type\":\"response.failed\",\"response\":{\"error\":{\"message\":\"quota exceeded\"}}}\n\n",
+        ]);
+        let (result, _) = ask(&local_provider(url, "responses"), true);
+        assert_eq!(result.unwrap_err(), "quota exceeded");
+    }
+
+    #[test]
+    fn a_server_that_will_not_stream_is_read_in_one_piece() {
+        let url = serve_once(JSON_HEAD, vec!["{\"choices\":[{\"message\":{\"content\":\"whole\"},\"finish_reason\":\"stop\"}]}"]);
+        let (result, pieces) = ask(&local_provider(url, "chat"), true);
+        assert_eq!(result.unwrap(), "whole");
+        assert!(pieces.is_empty());
+        // And the connection test, which never asks to stream.
+        let url = serve_once(JSON_HEAD, vec!["{\"choices\":[{\"message\":{\"content\":\"OK\"}}]}"]);
+        let (result, _) = ask(&local_provider(url, "chat"), false);
+        assert_eq!(result.unwrap(), "OK");
     }
 
     #[test]
