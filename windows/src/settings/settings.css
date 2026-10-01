@@ -221,6 +221,23 @@ select option {
   color: var(--ink);
 }
 
+/* One chat provider: a card inside the Providers section. */
+.provider {
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.provider input[type="radio"] {
+  accent-color: var(--green);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
 .diff {
   font: 400 11.5px/1.5 var(--mono);
   background: #08090b;

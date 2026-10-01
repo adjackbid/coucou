@@ -5,7 +5,8 @@ use keyring::Entry;
 
 const SERVICE: &str = "fr.louisraille.coucou";
 
-/// Every key Coucou may store. Anything outside this list is refused.
+/// Every fixed key Coucou may store. Besides these, `provider:<id>` holds an
+/// LLM provider's key. Anything else is refused.
 pub const KNOWN_KEYS: &[&str] = &[
     "anthropic-api-key",
     "n8n-url",
@@ -18,8 +19,21 @@ pub const KNOWN_KEYS: &[&str] = &[
     "calcom-api-key",
 ];
 
+const PROVIDER_PREFIX: &str = "provider:";
+
+fn allowed(key: &str) -> bool {
+    if KNOWN_KEYS.contains(&key) {
+        return true;
+    }
+    // A provider id is what the user typed in settings; keep it to characters
+    // that cannot turn into something else in a credential name.
+    key.strip_prefix(PROVIDER_PREFIX)
+        .map(|id| !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+        .unwrap_or(false)
+}
+
 fn entry(key: &str) -> Option<Entry> {
-    if !KNOWN_KEYS.contains(&key) {
+    if !allowed(key) {
         return None;
     }
     Entry::new(SERVICE, key).ok()
@@ -48,4 +62,20 @@ pub fn clear(key: &str) -> Result<(), String> {
 
 pub fn present(key: &str) -> bool {
     get(key).is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::allowed;
+
+    #[test]
+    fn provider_keys_are_allowed_only_with_a_tame_id() {
+        assert!(allowed("anthropic-api-key"));
+        assert!(allowed("provider:anthropic"));
+        assert!(allowed("provider:local_ollama-2"));
+        assert!(!allowed("provider:"));
+        assert!(!allowed("provider:a b"));
+        assert!(!allowed("provider:../x"));
+        assert!(!allowed("something-else"));
+    }
 }

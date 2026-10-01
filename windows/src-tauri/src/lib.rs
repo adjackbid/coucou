@@ -1,10 +1,10 @@
 // Coucou for Windows — app wiring and the commands the island calls.
 
-mod claude;
 mod files;
 mod hooks;
 mod integrations;
 mod island;
+mod llm;
 mod log;
 mod pipe;
 mod secrets;
@@ -22,8 +22,8 @@ use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder
 use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-use claude::{Chat, ChatContext, ChatReply};
 use files::DroppedFile;
+use llm::{Chat, ChatContext, ChatReply, Provider};
 use hooks::{HookPreview, HookStatus};
 use island::{PollGate, ScreenInfo};
 use pipe::Pending;
@@ -296,8 +296,22 @@ async fn chat_send(
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
-    let model = shared.settings.lock().unwrap().model.clone();
-    claude::send(&chat, &model, query, context).await
+    let provider = shared
+        .settings
+        .lock()
+        .unwrap()
+        .active()
+        .cloned()
+        .ok_or_else(|| "No provider configured. Open settings.".to_string())?;
+    llm::send(&chat, &provider, query, context).await
+}
+
+/// The settings window's "Test" button. The provider comes from the form as
+/// it is right now, saved or not; the key is still read from the Credential
+/// Manager, never passed in.
+#[tauri::command]
+async fn provider_test(provider: Provider) -> Result<String, String> {
+    llm::test(&provider).await
 }
 
 #[tauri::command]
@@ -467,6 +481,7 @@ pub fn run() {
             open_settings_window,
             set_paused,
             hotkey_status,
+            provider_test,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

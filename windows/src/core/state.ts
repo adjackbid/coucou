@@ -98,6 +98,22 @@ export interface IntegrationInfo {
   configured: boolean;
 }
 
+/** One endpoint the chat can talk to — mirror of llm::Provider in Rust. */
+export interface Provider {
+  id: string;
+  name: string;
+  /** "anthropic" (Messages API) or "openai" (Chat Completions / Responses). */
+  kind: "anthropic" | "openai";
+  baseUrl: string;
+  model: string;
+  /** OpenAI kind only: "chat" or "responses". */
+  wireApi: "chat" | "responses";
+  /** "", "bearer", "x-api-key", "none" or "header:<name>". Empty = the kind's default. */
+  auth: string;
+  headers: Record<string, string>;
+  capabilities: { images?: boolean | null; pdf?: boolean | null; webSearch?: boolean | null };
+}
+
 export interface Settings {
   soundEnabled: boolean;
   soundVolume: number;
@@ -107,11 +123,25 @@ export interface Settings {
   screen: "primary" | "cursor";
   autostart: boolean;
   hooksInstalled: boolean;
-  /** Claude model used by the chat. */
+  /** Pre-provider builds' model; Rust turns it into the first provider. */
   model: string;
   /** Global shortcut that opens and shuts the island; empty disables it. */
   hotkey: string;
+  providers: Provider[];
+  activeProvider: string;
 }
+
+export const DEFAULT_PROVIDER: Provider = {
+  id: "anthropic",
+  name: "Claude",
+  kind: "anthropic",
+  baseUrl: "https://api.anthropic.com",
+  model: "claude-opus-5",
+  wireApi: "chat",
+  auth: "",
+  headers: {},
+  capabilities: {},
+};
 
 export const DEFAULT_SETTINGS: Settings = {
   soundEnabled: true,
@@ -126,6 +156,8 @@ export const DEFAULT_SETTINGS: Settings = {
   hooksInstalled: false,
   model: "claude-opus-5",
   hotkey: "Ctrl+Shift+Space",
+  providers: [DEFAULT_PROVIDER],
+  activeProvider: "anthropic",
 };
 
 type Listener = () => void;

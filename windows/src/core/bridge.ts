@@ -5,7 +5,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import type { Settings } from "./state";
+import type { Provider, Settings } from "./state";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -100,6 +100,9 @@ export const Bridge = {
 
   /** Why the global shortcut is not active; null when it is. */
   hotkeyStatus: () => call<string | null>("hotkey_status"),
+
+  /** One tiny round trip to a provider as the form describes it. The key stays in Rust. */
+  providerTest: (provider: Provider) => callOrThrow<string>("provider_test", { provider }),
 };
 
 export interface IntegrationUpdate {

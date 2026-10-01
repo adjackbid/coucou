@@ -83,9 +83,27 @@ It works from any terminal — Windows Terminal, PowerShell, VS Code, Git Bash.
 
 ## Chat and keys
 
-**Settings… → Claude** takes your Anthropic API key. Keys live in the **Windows
-Credential Manager**, never on disk and never in the interface — the island can
-only ask whether a key exists. Same for every integration key.
+**Settings… → Chat providers** is where the chat sends its questions. Out of the
+box there is one provider, Claude at `api.anthropic.com`; add as many as you
+like and pick which one is in use:
+
+| Kind | Covers |
+|---|---|
+| Anthropic Messages API | Claude, or a proxy that speaks it |
+| OpenAI-compatible, Chat Completions wire | OpenAI, OpenRouter, Azure OpenAI, Ollama, LM Studio, vLLM, most proxies |
+| OpenAI-compatible, Responses wire | endpoints built on `/v1/responses` |
+
+Each provider has its own endpoint, model, way of carrying the key (Bearer,
+`x-api-key`, a custom header such as Azure's `api-key`, or none for a local
+server), optional extra headers, and three capability switches — images, PDFs,
+web search — that default to what the kind usually supports. **Test connection**
+sends one tiny question and shows the reply, so a wrong URL or key is caught
+before the island ever shows an error. Web search is Anthropic's server-side
+tool and only runs there.
+
+Keys live in the **Windows Credential Manager** under `provider:<id>`, never on
+disk and never in the interface — the island can only ask whether a key exists.
+Same for every integration key.
 
 No telemetry. The only network requests Coucou makes are to the services you
 configure yourself.

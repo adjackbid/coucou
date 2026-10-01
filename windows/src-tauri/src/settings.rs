@@ -4,6 +4,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use crate::llm::Provider;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -16,18 +18,44 @@ pub struct Settings {
     pub screen: String,
     pub autostart: bool,
     pub hooks_installed: bool,
-    /// Claude model used by the chat. Changeable in the settings window.
-    /// Defaulted explicitly so a settings.json written by an older build still loads.
+    /// The model of the pre-provider builds. Kept so an older settings.json
+    /// still loads; `migrate` turns it into the first provider.
     #[serde(default = "default_model")]
     pub model: String,
     /// Global shortcut that opens and shuts the island, e.g. "Ctrl+Alt+Space".
     /// Empty disables it.
     #[serde(default = "default_hotkey")]
     pub hotkey: String,
+    /// Every endpoint the chat can talk to, and which one it talks to now.
+    #[serde(default)]
+    pub providers: Vec<Provider>,
+    #[serde(default)]
+    pub active_provider: String,
 }
 
 fn default_model() -> String {
-    crate::claude::DEFAULT_MODEL.to_string()
+    crate::llm::anthropic::DEFAULT_MODEL.to_string()
+}
+
+impl Settings {
+    /// The provider the chat uses: the active one, else the first.
+    pub fn active(&self) -> Option<&Provider> {
+        self.providers
+            .iter()
+            .find(|p| p.id == self.active_provider)
+            .or_else(|| self.providers.first())
+    }
+
+    /// Brings a settings.json from before providers existed up to date: the
+    /// one Claude endpoint it implied becomes a real provider entry.
+    fn migrate(&mut self) {
+        if self.providers.is_empty() {
+            self.providers.push(Provider::anthropic(&self.model));
+        }
+        if !self.providers.iter().any(|p| p.id == self.active_provider) {
+            self.active_provider = self.providers[0].id.clone();
+        }
+    }
 }
 
 /// Ctrl+Alt+Space and Ctrl+Alt+M looked obvious but were both already taken on
@@ -56,6 +84,8 @@ impl Default for Settings {
             hooks_installed: false,
             model: default_model(),
             hotkey: default_hotkey(),
+            providers: vec![Provider::anthropic(&default_model())],
+            active_provider: "anthropic".into(),
         }
     }
 }
@@ -85,10 +115,12 @@ fn settings_path() -> PathBuf {
 }
 
 pub fn load() -> Settings {
-    match std::fs::read(settings_path()) {
+    let mut settings = match std::fs::read(settings_path()) {
         Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_default(),
         Err(_) => Settings::default(),
-    }
+    };
+    settings.migrate();
+    settings
 }
 
 pub fn save(settings: &Settings) -> std::io::Result<()> {
@@ -97,4 +129,29 @@ pub fn save(settings: &Settings) -> std::io::Result<()> {
     let json = serde_json::to_vec_pretty(settings)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     std::fs::write(settings_path(), json)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_old_settings_file_gets_its_claude_provider() {
+        let old = r#"{"soundEnabled":true,"soundVolume":0.1,"autoCloseInterval":15,"absenceInterval":180,
+            "activeIntegrations":[],"screen":"primary","autostart":false,"hooksInstalled":false,"model":"claude-sonnet-5"}"#;
+        let mut s: Settings = serde_json::from_str(old).unwrap();
+        s.migrate();
+        assert_eq!(s.providers.len(), 1);
+        assert_eq!(s.providers[0].id, "anthropic");
+        assert_eq!(s.providers[0].model, "claude-sonnet-5");
+        assert_eq!(s.active().unwrap().id, "anthropic");
+    }
+
+    #[test]
+    fn a_missing_active_provider_falls_back_to_the_first() {
+        let mut s = Settings::default();
+        s.active_provider = "gone".into();
+        s.migrate();
+        assert_eq!(s.active_provider, "anthropic");
+    }
 }
