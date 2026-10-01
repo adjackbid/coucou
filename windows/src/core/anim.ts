@@ -108,6 +108,11 @@ export class Tracked {
     return this.spring.value;
   }
 
+  /** Where it is heading (or sitting). */
+  get target(): number {
+    return this.spring.target;
+  }
+
   get animating(): boolean {
     return this.mode !== "idle";
   }

@@ -936,6 +936,16 @@ export class Island {
     const expanded = State.mode === "expanded";
     const greetingActive = expanded && State.view === "greeting";
 
+    // The island's size follows its contents, not only its view: a session
+    // card read and gone, a pill row added, a reply making the approval card
+    // taller. Whatever changed the state, the shape catches up here.
+    if (expanded) {
+      const { w, h } = this.targetSize();
+      if (Math.abs(w - this.width.target) > 0.5 || Math.abs(h - this.height.target) > 0.5) {
+        this.animateGeometry(w < this.width.target || h < this.height.target);
+      }
+    }
+
     this.contentEl.style.opacity = expanded && !greetingActive ? "1" : "0";
     this.contentEl.style.pointerEvents = expanded && !greetingActive ? "auto" : "none";
     this.greetingCanvas.style.display = greetingActive ? "block" : "none";
