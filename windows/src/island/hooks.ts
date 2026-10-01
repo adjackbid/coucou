@@ -33,6 +33,8 @@ interface HookPayload {
   message?: string;
   /** UserPromptSubmit carries `prompt`; `message` belongs to Notification/Stop. */
   prompt?: string;
+  /** Added by the relay on Stop: the assistant's last message, from the transcript. */
+  last_reply?: string;
   tool_name?: string;
   tool_input?: Record<string, unknown>;
   /** Set by coucou-hook when it had to cut a field: the input is not whole. */
@@ -280,9 +282,12 @@ function handleHook(island: Island, payload: HookPayload) {
       break;
     }
 
-    case "Stop":
+    case "Stop": {
       State.updateTask(CLAUDE_ID, "finished");
-      if (payload.message) State.appendStep(CLAUDE_ID, payload.message.slice(0, 60));
+      // What the agent said, on one line for the ticker; the finished card
+      // shows the same text with room to wrap.
+      const said = (payload.last_reply ?? payload.message ?? "").replace(/\s+/g, " ").trim();
+      if (said) State.appendStep(CLAUDE_ID, said.length > 240 ? `${said.slice(0, 240)}…` : said);
       Sound.play("finish");
       if (focused) surface("finished", true);
       else State.setPillBadge(CLAUDE_ID, "finished");
@@ -291,6 +296,7 @@ function handleHook(island: Island, payload: HookPayload) {
         State.setPillBadge(CLAUDE_ID, null);
       }, 5200);
       break;
+    }
 
     // ErrorOccurred is Copilot's name for the same thing.
     case "StopFailure":

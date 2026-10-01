@@ -36,6 +36,11 @@ const ERROR_PIPE_BUSY: i32 = 231;
 /// Fields that are pointless to forward and can be enormous (a whole file read,
 /// a full command output). The island never shows them.
 const DROPPED_FIELDS: &[&str] = &["tool_response", "transcript_path"];
+/// How much of the end of a transcript is read to find the last reply. A
+/// transcript can be megabytes; the last turn is in the final few kilobytes.
+const TRANSCRIPT_TAIL: u64 = 256 * 1024;
+/// Longest reply forwarded as `last_reply`.
+const MAX_REPLY_LEN: usize = 1_500;
 /// Longest string forwarded for any single field. The island shows the whole
 /// thing — a Write's content, an Edit's old and new strings — so this has to
 /// hold a real file, not a headline. Past it the field is cut and the payload
@@ -179,6 +184,20 @@ fn read_event(agent: &str, arg_event: &str) -> Option<(String, String)> {
     // payloads, so this is the one field that tells them apart.
     map.insert("agent".into(), serde_json::Value::String(agent.to_string()));
 
+    // The Stop payload carries no reply, only where the transcript is. The
+    // island wants to show what the agent just said, so the last assistant
+    // message is read out of the transcript here, before the path is dropped.
+    if event == "Stop" {
+        let path = map
+            .get("transcript_path")
+            .and_then(|v| v.as_str())
+            .map(std::path::PathBuf::from)
+            .or_else(|| copilot_transcript(agent, map.get("session_id").and_then(|v| v.as_str())));
+        if let Some(reply) = path.and_then(|p| last_reply(&p)) {
+            map.insert("last_reply".into(), serde_json::Value::String(reply));
+        }
+    }
+
     for field in DROPPED_FIELDS {
         map.remove(*field);
     }
@@ -217,6 +236,66 @@ fn read_event(agent: &str, arg_event: &str) -> Option<(String, String)> {
     let mut line = payload.to_string();
     line.push('\n');
     Some((line, event))
+}
+
+/// Copilot CLI keeps every session's events in a folder named after it. Its
+/// Stop payload may or may not say so; the folder is where it always is.
+fn copilot_transcript(agent: &str, session_id: Option<&str>) -> Option<std::path::PathBuf> {
+    if agent != "copilot" {
+        return None;
+    }
+    let id = session_id?;
+    // A session id is a UUID; anything else must not become a path component.
+    if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return None;
+    }
+    let home = std::env::var_os("USERPROFILE")?;
+    Some(std::path::PathBuf::from(home).join(".copilot").join("session-state").join(id).join("events.jsonl"))
+}
+
+/// The last thing the assistant said, from the tail of a JSONL transcript —
+/// Claude Code's (`type: "assistant"`, text blocks in `message.content`) or
+/// Copilot CLI's (`type: "assistant.message"`, a string in `data.content`).
+fn last_reply(path: &std::path::Path) -> Option<String> {
+    use std::io::{Seek, SeekFrom};
+    let mut file = std::fs::File::open(path).ok()?;
+    let len = file.metadata().ok()?.len();
+    let start = len.saturating_sub(TRANSCRIPT_TAIL);
+    file.seek(SeekFrom::Start(start)).ok()?;
+    let mut tail = Vec::new();
+    file.read_to_end(&mut tail).ok()?;
+    let text = String::from_utf8_lossy(&tail);
+    // Reading from the end: the first complete line that is a reply wins. A
+    // cut first line (we started mid-line) fails to parse and is skipped.
+    text.lines().rev().find_map(|line| reply_in_line(line))
+}
+
+fn reply_in_line(line: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
+    let kind = v.get("type").and_then(|t| t.as_str())?;
+    let text = match kind {
+        "assistant" => v
+            .get("message")?
+            .get("content")?
+            .as_array()?
+            .iter()
+            .filter(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
+            .filter_map(|b| b.get("text").and_then(|t| t.as_str()))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        "assistant.message" => v.get("data")?.get("content")?.as_str()?.to_string(),
+        _ => return None,
+    };
+    let text = text.trim();
+    if text.is_empty() {
+        // A tool-call-only turn says nothing; keep looking further back.
+        return None;
+    }
+    let mut out: String = text.chars().take(MAX_REPLY_LEN).collect();
+    if out.len() < text.len() {
+        out.push('…');
+    }
+    Some(out)
 }
 
 /// Two cuts: a generous one, then the short one if the line would still be too
@@ -374,6 +453,43 @@ mod tests {
         for edit in v["tool_input"]["edits"].as_array().unwrap() {
             assert!(edit["new_string"].as_str().unwrap().len() <= FALLBACK_FIELD_LEN + 4);
         }
+    }
+
+    #[test]
+    fn the_last_reply_is_found_in_either_transcript_shape() {
+        // Claude Code: the newest assistant line wins, tool-only turns are skipped.
+        let claude = [
+            r#"{"type":"user","message":{"content":"hi"}}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"older"}]}}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Done — "},{"type":"text","text":"three files changed."}]}}"#,
+            r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash"}]}}"#,
+        ];
+        let found = claude.iter().rev().find_map(|l| reply_in_line(l)).unwrap();
+        assert_eq!(found, "Done — \nthree files changed.");
+
+        // Copilot CLI: data.content is a plain string.
+        let copilot = r#"{"type":"assistant.message","data":{"content":"Still here and ready.","model":"glm"}}"#;
+        assert_eq!(reply_in_line(copilot).unwrap(), "Still here and ready.");
+        assert!(reply_in_line(r#"{"type":"assistant.turn_end","data":{}}"#).is_none());
+        assert!(reply_in_line("{ cut off").is_none());
+    }
+
+    #[test]
+    fn a_long_reply_is_cut_with_an_ellipsis() {
+        let line = format!(r#"{{"type":"assistant.message","data":{{"content":"{}"}}}}"#, "x".repeat(5000));
+        let out = reply_in_line(&line).unwrap();
+        assert!(out.ends_with('…'));
+        assert!(out.chars().count() == MAX_REPLY_LEN + 1);
+    }
+
+    #[test]
+    fn the_copilot_transcript_path_is_derived_only_from_a_tame_session_id() {
+        std::env::set_var("USERPROFILE", r"C:\Users\test");
+        let p = copilot_transcript("copilot", Some("2da23453-5236-436d-86e5-a54af110657d")).unwrap();
+        assert!(p.ends_with(r"session-state\2da23453-5236-436d-86e5-a54af110657d\events.jsonl"));
+        assert!(copilot_transcript("claude", Some("abc")).is_none());
+        assert!(copilot_transcript("copilot", Some(r"..\..\etc")).is_none());
+        assert!(copilot_transcript("copilot", None).is_none());
     }
 
     #[test]

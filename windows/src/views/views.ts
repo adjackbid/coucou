@@ -399,7 +399,8 @@ function buildError(actions: ViewActions): ViewHost {
 
 function buildFinished(actions: ViewActions): ViewHost {
   const who = h("div");
-  const title = h("div", { class: "title" });
+  // The agent's last words, wrapped to a few lines rather than one.
+  const title = h("div", { class: "title reply-text" });
   const row = h("div", { class: "actions" },
     btn("Open terminal", "primary", () => actions.openTerminal()),
     btn("OK", "secondary", () => actions.collapse()),
@@ -408,9 +409,10 @@ function buildFinished(actions: ViewActions): ViewHost {
   return {
     el,
     sync() {
+      const task = State.focusTask;
       clear(who);
-      who.append(agentWho(State.focusTask, "Claude Code finished"));
-      title.textContent = State.focusTask?.steps.at(-1) ?? "Session finished";
+      who.append(agentWho(task, `${task ? SOURCE_LABELS[task.source] : "Claude Code"} finished`));
+      title.textContent = task?.steps.at(-1) ?? "Session finished";
     },
   };
 }
