@@ -75,6 +75,23 @@ body {
   will-change: width, height, transform;
 }
 
+/* Something finished and nobody has looked: the shut island breathes a ring
+   of light in that session's colour until it is opened. */
+#island.unread {
+  animation: unread-ring 1.8s ease-in-out infinite;
+}
+
+@keyframes unread-ring {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ring, #22c55e) 55%, transparent),
+      0 0 18px 2px color-mix(in srgb, var(--ring, #22c55e) 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring, #22c55e) 18%, transparent),
+      0 0 34px 8px color-mix(in srgb, var(--ring, #22c55e) 60%, transparent);
+  }
+}
+
 #island-clip {
   position: absolute;
   inset: 0;

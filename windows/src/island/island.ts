@@ -950,6 +950,16 @@ export class Island {
       }
     }
 
+    this.syncKeepVisible();
+
+    // A reply nobody has looked at lights the shut island up: a breathing
+    // ring in that session's colour, until somebody opens it. Otherwise a
+    // finished session was easy to miss once the island had closed again.
+    const unread = State.unreadTasks;
+    const ring = State.mode === "compact" && unread.length > 0;
+    this.islandEl.classList.toggle("unread", ring);
+    if (ring) this.islandEl.style.setProperty("--ring", unread[0].color);
+
     // Compact mini grid, and the one line that says what Mochi is up to —
     // without it a shut island showed nothing of a session at work.
     const showGrid = State.mode === "compact";
@@ -994,11 +1004,19 @@ export class Island {
     Sound.setEnabled(State.settings.soundEnabled);
     Sound.setVolume(State.settings.soundVolume);
     this.fsm.homeToPetitDelay = State.settings.autoCloseInterval;
-    this.fsm.alwaysVisible = State.settings.alwaysVisible;
+    this.syncKeepVisible();
     // Switching it on brings a hidden island out; it then stays.
-    if (State.settings.alwaysVisible && this.fsm.state === "hidden") this.fsm.reveal();
-    if (State.settings.alwaysVisible && this.fsm.state === "petit") this.fsm.reveal();
+    if (State.settings.alwaysVisible && this.fsm.state !== "home") this.fsm.reveal();
     State.notify();
+  }
+
+  /** The island stays at least compact while it is wanted or has news. */
+  private syncKeepVisible() {
+    const keep = State.settings.alwaysVisible || State.unreadTasks.length > 0;
+    if (keep === this.fsm.keepVisible) return;
+    this.fsm.keepVisible = keep;
+    // News arriving while compact cancels the countdown already running.
+    if (keep && this.fsm.state === "petit") this.fsm.reveal();
   }
 
   get panelSize() {

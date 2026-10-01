@@ -26,8 +26,11 @@ export class IslandStateMachine {
   greetHoverCollapseDelay = 10;
   /** An alert waiting for an answer stays open, even when the mouse leaves. */
   pinned = false;
-  /** The setting: petit never becomes hidden on its own. */
-  alwaysVisible = false;
+  /**
+   * Petit never becomes hidden on its own: the "always visible" setting, or
+   * a reply nobody has looked at yet (the island is what carries the glow).
+   */
+  keepVisible = false;
 
   private petitHide: number | null = null;
   private homeCollapse: number | null = null;
@@ -127,7 +130,7 @@ export class IslandStateMachine {
 
   private schedulePetitHide() {
     this.clear("petitHide");
-    if (this.alwaysVisible) return;
+    if (this.keepVisible) return;
     const delay = this.peeked ? this.peekToHiddenDelay : this.petitToHiddenDelay;
     this.petitHide = window.setTimeout(() => {
       this.petitHide = null;
