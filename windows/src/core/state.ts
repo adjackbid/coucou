@@ -51,10 +51,23 @@ export interface AgentTask {
    * was started through it: the island can type into that terminal.
    */
   pty?: string | null;
+  /**
+   * A question the agent put to the person and is waiting on — Copilot's
+   * `ask_user`, Claude Code's `AskUserQuestion`. Cleared when the tool returns.
+   */
+  question?: AgentQuestion | null;
   emote?: BotEmoteName | null;
   miniEye?: EyeShape | null;
   pillBadge?: PillBadge | null;
   sessionCwd?: string | null;
+}
+
+/** What an agent asked, and the choices it offered; a typed answer is always allowed too. */
+export interface AgentQuestion {
+  text: string;
+  choices: string[];
+  /** The answer the island typed into the terminal, while the tool has not returned yet. */
+  answered?: string | null;
 }
 
 /** One field of a tool's input, laid out for reading on the approval card. */

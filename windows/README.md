@@ -122,6 +122,13 @@ CLI is idle, because these are keystrokes into a TUI and a busy one would
 mangle them. With no console to wrap (redirected output, CI) it just runs the
 command. **Settings… → Typing into your own terminals** has the line to paste.
 
+The same path answers the questions an agent puts to you. When Copilot calls
+`ask_user` (or Claude Code `AskUserQuestion`), the island shows the question on
+a card of its own, its choices as buttons, and a line for any other answer; a
+click or a typed line is typed into that terminal, and the card goes down when
+the CLI's `PostToolUse` says the tool returned. Without coucou-pty the card
+still shows what was asked and says to answer in the terminal.
+
 ## Agents you drive from the island
 
 **Settings… → Agents** lists coding agents Coucou starts itself and talks to

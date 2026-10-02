@@ -23,6 +23,8 @@ export interface ViewActions {
   openUrl(url: string): void;
   /** `terminal` gives the request back unanswered, for Claude Code to ask itself. */
   decide(d: "allow" | "deny" | "terminal"): void;
+  /** Types an answer to the focused session's question into its terminal. */
+  answerQuestion(text: string): Promise<void>;
   toggleSound(): void;
   setVolume(v: number): void;
   setAutoClose(seconds: number): void;
@@ -241,6 +243,9 @@ function buildOverview(actions: ViewActions): ViewHost {
       extras.style.display = cards.length ? "" : "none";
 
       const others = State.pillTasks.slice(0, MAX_PILLS);
+      // One session and nothing else: no empty pill card, the session takes the width.
+      el.classList.toggle("solo", others.length === 0 && cards.length === 0);
+      el.classList.toggle("narrow", others.length > 0 && others.length <= 2 && cards.length === 0);
       const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}:${t.unread ? 1 : 0}`).join("|");
       if (pillKey !== pillIds) {
         pillIds = pillKey;
@@ -413,20 +418,69 @@ function buildApproval(actions: ViewActions): ViewHost {
 
 // ── Question ──────────────────────────────────────────────────────────────────
 
-function buildQuestion(): ViewHost {
+/**
+ * An agent asked the person something (Copilot's ask_user, Claude Code's
+ * AskUserQuestion): the question, its choices as buttons, and a line to type
+ * any other answer. Both type into the session's terminal, so they are only
+ * live when the CLI was started through coucou-pty; otherwise the card still
+ * shows what was asked and says where to answer.
+ */
+function buildQuestion(actions: ViewActions): ViewHost {
   const who = h("div");
-  const title = h("div", { class: "title" });
-  const row = h("div", { class: "actions" });
-  const el = h("div", { class: "view" }, card("cyan", stack(116, 16, who, title, row)));
+  const title = h("div", { class: "q-text" });
+  const choices = h("div", { class: "q-choices" });
+  const note = h("div", { class: "sub" });
+  const input = h("input", { type: "text", class: "chat-input", spellcheck: "false" }) as HTMLInputElement;
+  const send = h("button", { class: "send-btn", title: "Type it into the terminal" }, svg(ICONS.arrowUp, 11));
+  const bar = h("div", { class: "chat-bar q-bar" }, input, send);
+  const el = h("div", { class: "view" }, card("cyan", stack(116, 16, who, title, choices, bar, note)));
+  let key = "";
+  function submit() {
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    void actions.answerQuestion(text);
+  }
+  send.addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Enter") {
+      e.preventDefault();
+      submit();
+    }
+    e.stopPropagation();
+  });
   return {
     el,
+    focus() {
+      if (State.focusTask?.pty && !State.focusTask.question?.answered) input.focus();
+    },
     sync() {
-      clear(who);
-      who.append(agentWho(State.focusTask, "Claude Code is asking a question"));
       const task = State.focusTask;
-      title.textContent = task?.steps.at(-1) ?? "Claude needs an answer.";
-      clear(row);
-      row.append(h("div", { class: "sub", text: "Answer in your terminal — Coucou can't reply for you yet." }));
+      const q = task?.question ?? null;
+      const live = !!task?.pty;
+      clear(who);
+      who.append(agentWho(task, "is asking you"));
+      title.textContent = q?.text ?? task?.steps.at(-1) ?? "Needs an answer.";
+      input.placeholder = `Type an answer into ${task?.name ?? "the"} terminal…`;
+      // Rebuilt only when the question changes — never between a mouse-down
+      // and its mouse-up, which would swallow the click.
+      const next = [task?.id, q?.text, q?.choices.join("|"), q?.answered ?? "", live].join("~");
+      if (next === key) return;
+      key = next;
+      clear(choices);
+      for (const c of q?.choices ?? []) {
+        const b = h("button", { class: `btn ${live ? "secondary" : "ghost"} q-chip`, text: c });
+        if (live && !q?.answered) b.addEventListener("click", () => void actions.answerQuestion(c));
+        else b.disabled = true;
+        choices.append(b);
+      }
+      choices.style.display = q?.choices.length ? "" : "none";
+      bar.style.display = live && !q?.answered ? "" : "none";
+      note.textContent = q?.answered
+        ? `Sent "${q.answered}" — waiting for the terminal.`
+        : live ? ""
+        : "Answer in the terminal — or start it through coucou-pty (Settings) to answer here.";
+      note.style.display = note.textContent ? "" : "none";
     },
   };
 }
@@ -740,7 +794,7 @@ export function buildViews(
   map.set("overview", buildOverview(actions));
   map.set("empty", buildEmpty(actions));
   map.set("approval", buildApproval(actions));
-  map.set("question", buildQuestion());
+  map.set("question", buildQuestion(actions));
   map.set("error", buildError(actions));
   map.set("finished", buildFinished(actions));
   map.set("session", buildSession(actions));

@@ -406,6 +406,30 @@ body {
   flex: 1 1 auto;
 }
 
+/* Nothing beside the focused session: its card takes the whole island. */
+.overview.solo > .left {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.overview.solo > .right {
+  display: none;
+}
+
+/* One or two other pills: a single narrow column, and the session keeps the rest. */
+.overview.narrow > .left {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.overview.narrow > .right {
+  flex: 0 0 132px;
+}
+
+.overview.narrow .pills {
+  grid-template-columns: 1fr;
+}
+
 /* Extra session cards between the focused card and the pills. */
 .overview > .extras {
   display: flex;
@@ -648,6 +672,46 @@ body {
 .sub {
   font: 400 13px var(--font);
   color: var(--dim);
+}
+
+/* The question card: what was asked, wrapping; the choices as a row of chips. */
+.q-text {
+  font: 600 14px/18px var(--font);
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  user-select: text;
+}
+
+.q-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.btn.q-chip {
+  padding: 5px 11px;
+  font-size: 12px;
+  max-width: 100%;
+}
+
+.btn.q-chip span,
+.btn.q-chip {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn.ghost {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--dim-2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.q-bar {
+  margin: 2px 0;
 }
 
 /* The session view: who, the scrolling log, the buttons — top to bottom. */

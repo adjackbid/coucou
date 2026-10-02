@@ -120,6 +120,35 @@ export function approvalHeight(lines: number): number {
   return Math.min(APPROVAL_MAX_H, APPROVAL_MIN_H + Math.round(Math.max(0, lines - 1) * CODE_LINE_H));
 }
 
+/** The question card: the familiar 160 pt card for one line and no choices. */
+const QUESTION_MIN_H = 160;
+const QUESTION_MAX_H = 320;
+/** Width the question's text and choices have, left of the Mochi and inside the padding. */
+const QUESTION_TEXT_W = EXPANDED_W - 116 - 16 - 24;
+
+/**
+ * The question card grows with what was asked: a long question wraps, and
+ * every row of choice buttons needs its own line. Rough text metrics are
+ * enough — the card is a little tall rather than clipping a choice.
+ */
+export function questionHeight(q: { text: string; choices: string[] } | null, withInput: boolean): number {
+  if (!q) return QUESTION_MIN_H;
+  const textLines = Math.min(3, Math.max(1, Math.ceil(q.text.length * 7.5 / QUESTION_TEXT_W)));
+  let rows = 0;
+  let used = 0;
+  for (const c of q.choices) {
+    const w = Math.min(QUESTION_TEXT_W, c.length * 7 + 34);
+    if (used === 0 || used + w + 6 > QUESTION_TEXT_W) {
+      rows += 1;
+      used = w;
+    } else {
+      used += w + 6;
+    }
+  }
+  const h = QUESTION_MIN_H + (textLines - 1) * 18 + rows * 32 + (withInput ? 36 : 0);
+  return Math.min(QUESTION_MAX_H, h);
+}
+
 /** A row of pills in the overview's right card. */
 const PILL_ROW_H = 32;
 /** One extra session card in the overview, gap included. */
@@ -146,6 +175,8 @@ export function islandSize(
   approvalLines = 0,
   pillCount = 0,
   extraCards = 0,
+  question: { text: string; choices: string[] } | null = null,
+  questionInput = false,
 ): { w: number; h: number } {
   switch (mode) {
     case "hidden":
@@ -159,6 +190,7 @@ export function islandSize(
         view === "prompt" ? chatPromptHeight(chatCount)
         : view === "approval" ? approvalHeight(approvalLines)
         : view === "overview" ? overviewHeight(pillCount)
+        : view === "question" ? questionHeight(question, questionInput)
         : VIEW_LAYOUTS[view].height;
       const w = view === "overview" ? overviewWidth(extraCards) : EXPANDED_W;
       return { w, h };

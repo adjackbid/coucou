@@ -177,6 +177,27 @@ export class Island {
         State.setPillBadge(req.taskId, null);
         this.setView(State.defaultView());
       },
+      answerQuestion: async (text) => {
+        // The answer is typed into the session's own terminal, exactly as the
+        // person would have: the CLI sees it as their keystrokes, and its
+        // PostToolUse takes the card down. Nothing is guessed about the TUI
+        // beyond "text, then Enter" — the same path as the session view.
+        const task = State.focusTask;
+        const q = task?.question;
+        if (!task?.pty || !q || q.answered) return;
+        q.answered = text;
+        State.notify();
+        try {
+          await Bridge.ptySend(task.pty, text);
+          Sound.play("blip");
+          State.appendTranscript(task.id, { role: "user", text });
+        } catch (err) {
+          q.answered = null;
+          task.pty = null;
+          State.appendTranscript(task.id, { role: "tool", text: String(err).replace(/^Error:\s*/, "") });
+        }
+        State.notify();
+      },
       toggleSound: () => {
         State.settings.soundEnabled = !State.settings.soundEnabled;
         Sound.setEnabled(State.settings.soundEnabled);
@@ -560,6 +581,7 @@ export class Island {
     const { w, h } = islandSize(
       State.mode, State.view, State.chatHistory.length, State.pendingApproval?.lines ?? 0,
       Math.min(State.pillTasks.length, MAX_PILLS), State.extraCards.length,
+      State.focusTask?.question ?? null, !!State.focusTask?.pty,
     );
     const r = State.mode === "expanded" ? EXPANDED_CORNER : ROUNDED_CORNER;
     return { w, h, r };

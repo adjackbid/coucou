@@ -5,7 +5,7 @@
 
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { INTEGRATION_AGENTS, State, sessionKey, type AgentSource, type ApprovalSection } from "../core/state";
+import { INTEGRATION_AGENTS, State, sessionKey, type AgentQuestion, type AgentSource, type ApprovalSection } from "../core/state";
 import type { Island } from "./island";
 
 /** Which agent each `--agent` of the relay is. Anything unknown is Claude Code. */
@@ -108,6 +108,32 @@ function stepLabel(tool: string, input: Record<string, unknown>): string {
   // A tool nobody listed still says what it was aimed at.
   const first = Object.values(input).find((v) => typeof v === "string" && v.trim()) as string | undefined;
   return first ? `${label} · ${first.slice(0, 40)}` : label;
+}
+
+/**
+ * A tool call that is really a question for the person: Copilot's `ask_user`
+ * (a message and a JSON schema whose enum is the choice list) and Claude
+ * Code's `AskUserQuestion` (questions with labelled options). Anything else
+ * is an ordinary step.
+ */
+function questionFrom(tool: string, input: Record<string, unknown>): AgentQuestion | null {
+  const strs = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
+  if (tool === "ask_user") {
+    const text = typeof input.message === "string" ? input.message.trim() : "";
+    const schema = (input.requestedSchema ?? input.requested_schema) as { properties?: Record<string, { enum?: unknown }> } | undefined;
+    const choices = Object.values(schema?.properties ?? {}).flatMap((f) => strs(f?.enum));
+    return text || choices.length ? { text: text || "Choose one:", choices } : null;
+  }
+  if (tool === "AskUserQuestion") {
+    const first = (input.questions as Array<Record<string, unknown>> | undefined)?.[0];
+    if (!first) return null;
+    const text = typeof first.question === "string" ? first.question.trim() : "";
+    const options = (first.options as Array<{ label?: unknown }> | undefined) ?? [];
+    const choices = options.map((o) => (typeof o.label === "string" ? o.label.trim() : "")).filter(Boolean);
+    return text || choices.length ? { text: text || "Choose one:", choices } : null;
+  }
+  return null;
 }
 
 /**
@@ -224,6 +250,7 @@ export function registerHookHandlers(island: Island) {
   if (!IS_TAURI) {
     (window as unknown as { coucouHook: (p: HookPayload) => void }).coucouHook = (p) =>
       handleHook(island, p);
+    (window as unknown as { coucouState: typeof State }).coucouState = State;
   }
 }
 
@@ -242,7 +269,6 @@ function handleHook(island: Island, payload: HookPayload) {
   // The name the person gave this folder, if any; else the folder's own.
   const projectName = State.settings.sessionNames?.[sessionKey(cwd)] || aliasProjectName(raw || "Session");
   const CLAUDE_ID = taskFor(payload, projectName, cwd);
-  const focused = State.focusId === CLAUDE_ID;
   const own = State.tasks.find((x) => x.id === CLAUDE_ID);
   if (own) {
     own.lastEvent = performance.now();
@@ -250,6 +276,21 @@ function handleHook(island: Island, payload: HookPayload) {
   }
   // A shut island's Mochi follows whoever is busy, so work is visible.
   State.followActivity(CLAUDE_ID);
+  // Decided after the follow: a shut island now shows this session, so its
+  // alert opens on the card; an open island keeps its focus, so an alert
+  // from another session is a badge rather than a yank.
+  const focused = State.focusId === CLAUDE_ID;
+  // The question ends with the tool that asked it (its PostToolUse), or with
+  // anything else the session does next; the card must not outlive it.
+  if (own?.question && name !== "PreToolUse" && !/^notification$/i.test(name)) {
+    own.question = null;
+    State.setPillBadge(CLAUDE_ID, null);
+    if (State.view === "question" && focused) {
+      State.isPinned = false;
+      island.dropPin();
+      island.setView(State.defaultView());
+    }
+  }
 
   /**
    * Alerts force the island open; work events only reveal the compact island
@@ -311,6 +352,26 @@ function handleHook(island: Island, payload: HookPayload) {
       upsert(CLAUDE_ID, projectName, cwd);
       State.updateTask(CLAUDE_ID, "working");
       const tool = payload.tool_name ?? "Tool";
+      const question = name === "PreToolUse" ? questionFrom(tool, payload.tool_input ?? {}) : null;
+      if (question && own) {
+        // Not a step but a question: one line in the ticker, the question
+        // itself on its own card — with the choices, when it offered any.
+        own.question = question;
+        State.updateTask(CLAUDE_ID, "question");
+        State.appendStep(CLAUDE_ID, `Asking you · ${question.text.slice(0, 60)}`);
+        State.appendTranscript(CLAUDE_ID, { role: "assistant", text: question.text });
+        Sound.play("question");
+        if (focused) {
+          // Pinned like an approval: the card waits for the answer rather
+          // than folding away after a few seconds.
+          State.isPinned = true;
+          island.alert("question");
+        } else {
+          State.setPillBadge(CLAUDE_ID, "approval");
+          island.reveal();
+        }
+        break;
+      }
       const label = stepLabel(tool, payload.tool_input ?? {});
       State.appendStep(CLAUDE_ID, label);
       State.appendTranscript(CLAUDE_ID, { role: "tool", text: label });
@@ -336,6 +397,8 @@ function handleHook(island: Island, payload: HookPayload) {
       if (lower.includes("rate limit") || lower.includes("limite d")) {
         State.updateTask(CLAUDE_ID, "ratelimit");
         Sound.play("rate");
+      } else if (own?.question) {
+        // Copilot repeats ask_user's text as a notification: the card has it.
       } else if (message.endsWith("?")) {
         State.updateTask(CLAUDE_ID, "question");
         State.appendStep(CLAUDE_ID, message);
