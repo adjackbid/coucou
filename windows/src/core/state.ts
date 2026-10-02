@@ -537,7 +537,11 @@ class AppState {
   }
 
   defaultView(): IslandViewName {
-    return this.tasks.length === 0 ? "empty" : "overview";
+    if (this.tasks.length === 0) return "empty";
+    // A question still waiting on the focused session comes back with the
+    // island: shutting it and opening it again must not lose the choices.
+    if (this.focusTask?.question) return "question";
+    return "overview";
   }
 }
 

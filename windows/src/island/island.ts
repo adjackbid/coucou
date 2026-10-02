@@ -123,6 +123,8 @@ export class Island {
       setFocus: (id) => {
         State.setFocus(id);
         Sound.play("blip");
+        // A pill whose session is waiting on an answer opens on the question.
+        if (State.focusTask?.question && State.view === "overview") this.setView("question");
       },
       openTerminal: () => {
         const cwd = State.focusTask?.sessionCwd ?? null;

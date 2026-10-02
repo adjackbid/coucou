@@ -62,7 +62,12 @@ function setText(row: Row, text: string) {
  */
 function place(row: Row, y: number, phase: number, opacity: number) {
   const scale = 1 - phase * (1 - COMPLETED_SCALE);
-  row.el.style.transform = `translate(${-phase * 10}px, ${y}px) scale(${scale})`;
+  // Offsets go through top/left, not translate: under the root zoom that
+  // compensates Windows text scaling, WebView2 scaled translate() lengths a
+  // second time, and the completed row landed on top of the current one.
+  row.el.style.top = `${y}px`;
+  row.el.style.left = `${-phase * 10}px`;
+  row.el.style.transform = `scale(${scale})`;
   row.el.style.opacity = String(opacity);
   row.chevron.style.opacity = String(clamp(1 - phase * 2, 0, 1));
   row.check.style.opacity = String(clamp(phase * 2 - 1, 0, 1));
