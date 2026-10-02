@@ -132,7 +132,12 @@ async fn handle(app: AppHandle, mut pipe: NamedPipeServer) {
         .to_string();
 
     if event != "PermissionRequest" {
-        log::line(format!("hook {agent} {event}"));
+        // The tool and whether a session id came along: enough to see a CLI
+        // change its payload shape without dumping the payload itself.
+        let tool = payload.get("tool_name").and_then(Value::as_str).unwrap_or("");
+        let sid = payload.get("session_id").and_then(Value::as_str).map(|s| s.len()).unwrap_or(0);
+        let detail = if tool.is_empty() { String::new() } else { format!(" tool={tool}") };
+        log::line(format!("hook {agent} {event}{detail} sid={sid}"));
         let _ = app.emit_to(WINDOW_LABEL, "hook", payload);
         let _ = pipe.disconnect();
         return;

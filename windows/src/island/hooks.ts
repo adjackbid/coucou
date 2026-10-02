@@ -132,13 +132,16 @@ function questionFrom(tool: string, input: Record<string, unknown>): AgentQuesti
         })
         .filter((x) => x !== "")
       : [];
-  if (tool === "ask_user") {
+  if (tool !== "ask_user" && tool !== "AskUserQuestion") return null;
+  // Copilot 1.0.91 calls the tool AskUserQuestion in its PascalCase hooks but
+  // keeps ask_user's arguments, so the shape of the input decides, not the name.
+  if (typeof input.message === "string" || input.requestedSchema != null) {
     const text = typeof input.message === "string" ? input.message.trim() : "";
     const schema = (input.requestedSchema ?? input.requested_schema) as { properties?: Record<string, { enum?: unknown }> } | undefined;
     const choices = Object.values(schema?.properties ?? {}).flatMap((f) => strs(f?.enum));
     return text || choices.length ? { text: text || "Choose one:", choices } : null;
   }
-  if (tool === "AskUserQuestion") {
+  {
     const first = (input.questions as Array<Record<string, unknown>> | undefined)?.[0];
     if (!first) return null;
     const text = typeof first.question === "string" ? first.question.trim() : "";
