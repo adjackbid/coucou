@@ -170,6 +170,21 @@ pub fn hook_exe_path() -> PathBuf {
     local_dir().join("bin").join("coucou-hook.exe")
 }
 
+/// The relay a team member's CLI starts as its MCP server.
+pub fn team_mcp_exe_path() -> PathBuf {
+    local_dir().join("bin").join("coucou-team-mcp.exe")
+}
+
+/// %APPDATA%\Coucou\teams — one JSON file per team, written by the person.
+pub fn team_configs_dir() -> PathBuf {
+    config_dir().join("teams")
+}
+
+/// %LOCALAPPDATA%\Coucou\teams — one folder per team, holding its log.
+pub fn team_logs_dir() -> PathBuf {
+    local_dir().join("teams")
+}
+
 fn settings_path() -> PathBuf {
     config_dir().join("settings.json")
 }

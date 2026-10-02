@@ -50,7 +50,8 @@
     ],
     "resources": {
       "../target/release/coucou-hook.exe": "coucou-hook.exe",
-      "../target/release/coucou-pty.exe": "coucou-pty.exe"
+      "../target/release/coucou-pty.exe": "coucou-pty.exe",
+      "../target/release/coucou-team-mcp.exe": "coucou-team-mcp.exe"
     },
     "copyright": "© Louis Raille",
     "category": "DeveloperTool",

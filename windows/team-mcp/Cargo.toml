@@ -1,0 +1,23 @@
+[package]
+name = "coucou-team-mcp"
+description = "Relays a team member's MCP calls to Coucou over a named pipe"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "coucou-team-mcp"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"
+
+# The same little bit of Win32 as coucou-hook: our own SID, and who serves the pipe.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_System_Pipes",
+  "Win32_System_Threading",
+] }

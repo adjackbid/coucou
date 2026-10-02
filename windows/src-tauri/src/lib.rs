@@ -11,6 +11,7 @@ mod pipe;
 mod policy;
 mod secrets;
 mod settings;
+mod team;
 mod tray;
 mod win_user;
 
@@ -25,6 +26,9 @@ use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 use acp::{AcpOutcome, AgentProfile, Agents, Launch};
+use team::orchestrator::{AcpDrive, Teams};
+use team::state::Snapshot;
+use team::TeamConfig;
 use files::DroppedFile;
 use llm::{Chat, ChatContext, ChatReply, Provider};
 use hooks::{Agent, HookPreview, HookStatus};
@@ -385,7 +389,7 @@ fn pty_send(pipe: String, text: String) -> Result<(), String> {
 async fn acp_send(
     app: AppHandle,
     shared: State<'_, Shared>,
-    agents: State<'_, Agents>,
+    agents: State<'_, Arc<Agents>>,
     agent_id: String,
     text: String,
 ) -> Result<AcpOutcome, String> {
@@ -404,7 +408,7 @@ async fn acp_send(
 /// ids the agent offered, or nothing for "cancelled".
 #[tauri::command]
 async fn acp_permission(
-    agents: State<'_, Agents>,
+    agents: State<'_, Arc<Agents>>,
     agent_id: String,
     request_id: serde_json::Value,
     option_id: Option<String>,
@@ -413,14 +417,14 @@ async fn acp_permission(
 }
 
 #[tauri::command]
-async fn acp_cancel(agents: State<'_, Agents>, agent_id: String) -> Result<(), String> {
+async fn acp_cancel(agents: State<'_, Arc<Agents>>, agent_id: String) -> Result<(), String> {
     agents.cancel(&agent_id).await
 }
 
 /// "New" in the chat while an agent is the target: the next prompt starts a
 /// fresh session.
 #[tauri::command]
-async fn acp_reset(agents: State<'_, Agents>, agent_id: String) -> Result<(), String> {
+async fn acp_reset(agents: State<'_, Arc<Agents>>, agent_id: String) -> Result<(), String> {
     agents.reset(&agent_id).await;
     Ok(())
 }
@@ -428,8 +432,167 @@ async fn acp_reset(agents: State<'_, Agents>, agent_id: String) -> Result<(), St
 /// The settings window's "Test": start the agent as the form describes it,
 /// shake hands, open a session, stop it.
 #[tauri::command]
-async fn acp_test(agents: State<'_, Agents>, profile: AgentProfile) -> Result<String, String> {
+async fn acp_test(agents: State<'_, Arc<Agents>>, profile: AgentProfile) -> Result<String, String> {
     agents.test(&profile).await
+}
+
+// ── Teams ─────────────────────────────────────────────────────────────────────
+
+/// A team file as the Teamwork window lists it.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamFile {
+    file: String,
+    config: Option<TeamConfig>,
+    /// Why it cannot start as it is; empty when it can.
+    problems: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamFiles {
+    dir: String,
+    files: Vec<TeamFile>,
+}
+
+/// A team file is named, never addressed: `shop.json`, in the teams folder.
+fn team_file_path(file: &str) -> Result<std::path::PathBuf, String> {
+    let plain = file.strip_suffix(".json").map(team::is_plain_id).unwrap_or(false);
+    if !plain {
+        return Err("That is not a team file.".into());
+    }
+    Ok(settings::team_configs_dir().join(file))
+}
+
+fn read_team_file(file: &str) -> Result<TeamConfig, String> {
+    let bytes = std::fs::read(team_file_path(file)?).map_err(|e| format!("Could not read {file}: {e}"))?;
+    // PowerShell 5 and Notepad both write a BOM; it is not part of the JSON.
+    let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(&bytes);
+    serde_json::from_slice(bytes).map_err(|e| format!("{file} is not a team file Coucou can read: {e}"))
+}
+
+/// An example to start from, written once into an empty teams folder.
+const EXAMPLE_TEAM: &str = include_str!("team/example.json");
+
+/// The team files in %APPDATA%\Coucou\teams, each with what stops it from starting.
+#[tauri::command]
+fn team_files(shared: State<Shared>) -> TeamFiles {
+    let dir = settings::team_configs_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| n.ends_with(".json")).collect())
+        .unwrap_or_default();
+    if names.is_empty() && std::fs::write(dir.join("example-shop.json"), EXAMPLE_TEAM).is_ok() {
+        names.push("example-shop.json".into());
+    }
+    names.sort();
+    let agents: Vec<String> = shared.settings.lock().unwrap().agents.iter().map(|a| a.id.clone()).collect();
+    let files = names
+        .into_iter()
+        .map(|file| match read_team_file(&file) {
+            Ok(config) => {
+                let problems = config.problems(&agents);
+                TeamFile { file, config: Some(config), problems }
+            }
+            Err(why) => TeamFile { file, config: None, problems: vec![why] },
+        })
+        .collect();
+    TeamFiles { dir: dir.to_string_lossy().to_string(), files }
+}
+
+/// Every team this run knows, and the last run of each team that has a log.
+#[tauri::command]
+fn team_snapshots(teams: State<Arc<Teams>>) -> Vec<Snapshot> {
+    if let Ok(entries) = std::fs::read_dir(settings::team_logs_dir()) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let id = entry.file_name().to_string_lossy().to_string();
+            if team::is_plain_id(&id) {
+                let _ = teams.load(&id);
+            }
+        }
+    }
+    teams.snapshots()
+}
+
+/// Starts the team a file describes. Only ever called from an explicit click.
+#[tauri::command]
+async fn team_start(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, file: String) -> Result<Snapshot, String> {
+    let config = read_team_file(&file)?;
+    let profiles = shared.settings.lock().unwrap().agents.clone();
+    if !settings::team_mcp_exe_path().is_file() {
+        return Err("coucou-team-mcp.exe is missing from Coucou's bin folder, so members could not report. Reinstall or rebuild Coucou.".into());
+    }
+    teams.start(config, &profiles)
+}
+
+/// The person writes to the leader (`to` empty) or to one member.
+#[tauri::command]
+fn team_instruct(teams: State<Arc<Teams>>, team: String, to: String, text: String) -> Result<(), String> {
+    teams.instruct(&team, &to, &text)
+}
+
+#[tauri::command]
+fn team_answer(teams: State<Arc<Teams>>, team: String, question: String, text: String) -> Result<(), String> {
+    teams.answer(&team, &question, &text)
+}
+
+/// The person's answer to the card a member's agent is holding: one of the
+/// agent's own options, or nothing for "cancelled".
+#[tauri::command]
+async fn team_permit(teams: State<'_, Arc<Teams>>, team: String, member: String, option_id: Option<String>) -> Result<(), String> {
+    teams.permit(&team, &member, option_id).await
+}
+
+#[tauri::command]
+fn team_pause(teams: State<Arc<Teams>>, team: String) -> Result<(), String> {
+    teams.pause(&team)
+}
+
+#[tauri::command]
+fn team_resume(teams: State<Arc<Teams>>, team: String) -> Result<(), String> {
+    teams.resume(&team)
+}
+
+/// Pause, and interrupt every turn under way.
+#[tauri::command]
+async fn team_interrupt(teams: State<'_, Arc<Teams>>, team: String) -> Result<(), String> {
+    teams.interrupt(&team).await
+}
+
+#[tauri::command]
+async fn team_recover(teams: State<'_, Arc<Teams>>, team: String, member: String) -> Result<(), String> {
+    teams.recover(&team, &member).await
+}
+
+/// Opens something a member handed in: a URL in the browser, a path in
+/// Explorer. No shell: the locator is an argument, never a command line.
+#[tauri::command]
+fn team_open(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<(), String> {
+    if locator.starts_with("http://") || locator.starts_with("https://") {
+        open_url(locator);
+        return Ok(());
+    }
+    let work_dir = teams.get(&team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or("There is no such team.")?;
+    let path = std::path::Path::new(&locator);
+    let full = if path.is_absolute() { path.to_path_buf() } else { std::path::Path::new(&work_dir).join(path) };
+    if !full.exists() {
+        return Err(format!("{} is no longer there.", full.display()));
+    }
+    let mut cmd = Command::new("explorer");
+    if full.is_dir() {
+        cmd.arg(&full);
+    } else {
+        cmd.arg("/select,").arg(&full);
+    }
+    cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Opens the folder the team files live in.
+#[tauri::command]
+fn team_open_configs() {
+    let dir = settings::team_configs_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = Command::new("explorer").arg(dir).spawn();
 }
 
 #[tauri::command]
@@ -604,9 +767,61 @@ fn open_settings_window(app: AppHandle) {
     show_settings_window(&app);
 }
 
+/// The Teamwork window: like the settings window, made hidden before the
+/// island's webview exists and only shown and hidden afterwards.
+fn create_team_window(app: &AppHandle) {
+    #[cfg(dev)]
+    let url = match app.config().build.dev_url.clone() {
+        Some(mut base) => {
+            base.set_path("/team.html");
+            WebviewUrl::External(base)
+        }
+        None => WebviewUrl::App("team.html".into()),
+    };
+    #[cfg(not(dev))]
+    let url = WebviewUrl::App("team.html".into());
+    match WebviewWindowBuilder::new(app, "team", url)
+        .additional_browser_args(BROWSER_ARGS)
+        .title("Teamwork — Coucou")
+        .inner_size(1180.0, 800.0)
+        .min_inner_size(860.0, 560.0)
+        .resizable(true)
+        .visible(false)
+        .center()
+        .build()
+    {
+        Ok(win) => {
+            let hidden = win.clone();
+            win.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = hidden.hide();
+                }
+            });
+        }
+        Err(err) => log::line(format!("team window failed: {err}")),
+    }
+}
+
+pub fn show_team_window(app: &AppHandle) {
+    let Some(win) = app.get_webview_window("team") else {
+        log::line("team window missing");
+        return;
+    };
+    let _ = win.unminimize();
+    let _ = win.show();
+    let _ = win.set_focus();
+}
+
+#[tauri::command]
+fn open_team_window(app: AppHandle) {
+    show_team_window(&app);
+}
+
 pub fn run() {
     let loaded = settings::load();
     let gate = Arc::new(PollGate::new());
+    let agents = Arc::new(Agents::default());
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -630,7 +845,7 @@ pub fn run() {
         })
         .manage(Pending::default())
         .manage(Chat::default())
-        .manage(Agents::default())
+        .manage(agents.clone())
         .invoke_handler(tauri::generate_handler![
             boot,
             save_settings,
@@ -668,12 +883,43 @@ pub fn run() {
             acp_cancel,
             acp_reset,
             acp_test,
+            team_files,
+            team_snapshots,
+            team_start,
+            team_instruct,
+            team_answer,
+            team_permit,
+            team_pause,
+            team_resume,
+            team_interrupt,
+            team_recover,
+            team_open,
+            team_open_configs,
+            open_team_window,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
             tray::build(&handle)?;
             // Before the island: see create_settings_window.
             create_settings_window(&handle);
+            create_team_window(&handle);
+
+            // Teams: their members run through the same agents as the chat's,
+            // and every change is told to both windows.
+            let emit: team::orchestrator::Emit = {
+                let app = handle.clone();
+                Arc::new(move |snapshot| {
+                    let _ = app.emit("team-changed", snapshot.clone());
+                })
+            };
+            let teams = Arc::new(Teams::new(
+                Arc::new(AcpDrive(agents.clone())),
+                emit,
+                Some(settings::team_logs_dir()),
+                settings::team_mcp_exe_path(),
+            ));
+            app.manage(teams.clone());
+            team::mcp::start(teams);
 
             if let Some(win) = island::window(&handle) {
                 island::make_non_activating(&win);
@@ -696,7 +942,10 @@ pub fn run() {
         .run(|app, event| {
             // Agents the island started must not outlive it.
             if let tauri::RunEvent::Exit = event {
-                let agents = app.state::<Agents>();
+                if let Some(teams) = app.try_state::<Arc<Teams>>() {
+                    tauri::async_runtime::block_on(teams.shutdown());
+                }
+                let agents = app.state::<Arc<Agents>>();
                 tauri::async_runtime::block_on(agents.shutdown());
             }
         });

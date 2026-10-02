@@ -502,6 +502,8 @@ pub fn ensure_hook_exe(app: &AppHandle) {
     ensure_exe(app, "coucou-hook.exe", "hooks cannot work");
     // The terminal wrapper rides along the same way: `coucou-pty -- copilot …`.
     ensure_exe(app, "coucou-pty.exe", "the island cannot type into terminals");
+    // And the relay a team member's CLI starts to reach the team's tools.
+    ensure_exe(app, "coucou-team-mcp.exe", "team members cannot report to the team");
 }
 
 fn ensure_exe(app: &AppHandle, name: &str, consequence: &str) {

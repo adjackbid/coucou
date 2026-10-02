@@ -649,6 +649,7 @@ impl Agents {
     }
 
     /// Whether the session's agent is up.
+    #[cfg(test)]
     pub fn is_running(&self, key: &str) -> bool {
         self.running(key).map(|r| r.alive.load(Ordering::Relaxed)).unwrap_or(false)
     }

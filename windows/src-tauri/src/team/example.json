@@ -1,0 +1,28 @@
+{
+  "id": "shop",
+  "name": "購物網站團隊",
+  "goal": "建立一個購物網站\n包含商品列表、購物車與會員登入\n交付可預覽網站與測試報告",
+  "scope": ["商品目錄", "購物車", "會員登入"],
+  "workDir": "D:\\Projects\\shop",
+  "leader": "ai1",
+  "autoApprove": true,
+  "members": [
+    { "id": "ai1", "name": "AI 1", "role": "規劃", "duty": "拆解需求、指派任務與審核成果", "agent": "copilot", "color": "#5b8def" },
+    { "id": "ai2", "name": "AI 2", "role": "執行整合", "duty": "整合各項成果,進行測試與驗收", "agent": "copilot", "color": "#34c7a0" },
+    { "id": "ai3", "name": "AI 3", "role": "網站開發", "duty": "實作網站前後端,依圖片素材進行開發", "agent": "copilot", "color": "#a06cf0" },
+    { "id": "ai4", "name": "AI 4", "role": "圖片生成", "duty": "生成商品與情境圖片,交付給網站開發", "agent": "copilot", "color": "#f5b63d" }
+  ],
+  "links": [
+    { "from": "ai4", "to": "ai3", "kind": "delivery", "what": "圖片素材" },
+    { "from": "ai3", "to": "ai2", "kind": "delivery", "what": "網站版本" }
+  ],
+  "expected": [
+    { "name": "網站預覽", "detail": "可在線上瀏覽的購物網站" },
+    { "name": "原始碼", "detail": "前後端原始碼與部署說明" },
+    { "name": "測試報告", "detail": "功能測試結果與驗收報告" },
+    { "name": "圖片素材", "detail": "商品圖片與情境素材" }
+  ],
+  "directTalk": true,
+  "sharedBoard": true,
+  "maxTurns": 60
+}

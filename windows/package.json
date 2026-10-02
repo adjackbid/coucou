@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "icons": "node scripts/gen-icons.mjs",
     "tauri": "tauri",
-    "predev": "cargo build --release -p coucou-hook -p coucou-pty",
-    "prebuild": "cargo build --release -p coucou-hook -p coucou-pty",
+    "predev": "cargo build --release -p coucou-hook -p coucou-pty -p coucou-team-mcp",
+    "prebuild": "cargo build --release -p coucou-hook -p coucou-pty -p coucou-team-mcp",
     "pack": "tauri build && node scripts/pack.mjs"
   },
   "devDependencies": {
