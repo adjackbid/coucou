@@ -2,6 +2,8 @@
 
 mod acp;
 mod files;
+mod folder;
+mod glass;
 mod hooks;
 mod integrations;
 mod island;
@@ -587,6 +589,71 @@ fn team_open(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<
     cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// Writes a team file from the Teamwork window's form. The file is named
+/// after the team's id, and only ever inside the teams folder.
+#[tauri::command]
+fn team_save(file: String, mut config: TeamConfig) -> Result<(), String> {
+    let path = team_file_path(&file)?;
+    config.id = file.trim_end_matches(".json").to_string();
+    let json = serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(settings::team_configs_dir()).map_err(|e| e.to_string())?;
+    std::fs::write(path, json).map_err(|e| format!("Could not save {file}: {e}"))
+}
+
+/// A new team file with one member, the leader, to fill in. Returns its name.
+#[tauri::command]
+fn team_new(shared: State<Shared>) -> Result<String, String> {
+    let dir = settings::team_configs_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let id = (1..1000)
+        .map(|n| if n == 1 { "team".to_string() } else { format!("team-{n}") })
+        .find(|id| !dir.join(format!("{id}.json")).exists())
+        .ok_or("There are too many team files.")?;
+    let agent = shared.settings.lock().unwrap().agents.first().map(|a| a.id.clone()).unwrap_or_default();
+    let config = serde_json::json!({
+        "id": id, "name": "", "goal": "", "workDir": "", "leader": "ai1", "autoApprove": true,
+        "members": [{ "id": "ai1", "name": "AI 1", "role": "", "duty": "", "agent": agent, "color": "" }],
+    });
+    let file = format!("{id}.json");
+    std::fs::write(dir.join(&file), serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?)
+        .map_err(|e| format!("Could not create {file}: {e}"))?;
+    Ok(file)
+}
+
+/// The system's folder dialog, over the Teamwork window. `None` when cancelled.
+#[tauri::command]
+async fn pick_folder(app: AppHandle, start: String, title: String) -> Result<Option<String>, String> {
+    let owner = app.get_webview_window("team").and_then(|w| w.hwnd().ok()).map(|h| h.0 as isize);
+    let picked = tauri::async_runtime::spawn_blocking(move || folder::pick(owner, &start, &title))
+        .await
+        .map_err(|e| e.to_string())?;
+    match &picked {
+        Ok(Some(_)) => log::line("folder dialog: a folder was chosen"),
+        Ok(None) => log::line("folder dialog: cancelled"),
+        Err(err) => log::line(format!("folder dialog: {err}")),
+    }
+    picked
+}
+
+/// The Teamwork window has no title bar of its own: its page draws the
+/// buttons, and these are what they do.
+#[tauri::command]
+fn team_window(app: AppHandle, action: String) {
+    let Some(win) = app.get_webview_window("team") else { return };
+    let _ = match action.as_str() {
+        "minimize" => win.minimize(),
+        "maximize" => {
+            if win.is_maximized().unwrap_or(false) {
+                win.unmaximize()
+            } else {
+                win.maximize()
+            }
+        }
+        "drag" => win.start_dragging(),
+        _ => win.hide(),
+    };
+}
+
 /// Opens the folder the team files live in.
 #[tauri::command]
 fn team_open_configs() {
@@ -767,6 +834,10 @@ fn open_settings_window(app: AppHandle) {
     show_settings_window(&app);
 }
 
+/// #0B0C0E at 45 %, as 0xAABBGGRR: dark enough that light text reads over
+/// a white window behind, thin enough that the desktop still shows.
+const GLASS_TINT: u32 = 0x730E_0C0B;
+
 /// The Teamwork window: like the settings window, made hidden before the
 /// island's webview exists and only shown and hidden afterwards.
 fn create_team_window(app: &AppHandle) {
@@ -801,11 +872,18 @@ fn create_team_window(app: &AppHandle) {
         .inner_size(width, height)
         .min_inner_size(720.0, 520.0)
         .resizable(true)
+        // A sheet of glass, not a framed window: no title bar (the page has
+        // its own), and nothing painted behind the page.
+        .decorations(false)
+        .transparent(true)
+        .shadow(true)
         .visible(false)
         .center()
         .build()
     {
         Ok(win) => {
+            // Coucou's black, thin enough for the desktop to show through.
+            glass::apply(&win, GLASS_TINT);
             let hidden = win.clone();
             win.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -910,6 +988,10 @@ pub fn run() {
             team_recover,
             team_open,
             team_open_configs,
+            team_save,
+            team_new,
+            pick_folder,
+            team_window,
             open_team_window,
         ])
         .setup(move |app| {

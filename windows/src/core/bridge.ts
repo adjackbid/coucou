@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentProfile, Provider, Settings } from "./state";
-import type { Snapshot, TeamFile } from "../team/types";
+import type { Snapshot, TeamConfig, TeamFile } from "../team/types";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -155,6 +155,14 @@ export const Bridge = {
   /** Opens something a member handed in: a URL, or a path in Explorer. */
   teamOpen: (team: string, locator: string) => callOrThrow<void>("team_open", { team, locator }),
   teamOpenConfigs: () => call<void>("team_open_configs"),
+  /** Writes a team file from the form; the file is named after the team's id. */
+  teamSave: (file: string, config: TeamConfig) => callOrThrow<void>("team_save", { file, config }),
+  /** A new team file with one member to fill in; returns its name. */
+  teamNew: () => callOrThrow<string>("team_new"),
+  /** The system's folder dialog; null when cancelled. */
+  pickFolder: (start: string, title: string) => callOrThrow<string | null>("pick_folder", { start, title }),
+  /** The Teamwork window draws its own title bar: minimize, maximize, drag, close. */
+  teamWindow: (action: "minimize" | "maximize" | "drag" | "close") => call<void>("team_window", { action }),
 };
 
 /** A `session/update` from an agent. */

@@ -32,6 +32,12 @@ const config: TeamConfig = {
   maxTurns: 60,
 };
 
+export const demoAgents = [
+  { id: "copilot", name: "Copilot CLI", command: "copilot", args: ["--acp", "--stdio"], env: {}, cwd: "" },
+  { id: "cg", name: "cg · glm-5.3-flash", command: "copilot", args: ["--acp", "--stdio"], env: {}, cwd: "" },
+  { id: "claude", name: "Claude Code", command: "claude", args: [], env: {}, cwd: "" },
+];
+
 export const demoFiles: { dir: string; files: TeamFile[] } = {
   dir: "C:\\Users\\you\\AppData\\Roaming\\Coucou\\teams",
   files: [

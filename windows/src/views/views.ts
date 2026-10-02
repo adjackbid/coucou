@@ -83,22 +83,38 @@ function stack(padLeft: number, padRight: number, ...children: Node[]): HTMLElem
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
+/** The Teamwork mark: a green, a violet and an amber Mochi, shoulder to shoulder. */
+const TEAM_MARK = `<svg viewBox="0 0 30 21" width="30" height="21" aria-hidden="true">
+  <defs>
+    <linearGradient id="tw-green" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8FF0C8"/><stop offset="1" stop-color="#22C55E"/></linearGradient>
+    <linearGradient id="tw-amber" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD98A"/><stop offset="1" stop-color="#F5A524"/></linearGradient>
+    <linearGradient id="tw-violet" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D2C4FF"/><stop offset="1" stop-color="#8B6CF6"/></linearGradient>
+  </defs>
+  <rect x="0.8" y="4.5" width="13" height="10.6" rx="4.9" fill="url(#tw-green)"/>
+  <ellipse cx="5" cy="9.5" rx="0.85" ry="1.2" fill="#0b0c0e"/><ellipse cx="8.2" cy="9.5" rx="0.85" ry="1.2" fill="#0b0c0e"/>
+  <rect x="16.2" y="4.5" width="13" height="10.6" rx="4.9" fill="url(#tw-amber)"/>
+  <ellipse cx="21.8" cy="9.5" rx="0.85" ry="1.2" fill="#0b0c0e"/><ellipse cx="25" cy="9.5" rx="0.85" ry="1.2" fill="#0b0c0e"/>
+  <rect x="7.2" y="7.4" width="15.6" height="12.6" rx="5.8" fill="url(#tw-violet)" stroke="#000" stroke-width="1.5"/>
+  <ellipse cx="13.1" cy="13.3" rx="1" ry="1.4" fill="#0b0c0e"/><ellipse cx="16.9" cy="13.3" rx="1" ry="1.4" fill="#0b0c0e"/>
+</svg>`;
+
 export function buildHeader(actions: ViewActions): ViewHost {
   const tabHome = h("button", { class: "tab", title: "Overview", onclick: () => go("overview") }, svg(ICONS.house, 13));
   const tabChat = h("button", { class: "tab", title: "Ask", onclick: () => go("prompt") }, svg(ICONS.bubble, 13));
   const tabDrop = h("button", { class: "tab", title: "Drop", onclick: () => go("upload") }, svg(ICONS.plus, 13));
 
-  const teamBtn = h(
-    "button",
-    {
-      title: "Teamwork",
-      onclick: () => {
-        actions.blip();
-        actions.openTeamWindow();
-      },
+  // Teamwork is a window of its own, not a view of the island: its button
+  // is the one mark in colour up here — three small Mochis side by side.
+  const teamBtn = h("button", {
+    class: "team-launch",
+    title: "Teamwork",
+    "aria-label": "Teamwork",
+    html: TEAM_MARK,
+    onclick: () => {
+      actions.blip();
+      actions.openTeamWindow();
     },
-    svg(ICONS.people, 14),
-  );
+  });
   const gearBtn = h("button", { title: "Settings", onclick: () => go("settings") }, svg(ICONS.gear, 14));
   const soundBtn = h("button", { title: "Mute", onclick: () => actions.toggleSound() }, svg(ICONS.speakerOn, 14));
   // Always there, on every view: the island must never have to be waited out.
@@ -113,7 +129,8 @@ export function buildHeader(actions: ViewActions): ViewHost {
     "div",
     { id: "header" },
     h("div", { class: "tabs" }, tabHome, tabChat, tabDrop),
-    h("div", { class: "header-actions" }, teamBtn, gearBtn, soundBtn, closeBtn),
+    teamBtn,
+    h("div", { class: "header-actions" }, gearBtn, soundBtn, closeBtn),
   );
 
   return {

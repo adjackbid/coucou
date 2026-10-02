@@ -1,13 +1,15 @@
-// The Teamwork window: which teams there are, and — for the one selected —
-// who is doing what, who waits on whom and what has been handed in.
+// The Teamwork window: which teams there are, how each is set up, and — for
+// the one running — who is doing what, who waits on whom and what has been
+// handed in.
 //
-// Everything shown comes from the team's snapshot as the orchestrator sends
-// it (`team-changed`); this page keeps no state of its own beyond what is
-// being typed. The screen is drawn again whole on every change, which is
-// cheap at this size and leaves nothing to fall out of step.
+// What the monitor shows comes whole from the team's snapshot as the
+// orchestrator sends it (`team-changed`); this page keeps nothing of its own
+// beyond what is being typed. The screen is drawn again on every change,
+// which is cheap at this size and leaves nothing to fall out of step.
 
 import "./team.css";
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
+import type { AgentProfile } from "../core/state";
 import { h, clear } from "../views/dom";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
@@ -15,10 +17,16 @@ const root = document.getElementById("team-root")!;
 
 let dir = "";
 let files: TeamFile[] = [];
+/** The agents of Settings → Agents: what a member can run as. */
+let agents: AgentProfile[] = [];
 /** The latest snapshot of each team, by team id. */
 const runs = new Map<string, Snapshot>();
-/** The team file being looked at. */
+/** The team file being looked at, and which of its screens. */
 let selected: string | null = null;
+let tab: "setup" | "monitor" = "setup";
+/** The form's working copy of the selected team; saved on request. */
+let editing: TeamConfig | null = null;
+let unsaved = false;
 /** The last thing that went wrong, shown until the next action. */
 let trouble = "";
 /** Who the instruction box writes to: "" is the leader. */
@@ -27,7 +35,8 @@ let recipient = "";
 const drafts = new Map<string, string>();
 
 const YOU = "you";
-const PALETTE = ["#5b8def", "#34c7a0", "#a06cf0", "#f5b63d", "#ef6f8f", "#4fc3e8"];
+/** Coucou's own accents, for members that were given no colour. */
+const PALETTE = ["#3B9EFF", "#34D399", "#A78BFA", "#F5A524", "#F472B6", "#22D3EE"];
 
 const STATUS: Record<MemberStatus, { label: string; mark: string }> = {
   working: { label: "工作中", mark: "◔" },
@@ -74,12 +83,12 @@ function said(text: string): string {
     [/^(TASK-\d+) was sent back (\d+) times\.$/, (m) => `${m[1]} 已被退回 ${m[2]} 次`],
     [/^Coucou was closed while the team was running\.$/, () => "團隊執行中時 Coucou 被關閉"],
     [/^interrupted$/, () => "被中斷"],
-    // Why a team file cannot start.
+    // Why a team cannot start.
     [/^The work folder (.+) does not exist\.$/, (m) => `工作資料夾 ${m[1]} 不存在`],
-    [/^The work folder must be a full path\.$/, () => "工作資料夾必須是完整路徑"],
-    [/^(.+) runs as agent '(.+)', which is not in Settings → Agents\.$/, (m) => `${m[1]} 使用的代理「${m[2]}」不在 設定 → Agents 裡`],
+    [/^The work folder must be a full path\.$/, () => "還沒有選擇工作資料夾"],
+    [/^(.+) runs as agent '(.*)', which is not in Settings → Agents\.$/, (m) => `${m[1]} 還沒有選擇代理${m[2] ? `(「${m[2]}」不在 設定 → Agents 裡)` : ""}`],
     [/^The leader '(.+)' is not a member\.$/, (m) => `Leader「${m[1]}」不是團隊成員`],
-    [/^The team has no goal\.$/, () => "團隊沒有填寫任務目標"],
+    [/^The team has no goal\.$/, () => "還沒有填寫任務描述"],
     [/^The team has no members\.$/, () => "團隊沒有成員"],
     [/^Two members are called '(.+)'\.$/, (m) => `有兩位成員的 id 都是「${m[1]}」`],
     [/^'(.+)' cannot be a member id\.$/, (m) => `「${m[1]}」不能當成員 id`],
@@ -99,10 +108,10 @@ function clock(ms: number): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function colorOf(snap: Snapshot | TeamConfig, id: string): string {
-  const at = snap.members.findIndex((m) => m.id === id);
-  if (at < 0) return "#9aa3b8";
-  return snap.members[at].color || PALETTE[at % PALETTE.length];
+function colorOf(team: { members: { id: string; color: string }[] }, id: string): string {
+  const at = team.members.findIndex((m) => m.id === id);
+  if (at < 0) return "#9398A1";
+  return team.members[at].color || PALETTE[at % PALETTE.length];
 }
 
 function nameOf(snap: Snapshot, id: string): string {
@@ -111,12 +120,12 @@ function nameOf(snap: Snapshot, id: string): string {
   return snap.members.find((m) => m.id === id)?.name ?? id;
 }
 
-/** A member's face: the same blob as the drafts, in the member's colour. */
+/** A member's face: a small Mochi in the member's colour. */
 function blob(color: string, size = 28): HTMLElement {
   return h("i", { class: "blob", style: `--c:${color};--s:${size}px`, "aria-hidden": "true" });
 }
 
-function who(snap: Snapshot, id: string, size = 20): HTMLElement {
+function who(snap: Snapshot, id: string, size = 18): HTMLElement {
   if (id === YOU || id === "system") return h("span", { class: "who", text: nameOf(snap, id) });
   return h("span", { class: "who" }, blob(colorOf(snap, id), size), h("span", { text: nameOf(snap, id) }));
 }
@@ -151,11 +160,21 @@ async function act(what: () => Promise<unknown>, after?: () => void) {
 
 // ── Sidebar: the teams ────────────────────────────────────────────────────────
 
+function select(file: string) {
+  selected = file;
+  trouble = "";
+  const picked = files.find((f) => f.file === file);
+  editing = picked?.config ? structuredClone(picked.config) : null;
+  unsaved = false;
+  const run = picked?.config ? runs.get(picked.config.id) : undefined;
+  tab = run && run.status !== "idle" ? "monitor" : "setup";
+}
+
 function sidebar(): HTMLElement {
   const list = h("div", { class: "team-list" });
   for (const file of files) {
     const run = file.config ? runs.get(file.config.id) : undefined;
-    const state = run ? TEAM_STATUS[run.status] : file.problems.length ? "需要修正" : "尚未啟動";
+    const state = run ? TEAM_STATUS[run.status] : file.problems.length ? "尚未設定完成" : "可以啟動";
     const needsYou = run?.members.some((m) => m.status === "waitingYou" || m.status === "lost") ?? false;
     list.append(
       h(
@@ -164,85 +183,239 @@ function sidebar(): HTMLElement {
           class: `team-item${file.file === selected ? " on" : ""}`,
           type: "button",
           onClick: () => {
-            selected = file.file;
-            trouble = "";
+            select(file.file);
             render();
           },
         },
-        h("span", { class: "team-item-name", text: file.config?.name ?? file.file }),
-        h("span", { class: `team-item-state${run?.status === "running" ? " live" : ""}`, text: needsYou ? `${state} · 等你` : state }),
+        h("span", { class: "team-item-name", text: file.config?.name || "未命名的團隊" }),
+        h("span", { class: `team-item-state${run?.status === "running" ? " live" : ""}${needsYou ? " you" : ""}`, text: needsYou ? `${state} · 等你` : state }),
       ),
     );
   }
-  if (!files.length) list.append(h("p", { class: "hint", text: "還沒有團隊檔案。" }));
+  if (!files.length) list.append(h("p", { class: "hint", text: "還沒有團隊。" }));
 
   return h(
     "aside",
-    { class: "sidebar glass" },
-    h("div", { class: "brand" }, blob("#ffffff", 34), h("span", { text: "Teamwork" })),
+    { class: "sidebar pane" },
+    h("div", { class: "brand", "data-drag": "" }, teamMark(30), h("span", { text: "Teamwork" })),
     h("div", { class: "side-title", text: "團隊" }),
     list,
     h(
       "div",
       { class: "side-foot" },
-      button("開啟團隊資料夾", "plain", () => void Bridge.teamOpenConfigs()),
-      button("重新整理", "plain", () => void load()),
-      h("p", { class: "hint", text: "每個團隊是資料夾裡的一個 JSON 檔。設定畫面完成前,請直接編輯檔案。" }),
+      button("＋ 新增團隊", "plain", () =>
+        void act(async () => {
+          const file = await Bridge.teamNew();
+          await load();
+          select(file);
+        }),
+      ),
+      h("button", { class: "link", type: "button", title: dir, onClick: () => void Bridge.teamOpenConfigs() }, "開啟團隊檔案的資料夾"),
     ),
   );
 }
 
-// ── A team that has not run yet ───────────────────────────────────────────────
+/** Three small Mochis side by side: the Teamwork mark, as on the island. */
+function teamMark(size: number): HTMLElement {
+  const el = h("span", { class: "team-mark", style: `--s:${size}px`, "aria-hidden": "true" });
+  el.append(blob("#34D399", size * 0.62), blob("#A78BFA", size * 0.78), blob("#F5A524", size * 0.62));
+  return el;
+}
+
+// ── Team setup ────────────────────────────────────────────────────────────────
+
+/** An input bound to the form's working copy. Typing does not redraw. */
+function bound<K extends "input" | "textarea">(tag: K, key: string, value: string, set: (v: string) => void, attrs: Record<string, string> = {}): HTMLElementTagNameMap[K] {
+  const el = h(tag, { class: "field", "data-key": key, spellcheck: "false", ...attrs }) as HTMLInputElement | HTMLTextAreaElement;
+  el.value = value;
+  el.addEventListener("input", () => {
+    set(el.value);
+    touched();
+  });
+  return el as HTMLElementTagNameMap[K];
+}
+
+/** Something in the form changed: the save button says so, without a redraw. */
+function touched() {
+  unsaved = true;
+  root.querySelector(".save")?.classList.add("due");
+}
+
+function nextMemberId(config: TeamConfig): string {
+  for (let n = 1; ; n++) if (!config.members.some((m) => m.id === `ai${n}`)) return `ai${n}`;
+}
+
+async function save(): Promise<boolean> {
+  if (!selected || !editing) return false;
+  await Bridge.teamSave(selected, editing);
+  unsaved = false;
+  // The file is read back, with whatever still stops it from starting.
+  const listed = await Bridge.teamFiles();
+  files = listed?.files ?? files;
+  return true;
+}
 
 function setup(file: TeamFile): HTMLElement {
-  const config = file.config;
-  const box = h("section", { class: "panel" });
+  const config = editing;
   if (!config) {
-    box.append(h("h2", { text: file.file }), h("p", { class: "problem", text: file.problems.join("\n") }));
-    return box;
+    return h("section", { class: "panel" }, h("h2", { text: file.file }), h("p", { class: "problem", text: file.problems.map(said).join("\n") }));
   }
-  box.append(h("h2", { text: "團隊成員" }));
-  const members = h("div", { class: "setup-members" });
-  for (const m of config.members) {
+  const run = runs.get(config.id);
+  const running = run?.status === "running" || run?.status === "paused";
+
+  // ── Left: what the team is for ──
+  const folder = bound("input", "workDir", config.workDir, (v) => (config.workDir = v), { placeholder: "選擇所有成員一起工作的資料夾" });
+  const goal = h(
+    "section",
+    { class: "panel form" },
+    h("h2", { text: "任務目標" }),
+    h("label", { text: "團隊名稱" }),
+    bound("input", "name", config.name, (v) => (config.name = v), { placeholder: "例如:購物網站團隊" }),
+    h("label", { text: "任務描述" }),
+    bound("textarea", "goal", config.goal, (v) => (config.goal = v), { rows: "5", placeholder: "要完成什麼、包含哪些功能、最後要交付什麼" }),
+    h("label", { text: "任務範圍(以逗號分隔)" }),
+    bound("input", "scope", config.scope.join("、"), (v) => (config.scope = v.split(/[,,、]/).map((x) => x.trim()).filter(Boolean)), { placeholder: "商品目錄、購物車、會員登入" }),
+    h("label", { text: "工作資料夾" }),
+    h(
+      "div",
+      { class: "row nowrap" },
+      folder,
+      button("選擇資料夾…", "plain", () =>
+        void act(async () => {
+          const picked = await Bridge.pickFolder(config.workDir, "選擇團隊的工作資料夾");
+          if (picked) {
+            config.workDir = picked;
+            unsaved = true;
+          }
+        }),
+      ),
+    ),
+    h("p", { class: "hint", text: "所有成員都在這個資料夾裡工作,交付的成果也放在這裡。" }),
+    h("label", { text: "工作模式" }),
+    h(
+      "div",
+      { class: "segmented" },
+      h("button", { type: "button", class: config.autoApprove ? "on" : "", onClick: () => ((config.autoApprove = true), (unsaved = true), render()) }, "自主協作"),
+      h("button", { type: "button", class: config.autoApprove ? "" : "on", onClick: () => ((config.autoApprove = false), (unsaved = true), render()) }, "逐步確認"),
+    ),
+    h("p", {
+      class: "hint",
+      text: config.autoApprove
+        ? "成員改檔、建置、跑測試不會問你;刪資料夾、安裝東西、對外發送等危險動作仍然會問。"
+        : "成員的每一個權限請求都會問你。",
+    }),
+    h("label", { text: "回合上限" }),
+    h("div", { class: "row nowrap" }, bound("input", "maxTurns", String(config.maxTurns), (v) => (config.maxTurns = Math.max(1, Math.min(500, Number(v) || 60))), { type: "number", min: "1", max: "500", class: "field narrow" }), h("span", { class: "hint", text: "整個團隊用完這麼多回合後會暫停,等你決定要不要繼續。" })),
+  );
+
+  // ── Right: who is in it ──
+  const members = h("div", { class: "member-rows" });
+  config.members.forEach((m, at) => {
+    const agent = h("select", { class: "field", title: "這位成員用哪個代理執行" }) as HTMLSelectElement;
+    if (!agents.some((a) => a.id === m.agent)) agent.append(h("option", { value: m.agent, text: m.agent ? `${m.agent}(不存在)` : "選擇代理…" }));
+    for (const a of agents) agent.append(h("option", { value: a.id, text: a.name }));
+    agent.value = m.agent;
+    agent.addEventListener("change", () => {
+      m.agent = agent.value;
+      unsaved = true;
+      render();
+    });
+    const isLeader = config.leader === m.id;
     members.append(
       h(
         "div",
-        { class: "setup-member" },
+        { class: `member-row${isLeader ? " leader" : ""}` },
         blob(colorOf(config, m.id), 34),
         h(
           "div",
-          {},
-          h("div", { class: "setup-name" }, m.name, m.id === config.leader ? h("span", { class: "chip leader", text: "Leader" }) : null, h("span", { class: "chip", text: m.role })),
-          h("div", { class: "dim", text: m.duty || "—" }),
+          { class: "member-fields" },
+          h(
+            "div",
+            { class: "row nowrap" },
+            bound("input", `m${at}.name`, m.name, (v) => (m.name = v), { placeholder: "名稱", class: "field name" }),
+            bound("input", `m${at}.role`, m.role, (v) => (m.role = v), { placeholder: "角色,例如:網站開發" }),
+            agent,
+          ),
+          bound("input", `m${at}.duty`, m.duty, (v) => (m.duty = v), { placeholder: "職責:這位成員負責什麼" }),
         ),
-        h("span", { class: "chip agent", title: "這位成員使用的代理(設定 → Agents)", text: m.agent }),
+        h(
+          "div",
+          { class: "member-side" },
+          h(
+            "button",
+            { type: "button", class: `chip pick${isLeader ? " leader" : ""}`, title: "Leader 負責拆解需求、指派任務與審核成果", onClick: () => ((config.leader = m.id), (unsaved = true), render()) },
+            isLeader ? "♛ Leader" : "設為 Leader",
+          ),
+          h(
+            "button",
+            {
+              type: "button",
+              class: "link",
+              disabled: config.members.length <= 1,
+              onClick: () => {
+                config.members.splice(at, 1);
+                if (config.leader === m.id) config.leader = config.members[0].id;
+                unsaved = true;
+                render();
+              },
+            },
+            "移除",
+          ),
+        ),
       ),
     );
-  }
-  box.append(members);
-  box.append(
+  });
+
+  const team = h(
+    "section",
+    { class: "panel form" },
+    h("h2", {}, "團隊成員", h("span", { class: "count", text: String(config.members.length) })),
+    members,
     h(
-      "dl",
-      { class: "facts" },
-      h("dt", { text: "工作資料夾" }),
-      h("dd", { class: "mono", text: config.workDir }),
-      h("dt", { text: "工作模式" }),
-      h("dd", { text: config.autoApprove ? "自主協作:一般動作不詢問,危險動作仍會問你" : "每個權限請求都問你" }),
-      h("dt", { text: "回合上限" }),
-      h("dd", { text: `${config.maxTurns} 回合後暫停等你` }),
+      "button",
+      {
+        type: "button",
+        class: "add",
+        onClick: () => {
+          const id = nextMemberId(config);
+          config.members.push({ id, name: `AI ${id.slice(2)}`, role: "", duty: "", agent: agents[0]?.id ?? "", color: "" });
+          unsaved = true;
+          render();
+        },
+      },
+      "＋ 加入成員",
     ),
+    agents.length
+      ? h("p", { class: "hint" }, "代理在 ", h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsWindow() }, "設定 → Agents"), " 裡新增與修改。")
+      : h("p", { class: "problem" }, "還沒有任何代理。請先到 ", h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsWindow() }, "設定 → Agents"), " 建立。"),
   );
-  if (file.problems.length) {
-    box.append(h("div", { class: "problem" }, h("strong", { text: "這個團隊還不能啟動:" }), ...file.problems.map((p) => h("div", { text: `• ${said(p)}` }))));
-  }
-  box.append(
+
+  const stops = unsaved ? [] : file.problems;
+  return h(
+    "div",
+    { class: "setup" },
+    h("div", { class: "setup-grid" }, goal, team),
+    stops.length ? h("div", { class: "problem" }, h("strong", { text: "啟動前還需要:" }), ...stops.map((p) => h("div", { text: `• ${said(p)}` }))) : null,
     h(
       "div",
-      { class: "row end" },
-      button("啟動 Teamwork", "primary", () => void act(async () => runs.set(config.id, await Bridge.teamStart(file.file))), file.problems.length > 0),
+      { class: "row end bar" },
+      running ? h("span", { class: "hint", text: "這個團隊正在執行;這裡的修改下次啟動才會套用。" }) : null,
+      h("button", { class: `btn plain save${unsaved ? " due" : ""}`, type: "button", onClick: () => void act(save) }, "儲存"),
+      button(
+        "啟動 Teamwork →",
+        "primary",
+        () =>
+          void act(async () => {
+            await save();
+            const again = files.find((f) => f.file === selected);
+            if (again?.problems.length) throw new Error(again.problems.join("\n"));
+            runs.set(config.id, await Bridge.teamStart(file.file));
+            tab = "monitor";
+          }),
+        running,
+      ),
     ),
   );
-  return box;
 }
 
 // ── The monitor ───────────────────────────────────────────────────────────────
@@ -255,7 +428,7 @@ function memberCard(snap: Snapshot, m: MemberView): HTMLElement {
     h(
       "header",
       {},
-      blob(colorOf(snap, m.id), 46),
+      blob(colorOf(snap, m.id), 44),
       h(
         "div",
         { class: "member-head" },
@@ -382,13 +555,13 @@ function feed(snap: Snapshot): HTMLElement {
   const items = [...snap.feed].reverse().slice(0, 40);
   for (const item of items) {
     const task = item.task ? snap.tasks.find((t) => t.id === item.task) : undefined;
-    const title = item.kind === "message" || item.kind === "task" || !task ? FEED_TITLE[item.kind] : `${FEED_TITLE[item.kind]} · ${task.title}`;
+    const title = item.kind === "message" || !task ? FEED_TITLE[item.kind] : `${FEED_TITLE[item.kind]} · ${task.title}`;
     list.append(
       h(
         "div",
         { class: `feed-item ${item.kind}${item.to === YOU ? " to-you" : ""}` },
         h("div", { class: "feed-head" }, who(snap, item.from), item.to ? h("span", { class: "arrow", text: "→" }) : null, item.to ? who(snap, item.to) : null, h("time", { text: clock(item.at) })),
-        h("div", { class: "feed-title", text: item.kind === "task" && task ? `${title} · ${task.title}` : title }),
+        h("div", { class: "feed-title", text: title }),
         item.text && item.kind !== "task" ? h("div", { class: "feed-text", text: said(item.text) }) : null,
       ),
     );
@@ -423,11 +596,11 @@ function deliverables(snap: Snapshot): HTMLElement {
 }
 
 function composer(snap: Snapshot): HTMLElement {
-  const select = h("select", { class: "field narrow", title: "傳給誰" }) as HTMLSelectElement;
-  select.append(h("option", { value: "", text: "給 Leader" }));
-  for (const m of snap.members) if (!m.isLeader) select.append(h("option", { value: m.id, text: `給 ${m.name}` }));
-  select.value = recipient;
-  select.addEventListener("change", () => (recipient = select.value));
+  const to = h("select", { class: "field narrow", title: "傳給誰" }) as HTMLSelectElement;
+  to.append(h("option", { value: "", text: "給 Leader" }));
+  for (const m of snap.members) if (!m.isLeader) to.append(h("option", { value: m.id, text: `給 ${m.name}` }));
+  to.value = recipient;
+  to.addEventListener("change", () => (recipient = to.value));
   const send = (text: string) =>
     void act(
       () => Bridge.teamInstruct(snap.id, recipient, text),
@@ -436,8 +609,8 @@ function composer(snap: Snapshot): HTMLElement {
   const input = field(`instruct:${snap.id}`, "傳送新指示…(對方這一輪結束後才會讀到)", send);
   return h(
     "div",
-    { class: "composer glass" },
-    select,
+    { class: "composer" },
+    to,
     input,
     button("送出", "primary", () => {
       if (input.value.trim()) send(input.value.trim());
@@ -460,7 +633,7 @@ function monitor(snap: Snapshot): HTMLElement {
       { class: "progress" },
       h("span", { class: "progress-label", text: "整體進度" }),
       h("span", { class: "progress-number", text: `${percent}%` }),
-      h("div", { class: "bar", role: "progressbar", "aria-valuenow": percent, "aria-valuemin": 0, "aria-valuemax": 100 }, h("i", { style: `width:${percent}%` })),
+      h("div", { class: "meter", role: "progressbar", "aria-valuenow": percent, "aria-valuemin": 0, "aria-valuemax": 100 }, h("i", { style: `width:${percent}%` })),
       h("span", { class: "dim", text: `已驗收 ${snap.done} / ${snap.total} 項任務` }),
       h("span", { class: "dim", text: `${snap.totalTurns} / ${snap.maxTurns} 回合` }),
       h("span", { class: "dim", text: `已執行 ${minutes} 分鐘` }),
@@ -474,10 +647,17 @@ function monitor(snap: Snapshot): HTMLElement {
 
 // ── The page ──────────────────────────────────────────────────────────────────
 
+/** The window has no title bar of its own: these three stand in for it. */
+function windowButtons(): HTMLElement {
+  const b = (label: string, title: string, action: "minimize" | "maximize" | "close") =>
+    h("button", { class: `win ${action}`, type: "button", title, "aria-label": title, onClick: () => void Bridge.teamWindow(action) }, label);
+  return h("div", { class: "window-buttons" }, b("–", "最小化", "minimize"), b("▢", "最大化", "maximize"), b("✕", "關閉", "close"));
+}
+
 function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
-  const name = snap?.name ?? file.config?.name ?? file.file;
-  const goal = (snap?.goal ?? file.config?.goal ?? "").split("\n")[0];
-  const count = snap?.members.length ?? file.config?.members.length ?? 0;
+  const name = snap?.name || editing?.name || file.config?.name || "未命名的團隊";
+  const goal = (snap?.goal ?? editing?.goal ?? "").split("\n")[0];
+  const count = snap?.members.length ?? editing?.members.length ?? 0;
   const actions = h("div", { class: "row" });
   if (snap?.status === "running") {
     actions.append(
@@ -487,29 +667,46 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
   } else if (snap?.status === "paused") {
     actions.append(button("繼續", "primary", () => void act(() => Bridge.teamResume(snap.id))));
   }
-  if (snap && snap.status !== "running" && file.config) {
-    actions.append(button("重新啟動團隊", "plain", () => void act(async () => runs.set(file.config!.id, await Bridge.teamStart(file.file))), file.problems.length > 0));
-  }
   return h(
     "header",
-    { class: "top" },
+    { class: "top", "data-drag": "" },
     h(
       "div",
-      {},
-      h("h1", {}, name, snap ? h("span", { class: `state ${snap.status}`, text: TEAM_STATUS[snap.status] }) : null),
-      h("p", { class: "dim", text: `${goal} · ${count} 位 AI 成員` }),
+      { class: "top-title", "data-drag": "" },
+      h("h1", { "data-drag": "" }, name, snap ? h("span", { class: `state ${snap.status}`, text: TEAM_STATUS[snap.status] }) : null),
+      h("p", { class: "dim", "data-drag": "", text: goal ? `${goal} · ${count} 位 AI 成員` : `${count} 位 AI 成員` }),
       snap?.status === "paused" && snap.pausedWhy ? h("p", { class: "paused-why", text: said(snap.pausedWhy) }) : null,
     ),
     actions,
+    windowButtons(),
   );
 }
 
-function tabs(): HTMLElement {
-  // The other three screens come with the next stage; they are shown so the
-  // order is clear, and say so rather than pretend.
-  const tab = (label: string, on: boolean) =>
-    h("button", { class: `tab${on ? " on" : ""}`, type: "button", disabled: !on }, label, on ? null : h("small", { text: "下一階段" }));
-  return h("nav", { class: "tabs glass" }, tab("團隊設定", false), tab("協作關係", false), tab("工作監控", true), tab("溝通紀錄", false));
+function tabs(snap: Snapshot | undefined): HTMLElement {
+  // Two of the four screens exist; the other two say so rather than pretend.
+  const item = (label: string, id: "setup" | "monitor" | null, enabled: boolean, note = "") =>
+    h(
+      "button",
+      {
+        class: `tab${id && tab === id ? " on" : ""}`,
+        type: "button",
+        disabled: !enabled,
+        onClick: () => {
+          if (id) tab = id;
+          render();
+        },
+      },
+      label,
+      note ? h("small", { text: note }) : null,
+    );
+  return h(
+    "nav",
+    { class: "tabs" },
+    item("團隊設定", "setup", true),
+    item("協作關係", null, false, "下一階段"),
+    item("工作監控", "monitor", !!snap, snap ? "" : "啟動後"),
+    item("溝通紀錄", null, false, "下一階段"),
+  );
 }
 
 function main(): HTMLElement {
@@ -517,18 +714,20 @@ function main(): HTMLElement {
   if (!file) {
     return h(
       "main",
-      { class: "main glass" },
-      h("div", { class: "welcome" }, h("h1", { text: "Teamwork" }), h("p", { class: "dim", text: "從左邊選一個團隊。" }), dir ? h("p", { class: "dim mono", text: dir }) : null),
+      { class: "main pane" },
+      h("header", { class: "top", "data-drag": "" }, h("div", { "data-drag": "" }), windowButtons()),
+      h("div", { class: "welcome" }, teamMark(64), h("h1", { text: "Teamwork" }), h("p", { class: "dim", text: files.length ? "從左邊選一個團隊。" : "按左下角的「新增團隊」開始。" })),
     );
   }
   const snap = file.config ? runs.get(file.config.id) : undefined;
+  const showMonitor = tab === "monitor" && snap;
   return h(
     "main",
-    { class: "main glass" },
+    { class: "main pane" },
     header(file, snap),
-    tabs(),
+    tabs(snap),
     trouble ? h("div", { class: "problem", role: "alert", text: trouble.split("\n").map(said).join("\n") }) : null,
-    h("div", { class: "scroll" }, snap ? monitor(snap) : setup(file)),
+    h("div", { class: "scroll" }, showMonitor ? monitor(snap) : setup(file)),
   );
 }
 
@@ -536,7 +735,7 @@ function render() {
   // Drawing again must not take the caret out of a field someone is typing in.
   const active = document.activeElement as HTMLInputElement | null;
   const key = active?.dataset?.key;
-  const caret = key ? [active!.selectionStart, active!.selectionEnd] : null;
+  const caret = key && active!.type !== "number" ? [active!.selectionStart, active!.selectionEnd] : null;
   const scroll = root.querySelector(".scroll")?.scrollTop ?? 0;
 
   clear(root);
@@ -558,17 +757,27 @@ async function load() {
     const listed = await Bridge.teamFiles();
     dir = listed?.dir ?? "";
     files = listed?.files ?? [];
+    agents = (await Bridge.boot())?.settings.agents ?? [];
     for (const snap of (await Bridge.teamSnapshots()) ?? []) runs.set(snap.id, snap);
   } else if (import.meta.env.DEV) {
     // A plain browser: the drafts' team, to look at the screen without the app.
     const demo = await import("./demo");
+    // No desktop behind a browser tab: stand one in, so the glass has something to show.
+    document.documentElement.classList.add("demo");
     dir = demo.demoFiles.dir;
     files = demo.demoFiles.files;
+    agents = demo.demoAgents;
     runs.set("shop", demo.demoSnapshot());
   }
   if (!selected || !files.some((f) => f.file === selected)) {
     // The team that is running, else the first.
-    selected = files.find((f) => f.config && runs.get(f.config.id)?.status === "running")?.file ?? files[0]?.file ?? null;
+    const first = files.find((f) => f.config && runs.get(f.config.id)?.status === "running")?.file ?? files[0]?.file ?? null;
+    if (first) select(first);
+    else selected = null;
+  } else if (!unsaved) {
+    // The file may have been edited outside; an untouched form follows it.
+    const again = files.find((f) => f.file === selected);
+    editing = again?.config ? structuredClone(again.config) : null;
   }
   render();
 }
@@ -576,8 +785,24 @@ async function load() {
 async function start() {
   await onEvent<Snapshot>("team-changed", (snap) => {
     runs.set(snap.id, snap);
-    render();
+    // Typing in the form is not interrupted by a team at work behind it.
+    if (tab === "monitor" || !unsaved) render();
   });
+  // Agents may have been added in the settings window meanwhile.
+  await onEvent<{ agents: AgentProfile[] }>("settings-changed", (s) => {
+    agents = s.agents ?? agents;
+    if (!unsaved) render();
+  });
+
+  // The page is the title bar: drag it by its header, double-click to maximize.
+  root.addEventListener("mousedown", (e) => {
+    const target = e.target as HTMLElement;
+    if (e.button === 0 && e.detail === 1 && target.hasAttribute("data-drag")) void Bridge.teamWindow("drag");
+  });
+  root.addEventListener("dblclick", (e) => {
+    if ((e.target as HTMLElement).hasAttribute("data-drag")) void Bridge.teamWindow("maximize");
+  });
+
   // "18 minutes" has to move on its own — but only while someone can see it:
   // a hidden window keeps no timer.
   let tick = 0;
@@ -585,7 +810,7 @@ async function start() {
     window.clearInterval(tick);
     if (document.hidden) return;
     tick = window.setInterval(() => {
-      if ([...runs.values()].some((r) => r.status === "running")) render();
+      if (tab === "monitor" && [...runs.values()].some((r) => r.status === "running")) render();
     }, 30_000);
   };
   document.addEventListener("visibilitychange", () => {
