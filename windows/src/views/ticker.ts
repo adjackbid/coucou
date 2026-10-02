@@ -83,6 +83,8 @@ export class Ticker {
   private queue: string[] = [];
   private startMs: number | null = null;
   private displayIndex = -1;
+  /** The task's stepCount at the last sync: new steps are the ones past it. */
+  private seenCount = 0;
 
   constructor() {
     this.el = h("div", { class: "ticker" }, this.a.el, this.b.el, this.c.el);
@@ -103,10 +105,12 @@ export class Ticker {
   sync(task: AgentTask | null) {
     const steps = task && task.steps.length > 0 ? task.steps : ["…"];
     const idx = task ? Math.min(task.stepIndex, steps.length - 1) : -1;
+    const count = task?.stepCount ?? steps.length;
 
     // First render: drop straight into place, no animation.
     if (this.displayIndex < 0) {
       this.displayIndex = idx;
+      this.seenCount = count;
       setText(this.a, idx > 0 ? steps[idx - 1] : "…");
       setText(this.b, steps[Math.max(idx, 0)]);
       this.rest();
@@ -114,17 +118,23 @@ export class Ticker {
     }
 
     // The session restarted (steps were cleared): re-seed rather than scroll.
-    if (idx < this.displayIndex) {
+    if (idx < this.displayIndex || count < this.seenCount) {
       this.queue = [];
       this.startMs = null;
       this.displayIndex = idx;
+      this.seenCount = count;
       setText(this.a, idx > 0 ? steps[idx - 1] : "…");
       setText(this.b, steps[Math.max(idx, 0)]);
       this.rest();
       return;
     }
 
-    for (let i = this.displayIndex + 1; i <= idx; i++) this.queue.push(steps[i]);
+    // New steps are counted, not indexed: once the list holds its last
+    // twenty, the index stops moving while steps keep arriving, and the
+    // ticker used to freeze on the twentieth.
+    const fresh = Math.min(count - this.seenCount, steps.length);
+    for (let i = steps.length - fresh; i < steps.length; i++) this.queue.push(steps[i]);
+    this.seenCount = count;
     this.displayIndex = idx;
     if (this.queue.length > MAX_QUEUE) {
       this.queue = this.queue.slice(-MAX_QUEUE);

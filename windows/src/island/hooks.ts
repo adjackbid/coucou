@@ -267,6 +267,7 @@ function clearSession(taskId: string) {
   t.steps = [];
   t.transcript = [];
   t.stepIndex = 0;
+  t.stepCount = 0;
   t.name = INTEGRATION_AGENTS.find((x) => x.id === taskId)?.name ?? t.name;
   t.pillBadge = null;
 }

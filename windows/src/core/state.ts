@@ -33,6 +33,12 @@ export interface AgentTask {
   stepIndex: number;
   /** One short line per event, for the ticker. */
   steps: string[];
+  /**
+   * Steps appended since the session started, the dropped ones included.
+   * `steps` keeps the last twenty, so its length stops moving: this is what
+   * tells the ticker that something new arrived.
+   */
+  stepCount?: number;
   /** The same events in full, for the session view. */
   transcript: TranscriptEntry[];
   source: AgentSource;
@@ -433,6 +439,7 @@ class AppState {
     t.steps.push(step);
     if (t.steps.length > 20) t.steps.shift();
     t.stepIndex = t.steps.length - 1;
+    t.stepCount = (t.stepCount ?? 0) + 1;
     this.notify();
   }
 
