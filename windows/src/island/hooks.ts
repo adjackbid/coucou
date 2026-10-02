@@ -24,6 +24,9 @@ function taskFor(payload: HookPayload, projectName: string, cwd: string): string
   const agent = AGENT_SOURCES[payload.agent ?? "claude"] ?? AGENT_SOURCES.claude;
   const sessionId = (payload.session_id ?? "").trim();
   if (sessionId) return State.ensureSessionTask(agent.source, sessionId, projectName, cwd);
+  // No id in the payload (a CLI whose hook shape changed): the folder still
+  // tells two sessions apart, which beats piling both onto one pill.
+  if (cwd) return State.ensureSessionTask(agent.source, `cwd:${sessionKey(cwd)}`, projectName, cwd);
   State.ensureTask(agent.standing);
   return agent.standing;
 }
