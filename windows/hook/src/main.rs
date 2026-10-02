@@ -162,7 +162,13 @@ fn main() {
 /// `toolCalls: [{name, args}]`. Both shapes are accepted; a field already in
 /// the Claude spelling is left alone.
 fn normalize_copilot(map: &mut serde_json::Map<String, serde_json::Value>) {
-    for (camel, snake) in [("sessionId", "session_id"), ("transcriptPath", "transcript_path")] {
+    for (camel, snake) in [
+        ("sessionId", "session_id"),
+        ("transcriptPath", "transcript_path"),
+        // permissionRequest names the tool directly.
+        ("toolName", "tool_name"),
+        ("toolInput", "tool_input"),
+    ] {
         if !map.contains_key(snake) {
             if let Some(v) = map.remove(camel) {
                 map.insert(snake.into(), v);
@@ -754,6 +760,13 @@ mod tests {
         assert_eq!(v["tool_name"], "ask_user");
         assert_eq!(v["tool_input"]["message"], "Now what?");
         assert!(v.get("sessionId").is_none());
+
+        let mut perm = serde_json::json!({
+            "sessionId": "bb43", "toolName": "powershell", "toolInput": { "command": "Get-ChildItem" }
+        });
+        normalize_copilot(perm.as_object_mut().unwrap());
+        assert_eq!(perm["tool_name"], "powershell");
+        assert_eq!(perm["tool_input"]["command"], "Get-ChildItem");
 
         // The older, Claude-shaped payload is left as it is.
         let mut old = serde_json::json!({ "session_id": "a", "tool_name": "Bash", "tool_input": { "command": "ls" } });

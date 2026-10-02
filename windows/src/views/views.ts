@@ -5,7 +5,7 @@
 import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { Ticker } from "./ticker";
-import { MAX_PILLS, SOURCE_LABELS, State, isAgentSource, sessionKey, type AgentTask } from "../core/state";
+import { MAX_PILLS, SOURCE_LABELS, State, isAgentSource, sessionKey, type AgentTask, type QuestionAnswer } from "../core/state";
 import { Bridge } from "../core/bridge";
 import { washRGBA, type IslandViewName, type Wash } from "../core/layout";
 import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
@@ -23,8 +23,8 @@ export interface ViewActions {
   openUrl(url: string): void;
   /** `terminal` gives the request back unanswered, for Claude Code to ask itself. */
   decide(d: "allow" | "deny" | "terminal"): void;
-  /** Types an answer to the focused session's question into its terminal. */
-  answerQuestion(text: string): Promise<void>;
+  /** Answers the current field of the focused session's question, in its terminal. */
+  answerQuestion(answer: QuestionAnswer): Promise<void>;
   toggleSound(): void;
   setVolume(v: number): void;
   setAutoClose(seconds: number): void;
@@ -428,18 +428,19 @@ function buildApproval(actions: ViewActions): ViewHost {
 function buildQuestion(actions: ViewActions): ViewHost {
   const who = h("div");
   const title = h("div", { class: "q-text" });
+  const fieldLabel = h("div", { class: "sub q-field" });
   const choices = h("div", { class: "q-choices" });
   const note = h("div", { class: "sub" });
   const input = h("input", { type: "text", class: "chat-input", spellcheck: "false" }) as HTMLInputElement;
   const send = h("button", { class: "send-btn", title: "Type it into the terminal" }, svg(ICONS.arrowUp, 11));
   const bar = h("div", { class: "chat-bar q-bar" }, input, send);
-  const el = h("div", { class: "view" }, card("cyan", stack(116, 16, who, title, choices, bar, note)));
+  const el = h("div", { class: "view" }, card("cyan", stack(116, 16, who, title, fieldLabel, choices, bar, note)));
   let key = "";
   function submit() {
     const text = input.value.trim();
     if (!text) return;
     input.value = "";
-    void actions.answerQuestion(text);
+    void actions.answerQuestion({ text });
   }
   send.addEventListener("click", submit);
   input.addEventListener("keydown", (e) => {
@@ -457,24 +458,38 @@ function buildQuestion(actions: ViewActions): ViewHost {
     sync() {
       const task = State.focusTask;
       const q = task?.question ?? null;
+      const field = q?.fields[q.current] ?? null;
       const live = !!task?.pty;
       clear(who);
       who.append(agentWho(task, "is asking you"));
       title.textContent = q?.text ?? task?.steps.at(-1) ?? "Needs an answer.";
-      input.placeholder = `Type an answer into ${task?.name ?? "the"} terminal…`;
-      // Rebuilt only when the question changes — never between a mouse-down
-      // and its mouse-up, which would swallow the click.
-      const next = [task?.id, q?.text, q?.choices.join("|"), q?.answered ?? "", live].join("~");
+      input.placeholder = field?.title
+        ? `Type your own answer for "${field.title}"…`
+        : `Type an answer into ${task?.name ?? "the"} terminal…`;
+      // Rebuilt only when the question or its field changes — never between
+      // a mouse-down and its mouse-up, which would swallow the click.
+      const next = [task?.id, q?.text, q?.current, field?.choices.join("|"), q?.answered ?? "", live].join("~");
       if (next === key) return;
       key = next;
+      // One field at a time, in the terminal's order; the label says which.
+      const n = q?.fields.length ?? 0;
+      const prefix = q && n > 1 ? `${q.current + 1}/${n} · ` : "";
+      fieldLabel.textContent = field && (n > 1 || field.title)
+        ? `${prefix}${field.title}${field.required ? "" : " (optional)"}`
+        : "";
+      fieldLabel.style.display = fieldLabel.textContent && !q?.answered ? "" : "none";
       clear(choices);
-      for (const c of q?.choices ?? []) {
-        const b = h("button", { class: `btn ${live ? "secondary" : "ghost"} q-chip`, text: c });
-        if (live && !q?.answered) b.addEventListener("click", () => void actions.answerQuestion(c));
+      const chip = (text: string, answer: QuestionAnswer) => {
+        const b = h("button", { class: `btn ${live ? "secondary" : "ghost"} q-chip`, text });
+        if (live && !q?.answered) b.addEventListener("click", () => void actions.answerQuestion(answer));
         else b.disabled = true;
         choices.append(b);
+      };
+      if (field && !q?.answered) {
+        field.choices.forEach((c, i) => chip(c, { choice: i }));
+        if (!field.required && field.choices.length === 0) chip("Skip", { skip: true });
       }
-      choices.style.display = q?.choices.length ? "" : "none";
+      choices.style.display = choices.childElementCount ? "" : "none";
       bar.style.display = live && !q?.answered ? "" : "none";
       note.textContent = q?.answered
         ? `Sent "${q.answered}" — waiting for the terminal.`

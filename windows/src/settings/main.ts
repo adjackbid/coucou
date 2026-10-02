@@ -64,7 +64,7 @@ const AGENT_COPY: AgentCopy[] = [
     agent: "copilot",
     title: "Copilot CLI",
     file: "coucou.json",
-    installed: "Coucou is hooked into your Copilot CLI sessions (the `copilot` command, or a wrapper such as `cg`). Steps show up on the Copilot pill; permission requests reach the island unless the session runs with --yolo.",
+    installed: "Coucou is hooked into your Copilot CLI sessions (the `copilot` command, or a wrapper such as `cg`). Steps, questions and replies show up on its pill.",
     missing: "Install the hooks to see your Copilot CLI sessions in the island. This writes one file of Coucou's own into your .copilot\\hooks folder and touches nothing else.",
   },
   {
@@ -114,6 +114,28 @@ function agentSection(copy: AgentCopy, status: HookStatus): HTMLElement {
         class: "notice warn",
         text: "coucou-hook.exe is not in place yet. Restart Coucou; if it still fails, build it with `cargo build -p coucou-hook`.",
       }));
+    }
+
+    if (copy.agent === "copilot" && status.installed) {
+      // Copilot 1.0.91 runs the PermissionRequest hook even under --yolo, so
+      // a session meant to run unattended would stop at a card for every
+      // tool. The switch rewrites Coucou's own hook file without that hook.
+      body.append(h("div", { class: "row" },
+        h("label", { text: "Ask before tools" }),
+        toggle(settings.copilotPermissionCards, async (v) => {
+          settings.copilotPermissionCards = v;
+          await save();
+          try {
+            const preview = await Bridge.hooksPreview("copilot", true);
+            if (preview) await Bridge.hooksApply("copilot", true, preview.fingerprint);
+          } catch (err) {
+            body.append(h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }));
+            return;
+          }
+          await rebuild();
+        }),
+        h("span", { class: "hint", text: "permission requests come to the island; off for --yolo sessions, which then run without a card per step" }),
+      ));
     }
 
     const actions = h("div", { class: "row" });

@@ -277,8 +277,14 @@ fn backup_path(agent: Agent) -> PathBuf {
 /// no shell ever sees the path.
 fn copilot_file() -> Value {
     let exe = settings::hook_exe_path().to_string_lossy().to_string();
+    let cards = settings::load().copilot_permission_cards;
     let mut hooks = Map::new();
     for (event, timeout) in COPILOT_EVENTS {
+        // Without the hook Copilot decides as it would on its own: --yolo
+        // allows, an interactive session asks in its terminal.
+        if *event == "PermissionRequest" && !cards {
+            continue;
+        }
         hooks.insert(
             (*event).to_string(),
             json!([{

@@ -179,22 +179,46 @@ export class Island {
         State.setPillBadge(req.taskId, null);
         this.setView(State.defaultView());
       },
-      answerQuestion: async (text) => {
-        // The answer is typed into the session's own terminal, exactly as the
-        // person would have: the CLI sees it as their keystrokes, and its
-        // PostToolUse takes the card down. Nothing is guessed about the TUI
-        // beyond "text, then Enter" — the same path as the session view.
+      answerQuestion: async (answer) => {
+        // The answer is keystrokes into the session's own terminal, the way
+        // the person would have typed them: Copilot's form takes one field at
+        // a time — a list to move through with the arrows and accept with
+        // Enter, "Other (type your answer)" at its end, a free-text line for a
+        // field with no choices. Its PostToolUse takes the card down.
         const task = State.focusTask;
         const q = task?.question;
-        if (!task?.pty || !q || q.answered) return;
-        q.answered = text;
-        State.notify();
+        const field = q?.fields[q.current];
+        if (!task?.pty || !q || !field || q.answered) return;
+        const DOWN = "\x1b[B";
+        const UP = "\x1b[A";
+        const moves = (to: number) => {
+          const delta = to - (field.defaultIndex ?? 0);
+          return delta > 0 ? DOWN.repeat(delta) : UP.repeat(-delta);
+        };
+        // Each entry is one write; the wrapper follows every write with Enter.
+        const writes: string[] = [];
+        let said = "";
+        if ("choice" in answer) {
+          said = field.choices[answer.choice] ?? "";
+          writes.push(moves(answer.choice) || "\r");
+        } else if ("text" in answer) {
+          said = answer.text;
+          if (field.choices.length) writes.push(moves(field.choices.length) || "\r");
+          writes.push(answer.text);
+        } else {
+          writes.push("\r");
+        }
+        const label = field.title ? `${field.title}: ${said || "(skipped)"}` : said || "(skipped)";
         try {
-          await Bridge.ptySend(task.pty, text);
+          for (const [i, w] of writes.entries()) {
+            if (i > 0) await new Promise((r) => window.setTimeout(r, 400));
+            await Bridge.ptySend(task.pty, w);
+          }
           Sound.play("blip");
-          State.appendTranscript(task.id, { role: "user", text });
+          State.appendTranscript(task.id, { role: "user", text: label });
+          q.current += 1;
+          if (q.current >= q.fields.length) q.answered = said || label;
         } catch (err) {
-          q.answered = null;
           task.pty = null;
           State.appendTranscript(task.id, { role: "tool", text: String(err).replace(/^Error:\s*/, "") });
         }

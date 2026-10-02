@@ -131,12 +131,18 @@ const QUESTION_TEXT_W = EXPANDED_W - 116 - 16 - 24;
  * every row of choice buttons needs its own line. Rough text metrics are
  * enough — the card is a little tall rather than clipping a choice.
  */
-export function questionHeight(q: { text: string; choices: string[] } | null, withInput: boolean): number {
+export function questionHeight(
+  q: { text: string; fields: { title: string; choices: string[]; required: boolean }[]; current: number } | null,
+  withInput: boolean,
+): number {
   if (!q) return QUESTION_MIN_H;
   const textLines = Math.min(3, Math.max(1, Math.ceil(q.text.length * 7.5 / QUESTION_TEXT_W)));
+  const field = q.fields[q.current];
+  const choices = field ? [...field.choices, ...(field.required ? [] : ["Skip"])] : [];
+  const labelled = q.fields.length > 1 || (field?.title ?? "") !== "";
   let rows = 0;
   let used = 0;
-  for (const c of q.choices) {
+  for (const c of choices) {
     const w = Math.min(QUESTION_TEXT_W, c.length * 7 + 34);
     if (used === 0 || used + w + 6 > QUESTION_TEXT_W) {
       rows += 1;
@@ -145,7 +151,7 @@ export function questionHeight(q: { text: string; choices: string[] } | null, wi
       used += w + 6;
     }
   }
-  const h = QUESTION_MIN_H + (textLines - 1) * 18 + rows * 32 + (withInput ? 36 : 0);
+  const h = QUESTION_MIN_H + (textLines - 1) * 18 + (labelled ? 16 : 0) + rows * 32 + (withInput ? 36 : 0);
   return Math.min(QUESTION_MAX_H, h);
 }
 
@@ -175,7 +181,7 @@ export function islandSize(
   approvalLines = 0,
   pillCount = 0,
   extraCards = 0,
-  question: { text: string; choices: string[] } | null = null,
+  question: Parameters<typeof questionHeight>[0] = null,
   questionInput = false,
 ): { w: number; h: number } {
   switch (mode) {

@@ -62,11 +62,29 @@ export interface AgentTask {
   sessionCwd?: string | null;
 }
 
-/** What an agent asked, and the choices it offered; a typed answer is always allowed too. */
+/** One field of an agent's question: a select list, or a free-text line when it has no choices. */
+export interface QuestionField {
+  title: string;
+  choices: string[];
+  required: boolean;
+  /** The choice the CLI's list starts on, when the schema names a default. */
+  defaultIndex: number | null;
+}
+
+/** What the person picked for one field. */
+export type QuestionAnswer = { choice: number } | { text: string } | { skip: true };
+
+/**
+ * What an agent asked. Copilot's ask_user is a small form: one field per
+ * schema property, answered in order in its terminal, so the card walks
+ * them in the same order.
+ */
 export interface AgentQuestion {
   text: string;
-  choices: string[];
-  /** The answer the island typed into the terminal, while the tool has not returned yet. */
+  fields: QuestionField[];
+  /** The field the terminal is on now. */
+  current: number;
+  /** Everything was typed into the terminal; the tool has not returned yet. */
   answered?: string | null;
 }
 
@@ -222,6 +240,8 @@ export interface Settings {
   autostart: boolean;
   hooksInstalled: boolean;
   copilotHooksInstalled: boolean;
+  /** Copilot's permission requests come to the island; off keeps that hook out of its file. */
+  copilotPermissionCards: boolean;
   antigravityHooksInstalled: boolean;
   /** Pre-provider builds' model; Rust turns it into the first provider. */
   model: string;
@@ -270,6 +290,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autostart: false,
   hooksInstalled: false,
   copilotHooksInstalled: false,
+  copilotPermissionCards: true,
   antigravityHooksInstalled: false,
   model: "claude-opus-5",
   hotkey: "Ctrl+Shift+Space",

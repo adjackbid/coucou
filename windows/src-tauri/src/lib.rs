@@ -358,7 +358,9 @@ fn pty_send(pipe: String, text: String) -> Result<(), String> {
     if !is_pty_pipe(&pipe) {
         return Err("That is not a Coucou terminal.".into());
     }
-    let text = text.trim();
+    // A bare "\r" is a deliberate Enter (accept the highlighted choice,
+    // skip an optional field); anything else is typed, trimmed.
+    let text = if text == "\r" { text.as_str() } else { text.trim() };
     if text.is_empty() {
         return Ok(());
     }

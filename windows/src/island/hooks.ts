@@ -5,7 +5,7 @@
 
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { INTEGRATION_AGENTS, State, sessionKey, type AgentQuestion, type AgentSource, type ApprovalSection } from "../core/state";
+import { INTEGRATION_AGENTS, State, sessionKey, type AgentQuestion, type AgentSource, type ApprovalSection, type QuestionField } from "../core/state";
 import type { Island } from "./island";
 
 /** Which agent each `--agent` of the relay is. Anything unknown is Claude Code. */
@@ -120,6 +120,11 @@ function stepLabel(tool: string, input: Record<string, unknown>): string {
  * is an ordinary step.
  */
 function questionFrom(tool: string, input: Record<string, unknown>): AgentQuestion | null {
+  const field = (title: string, choices: string[], required: boolean, def: unknown = null): QuestionField => {
+    const d = typeof def === "string" ? def : null;
+    const defaultIndex = d == null ? -1 : choices.findIndex((c) => c === d);
+    return { title, choices, required, defaultIndex: defaultIndex >= 0 ? defaultIndex : null };
+  };
   // An enum entry is a string, or `{const, title}` when the choice has a label.
   const strs = (v: unknown): string[] =>
     Array.isArray(v)
@@ -137,9 +142,15 @@ function questionFrom(tool: string, input: Record<string, unknown>): AgentQuesti
   // keeps ask_user's arguments, so the shape of the input decides, not the name.
   if (typeof input.message === "string" || input.requestedSchema != null) {
     const text = typeof input.message === "string" ? input.message.trim() : "";
-    const schema = (input.requestedSchema ?? input.requested_schema) as { properties?: Record<string, { enum?: unknown }> } | undefined;
-    const choices = Object.values(schema?.properties ?? {}).flatMap((f) => strs(f?.enum));
-    return text || choices.length ? { text: text || "Choose one:", choices } : null;
+    const schema = (input.requestedSchema ?? input.requested_schema) as
+      | { properties?: Record<string, { enum?: unknown; title?: unknown; default?: unknown }>; required?: unknown }
+      | undefined;
+    const required = new Set(strs(schema?.required));
+    const fields = Object.entries(schema?.properties ?? {}).map(([key, f]) =>
+      field(typeof f?.title === "string" ? f.title : key, strs(f?.enum), required.size === 0 || required.has(key), f?.default),
+    );
+    if (!text && fields.length === 0) return null;
+    return { text: text || "Choose one:", fields: fields.length ? fields : [field("", [], true)], current: 0 };
   }
   {
     const first = (input.questions as Array<Record<string, unknown>> | undefined)?.[0];
@@ -147,7 +158,8 @@ function questionFrom(tool: string, input: Record<string, unknown>): AgentQuesti
     const text = typeof first.question === "string" ? first.question.trim() : "";
     const options = (first.options as Array<{ label?: unknown }> | undefined) ?? [];
     const choices = options.map((o) => (typeof o.label === "string" ? o.label.trim() : "")).filter(Boolean);
-    return text || choices.length ? { text: text || "Choose one:", choices } : null;
+    if (!text && choices.length === 0) return null;
+    return { text: text || "Choose one:", fields: [field("", choices, true)], current: 0 };
   }
   return null;
 }

@@ -42,6 +42,11 @@ pub struct Settings {
     /// Never hide: the island stays at least compact at the top of the screen.
     #[serde(default)]
     pub always_visible: bool,
+    /// Copilot asks the island before every tool, --yolo or not (1.0.91 runs
+    /// the PermissionRequest hook regardless). Off leaves that hook out, so a
+    /// --yolo session runs without a card for each step.
+    #[serde(default = "default_true")]
+    pub copilot_permission_cards: bool,
     /// Seconds the compact bar stays after the mouse leaves before hiding.
     #[serde(default = "default_hide_after")]
     pub hide_after: f64,
@@ -51,6 +56,10 @@ pub struct Settings {
     /// Names the person gave to project folders, by lower-cased path.
     #[serde(default)]
     pub session_names: std::collections::BTreeMap<String, String>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_max_cards() -> u32 {
@@ -133,6 +142,7 @@ impl Default for Settings {
             active_provider: "anthropic".into(),
             max_session_cards: default_max_cards(),
             always_visible: false,
+            copilot_permission_cards: true,
             hide_after: default_hide_after(),
             agents: vec![AgentProfile::copilot()],
             session_names: Default::default(),
