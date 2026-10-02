@@ -247,6 +247,7 @@ export class Island {
         State.notify();
       },
       openSettingsWindow: () => void Bridge.openSettingsWindow(),
+      openTeamWindow: () => void Bridge.openTeamWindow(),
       blip: () => Sound.play("blip"),
     };
 
