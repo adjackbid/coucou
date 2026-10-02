@@ -8,6 +8,7 @@ mod island;
 mod llm;
 mod log;
 mod pipe;
+mod policy;
 mod secrets;
 mod settings;
 mod tray;
@@ -23,7 +24,7 @@ use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder
 use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-use acp::{AcpOutcome, AgentProfile, Agents};
+use acp::{AcpOutcome, AgentProfile, Agents, Launch};
 use files::DroppedFile;
 use llm::{Chat, ChatContext, ChatReply, Provider};
 use hooks::{Agent, HookPreview, HookStatus};
@@ -395,7 +396,8 @@ async fn acp_send(
         .agent(&agent_id)
         .cloned()
         .ok_or_else(|| "That agent is not in settings any more.".to_string())?;
-    agents.prompt(&app, &profile, text).await
+    // The chat's agent: one session per profile, and a card for every request.
+    agents.prompt(&acp::to_island(&app), &agent_id, &profile, &Launch::default(), text).await
 }
 
 /// The island's answer to an agent's permission request: one of the option
@@ -426,8 +428,8 @@ async fn acp_reset(agents: State<'_, Agents>, agent_id: String) -> Result<(), St
 /// The settings window's "Test": start the agent as the form describes it,
 /// shake hands, open a session, stop it.
 #[tauri::command]
-async fn acp_test(app: AppHandle, agents: State<'_, Agents>, profile: AgentProfile) -> Result<String, String> {
-    agents.test(&app, &profile).await
+async fn acp_test(agents: State<'_, Agents>, profile: AgentProfile) -> Result<String, String> {
+    agents.test(&profile).await
 }
 
 #[tauri::command]

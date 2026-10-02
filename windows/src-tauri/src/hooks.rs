@@ -708,6 +708,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(tmp.join(".claude")).unwrap();
         std::env::set_var("USERPROFILE", &tmp);
+        // Copilot's hook file depends on a preference; without this the test
+        // reads whatever the person running it has in their own settings.json.
+        std::env::set_var("APPDATA", &tmp);
 
         let path = settings_path();
         assert!(path.starts_with(&tmp), "the test must not touch the real home");
