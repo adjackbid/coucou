@@ -780,11 +780,26 @@ fn create_team_window(app: &AppHandle) {
     };
     #[cfg(not(dev))]
     let url = WebviewUrl::App("team.html".into());
+    // Four members side by side, a board and a timeline: this screen wants
+    // room, and Windows' text-size setting takes its share of every pixel
+    // (at 150 % a 1180 pt window lays out like a 790 pt one). So it opens as
+    // large as the display comfortably allows, up to a size where the whole
+    // screen fits even then.
+    let (width, height) = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map(|m| {
+            let scale = m.scale_factor().max(1.0);
+            let (w, h) = (m.size().width as f64 / scale, m.size().height as f64 / scale);
+            ((w * 0.9).min(1680.0), (h * 0.86).min(1040.0))
+        })
+        .unwrap_or((1280.0, 820.0));
     match WebviewWindowBuilder::new(app, "team", url)
         .additional_browser_args(BROWSER_ARGS)
         .title("Teamwork — Coucou")
-        .inner_size(1180.0, 800.0)
-        .min_inner_size(860.0, 560.0)
+        .inner_size(width, height)
+        .min_inner_size(720.0, 520.0)
         .resizable(true)
         .visible(false)
         .center()

@@ -1,0 +1,165 @@
+// What the Teamwork window is told — mirrors of team::state and team::TeamConfig.
+
+export interface MemberConfig {
+  id: string;
+  name: string;
+  role: string;
+  duty: string;
+  agent: string;
+  color: string;
+}
+
+export interface TeamConfig {
+  id: string;
+  name: string;
+  goal: string;
+  scope: string[];
+  workDir: string;
+  leader: string;
+  autoApprove: boolean;
+  members: MemberConfig[];
+  links: { from: string; to: string; kind: "delivery" | "talk"; what: string }[];
+  expected: { name: string; detail: string }[];
+  directTalk: boolean;
+  sharedBoard: boolean;
+  maxTurns: number;
+}
+
+export interface TeamFile {
+  file: string;
+  config: TeamConfig | null;
+  /** Why it cannot start as it is; empty when it can. */
+  problems: string[];
+}
+
+export type TeamStatus = "idle" | "running" | "paused" | "finished";
+export type TaskStatus = "todo" | "doing" | "delivered" | "done";
+export type MemberStatus = "working" | "waitingDelivery" | "waitingReply" | "waitingYou" | "idle" | "done" | "lost";
+
+export type Danger =
+  | "deletes-folder"
+  | "deletes-many"
+  | "installs"
+  | "downloads"
+  | "destructive-git"
+  | "sends-out"
+  | "outside-work-dir"
+  | "system"
+  | "opaque";
+
+export interface Permission {
+  requestId: unknown;
+  title: string;
+  kind: string;
+  rawInput: unknown;
+  options: { optionId: string; name: string; kind: string }[];
+  danger: Danger | null;
+}
+
+export interface MemberView {
+  id: string;
+  name: string;
+  role: string;
+  duty: string;
+  agent: string;
+  color: string;
+  isLeader: boolean;
+  status: MemberStatus;
+  /** The task it is on, if any. */
+  task: string | null;
+  waiting: { on: string; what: string; task: string | null } | null;
+  /** The tool it is using right now. */
+  activity: string;
+  turns: number;
+  permission: Permission | null;
+  lostWhy: string;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  detail: string;
+  owner: string;
+  status: TaskStatus;
+  priority: "high" | "medium" | "low";
+  criteria: { text: string; claimed: boolean }[];
+  dependsOn: string[];
+  deliverTo: string | null;
+  blocked: { reason: string; on: string } | null;
+  note: string;
+  rejections: number;
+  dispatched: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Deliverable {
+  id: string;
+  task: string;
+  kind: string;
+  locator: string;
+  summary: string;
+  by: string;
+  at: number;
+  accepted: boolean | null;
+}
+
+export interface Message {
+  id: string;
+  from: string;
+  to: string;
+  text: string;
+  task: string | null;
+  at: number;
+  heard: boolean;
+}
+
+export interface Question {
+  id: string;
+  by: string;
+  question: string;
+  task: string | null;
+  at: number;
+  answer: string | null;
+}
+
+export interface FeedItem {
+  at: number;
+  kind:
+    | "message"
+    | "task"
+    | "delivered"
+    | "accepted"
+    | "rejected"
+    | "blocked"
+    | "asked"
+    | "answered"
+    | "lost"
+    | "paused"
+    | "finished";
+  from: string;
+  to: string;
+  text: string;
+  task: string | null;
+}
+
+export interface Snapshot {
+  id: string;
+  name: string;
+  goal: string;
+  workDir: string;
+  status: TeamStatus;
+  pausedWhy: string;
+  done: number;
+  total: number;
+  totalTurns: number;
+  maxTurns: number;
+  startedAt: number;
+  finishedAt: number;
+  members: MemberView[];
+  tasks: Task[];
+  deliverables: Deliverable[];
+  messages: Message[];
+  questions: Question[];
+  feed: FeedItem[];
+}

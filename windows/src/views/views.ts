@@ -138,7 +138,9 @@ function buildOverview(actions: ViewActions): ViewHost {
   left.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("button")) return;
     const task = State.focusTask;
-    if (task && isAgentSource(task.source) && task.transcript.length > 0) actions.setView("session");
+    // A team has no conversation of its own to show: its card opens the Teamwork window.
+    if (task?.source === "team") actions.openTarget();
+    else if (task && isAgentSource(task.source) && task.transcript.length > 0) actions.setView("session");
   });
   const pills = h("div", { class: "pills" });
   const right = card(null, pills);

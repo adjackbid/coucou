@@ -397,7 +397,12 @@ impl Teams {
             let secret = token();
             let launch = Launch {
                 cwd: Some(config.work_dir.clone()),
-                env: BTreeMap::new(),
+                // Seen by the hooks the CLI runs, which then stay silent: a
+                // member's steps and permissions come through the team.
+                env: BTreeMap::from([
+                    ("COUCOU_TEAM".to_string(), config.id.clone()),
+                    ("COUCOU_MEMBER".to_string(), member.id.clone()),
+                ]),
                 mcp_servers: vec![McpServer {
                     name: "coucou-team".into(),
                     command: self.bridge.to_string_lossy().to_string(),
@@ -967,6 +972,9 @@ mod tests {
             assert_eq!(seat.key, "team:shop:ai3");
             assert_eq!(seat.launch.cwd.as_deref(), Some(dir.as_str()));
             assert_eq!(seat.launch.auto, Some(Scope::new(&dir)));
+            // The CLI itself is told it is a team member (its hooks stay silent); the token is not in its environment.
+            assert_eq!(seat.launch.env["COUCOU_TEAM"], "shop");
+            assert!(!seat.launch.env.contains_key("COUCOU_TEAM_TOKEN"));
             let server = &seat.launch.mcp_servers[0];
             assert_eq!(server.command, r"C:\bin\coucou-team-mcp.exe");
             assert_eq!(server.env["COUCOU_MEMBER"], "ai3");

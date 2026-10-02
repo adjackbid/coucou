@@ -131,6 +131,15 @@ fn finish(agent: &str) -> ! {
 
 fn main() {
     let (agent, arg_event) = parse_args();
+
+    // A team member's CLI. The team has its own line to Coucou — the agent
+    // protocol and the team's tools — and its permission requests are answered
+    // there, by the team's rules or on its card. Saying nothing here leaves the
+    // CLI to decide exactly as if no hook were installed, and keeps four
+    // members from becoming four more pills.
+    if std::env::var_os("COUCOU_TEAM").map(|v| !v.is_empty()).unwrap_or(false) {
+        finish(&agent);
+    }
     let Some((payload, event)) = read_event(&agent, &arg_event) else { finish(&agent) };
 
     let waits_for_answer = event == "PermissionRequest";

@@ -3,7 +3,7 @@
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
 
-export type AgentSource = "claudeCode" | "copilot" | "antigravity" | "n8n";
+export type AgentSource = "claudeCode" | "copilot" | "antigravity" | "team" | "n8n";
 
 /** A pill that stands for a coding agent fed by hooks, rather than a poller. */
 export function isAgentSource(source: AgentSource): boolean {
@@ -15,6 +15,7 @@ export const SOURCE_LABELS: Record<AgentSource, string> = {
   claudeCode: "Claude Code",
   copilot: "Copilot CLI",
   antigravity: "Antigravity",
+  team: "Teamwork",
   n8n: "n8n",
 };
 export type PillBadge = "approval" | "finished" | "error";
@@ -530,6 +531,31 @@ class AppState {
       this.notify();
     }
     return id;
+  }
+
+  /**
+   * A running team's pill: its line in the ticker is how far the team is and
+   * who needs the person (island/team.ts). The whole picture is in the
+   * Teamwork window, which the card opens.
+   */
+  addTeamTask(id: string, name: string, cwd: string) {
+    if (this.tasks.some((t) => t.id === id)) return;
+    this.tasks.push({
+      id,
+      name,
+      color: "#6F93FF",
+      state: "idle",
+      stepIndex: 0,
+      steps: [],
+      transcript: [],
+      source: "team",
+      isIntegration: false,
+      isSession: true,
+      sessionCwd: cwd || null,
+    });
+    this.sortTasks();
+    if (!this.focusId || !this.tasks.some((t) => t.id === this.focusId)) this.focusId = id;
+    this.notify();
   }
 
   /** The session is over: its pill goes, and the standing pill may return. */

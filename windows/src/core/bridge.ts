@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentProfile, Provider, Settings } from "./state";
+import type { Snapshot, TeamFile } from "../team/types";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -132,6 +133,28 @@ export const Bridge = {
   acpReset: (agentId: string) => call<void>("acp_reset", { agentId }),
   /** Starts the agent as the form describes it, shakes hands, stops it. */
   acpTest: (profile: AgentProfile) => callOrThrow<string>("acp_test", { profile }),
+
+  // ── Teams ─────────────────────────────────────────────────────────────────
+  openTeamWindow: () => call<void>("open_team_window"),
+  /** The team files in %APPDATA%\Coucou\teams, each with what stops it from starting. */
+  teamFiles: () => call<{ dir: string; files: TeamFile[] }>("team_files"),
+  teamSnapshots: () => call<Snapshot[]>("team_snapshots"),
+  /** Starts the team a file describes — only ever from an explicit click. */
+  teamStart: (file: string) => callOrThrow<Snapshot>("team_start", { file }),
+  /** The person writes to the leader (`to` empty) or to one member. */
+  teamInstruct: (team: string, to: string, text: string) => callOrThrow<void>("team_instruct", { team, to, text }),
+  teamAnswer: (team: string, question: string, text: string) => callOrThrow<void>("team_answer", { team, question, text }),
+  /** Answers the card a member's agent is holding with one of its own options. */
+  teamPermit: (team: string, member: string, optionId: string | null) =>
+    callOrThrow<void>("team_permit", { team, member, optionId }),
+  teamPause: (team: string) => callOrThrow<void>("team_pause", { team }),
+  teamResume: (team: string) => callOrThrow<void>("team_resume", { team }),
+  /** Pause, and interrupt every turn under way. */
+  teamInterrupt: (team: string) => callOrThrow<void>("team_interrupt", { team }),
+  teamRecover: (team: string, member: string) => callOrThrow<void>("team_recover", { team, member }),
+  /** Opens something a member handed in: a URL, or a path in Explorer. */
+  teamOpen: (team: string, locator: string) => callOrThrow<void>("team_open", { team, locator }),
+  teamOpenConfigs: () => call<void>("team_open_configs"),
 };
 
 /** A `session/update` from an agent. */

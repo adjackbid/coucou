@@ -8,6 +8,7 @@ import { Island } from "./island/island";
 import { onAcpUpdate, onChatDelta } from "./views/chat";
 import { registerHookHandlers } from "./island/hooks";
 import { registerIntegrationHandlers, refreshConfigured } from "./island/integrations";
+import { registerTeamHandlers } from "./island/team";
 
 /**
  * Makes one CSS pixel equal one window-logical pixel, whatever the webview
@@ -114,6 +115,7 @@ async function main() {
 
   registerHookHandlers(island);
   registerIntegrationHandlers(island);
+  registerTeamHandlers(island);
 
   island.launch();
 

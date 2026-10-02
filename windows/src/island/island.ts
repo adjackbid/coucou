@@ -142,7 +142,11 @@ export class Island {
           integration_notion: "https://notion.so",
           integration_calcom: "https://app.cal.com/bookings",
         };
-        if (isAgentSource(task.source)) void Bridge.openInVSCode(task.sessionCwd ?? null);
+        if (task.source === "team") {
+          void Bridge.openTeamWindow();
+          // A finished team that has been looked at has nothing more to say here.
+          if (task.state === "finished") State.endSession(task.id);
+        } else if (isAgentSource(task.source)) void Bridge.openInVSCode(task.sessionCwd ?? null);
         else if (task.id === "integration_n8n") void Bridge.openN8n();
         else if (urls[task.id]) void Bridge.openUrl(urls[task.id]);
       },
