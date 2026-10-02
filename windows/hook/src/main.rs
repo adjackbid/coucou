@@ -156,6 +156,36 @@ fn main() {
     finish(&agent);
 }
 
+/// Copilot's payload, put into the words every other agent uses. Up to
+/// 1.0.90 its PascalCase hooks received Claude-shaped payloads; 1.0.91 sends
+/// its native shape to every hook — `sessionId`, and the tool as
+/// `toolCalls: [{name, args}]`. Both shapes are accepted; a field already in
+/// the Claude spelling is left alone.
+fn normalize_copilot(map: &mut serde_json::Map<String, serde_json::Value>) {
+    for (camel, snake) in [("sessionId", "session_id"), ("transcriptPath", "transcript_path")] {
+        if !map.contains_key(snake) {
+            if let Some(v) = map.remove(camel) {
+                map.insert(snake.into(), v);
+            }
+        }
+    }
+    if !map.contains_key("tool_name") {
+        let first = map
+            .get("toolCalls")
+            .and_then(|v| v.as_array())
+            .and_then(|a| a.first())
+            .cloned();
+        if let Some(call) = first {
+            if let Some(name) = call.get("name").and_then(|v| v.as_str()) {
+                map.insert("tool_name".into(), serde_json::Value::String(name.to_string()));
+            }
+            if let Some(args) = call.get("args").or_else(|| call.get("arguments")) {
+                map.insert("tool_input".into(), args.clone());
+            }
+        }
+    }
+}
+
 /// Antigravity's payload, put into the words every other agent uses: its
 /// camelCase ids become `session_id` / `cwd` / `transcript_path`, and its
 /// events get the names the island knows. Returns the event name.
@@ -268,6 +298,9 @@ fn read_event(agent: &str, arg_event: &str) -> Option<(String, String)> {
 
     // The event name is passed on the command line by the hook entry; the JSON
     // usually carries it too. Trust the argument when the JSON is missing it.
+    if agent == "copilot" {
+        normalize_copilot(map);
+    }
     let event = if agent == "antigravity" {
         normalize_antigravity(map, arg_event)
     } else {
@@ -708,6 +741,25 @@ mod tests {
             Found::Fresh(r) => assert_eq!(r, "Done."),
             _ => panic!("the final text after a tool round trip is fresh"),
         }
+    }
+
+    #[test]
+    fn copilot_1_0_91_payloads_are_put_into_the_islands_words() {
+        let mut v = serde_json::json!({
+            "sessionId": "097a", "cwd": "D:/Code/DemoLight",
+            "toolCalls": [{ "id": "call_1", "name": "ask_user", "args": { "message": "Now what?" } }]
+        });
+        normalize_copilot(v.as_object_mut().unwrap());
+        assert_eq!(v["session_id"], "097a");
+        assert_eq!(v["tool_name"], "ask_user");
+        assert_eq!(v["tool_input"]["message"], "Now what?");
+        assert!(v.get("sessionId").is_none());
+
+        // The older, Claude-shaped payload is left as it is.
+        let mut old = serde_json::json!({ "session_id": "a", "tool_name": "Bash", "tool_input": { "command": "ls" } });
+        normalize_copilot(old.as_object_mut().unwrap());
+        assert_eq!(old["tool_name"], "Bash");
+        assert_eq!(old["tool_input"]["command"], "ls");
     }
 
     #[test]

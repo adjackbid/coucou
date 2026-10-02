@@ -117,8 +117,18 @@ function stepLabel(tool: string, input: Record<string, unknown>): string {
  * is an ordinary step.
  */
 function questionFrom(tool: string, input: Record<string, unknown>): AgentQuestion | null {
+  // An enum entry is a string, or `{const, title}` when the choice has a label.
   const strs = (v: unknown): string[] =>
-    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
+    Array.isArray(v)
+      ? v
+        .map((x) => {
+          if (typeof x === "string") return x.trim();
+          const o = x as { title?: unknown; const?: unknown } | null;
+          const label = o && (typeof o.title === "string" ? o.title : typeof o.const === "string" ? o.const : "");
+          return (label ?? "").trim();
+        })
+        .filter((x) => x !== "")
+      : [];
   if (tool === "ask_user") {
     const text = typeof input.message === "string" ? input.message.trim() : "";
     const schema = (input.requestedSchema ?? input.requested_schema) as { properties?: Record<string, { enum?: unknown }> } | undefined;
