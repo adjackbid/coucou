@@ -486,7 +486,8 @@ fn team_files(shared: State<Shared>) -> TeamFiles {
     let mut names: Vec<String> = std::fs::read_dir(&dir)
         .map(|entries| entries.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| n.ends_with(".json")).collect())
         .unwrap_or_default();
-    if names.is_empty() && std::fs::write(dir.join("example-shop.json"), EXAMPLE_TEAM).is_ok() {
+    // Only into a folder never used: after the last team is deleted, none comes back.
+    if names.is_empty() && !dir.join(".deleted").exists() && std::fs::write(dir.join("example-shop.json"), EXAMPLE_TEAM).is_ok() {
         names.push("example-shop.json".into());
     }
     names.sort();
@@ -687,6 +688,44 @@ fn team_new(shared: State<Shared>) -> Result<String, String> {
     std::fs::write(dir.join(&file), serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?)
         .map_err(|e| format!("Could not create {file}: {e}"))?;
     Ok(file)
+}
+
+/// A copy of a team file, to start a similar team from: same goal and
+/// members, its own id and name. Returns the new file's name.
+#[tauri::command]
+fn team_duplicate(file: String) -> Result<String, String> {
+    let mut config = read_team_file(&file)?;
+    let dir = settings::team_configs_dir();
+    let base = file.trim_end_matches(".json");
+    let id = (1..1000)
+        .map(|n| if n == 1 { format!("{base}-copy") } else { format!("{base}-copy-{n}") })
+        .find(|id| !dir.join(format!("{id}.json")).exists())
+        .ok_or("There are too many copies of this team.")?;
+    config.id = id.clone();
+    config.name = if config.name.trim().is_empty() { String::new() } else { format!("{} (複本)", config.name.trim()) };
+    let copy = format!("{id}.json");
+    std::fs::write(dir.join(&copy), serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?)
+        .map_err(|e| format!("Could not create {copy}: {e}"))?;
+    Ok(copy)
+}
+
+/// Takes a team off the list — only ever from an explicit click. Nothing is
+/// destroyed: the file moves to the teams folder's `.deleted`, and the run's
+/// log stays where it is. A team with agents at work is refused.
+#[tauri::command]
+fn team_delete(teams: State<Arc<Teams>>, file: String) -> Result<(), String> {
+    let path = team_file_path(&file)?;
+    let id = file.trim_end_matches(".json");
+    if teams.is_live(id) {
+        return Err("This team is running. Stop it before deleting it.".into());
+    }
+    let bin = settings::team_configs_dir().join(".deleted");
+    std::fs::create_dir_all(&bin).map_err(|e| e.to_string())?;
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    std::fs::rename(&path, bin.join(format!("{id}-{stamp}.json"))).map_err(|e| format!("Could not delete {file}: {e}"))?;
+    teams.forget(id);
+    log::line(format!("team {id}: file moved to .deleted"));
+    Ok(())
 }
 
 /// The system's folder dialog, over the Teamwork window. `None` when cancelled.
@@ -1057,6 +1096,8 @@ pub fn run() {
             team_start,
             team_instruct,
             team_attach_bytes,
+            team_duplicate,
+            team_delete,
             team_attach_path,
             team_answer,
             team_permit,

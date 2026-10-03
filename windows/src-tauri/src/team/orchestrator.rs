@@ -485,6 +485,16 @@ impl Teams {
         self.get(id).ok_or_else(|| format!("There is no team '{id}'."))
     }
 
+    /// Agents still stand behind this team: it is running, or paused in this run.
+    pub fn is_live(&self, id: &str) -> bool {
+        self.get(id).is_some_and(|t| !t.seats.is_empty() && t.with_state(|s| s.status != TeamStatus::Finished))
+    }
+
+    /// The team's file is gone: its picture goes too.
+    pub fn forget(&self, id: &str) {
+        self.teams.lock().unwrap().remove(id);
+    }
+
     pub fn snapshots(&self) -> Vec<Snapshot> {
         let teams: Vec<Arc<Team>> = self.teams.lock().unwrap().values().cloned().collect();
         let mut out: Vec<Snapshot> = teams.iter().filter_map(|t| t.full_snapshot()).collect();

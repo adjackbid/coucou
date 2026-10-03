@@ -176,6 +176,10 @@ export const Bridge = {
   teamOpenConfigs: () => call<void>("team_open_configs"),
   /** Writes a team file from the form; the file is named after the team's id. */
   teamSave: (file: string, config: TeamConfig) => callOrThrow<void>("team_save", { file, config }),
+  /** A copy of a team file (same goal and members); returns the new file's name. */
+  teamDuplicate: (file: string) => callOrThrow<string>("team_duplicate", { file }),
+  /** Takes a team off the list: its file moves to the teams folder's `.deleted`. */
+  teamDelete: (file: string) => callOrThrow<void>("team_delete", { file }),
   /** A new team file with one member to fill in; returns its name. */
   teamNew: () => callOrThrow<string>("team_new"),
   /** The system's folder dialog; null when cancelled. */

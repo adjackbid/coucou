@@ -38,6 +38,11 @@ let recipient = "";
 const drafts = new Map<string, string>();
 /** The models each agent offers, asked once per window: agent id → list (or why not). */
 const modelLists = new Map<string, ModelChoice[] | string>();
+/** The team file whose delete button has been pressed once. */
+let confirming: string | null = null;
+const ICON_COPY = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>';
+const ICON_TRASH = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+
 /** The member whose screen is shown large; null for everyone side by side. */
 let focused: string | null = null;
 
@@ -221,17 +226,70 @@ function sidebar(): HTMLElement {
     const needsYou = run?.members.some((m) => m.status === "waitingYou" || m.status === "lost") ?? false;
     list.append(
       h(
-        "button",
-        {
-          class: `team-item${file.file === selected ? " on" : ""}`,
-          type: "button",
-          onClick: () => {
-            select(file.file);
-            render();
+        "div",
+        { class: `team-row${file.file === selected ? " on" : ""}` },
+        h(
+          "button",
+          {
+            class: `team-item${file.file === selected ? " on" : ""}`,
+            type: "button",
+            onClick: () => {
+              select(file.file);
+              render();
+            },
           },
-        },
-        h("span", { class: "team-item-name", text: file.config?.name || "未命名的團隊" }),
-        h("span", { class: `team-item-state${run?.status === "running" ? " live" : ""}${needsYou ? " you" : ""}`, text: needsYou ? `${state} · 等你` : state }),
+          h("span", { class: "team-item-name", text: file.config?.name || "未命名的團隊" }),
+          h("span", { class: `team-item-state${run?.status === "running" ? " live" : ""}${needsYou ? " you" : ""}`, text: needsYou ? `${state} · 等你` : state }),
+        ),
+        h(
+          "span",
+          { class: "team-actions" },
+          h("button", {
+            class: "icon-btn",
+            type: "button",
+            title: "複製這個團隊",
+            "aria-label": "複製這個團隊",
+            html: ICON_COPY,
+            onClick: () =>
+              void act(async () => {
+                const copy = await Bridge.teamDuplicate(file.file);
+                await load();
+                select(copy);
+              }),
+          }),
+          // Deleting asks twice, right here: the first click arms it.
+          confirming === file.file
+            ? h("button", {
+                class: "icon-btn armed",
+                type: "button",
+                title: "再按一次刪除(檔案會移到 .deleted,可以找回)",
+                onClick: () =>
+                  void act(async () => {
+                    confirming = null;
+                    await Bridge.teamDelete(file.file);
+                    if (selected === file.file) selected = null;
+                    await load();
+                  }),
+              }, "刪除?")
+            : h("button", {
+                class: "icon-btn",
+                type: "button",
+                title: run && run.status !== "finished" && !run.detached ? "團隊執行中,先停下才能刪除" : "刪除這個團隊",
+                "aria-label": "刪除這個團隊",
+                disabled: !!run && run.status !== "finished" && !run.detached,
+                html: ICON_TRASH,
+                onClick: () => {
+                  confirming = file.file;
+                  render();
+                  window.setTimeout(() => {
+                    if (confirming === file.file) {
+                      confirming = null;
+                      render();
+                    }
+                  }, 4000);
+                },
+              }),
+        ),
       ),
     );
   }
@@ -419,7 +477,7 @@ function setup(file: TeamFile): HTMLElement {
             "button",
             {
               type: "button",
-              class: "link",
+              class: "link quiet-danger",
               disabled: config.members.length <= 1,
               onClick: () => {
                 config.members.splice(at, 1);
@@ -1020,6 +1078,14 @@ async function start() {
   await onEvent<{ agents: AgentProfile[] }>("settings-changed", (s) => {
     agents = s.agents ?? agents;
     if (!unsaved) render();
+  });
+
+  // The browser's own right-click menu belongs to no app: only fields and
+  // selected text keep it, for copy and paste.
+  document.addEventListener("contextmenu", (e) => {
+    const target = e.target as HTMLElement;
+    const editing = target.closest("input, textarea, [contenteditable]");
+    if (!editing && !window.getSelection()?.toString()) e.preventDefault();
   });
 
   // The page is the title bar: drag it by its header, double-click to maximize.

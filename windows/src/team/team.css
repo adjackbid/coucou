@@ -250,18 +250,82 @@ html.demo body.team-window {
   opacity: 0.4;
 }
 
+/* A quiet text action, in the island's greys: no web-page blue. */
 .link {
   font: inherit;
   font-size: 12px;
-  color: var(--blue);
+  color: var(--dim-glass);
   background: none;
   border: 0;
+  padding: 2px 0;
   cursor: default;
   text-align: left;
 }
 
 .link:hover {
+  color: var(--ink);
   text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link.quiet-danger:hover {
+  color: var(--red-text);
+}
+
+/* A team in the list, with its copy and delete at hand on hover. */
+.team-row {
+  position: relative;
+}
+
+.team-row .team-item {
+  width: 100%;
+  padding-right: 58px;
+}
+
+.team-actions {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+}
+
+.team-row:hover .team-actions,
+.team-row:focus-within .team-actions,
+.team-actions:has(.armed) {
+  opacity: 1;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--dim);
+  background: transparent;
+  font: 600 11.5px var(--font);
+  cursor: default;
+}
+
+.icon-btn:hover {
+  color: var(--ink);
+  background: var(--lift-2);
+}
+
+.icon-btn:disabled {
+  opacity: 0.35;
+}
+
+.icon-btn.armed {
+  padding: 0 8px;
+  color: var(--red-text);
+  background: rgba(244, 80, 94, 0.18);
 }
 
 .link:disabled {
@@ -491,7 +555,7 @@ input[type="number"].field.narrow {
 }
 
 .side-foot .link {
-  color: #8cc4ff;
+  color: var(--dim-glass);
 }
 
 .top .dim,
@@ -810,11 +874,12 @@ h2 {
   border-radius: 14px;
   border: 1px dashed rgba(255, 255, 255, 0.18);
   background: transparent;
-  color: var(--blue);
+  color: var(--ink-2);
   cursor: default;
 }
 
 .add:hover {
+  color: var(--ink);
   background: var(--lift);
 }
 
@@ -824,6 +889,9 @@ h2 {
   position: sticky;
   bottom: 0;
   z-index: 2;
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
   padding: 8px;
   border-radius: 999px;
   background: rgba(11, 12, 14, 0.82);
