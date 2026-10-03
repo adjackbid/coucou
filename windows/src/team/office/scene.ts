@@ -117,6 +117,8 @@ export interface SceneOptions {
   /** Small and still: the company map's thumbnails. */
   mini?: boolean;
   onSelect?: (memberId: string) => void;
+  /** A click on the room where there is no one: the selection is let go. */
+  onBlank?: () => void;
 }
 
 export class TeamScene {
@@ -149,6 +151,14 @@ export class TeamScene {
       this.layout();
     };
     new ResizeObserver(fit).observe(this.el);
+    // A Mochi picks its member; anywhere else in the room lets the selection go.
+    this.el.addEventListener("click", (e) => {
+      const t = e.target as HTMLElement;
+      if (t.closest(".office-label, .office-bubble")) return;
+      const mochi = t.closest<HTMLElement>(".office-mochi");
+      if (mochi?.dataset.member) this.opts.onSelect?.(mochi.dataset.member);
+      else this.opts.onBlank?.();
+    });
     this.build();
     scenes.add(this);
   }
@@ -304,7 +314,7 @@ export class TeamScene {
     let a = this.actors.get(m.memberId);
     if (!a) {
       const size = Math.round(BODY / 0.6);
-      const canvas = h("canvas", { class: "office-mochi", "aria-hidden": "true", style: `width:${size}px;height:${size}px` });
+      const canvas = h("canvas", { class: "office-mochi", "aria-hidden": "true", "data-member": m.memberId, style: `width:${size}px;height:${size}px` });
       const engine = new BotEngine();
       engine.isMini = true;
       engine.bodyColor = hexToRGB(color);

@@ -122,6 +122,16 @@
     radial-gradient(closest-side, rgba(60, 35, 15, 0.32), rgba(60, 35, 15, 0));
 }
 
+/* A Mochi can be clicked to pick its member. */
+.office-stage > canvas.office-mochi {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.office-scene:not(.mini) {
+  cursor: default;
+}
+
 .office-mochi.selected {
   filter: drop-shadow(0 0 10px color-mix(in srgb, white 60%, transparent));
 }

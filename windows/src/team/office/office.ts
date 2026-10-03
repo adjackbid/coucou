@@ -124,6 +124,9 @@ export class Office {
         onSelect: (memberId) => {
           this.select(teamId, memberId);
         },
+        onBlank: () => {
+          if (this.sel?.teamId === teamId) this.close(teamId, false);
+        },
       });
       map.set(teamId, s);
     }
@@ -141,12 +144,13 @@ export class Office {
     if (memberId) requestAnimationFrame(() => document.querySelector<HTMLElement>(".office-drawer h2")?.focus());
   }
 
-  private close(teamId: string) {
+  /** Closes the drawer; from the keyboard, focus goes back to the member's label. */
+  private close(teamId: string, refocus = true) {
     const was = this.sel?.memberId;
     this.sel = null;
     this.back = null;
     this.host.render();
-    if (was) requestAnimationFrame(() => this.scenes.get(teamId)?.focusLabel(was));
+    if (was && refocus) requestAnimationFrame(() => this.scenes.get(teamId)?.focusLabel(was));
   }
 
   // ── Small pieces ─────────────────────────────────────────────────────────────
