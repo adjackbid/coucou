@@ -79,7 +79,7 @@ export class Office {
     this.demo = !!opts.demo;
     this.main = new OfficeStore(() => this.resync());
     if (this.demo) {
-      this.mock = new MockAdapter();
+      this.mock = new MockAdapter(Number(new URLSearchParams(location.search).get("rooms")) || 4);
       this.main.loadSnapshot(this.mock.snapshot());
       this.mock.subscribe((e) => this.main.receive(e));
       this.main.setConnection({ status: "live", lastAppliedSeq: this.main.cursor, lastServerTime: this.main.serverTime });

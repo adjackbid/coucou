@@ -22,7 +22,8 @@ export class MockAdapter {
   private commands = new Map<string, CommandRecord>();
   private emit: (e: DomainEvent) => void = () => {};
 
-  constructor() {
+  /** `rooms` > 4 copies the demo teams, for checking a busy company (`?office=mock&rooms=20`). */
+  constructor(rooms = 4) {
     // Names and colours, Coucou's extension, from the agents of the fixture.
     for (const m of this.snap.members) {
       const agent = this.snap.agents.find((a) => a.agentId === m.agentId);
@@ -30,6 +31,20 @@ export class MockAdapter {
       m.color = PALETTE[agent?.avatarKey ?? ""] ?? "#3B9EFF";
     }
     this.seq = Math.max(this.snap.asOfSeq, ...this.events.map((e) => e.seq));
+    for (let n = 1; this.snap.teams.length < rooms; n++) {
+      const s = this.snap;
+      const base = { teams: [...s.teams], runs: [...s.runs], members: [...s.members], tasks: [...s.tasks], messages: [...s.messages], artifacts: [...s.artifacts] };
+      for (const t of base.teams) {
+        if (s.teams.length >= rooms) break;
+        const id = (x: string) => `${x}~${n}`;
+        s.teams.push({ ...t, teamId: id(t.teamId), name: `${t.name} ${n + 1}`, currentRunId: id(t.currentRunId) });
+        s.runs.push(...base.runs.filter((r) => r.teamId === t.teamId).map((r) => ({ ...r, runId: id(r.runId), teamId: id(t.teamId) })));
+        s.members.push(...base.members.filter((m) => m.teamId === t.teamId).map((m) => ({ ...m, teamId: id(t.teamId), runId: id(m.runId) })));
+        s.tasks.push(...base.tasks.filter((x) => x.teamId === t.teamId).map((x) => ({ ...x, taskId: id(x.taskId), teamId: id(t.teamId), runId: id(x.runId) })));
+        s.messages.push(...base.messages.filter((x) => x.teamId === t.teamId).map((x) => ({ ...x, messageId: id(x.messageId), teamId: id(t.teamId), runId: id(x.runId) })));
+        s.artifacts.push(...base.artifacts.filter((x) => x.teamId === t.teamId).map((x) => ({ ...x, artifactId: id(x.artifactId), teamId: id(t.teamId), runId: id(x.runId) })));
+      }
+    }
   }
 
   snapshot(): CompanySnapshot {
