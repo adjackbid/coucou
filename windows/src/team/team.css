@@ -93,12 +93,22 @@ html.demo body.team-window {
   }
 }
 
+/* One sheet of glass, edge to edge: the window's own rounded corners are
+   its only frame. The sidebar and the main pane are its two halves, parted
+   by a hairline — no pane floats inside another frame. */
 .shell {
   display: grid;
   grid-template-columns: 208px 1fr;
-  gap: 8px;
   height: 100%;
-  padding: 8px;
+}
+
+.shell > .pane {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.shell > .sidebar {
+  box-shadow: inset -1px 0 0 var(--hairline);
 }
 
 .dim {
