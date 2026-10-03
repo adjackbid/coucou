@@ -1,0 +1,414 @@
+{
+  "schemaVersion": 2,
+  "source": "Blender scene CoucouOffice (D:/CouCouOffice/blender/office.blend): orthographic camera, azimuth 45, elevation 30, 280 px/m in these 2x files",
+  "pixelRatio": 2,
+  "pxPerMetre": 140,
+  "note": "Pixel values are in the 2x files; logical = value / 2. World: x along the window wall toward screen-left, y along the right wall toward screen-right, metres; floor 0..6 x 0..6.",
+  "worldToScreen": {
+    "x0": 1600,
+    "y0": 738,
+    "perMetreX": 197.99,
+    "perMetreY": 98.99,
+    "perMetreZ": 242.49,
+    "formula": "X = x0 + (y - x) * perMetreX; Y = y0 + (x + y) * perMetreY - z * perMetreZ"
+  },
+  "room": {
+    "file": "room/floor_back.webp",
+    "canvas": [
+      3200,
+      2000
+    ],
+    "sizeMetres": [
+      6,
+      6
+    ],
+    "wallHeightMetres": 2.8,
+    "floor": {
+      "back": [
+        1600.0,
+        738.0
+      ],
+      "screenLeft": [
+        412.1,
+        1332.0
+      ],
+      "front": [
+        1600.0,
+        1925.9
+      ],
+      "screenRight": [
+        2787.9,
+        1332.0
+      ]
+    },
+    "whiteboardQuad": [
+      [
+        2468.2,
+        703.3
+      ],
+      [
+        2733.5,
+        836.0
+      ],
+      [
+        2733.5,
+        1063.9
+      ],
+      [
+        2468.2,
+        931.2
+      ]
+    ],
+    "artifactSlots": [
+      [
+        [
+          1730.3,
+          287.2
+        ],
+        [
+          1813.4,
+          328.8
+        ],
+        [
+          1813.4,
+          425.8
+        ],
+        [
+          1730.3,
+          384.2
+        ]
+      ],
+      [
+        [
+          1849.1,
+          346.6
+        ],
+        [
+          1932.2,
+          388.2
+        ],
+        [
+          1932.2,
+          485.2
+        ],
+        [
+          1849.1,
+          443.6
+        ]
+      ],
+      [
+        [
+          1967.9,
+          406.0
+        ],
+        [
+          2051.0,
+          447.6
+        ],
+        [
+          2051.0,
+          544.6
+        ],
+        [
+          1967.9,
+          503.0
+        ]
+      ],
+      [
+        [
+          1730.3,
+          423.0
+        ],
+        [
+          1813.4,
+          464.6
+        ],
+        [
+          1813.4,
+          561.6
+        ],
+        [
+          1730.3,
+          520.0
+        ]
+      ],
+      [
+        [
+          1849.1,
+          482.4
+        ],
+        [
+          1932.2,
+          524.0
+        ],
+        [
+          1932.2,
+          621.0
+        ],
+        [
+          1849.1,
+          579.4
+        ]
+      ],
+      [
+        [
+          1967.9,
+          541.8
+        ],
+        [
+          2051.0,
+          583.4
+        ],
+        [
+          2051.0,
+          680.4
+        ],
+        [
+          1967.9,
+          638.8
+        ]
+      ]
+    ],
+    "keepOut": [
+      {
+        "what": "corner plant",
+        "x": [
+          0,
+          0.75
+        ],
+        "y": [
+          0,
+          0.75
+        ]
+      },
+      {
+        "what": "coffee counter",
+        "x": [
+          5.2,
+          6
+        ],
+        "y": [
+          0,
+          0.7
+        ]
+      }
+    ],
+    "spots": {
+      "whiteboard": [
+        0.9,
+        5.1
+      ],
+      "coffee": [
+        5.0,
+        1.0
+      ],
+      "meeting": [
+        4.5,
+        4.7
+      ]
+    }
+  },
+  "workstations": {
+    "SE": {
+      "canvas": [
+        454,
+        526
+      ],
+      "groundPivot": [
+        227.0,
+        377.5
+      ],
+      "actorBottom": [
+        326.0,
+        356.5
+      ],
+      "screenQuad": [
+        [
+          191.0,
+          82.3
+        ],
+        [
+          297.9,
+          28.9
+        ],
+        [
+          297.9,
+          106.4
+        ],
+        [
+          191.0,
+          159.9
+        ]
+      ],
+      "deskFeet": [
+        [
+          296.3,
+          285.4
+        ],
+        [
+          42.9,
+          412.1
+        ],
+        [
+          157.7,
+          469.5
+        ],
+        [
+          411.1,
+          342.8
+        ]
+      ],
+      "chairFeet": [
+        [
+          377.5,
+          496.2
+        ],
+        [
+          390.9,
+          454.0
+        ],
+        [
+          314.6,
+          434.6
+        ],
+        [
+          254.1,
+          464.8
+        ],
+        [
+          292.9,
+          502.9
+        ]
+      ],
+      "layers": [
+        "workstation/desk_SE.webp",
+        "workstation/chair_SE.webp"
+      ]
+    },
+    "SW": {
+      "canvas": [
+        522,
+        454
+      ],
+      "groundPivot": [
+        295.2,
+        337.7
+      ],
+      "actorBottom": [
+        109.1,
+        273.2
+      ],
+      "screenQuad": [
+        [
+          303.5,
+          28.6
+        ],
+        [
+          410.4,
+          82.1
+        ],
+        [
+          410.4,
+          159.7
+        ],
+        [
+          303.5,
+          106.2
+        ]
+      ],
+      "deskFeet": [
+        [
+          479.3,
+          372.3
+        ],
+        [
+          225.9,
+          245.6
+        ],
+        [
+          111.1,
+          303.0
+        ],
+        [
+          364.5,
+          429.7
+        ]
+      ],
+      "chairFeet": [
+        [
+          57.6,
+          412.9
+        ],
+        [
+          142.1,
+          419.6
+        ],
+        [
+          181.0,
+          381.5
+        ],
+        [
+          120.5,
+          351.2
+        ],
+        [
+          44.2,
+          370.6
+        ]
+      ],
+      "layers": [
+        "workstation/desk_SW.webp",
+        "workstation/chair_SW.webp"
+      ]
+    }
+  },
+  "props": {
+    "meetingTable": {
+      "canvas": [
+        470,
+        432
+      ],
+      "groundPivot": [
+        295.5,
+        279.5
+      ],
+      "feet": [
+        [
+          392.5,
+          175.5
+        ],
+        [
+          73.7,
+          249.8
+        ],
+        [
+          354.9,
+          390.4
+        ],
+        [
+          240.1,
+          307.2
+        ],
+        [
+          350.9,
+          251.8
+        ],
+        [
+          350.9,
+          307.2
+        ],
+        [
+          240.1,
+          251.8
+        ]
+      ],
+      "file": "props/meeting_table.webp",
+      "radiusMetres": 1.05,
+      "at": [
+        4.5,
+        4.7
+      ]
+    }
+  },
+  "drawOrder": "Per workstation: desk layer, screen content, chair layer, member. Between objects: by x + y of their ground point (larger is nearer the camera)."
+}

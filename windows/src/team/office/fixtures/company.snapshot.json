@@ -1,0 +1,1036 @@
+{
+  "schemaVersion": 1,
+  "companyId": "demo-company",
+  "streamId": "demo-authorized-stream-1",
+  "asOfSeq": 100,
+  "serverTime": "2026-10-03T14:56:00Z",
+  "agents": [
+    {
+      "agentId": "claude",
+      "name": "Claude",
+      "avatarKey": "agent-claude",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "agentId": "codex",
+      "name": "Codex",
+      "avatarKey": "agent-codex",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "agentId": "codex2",
+      "name": "Codex2",
+      "avatarKey": "agent-codex2",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "agentId": "ai1",
+      "name": "AI 1",
+      "avatarKey": "agent-ai1",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "agentId": "ai2",
+      "name": "AI 2",
+      "avatarKey": "agent-ai2",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "agentId": "ai3",
+      "name": "AI 3",
+      "avatarKey": "agent-ai3",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "agentId": "ai4",
+      "name": "AI 4",
+      "avatarKey": "agent-ai4",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "agentId": "ai5",
+      "name": "AI 5",
+      "avatarKey": "agent-ai5",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "agentId": "ai6",
+      "name": "AI 6",
+      "avatarKey": "agent-ai6",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "agentId": "ai7",
+      "name": "AI 7",
+      "avatarKey": "agent-ai7",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    }
+  ],
+  "teams": [
+    {
+      "teamId": "taiwan",
+      "name": "Taiwan 景點",
+      "goal": "台灣景點網站已完成並驗收。",
+      "memberIds": [
+        "member-claude",
+        "member-codex",
+        "member-codex2"
+      ],
+      "leaderMemberId": "member-claude",
+      "currentRunId": "run-taiwan",
+      "officeLayoutId": "layout-taiwan",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "teamId": "shop",
+      "name": "購物網站",
+      "goal": "商品列表、購物車與會員登入。",
+      "memberIds": [
+        "member-ai1",
+        "member-ai2",
+        "member-ai3",
+        "member-ai4"
+      ],
+      "leaderMemberId": "member-ai1",
+      "currentRunId": "run-shop",
+      "officeLayoutId": "layout-shop",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "teamId": "assets",
+      "name": "商品素材",
+      "goal": "完成商品主視覺與 Banner。",
+      "memberIds": [
+        "member-ai5",
+        "member-ai6"
+      ],
+      "leaderMemberId": "member-ai5",
+      "currentRunId": "run-assets",
+      "officeLayoutId": "layout-assets",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "teamId": "research",
+      "name": "規格研究",
+      "goal": "等待新的研究任務。",
+      "memberIds": [
+        "member-ai7"
+      ],
+      "leaderMemberId": "member-ai7",
+      "currentRunId": "run-research",
+      "officeLayoutId": "layout-research",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    }
+  ],
+  "runs": [
+    {
+      "runId": "run-taiwan",
+      "teamId": "taiwan",
+      "status": "completed",
+      "progress": {
+        "completed": 5,
+        "total": 5,
+        "percent": 100
+      },
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "runId": "run-shop",
+      "teamId": "shop",
+      "status": "running",
+      "progress": {
+        "completed": 3,
+        "total": 7,
+        "percent": 43
+      },
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "runId": "run-assets",
+      "teamId": "assets",
+      "status": "needs_attention",
+      "progress": {
+        "completed": 1,
+        "total": 4,
+        "percent": 25
+      },
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "runId": "run-research",
+      "teamId": "research",
+      "status": "idle",
+      "progress": {
+        "completed": 0,
+        "total": 0,
+        "percent": null
+      },
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    }
+  ],
+  "members": [
+    {
+      "memberId": "member-claude",
+      "agentId": "claude",
+      "teamId": "taiwan",
+      "runId": "run-taiwan",
+      "roleLabel": "Leader 與規劃",
+      "workStatus": "completed",
+      "engineStatus": "online",
+      "primaryTaskId": null,
+      "activeTaskIds": [],
+      "lastCompletedTaskId": "tw-5",
+      "summary": "5 項任務已完成並驗收。",
+      "waitingFor": null,
+      "lastActivityAt": "2026-10-03T14:56:00Z",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "memberId": "member-codex",
+      "agentId": "codex",
+      "teamId": "taiwan",
+      "runId": "run-taiwan",
+      "roleLabel": "工程開發",
+      "workStatus": "completed",
+      "engineStatus": "online",
+      "primaryTaskId": null,
+      "activeTaskIds": [],
+      "lastCompletedTaskId": "tw-2",
+      "summary": "網站開發完成。",
+      "waitingFor": null,
+      "lastActivityAt": "2026-10-03T14:56:00Z",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "memberId": "member-codex2",
+      "agentId": "codex2",
+      "teamId": "taiwan",
+      "runId": "run-taiwan",
+      "roleLabel": "景點設計",
+      "workStatus": "completed",
+      "engineStatus": "online",
+      "primaryTaskId": null,
+      "activeTaskIds": [],
+      "lastCompletedTaskId": "tw-4",
+      "summary": "景點設計完成。",
+      "waitingFor": null,
+      "lastActivityAt": "2026-10-03T14:56:00Z",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "memberId": "member-ai1",
+      "agentId": "ai1",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "roleLabel": "Leader 與規劃",
+      "workStatus": "planning",
+      "engineStatus": "online",
+      "primaryTaskId": "shop-scope",
+      "activeTaskIds": [
+        "shop-scope"
+      ],
+      "lastCompletedTaskId": "shop-spec",
+      "summary": "確認首版結帳範圍。",
+      "waitingFor": null,
+      "lastActivityAt": "2026-10-03T14:56:00Z",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "memberId": "member-ai2",
+      "agentId": "ai2",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "roleLabel": "執行整合",
+      "workStatus": "waiting_dependency",
+      "engineStatus": "online",
+      "primaryTaskId": "shop-tests",
+      "activeTaskIds": [
+        "shop-tests"
+      ],
+      "lastCompletedTaskId": null,
+      "summary": "測試案例已備妥，等待網站版本。",
+      "waitingFor": {
+        "reason": "AI 3 尚未交付網站版本。",
+        "memberIds": [
+          "member-ai3"
+        ],
+        "taskIds": [
+          "shop-cart"
+        ],
+        "expectedArtifact": "可測試的網站版本",
+        "nextAction": "收到版本後執行整合測試並回報 Leader。"
+      },
+      "lastActivityAt": "2026-10-03T14:56:00Z",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "memberId": "member-ai3",
+      "agentId": "ai3",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "roleLabel": "網站開發",
+      "workStatus": "working",
+      "engineStatus": "online",
+      "primaryTaskId": "shop-cart",
+      "activeTaskIds": [
+        "shop-cart"
+      ],
+      "lastCompletedTaskId": "shop-catalog",
+      "summary": "實作購物車、數量調整與小計。",
+      "waitingFor": null,
+      "lastActivityAt": "2026-10-03T14:56:00Z",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "memberId": "member-ai4",
+      "agentId": "ai4",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "roleLabel": "圖片生成",
+      "workStatus": "completed",
+      "engineStatus": "online",
+      "primaryTaskId": null,
+      "activeTaskIds": [],
+      "lastCompletedTaskId": "shop-images",
+      "summary": "6 張商品圖已交付 AI 3。",
+      "waitingFor": null,
+      "lastActivityAt": "2026-10-03T14:56:00Z",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "memberId": "member-ai5",
+      "agentId": "ai5",
+      "teamId": "assets",
+      "runId": "run-assets",
+      "roleLabel": "Leader 與圖片設計",
+      "workStatus": "waiting_input",
+      "engineStatus": "online",
+      "primaryTaskId": "assets-style",
+      "activeTaskIds": [
+        "assets-style"
+      ],
+      "lastCompletedTaskId": "assets-brief",
+      "summary": "等待管理者確認圖片風格。",
+      "waitingFor": {
+        "reason": "需要管理者選擇寫實或插畫風格。",
+        "memberIds": [],
+        "taskIds": [],
+        "expectedArtifact": null,
+        "nextAction": "收到風格確認後製作 Banner。"
+      },
+      "lastActivityAt": "2026-10-03T14:56:00Z",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "memberId": "member-ai6",
+      "agentId": "ai6",
+      "teamId": "assets",
+      "runId": "run-assets",
+      "roleLabel": "素材整合",
+      "workStatus": "waiting_dependency",
+      "engineStatus": "online",
+      "primaryTaskId": "assets-package",
+      "activeTaskIds": [
+        "assets-package"
+      ],
+      "lastCompletedTaskId": null,
+      "summary": "等待 AI 5 的 Banner。",
+      "waitingFor": {
+        "reason": "AI 5 的商品 Banner 尚未完成。",
+        "memberIds": [
+          "member-ai5"
+        ],
+        "taskIds": [
+          "assets-banner"
+        ],
+        "expectedArtifact": "商品 Banner",
+        "nextAction": "收到 Banner 後打包素材。"
+      },
+      "lastActivityAt": "2026-10-03T14:56:00Z",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "memberId": "member-ai7",
+      "agentId": "ai7",
+      "teamId": "research",
+      "runId": "run-research",
+      "roleLabel": "Leader 與研究",
+      "workStatus": "idle",
+      "engineStatus": "online",
+      "primaryTaskId": null,
+      "activeTaskIds": [],
+      "lastCompletedTaskId": null,
+      "summary": "等待新的規格研究任務。",
+      "waitingFor": null,
+      "lastActivityAt": "2026-10-03T14:56:00Z",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    }
+  ],
+  "tasks": [
+    {
+      "taskId": "tw-1",
+      "teamId": "taiwan",
+      "runId": "run-taiwan",
+      "title": "需求規格",
+      "assigneeMemberId": "member-claude",
+      "status": "completed",
+      "parentTaskId": null,
+      "dependencyTaskIds": [],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "tw-1-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": true
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "tw-2",
+      "teamId": "taiwan",
+      "runId": "run-taiwan",
+      "title": "首頁精修",
+      "assigneeMemberId": "member-codex",
+      "status": "completed",
+      "parentTaskId": null,
+      "dependencyTaskIds": [],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "tw-2-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": true
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "tw-3",
+      "teamId": "taiwan",
+      "runId": "run-taiwan",
+      "title": "景點模板",
+      "assigneeMemberId": "member-codex2",
+      "status": "completed",
+      "parentTaskId": null,
+      "dependencyTaskIds": [],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "tw-3-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": true
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "tw-4",
+      "teamId": "taiwan",
+      "runId": "run-taiwan",
+      "title": "互動景點",
+      "assigneeMemberId": "member-codex2",
+      "status": "completed",
+      "parentTaskId": null,
+      "dependencyTaskIds": [],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "tw-4-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": true
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "tw-5",
+      "teamId": "taiwan",
+      "runId": "run-taiwan",
+      "title": "最終驗收",
+      "assigneeMemberId": "member-claude",
+      "status": "completed",
+      "parentTaskId": null,
+      "dependencyTaskIds": [],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "tw-5-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": true
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "shop-spec",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "title": "需求拆解",
+      "assigneeMemberId": "member-ai1",
+      "status": "completed",
+      "parentTaskId": null,
+      "dependencyTaskIds": [],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "shop-spec-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": true
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "shop-catalog",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "title": "商品列表",
+      "assigneeMemberId": "member-ai3",
+      "status": "completed",
+      "parentTaskId": null,
+      "dependencyTaskIds": [
+        "shop-spec"
+      ],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "shop-catalog-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": true
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "shop-images",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "title": "商品圖片",
+      "assigneeMemberId": "member-ai4",
+      "status": "completed",
+      "parentTaskId": null,
+      "dependencyTaskIds": [
+        "shop-spec"
+      ],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "shop-images-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": true
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "shop-cart",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "title": "購物車功能",
+      "assigneeMemberId": "member-ai3",
+      "status": "running",
+      "parentTaskId": null,
+      "dependencyTaskIds": [
+        "shop-catalog",
+        "shop-images"
+      ],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "cart-add",
+          "text": "可加入商品",
+          "passed": false
+        },
+        {
+          "id": "cart-qty",
+          "text": "可調整數量",
+          "passed": false
+        },
+        {
+          "id": "cart-total",
+          "text": "小計正確",
+          "passed": false
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "shop-scope",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "title": "確認結帳範圍",
+      "assigneeMemberId": "member-ai1",
+      "status": "running",
+      "parentTaskId": null,
+      "dependencyTaskIds": [
+        "shop-spec"
+      ],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "shop-scope-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": false
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "shop-tests",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "title": "整合測試",
+      "assigneeMemberId": "member-ai2",
+      "status": "waiting_dependency",
+      "parentTaskId": null,
+      "dependencyTaskIds": [
+        "shop-cart",
+        "shop-catalog",
+        "shop-images"
+      ],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "shop-tests-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": false
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "shop-review",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "title": "最終驗收",
+      "assigneeMemberId": "member-ai1",
+      "status": "pending",
+      "parentTaskId": null,
+      "dependencyTaskIds": [
+        "shop-tests",
+        "shop-scope"
+      ],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "shop-review-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": false
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "assets-brief",
+      "teamId": "assets",
+      "runId": "run-assets",
+      "title": "素材需求整理",
+      "assigneeMemberId": "member-ai5",
+      "status": "completed",
+      "parentTaskId": null,
+      "dependencyTaskIds": [],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "assets-brief-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": true
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "assets-style",
+      "teamId": "assets",
+      "runId": "run-assets",
+      "title": "圖片風格確認",
+      "assigneeMemberId": "member-ai5",
+      "status": "waiting_input",
+      "parentTaskId": null,
+      "dependencyTaskIds": [
+        "assets-brief"
+      ],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "assets-style-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": false
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "assets-banner",
+      "teamId": "assets",
+      "runId": "run-assets",
+      "title": "商品 Banner",
+      "assigneeMemberId": "member-ai5",
+      "status": "pending",
+      "parentTaskId": null,
+      "dependencyTaskIds": [
+        "assets-style"
+      ],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "assets-banner-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": false
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "taskId": "assets-package",
+      "teamId": "assets",
+      "runId": "run-assets",
+      "title": "素材打包",
+      "assigneeMemberId": "member-ai6",
+      "status": "waiting_dependency",
+      "parentTaskId": null,
+      "dependencyTaskIds": [
+        "assets-banner"
+      ],
+      "includeInProgress": true,
+      "acceptanceCriteria": [
+        {
+          "id": "assets-package-accept",
+          "text": "完成並滿足此任務驗收條件",
+          "passed": false
+        }
+      ],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    }
+  ],
+  "messages": [
+    {
+      "messageId": "msg-1",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "threadId": "thread-shopping",
+      "taskId": "shop-images",
+      "from": {
+        "kind": "member",
+        "memberId": "member-ai4"
+      },
+      "toMemberIds": [
+        "member-ai3"
+      ],
+      "kind": "handoff",
+      "text": "已交付 6 張商品圖。",
+      "deliveryStatus": "delivered",
+      "artifactIds": [
+        "art-product-images"
+      ],
+      "occurredAt": "2026-10-03T14:52:00Z",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "messageId": "msg-2",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "threadId": "thread-shopping",
+      "taskId": "shop-cart",
+      "from": {
+        "kind": "member",
+        "memberId": "member-ai3"
+      },
+      "toMemberIds": [
+        "member-ai1"
+      ],
+      "kind": "question",
+      "text": "首版需要優惠券嗎？",
+      "deliveryStatus": "delivered",
+      "artifactIds": [],
+      "occurredAt": "2026-10-03T14:53:00Z",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "messageId": "msg-3",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "threadId": "thread-shopping",
+      "taskId": "shop-cart",
+      "from": {
+        "kind": "member",
+        "memberId": "member-ai1"
+      },
+      "toMemberIds": [
+        "member-ai3"
+      ],
+      "kind": "decision",
+      "text": "首版先完成基本結帳。",
+      "deliveryStatus": "delivered",
+      "artifactIds": [],
+      "occurredAt": "2026-10-03T14:54:00Z",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifactId": "art-product-images",
+      "teamId": "shop",
+      "runId": "run-shop",
+      "taskId": "shop-images",
+      "authorMemberId": "member-ai4",
+      "name": "商品圖片 6 張",
+      "kind": "bundle",
+      "artifactVersion": 1,
+      "resourceRef": "demo://artifacts/product-images",
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    }
+  ],
+  "layouts": [
+    {
+      "layoutId": "layout-taiwan",
+      "logicalWidth": 1600,
+      "logicalHeight": 1000,
+      "workstations": [
+        {
+          "memberId": "member-claude",
+          "anchor": {
+            "x": 0.28,
+            "y": 0.3
+          },
+          "facing": "S"
+        },
+        {
+          "memberId": "member-codex",
+          "anchor": {
+            "x": 0.72,
+            "y": 0.3
+          },
+          "facing": "S"
+        },
+        {
+          "memberId": "member-codex2",
+          "anchor": {
+            "x": 0.28,
+            "y": 0.6799999999999999
+          },
+          "facing": "S"
+        }
+      ],
+      "furniture": [
+        {
+          "id": "whiteboard",
+          "assetKey": "furniture-whiteboard",
+          "anchor": {
+            "x": 0.18,
+            "y": 0.12
+          },
+          "layer": "back"
+        },
+        {
+          "id": "coffee",
+          "assetKey": "furniture-coffee",
+          "anchor": {
+            "x": 0.88,
+            "y": 0.82
+          },
+          "layer": "depth"
+        }
+      ],
+      "navPoints": [],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "layoutId": "layout-shop",
+      "logicalWidth": 1600,
+      "logicalHeight": 1000,
+      "workstations": [
+        {
+          "memberId": "member-ai1",
+          "anchor": {
+            "x": 0.28,
+            "y": 0.3
+          },
+          "facing": "S"
+        },
+        {
+          "memberId": "member-ai2",
+          "anchor": {
+            "x": 0.72,
+            "y": 0.3
+          },
+          "facing": "S"
+        },
+        {
+          "memberId": "member-ai3",
+          "anchor": {
+            "x": 0.28,
+            "y": 0.6799999999999999
+          },
+          "facing": "S"
+        },
+        {
+          "memberId": "member-ai4",
+          "anchor": {
+            "x": 0.72,
+            "y": 0.6799999999999999
+          },
+          "facing": "S"
+        }
+      ],
+      "furniture": [
+        {
+          "id": "whiteboard",
+          "assetKey": "furniture-whiteboard",
+          "anchor": {
+            "x": 0.18,
+            "y": 0.12
+          },
+          "layer": "back"
+        },
+        {
+          "id": "coffee",
+          "assetKey": "furniture-coffee",
+          "anchor": {
+            "x": 0.88,
+            "y": 0.82
+          },
+          "layer": "depth"
+        }
+      ],
+      "navPoints": [],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "layoutId": "layout-assets",
+      "logicalWidth": 1600,
+      "logicalHeight": 1000,
+      "workstations": [
+        {
+          "memberId": "member-ai5",
+          "anchor": {
+            "x": 0.28,
+            "y": 0.3
+          },
+          "facing": "S"
+        },
+        {
+          "memberId": "member-ai6",
+          "anchor": {
+            "x": 0.72,
+            "y": 0.3
+          },
+          "facing": "S"
+        }
+      ],
+      "furniture": [
+        {
+          "id": "whiteboard",
+          "assetKey": "furniture-whiteboard",
+          "anchor": {
+            "x": 0.18,
+            "y": 0.12
+          },
+          "layer": "back"
+        },
+        {
+          "id": "coffee",
+          "assetKey": "furniture-coffee",
+          "anchor": {
+            "x": 0.88,
+            "y": 0.82
+          },
+          "layer": "depth"
+        }
+      ],
+      "navPoints": [],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    },
+    {
+      "layoutId": "layout-research",
+      "logicalWidth": 1600,
+      "logicalHeight": 1000,
+      "workstations": [
+        {
+          "memberId": "member-ai7",
+          "anchor": {
+            "x": 0.28,
+            "y": 0.3
+          },
+          "facing": "S"
+        }
+      ],
+      "furniture": [
+        {
+          "id": "whiteboard",
+          "assetKey": "furniture-whiteboard",
+          "anchor": {
+            "x": 0.18,
+            "y": 0.12
+          },
+          "layer": "back"
+        },
+        {
+          "id": "coffee",
+          "assetKey": "furniture-coffee",
+          "anchor": {
+            "x": 0.88,
+            "y": 0.82
+          },
+          "layer": "depth"
+        }
+      ],
+      "navPoints": [],
+      "revision": 1,
+      "updatedAt": "2026-10-03T14:56:00Z"
+    }
+  ],
+  "commands": []
+}

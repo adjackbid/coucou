@@ -16,6 +16,7 @@ import { h, clear } from "../views/dom";
 import * as live from "./live";
 import { dropdown, menuOpen, onMenuClosed, refreshSuggestions, suggest } from "./ui";
 import { linksScreen, logScreen, type Page } from "./screens";
+import { Office } from "./office/office";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
@@ -29,6 +30,11 @@ const runs = new Map<string, Snapshot>();
 /** The team file being looked at, and which of its screens. */
 let selected: string | null = null;
 let tab: "setup" | "links" | "monitor" | "log" = "setup";
+/** The monitor as a board, or as the team's office. */
+let monitorMode: "board" | "office" = "board";
+/** The company map instead of one team; or the office of a team that has no file here (示範資料). */
+let place: "team" | "company" | "office" = "team";
+let officeTeam: string | null = null;
 /** The form's working copy of the selected team; saved on request. */
 let editing: TeamConfig | null = null;
 let unsaved = false;
@@ -212,6 +218,7 @@ async function act(what: () => Promise<unknown>, after?: () => void) {
 
 function select(file: string) {
   selected = file;
+  place = "team";
   trouble = "";
   const picked = files.find((f) => f.file === file);
   editing = picked?.config ? structuredClone(picked.config) : null;
@@ -229,11 +236,11 @@ function sidebar(): HTMLElement {
     list.append(
       h(
         "div",
-        { class: `team-row${file.file === selected ? " on" : ""}` },
+        { class: `team-row${file.file === selected && place === "team" ? " on" : ""}` },
         h(
           "button",
           {
-            class: `team-item${file.file === selected ? " on" : ""}`,
+            class: `team-item${file.file === selected && place === "team" ? " on" : ""}`,
             type: "button",
             onClick: () => {
               select(file.file);
@@ -301,6 +308,19 @@ function sidebar(): HTMLElement {
     "aside",
     { class: "sidebar pane" },
     h("div", { class: "brand", "data-drag": "" }, teamMark(30), h("span", { text: "Teamwork" })),
+    h(
+      "button",
+      {
+        class: `team-item company${place === "company" ? " on" : ""}`,
+        type: "button",
+        onClick: () => {
+          place = "company";
+          render();
+        },
+      },
+      h("span", { class: "team-item-name", text: "公司總覽" }),
+      h("span", { class: "team-item-state", text: office.demo ? "示範資料" : "所有團隊的辦公室" }),
+    ),
     h("div", { class: "side-title", text: "團隊" }),
     list,
     h(
@@ -918,7 +938,9 @@ function composer(snap: Snapshot): HTMLElement {
 }
 
 function monitor(snap: Snapshot): HTMLElement {
-  const percent = snap.total ? Math.round((snap.done / snap.total) * 100) : 0;
+  // The board and the Office read progress from the same calculation.
+  const shared = office.store.progress(snap.id);
+  const percent = shared.percent ?? 0;
   const minutes = Math.max(0, Math.floor(((snap.finishedAt || Date.now()) - snap.startedAt) / 60_000));
 
   return h(
@@ -928,7 +950,7 @@ function monitor(snap: Snapshot): HTMLElement {
       "div",
       { class: "progress" },
       h("span", { class: "progress-label", text: "整體進度" }),
-      h("span", { class: "progress-number", text: `${percent}%` }),
+      h("span", { class: "progress-number", text: shared.percent === null ? "尚未派工" : `${percent}%` }),
       h("div", { class: "meter", role: "progressbar", "aria-valuenow": percent, "aria-valuemin": 0, "aria-valuemax": 100 }, h("i", { style: `width:${percent}%` })),
       h("span", { class: "dim", text: `已驗收 ${snap.done} / ${snap.total} 項任務` }),
       h("span", { class: "dim", text: `${snap.totalTurns} / ${snap.maxTurns} 回合` }),
@@ -1016,12 +1038,41 @@ function tabs(snap: Snapshot | undefined): HTMLElement {
     { class: "tabs" },
     item("團隊設定", "setup", true),
     item("協作關係", "links", !!editing),
-    item("工作監控", "monitor", !!snap, snap ? "" : "啟動後"),
+    item("工作監控", "monitor", true, ""),
     item("溝通紀錄", "log", !!snap, snap ? "" : "啟動後"),
+    tab === "monitor"
+      ? h(
+          "div",
+          { class: "office-switch", role: "group", "aria-label": "看板或辦公室" },
+          h("button", { class: monitorMode === "board" ? "on" : "", type: "button", "aria-pressed": String(monitorMode === "board"), disabled: !snap, title: snap ? "" : "團隊啟動後才有看板", onClick: () => { monitorMode = "board"; render(); } }, "看板"),
+          h("button", { class: monitorMode === "office" ? "on" : "", type: "button", "aria-pressed": String(monitorMode === "office"), onClick: () => { monitorMode = "office"; render(); } }, "Office"),
+        )
+      : null,
   );
 }
 
 function main(): HTMLElement {
+  if (place === "company" || (place === "office" && officeTeam)) {
+    const team = place === "office" ? office.store.team(officeTeam!) : undefined;
+    return h(
+      "main",
+      { class: "main pane" },
+      h(
+        "header",
+        { class: "top", "data-drag": "" },
+        h(
+          "nav",
+          { class: "crumbs", "data-drag": "", "aria-label": "位置" },
+          place === "office"
+            ? h("button", { class: "link", type: "button", onClick: () => { place = "company"; render(); } }, "公司總覽")
+            : h("b", { text: "公司總覽" }),
+          team ? h("span", { class: "dim", text: ` › ${team.name}` }) : null,
+        ),
+        windowButtons(),
+      ),
+      h("div", { class: "scroll" }, place === "office" ? office.team(officeTeam!) : office.company()),
+    );
+  }
   const file = files.find((f) => f.file === selected);
   if (!file) {
     return h(
@@ -1034,7 +1085,8 @@ function main(): HTMLElement {
   const snap = file.config ? runs.get(file.config.id) : undefined;
   // A screen that needs a running team falls back to the setup.
   const view =
-    tab === "monitor" && snap ? monitor(snap)
+    tab === "monitor" && (monitorMode === "office" || !snap) && file.config ? office.team(file.config.id)
+    : tab === "monitor" && snap ? monitor(snap)
     : tab === "log" && snap && editing ? logScreen(editing, snap, page)
     : tab === "links" && editing ? linksScreen(editing, snap, page)
     : setup(file);
@@ -1047,6 +1099,34 @@ function main(): HTMLElement {
     h("div", { class: "scroll" }, view),
   );
 }
+
+/** The Office: the same record as the board, as rooms. `?office=mock` in a browser shows the spec's demo company. */
+const office = new Office(
+  {
+    render: () => render(),
+    showBoard: () => {
+      monitorMode = "board";
+      render();
+    },
+    openTeam: (teamId) => {
+      const file = files.find((f) => f.config?.id === teamId);
+      if (file) {
+        select(file.file);
+        tab = "monitor";
+        monitorMode = "office";
+      } else {
+        place = "office";
+        officeTeam = teamId;
+      }
+      render();
+    },
+    openArtifact: (teamId, ref) => void act(() => Bridge.teamOpen(teamId, ref)),
+    pause: (teamId) => Bridge.teamPause(teamId),
+    resume: (teamId) => Bridge.teamResume(teamId),
+    instruct: (teamId, text) => Bridge.teamInstruct(teamId, "", text),
+  },
+  { demo: !IS_TAURI && new URLSearchParams(location.search).get("office") === "mock" },
+);
 
 /** What the 協作關係 and 溝通紀錄 screens borrow from the page. */
 const page: Page = { render: () => render(), act, save, said, colorOf, blob, composer, touched };
@@ -1077,6 +1157,7 @@ function render() {
   const scroller = root.querySelector(".scroll");
   if (scroller) scroller.scrollTop = scroll;
   live.afterRender();
+  office.afterRender();
   if (key) {
     const again = root.querySelector<HTMLInputElement>(`[data-key="${CSS.escape(key)}"]`);
     if (again) {
@@ -1109,6 +1190,11 @@ async function load() {
       runs.set("shop", snap);
       live.applySnapshot(snap);
       tab = "monitor";
+      // `?view=office` / `?view=company` open the Office straight away, to look at it.
+      const view = new URLSearchParams(location.search).get("view");
+      if (view === "office") monitorMode = "office";
+      const member = new URLSearchParams(location.search).get("member");
+      if (member) office.sel = { teamId: "shop", memberId: member };
       demo.demoStream(live.applyPatch, (next) => {
         runs.set(next.id, next);
         live.applySnapshot(next);
@@ -1116,6 +1202,7 @@ async function load() {
       }, snap);
     }
   }
+  office.feed(files, runs);
   if (!selected || !files.some((f) => f.file === selected)) {
     // The team that is running, else the first.
     const first = files.find((f) => f.config && runs.get(f.config.id)?.status === "running")?.file ?? files[0]?.file ?? null;
@@ -1126,14 +1213,19 @@ async function load() {
     const again = files.find((f) => f.file === selected);
     editing = again?.config ? structuredClone(again.config) : null;
   }
+  // A browser opened at `?view=company` starts on the company map.
+  if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "company") place = "company";
+  firstLoad = false;
   render();
 }
+let firstLoad = true;
 
 async function start() {
   live.setSaid(said);
   await onEvent<Snapshot>("team-changed", (snap) => {
     runs.set(snap.id, snap);
     live.applySnapshot(snap);
+    office.feed(files, runs);
     // Typing in the form is not interrupted by a team at work behind it.
     if (tab === "monitor" || !unsaved) render();
   });

@@ -1,0 +1,223 @@
+[
+ {
+  "schemaVersion": 1,
+  "streamId": "demo-authorized-stream-1",
+  "eventId": "evt-101",
+  "seq": 101,
+  "occurredAt": "2026-10-03T14:56:01Z",
+  "type": "artifact.created",
+  "changes": [
+   {
+    "entityKind": "artifact",
+    "entityKey": "art-website-v1",
+    "revision": 1,
+    "op": "upsert",
+    "value": {
+     "artifactId": "art-website-v1",
+     "teamId": "shop",
+     "runId": "run-shop",
+     "taskId": "shop-cart",
+     "authorMemberId": "member-ai3",
+     "name": "購物網站可測試版本",
+     "kind": "website",
+     "artifactVersion": 1,
+     "resourceRef": "demo://artifacts/shopping-v1",
+     "revision": 1,
+     "updatedAt": "2026-10-03T14:56:01Z"
+    }
+   }
+  ]
+ },
+ {
+  "schemaVersion": 1,
+  "streamId": "demo-authorized-stream-1",
+  "eventId": "evt-102",
+  "seq": 102,
+  "occurredAt": "2026-10-03T14:56:02Z",
+  "type": "task.updated",
+  "changes": [
+   {
+    "entityKind": "task",
+    "entityKey": "shop-cart",
+    "revision": 2,
+    "op": "upsert",
+    "value": {
+     "taskId": "shop-cart",
+     "teamId": "shop",
+     "runId": "run-shop",
+     "title": "購物車功能",
+     "assigneeMemberId": "member-ai3",
+     "status": "completed",
+     "parentTaskId": null,
+     "dependencyTaskIds": [
+      "shop-catalog",
+      "shop-images"
+     ],
+     "includeInProgress": true,
+     "acceptanceCriteria": [
+      {
+       "id": "cart-add",
+       "text": "可加入商品",
+       "passed": true
+      },
+      {
+       "id": "cart-qty",
+       "text": "可調整數量",
+       "passed": true
+      },
+      {
+       "id": "cart-total",
+       "text": "小計正確",
+       "passed": true
+      }
+     ],
+     "revision": 2,
+     "updatedAt": "2026-10-03T14:56:02Z"
+    }
+   },
+   {
+    "entityKind": "member",
+    "entityKey": "run-shop/member-ai3",
+    "revision": 2,
+    "op": "upsert",
+    "value": {
+     "memberId": "member-ai3",
+     "agentId": "ai3",
+     "teamId": "shop",
+     "runId": "run-shop",
+     "roleLabel": "網站開發",
+     "workStatus": "completed",
+     "engineStatus": "online",
+     "primaryTaskId": null,
+     "activeTaskIds": [],
+     "lastCompletedTaskId": "shop-cart",
+     "summary": "網站版本已交付 AI 2。",
+     "waitingFor": null,
+     "lastActivityAt": "2026-10-03T14:56:02Z",
+     "revision": 2,
+     "updatedAt": "2026-10-03T14:56:02Z"
+    }
+   },
+   {
+    "entityKind": "run",
+    "entityKey": "run-shop",
+    "revision": 2,
+    "op": "upsert",
+    "value": {
+     "runId": "run-shop",
+     "teamId": "shop",
+     "status": "running",
+     "progress": {
+      "completed": 4,
+      "total": 7,
+      "percent": 57
+     },
+     "revision": 2,
+     "updatedAt": "2026-10-03T14:56:02Z"
+    }
+   }
+  ]
+ },
+ {
+  "schemaVersion": 1,
+  "streamId": "demo-authorized-stream-1",
+  "eventId": "evt-103",
+  "seq": 103,
+  "occurredAt": "2026-10-03T14:56:03Z",
+  "type": "task.updated",
+  "changes": [
+   {
+    "entityKind": "task",
+    "entityKey": "shop-tests",
+    "revision": 2,
+    "op": "upsert",
+    "value": {
+     "taskId": "shop-tests",
+     "teamId": "shop",
+     "runId": "run-shop",
+     "title": "整合測試",
+     "assigneeMemberId": "member-ai2",
+     "status": "running",
+     "parentTaskId": null,
+     "dependencyTaskIds": [
+      "shop-cart",
+      "shop-catalog",
+      "shop-images"
+     ],
+     "includeInProgress": true,
+     "acceptanceCriteria": [
+      {
+       "id": "shop-tests-accept",
+       "text": "完成並滿足此任務驗收條件",
+       "passed": false
+      }
+     ],
+     "revision": 2,
+     "updatedAt": "2026-10-03T14:56:03Z"
+    }
+   },
+   {
+    "entityKind": "member",
+    "entityKey": "run-shop/member-ai2",
+    "revision": 2,
+    "op": "upsert",
+    "value": {
+     "memberId": "member-ai2",
+     "agentId": "ai2",
+     "teamId": "shop",
+     "runId": "run-shop",
+     "roleLabel": "執行整合",
+     "workStatus": "working",
+     "engineStatus": "online",
+     "primaryTaskId": "shop-tests",
+     "activeTaskIds": [
+      "shop-tests"
+     ],
+     "lastCompletedTaskId": null,
+     "summary": "執行購物車整合測試。",
+     "waitingFor": null,
+     "lastActivityAt": "2026-10-03T14:56:03Z",
+     "revision": 2,
+     "updatedAt": "2026-10-03T14:56:03Z"
+    }
+   }
+  ]
+ },
+ {
+  "schemaVersion": 1,
+  "streamId": "demo-authorized-stream-1",
+  "eventId": "evt-104",
+  "seq": 104,
+  "occurredAt": "2026-10-03T14:56:04Z",
+  "type": "message.created",
+  "changes": [
+   {
+    "entityKind": "message",
+    "entityKey": "msg-4",
+    "revision": 1,
+    "op": "upsert",
+    "value": {
+     "messageId": "msg-4",
+     "teamId": "shop",
+     "runId": "run-shop",
+     "threadId": "thread-shopping",
+     "taskId": "shop-tests",
+     "from": {
+      "kind": "member",
+      "memberId": "member-ai2"
+     },
+     "toMemberIds": [
+      "member-ai1"
+     ],
+     "kind": "message",
+     "text": "已收到網站版本，開始整合測試。",
+     "deliveryStatus": "delivered",
+     "artifactIds": [],
+     "occurredAt": "2026-10-03T14:56:04Z",
+     "revision": 1,
+     "updatedAt": "2026-10-03T14:56:04Z"
+    }
+   }
+  ]
+ }
+]

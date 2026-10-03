@@ -1,0 +1,69 @@
+{
+  "fixtureOnly": true,
+  "notes": "demo:// 是示例資源參照，MockAdapter 必須使用內建預覽或明確的示範提示，不可嘗試當作 HTTP 下載。事件會更新真實狀態模型；播放間隔只是示範操作。",
+  "cases": [
+    {
+      "id": "normal",
+      "eventOrder": [
+        101,
+        102,
+        103,
+        104
+      ],
+      "expected": "游標 104，購物網站 4/7=57%，AI 2 工作中，AI 3 已完成，訊息總數 4。"
+    },
+    {
+      "id": "duplicate",
+      "eventOrder": [
+        101,
+        102,
+        102,
+        103,
+        104,
+        104
+      ],
+      "expected": "與 normal 一致；不重複訊息或動畫。"
+    },
+    {
+      "id": "gap",
+      "eventOrder": [
+        101,
+        103
+      ],
+      "expected": "游標停在 101 並要求補拉或快照，103 先緩存。"
+    },
+    {
+      "id": "out-of-order",
+      "eventOrder": [
+        101,
+        103,
+        102,
+        104
+      ],
+      "expected": "察覺缺口後重整順序或重新同步，最終與 normal 一致。"
+    },
+    {
+      "id": "stream-lost",
+      "eventOrder": [
+        101
+      ],
+      "transportAction": "disconnect",
+      "expected": "顯示連線中斷／資料已過期；不修改 Agent engineStatus 或將任務標完成。"
+    },
+    {
+      "id": "new-run",
+      "eventOrder": [],
+      "expected": "切換 runId 後，不接受上一輪 memberKey 的資料覆寫新工位狀態。"
+    },
+    {
+      "id": "command-ack",
+      "eventOrder": [],
+      "expected": "accepted 先顯示已接受，直到 command.updated applied 與相關 run 事件才顯示已套用。"
+    },
+    {
+      "id": "command-retry",
+      "eventOrder": [],
+      "expected": "相同 clientRequestId 重試回傳同一 commandId；失敗指令保留使用者輸入。"
+    }
+  ]
+}
