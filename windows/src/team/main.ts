@@ -15,6 +15,7 @@ import type { AgentProfile, ModelChoice } from "../core/state";
 import { h, clear } from "../views/dom";
 import * as live from "./live";
 import { dropdown, menuOpen, onMenuClosed, refreshSuggestions, suggest } from "./ui";
+import { linksScreen, logScreen, type Page } from "./screens";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
@@ -27,7 +28,7 @@ let agents: AgentProfile[] = [];
 const runs = new Map<string, Snapshot>();
 /** The team file being looked at, and which of its screens. */
 let selected: string | null = null;
-let tab: "setup" | "monitor" = "setup";
+let tab: "setup" | "links" | "monitor" | "log" = "setup";
 /** The form's working copy of the selected team; saved on request. */
 let editing: TeamConfig | null = null;
 let unsaved = false;
@@ -995,8 +996,7 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
 }
 
 function tabs(snap: Snapshot | undefined): HTMLElement {
-  // Two of the four screens exist; the other two say so rather than pretend.
-  const item = (label: string, id: "setup" | "monitor" | null, enabled: boolean, note = "") =>
+  const item = (label: string, id: typeof tab, enabled: boolean, note = "") =>
     h(
       "button",
       {
@@ -1004,7 +1004,7 @@ function tabs(snap: Snapshot | undefined): HTMLElement {
         type: "button",
         disabled: !enabled,
         onClick: () => {
-          if (id) tab = id;
+          tab = id;
           render();
         },
       },
@@ -1015,9 +1015,9 @@ function tabs(snap: Snapshot | undefined): HTMLElement {
     "nav",
     { class: "tabs" },
     item("團隊設定", "setup", true),
-    item("協作關係", null, false, "下一階段"),
+    item("協作關係", "links", !!editing),
     item("工作監控", "monitor", !!snap, snap ? "" : "啟動後"),
-    item("溝通紀錄", null, false, "下一階段"),
+    item("溝通紀錄", "log", !!snap, snap ? "" : "啟動後"),
   );
 }
 
@@ -1032,16 +1032,24 @@ function main(): HTMLElement {
     );
   }
   const snap = file.config ? runs.get(file.config.id) : undefined;
-  const showMonitor = tab === "monitor" && snap;
+  // A screen that needs a running team falls back to the setup.
+  const view =
+    tab === "monitor" && snap ? monitor(snap)
+    : tab === "log" && snap && editing ? logScreen(editing, snap, page)
+    : tab === "links" && editing ? linksScreen(editing, snap, page)
+    : setup(file);
   return h(
     "main",
     { class: "main pane" },
     header(file, snap),
     tabs(snap),
     trouble ? h("div", { class: "problem", role: "alert", text: trouble.split("\n").map(said).join("\n") }) : null,
-    h("div", { class: "scroll" }, showMonitor ? monitor(snap) : setup(file)),
+    h("div", { class: "scroll" }, view),
   );
 }
+
+/** What the 協作關係 and 溝通紀錄 screens borrow from the page. */
+const page: Page = { render: () => render(), act, save, said, colorOf, blob, composer, touched };
 
 /** Drawing again waits while a menu is open: it hangs from a field that would be replaced. */
 let renderWaiting = false;

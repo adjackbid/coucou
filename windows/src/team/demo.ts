@@ -189,7 +189,14 @@ export function demoSnapshot(): Snapshot {
       { id: "D-2", task: "TASK-03", kind: "image", locator: "public/images", summary: "6 張商品圖:主圖、情境圖與細節圖", by: "ai4", at: ago(4), accepted: true },
       { id: "D-3", task: "TASK-02", kind: "preview", locator: "http://localhost:5173/", summary: "購物網站首頁(開發中)", by: "ai3", at: ago(6), accepted: true },
     ],
-    messages: [],
+    messages: [
+      { id: "M-1", from: "system", to: "ai4", text: "TASK-03 is yours and ready to start: 商品圖片", task: "TASK-03", at: ago(17), heard: true },
+      { id: "M-2", from: "ai4", to: "ai3", text: "這是 6 張商品圖,包含主圖、情境圖與細節圖,請用於購物車與商品頁面。", task: "TASK-03", at: ago(4), heard: true },
+      { id: "M-3", from: "ai1", to: "ai3", text: "請完成購物車、數量調整與小計。", task: "TASK-04", at: ago(8), heard: true },
+      { id: "M-4", from: "ai3", to: "ai1", text: "請問優惠券是否需要支援滿額折扣?以及是否需要會員限定的優惠?", task: "TASK-04", at: ago(3), heard: true },
+      { id: "M-5", from: "ai1", to: "ai3", text: "首版先完成基本結帳流程,優惠券規則後續再擴充,請先專注於核心功能實作。", task: "TASK-04", at: ago(2), heard: true },
+      { id: "M-6", from: "you", to: "ai1", text: "首頁的 Banner 請換成夏季主題。", task: null, at: ago(1), heard: false },
+    ],
     questions: [],
     feed: [
       { at: ago(18), kind: "task", from: "ai1", to: "ai4", text: "商品圖片", task: "TASK-03" },

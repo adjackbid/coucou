@@ -151,7 +151,7 @@ const TOOL_MARK: Record<string, string> = {
 };
 
 /** What a member heard at the start of a turn, in the window's words. */
-function heardWords(text: string): string {
+export function heardWords(text: string): string {
   const rules: [RegExp, (m: RegExpMatchArray) => string][] = [
     [/^The team has started\./, () => "團隊開始了:規劃工作並建立任務"],
     [/^(TASK-\d+) is yours and ready to start: (.+)/, (m) => `${m[1]}「${m[2]}」交給你了`],

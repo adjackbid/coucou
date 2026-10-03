@@ -1881,3 +1881,715 @@ h2 {
   margin-left: auto;
   padding: 5px 12px;
 }
+
+/* ── 協作關係: the team as a map ───────────────────────────────────────────── */
+
+.links-screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.legend .key {
+  display: inline-block;
+  width: 22px;
+  height: 0;
+  margin-left: 8px;
+  border-top: 2px solid var(--dim);
+}
+
+.legend .key.dashed {
+  border-top-style: dashed;
+}
+
+.legend .key.lead {
+  border-top: 2px dotted rgba(245, 246, 248, 0.4);
+}
+
+.legend .key.live {
+  border-top-color: var(--green-2);
+}
+
+.map {
+  position: relative;
+  height: 470px;
+  margin-top: 10px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.06) 1px, transparent 0) 0 0 / 22px 22px,
+    rgba(0, 0, 0, 0.18);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  overflow: hidden;
+}
+
+.map-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.edge {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+
+.edge.talk {
+  stroke-dasharray: 6 6;
+}
+
+.edge.lead {
+  stroke-dasharray: 2 6;
+  stroke-width: 1.6;
+}
+
+/* Work moving along a line right now. */
+.edge.live {
+  stroke-width: 2.6;
+  stroke-dasharray: 10 8;
+  animation: edge-flow 0.9s linear infinite;
+}
+
+@keyframes edge-flow {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+.edge-label {
+  fill: var(--ink-2);
+  font: 600 11.5px var(--font);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(11, 12, 14, 0.85);
+  stroke-width: 4px;
+}
+
+.map-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 128px;
+  max-width: 180px;
+  padding: 12px 14px 10px;
+  border: 0;
+  border-radius: 18px;
+  font: inherit;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--c) 12%, rgba(var(--card), 0.88));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent), 0 8px 22px rgba(0, 0, 0, 0.28);
+  cursor: default;
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+
+.map-node:hover {
+  transform: translate(-50%, -52%);
+}
+
+.map-node.on {
+  box-shadow: inset 0 0 0 2px var(--c), 0 0 26px color-mix(in srgb, var(--c) 35%, transparent);
+}
+
+.map-node.working {
+  box-shadow: inset 0 0 0 1px var(--c), 0 0 22px color-mix(in srgb, var(--c) 28%, transparent);
+}
+
+.map-node.waitingYou,
+.map-node.lost {
+  box-shadow: inset 0 0 0 1px rgba(244, 80, 94, 0.7), 0 0 18px rgba(244, 80, 94, 0.2);
+}
+
+.crown-mini {
+  position: absolute;
+  top: -11px;
+  font-style: normal;
+  font-size: 15px;
+  color: var(--amber);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.map-name {
+  margin-top: 4px;
+  font-weight: 650;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.map-role {
+  max-width: 100%;
+  font-size: 11.5px;
+  color: var(--dim-glass);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-state {
+  margin-top: 2px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--dim);
+  background: var(--lift);
+}
+
+.map-state.working {
+  color: var(--blue);
+  background: rgba(59, 158, 255, 0.15);
+}
+
+.map-state.waitingYou,
+.map-state.lost {
+  color: var(--red-text);
+  background: rgba(244, 80, 94, 0.16);
+}
+
+.map-state.done {
+  color: var(--green-2);
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.member-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.member-panel > label {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink-2);
+}
+
+.member-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+}
+
+.member-card-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.member-card-state {
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.member-card-state.working {
+  color: var(--blue);
+}
+
+.member-card-state.done {
+  color: var(--green-2);
+}
+
+.member-card-state.waitingYou,
+.member-card-state.lost {
+  color: var(--red-text);
+}
+
+.duty {
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: rgba(0, 0, 0, 0.22);
+  overflow-wrap: anywhere;
+}
+
+.rel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--lift);
+  font-size: 12.5px;
+}
+
+.rel-name {
+  flex: none;
+  font-weight: 600;
+}
+
+.rel-what {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--dim-glass);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rel-add {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.rel-add .field {
+  padding: 6px 10px;
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.check i {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 5px;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.25);
+}
+
+.check.on i {
+  color: #0b0c0e;
+  background: var(--green-2);
+  box-shadow: none;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--lift);
+  text-align: left;
+  cursor: default;
+}
+
+.switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.switch-text b {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.switch-text small {
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.switch {
+  flex: none;
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  transition: background 0.15s ease-out;
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ink);
+  transition: transform 0.15s ease-out;
+}
+
+.switch-row.on .switch {
+  background: var(--green-2);
+}
+
+.switch-row.on .switch::after {
+  transform: translateX(16px);
+}
+
+/* ── 溝通紀錄: every exchange, by task ─────────────────────────────────────── */
+
+.log-screen {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.9fr) minmax(0, 1.6fr) minmax(250px, 1fr);
+  gap: 10px;
+  align-items: stretch;
+  height: calc(100vh - 230px);
+  min-height: 460px;
+}
+
+.log-screen > .panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.log-task {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.log-task > label {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink-2);
+}
+
+.log-threads > .field {
+  flex: none;
+}
+
+.filters {
+  display: flex;
+  gap: 6px;
+}
+
+.filter {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  font: 600 12px var(--font);
+  color: var(--dim);
+  background: var(--lift);
+  cursor: default;
+}
+
+.filter.on {
+  color: var(--ink);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.threads {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.thread {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+  cursor: default;
+}
+
+.thread:hover {
+  background: var(--lift);
+}
+
+.thread.on {
+  background: var(--lift-2);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.thread-faces {
+  flex: none;
+  display: inline-flex;
+}
+
+.thread-faces .blob + .blob {
+  margin-left: -8px;
+}
+
+.thread-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.thread-title {
+  font-weight: 650;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-sub {
+  font-size: 11.5px;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread time,
+.convo time {
+  flex: none;
+  font-size: 11px;
+  color: var(--dim-3);
+}
+
+.flag.blocked {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  margin-right: 5px;
+  border-radius: 50%;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--red);
+}
+
+.convo-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.convo-people {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.convo {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  user-select: text;
+}
+
+.convo-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.convo-msg.mine {
+  justify-content: flex-end;
+}
+
+.convo-bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 82%;
+}
+
+.convo-msg.mine .convo-bubble-wrap {
+  align-items: flex-end;
+}
+
+.convo-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.convo-head b {
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.convo-bubble {
+  padding: 8px 12px;
+  border-radius: 4px 14px 14px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--c) 16%, rgba(255, 255, 255, 0.05));
+}
+
+.convo-msg.mine .convo-bubble {
+  border-radius: 14px 4px 14px 14px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.convo-unread {
+  font-size: 11px;
+  color: var(--amber);
+}
+
+.convo-note,
+.convo-event {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--dim-glass);
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.convo-note b,
+.convo-event b {
+  color: var(--ink-2);
+}
+
+.convo-note time,
+.convo-event time {
+  margin-left: auto;
+}
+
+.convo-event > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.convo-event.ev-delivered,
+.convo-event.ev-accepted {
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.35);
+}
+
+.convo-event.ev-rejected,
+.convo-event.ev-blocked,
+.convo-event.ev-lost {
+  box-shadow: inset 0 0 0 1px rgba(244, 80, 94, 0.4);
+}
+
+.log-convo .composer-wrap {
+  position: static;
+}
+
+.task-card-big {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--lift);
+}
+
+.task-card-big b {
+  flex: 1 1 auto;
+  font-size: 14px;
+}
+
+.chip.state.doing {
+  color: var(--blue);
+  background: rgba(59, 158, 255, 0.15);
+}
+
+.chip.state.delivered {
+  color: var(--amber);
+  background: rgba(245, 165, 36, 0.15);
+}
+
+.chip.state.done {
+  color: var(--green-2);
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.fact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 12.5px;
+}
+
+.fact-k {
+  flex: none;
+  width: 52px;
+  color: var(--dim);
+}
+
+.fact-v {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.fact-v small {
+  font-weight: 400;
+  color: var(--dim);
+}
+
+.deliverable.small {
+  padding: 8px 10px;
+}
+
+@media (max-width: 1100px) {
+  .links-screen,
+  .log-screen {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+}
