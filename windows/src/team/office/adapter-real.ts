@@ -50,7 +50,9 @@ function runStatus(snap: Snapshot | undefined): RunStatus {
 }
 
 function workStatus(m: MemberView, snap: Snapshot): WorkStatus {
-  if (snap.detached) return "unknown";
+  // A team loaded from an earlier run has no agent behind it (engineStatus
+  // says so), but its record is whole: Coucou ended its open turns when it
+  // read the log, so each member's state is what the run left.
   switch (m.status) {
     case "lost": return "error";
     case "waitingYou": return "waiting_input";

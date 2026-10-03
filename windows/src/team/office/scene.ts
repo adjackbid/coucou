@@ -381,10 +381,10 @@ export class TeamScene {
     const label = h(
       "button",
       {
-        class: `office-label ${st.tone}${sel ? " on" : ""}`, type: "button",
+        class: `office-label ${st.tone}${sel ? " on" : ""}${m.engineStatus === "offline" ? " offline" : ""}`, type: "button",
         style: `--c:${color}`,
         "aria-pressed": sel ? "true" : "false",
-        "aria-label": `${m.displayName ?? m.memberId}${leader ? ",Leader" : ""},${m.roleLabel},${st.label}${task ? `,${task}` : ""}`,
+        "aria-label": `${m.displayName ?? m.memberId}${leader ? ",Leader" : ""},${m.roleLabel},${st.label}${task ? `,${task}` : ""}${m.engineStatus === "offline" ? ",未連線" : ""}`,
         "data-member": m.memberId,
         onClick: () => this.opts.onSelect?.(m.memberId),
       },

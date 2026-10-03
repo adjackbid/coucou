@@ -557,7 +557,8 @@ export class Office {
         h("i", { class: "office-blob big", style: `background:${m.color}` }),
         h("div", { class: "grow" },
           h("h2", { tabindex: "-1", text: `${m.displayName} · ${m.roleLabel}` }),
-          h("div", { class: "row" }, leader ? h("span", { class: "office-pill quiet", text: "♛ Leader" }) : null, this.status(m.workStatus), this.demoTag()),
+          h("div", { class: "row" }, leader ? h("span", { class: "office-pill quiet", text: "♛ Leader" }) : null, this.status(m.workStatus),
+            m.engineStatus === "offline" ? h("span", { class: "office-pill quiet", title: "沒有代理在執行;顯示的是紀錄裡最後的狀態", text: "⌁ 未連線" }) : null, this.demoTag()),
           h("small", { class: "dim", text: `最後更新 ${clock(m.lastActivityAt) || "—"}` })),
         h("button", { class: "icon-btn", type: "button", title: "關閉(Esc)", "aria-label": "關閉", onClick: () => this.close(teamId) }, "✕")),
       this.back

@@ -306,6 +306,11 @@
 .office-label.done .st { color: #6ee7b7; }
 .office-label.quiet .st { color: var(--dim); }
 
+/* No agent behind it: the last recorded state, a little faded. */
+.office-label.offline {
+  opacity: 0.78;
+}
+
 .office-label.on,
 .office-label:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--c) 80%, white);
@@ -869,6 +874,10 @@
 @media (max-width: 1279px) {
   .office-body {
     grid-template-columns: 1fr;
+  }
+  /* The map shares the column with the room summary under it. */
+  .office-map-viewport {
+    height: min(58vh, 640px);
   }
   .office-drawer {
     position: fixed;
