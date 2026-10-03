@@ -625,12 +625,21 @@ fn segment_danger(scope: &Scope, tokens: &[Token], depth: u8) -> Option<Danger> 
 
 /// Where an agent's own image generation leaves its pictures: Codex's
 /// `%USERPROFILE%\.codex\generated_images`.
+fn generated_images() -> Option<&'static str> {
+    // Read once: the home folder does not move while Coucou runs.
+    static ROOT: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    ROOT.get_or_init(|| {
+        let home = std::env::var("USERPROFILE").ok()?;
+        Some(Path::new(&home).join(".codex").join("generated_images").to_string_lossy().to_lowercase())
+    })
+    .as_deref()
+}
+
 fn is_generated_image(path: &str) -> bool {
-    let Ok(home) = std::env::var("USERPROFILE") else { return false };
-    let root = Path::new(&home).join(".codex").join("generated_images").to_string_lossy().to_lowercase();
+    let Some(root) = generated_images() else { return false };
     let path = path.trim_matches(['"', '\'']).replace('/', "\\").to_lowercase();
     // No way out of it with `..`.
-    !path.contains("..") && path.strip_prefix(root.as_str()).is_some_and(|rest| rest.starts_with('\\'))
+    !path.contains("..") && path.strip_prefix(root).is_some_and(|rest| rest.starts_with('\\'))
 }
 
 fn is_assignment(token: &str) -> bool {
@@ -668,8 +677,10 @@ mod tests {
 
     #[test]
     fn an_agent_may_bring_in_the_images_it_generated() {
-        let home = std::env::var("USERPROFILE").unwrap();
-        let made = format!(r"{home}\.codex\generated_images\01a1004f\ig_0.png");
+        // The rule's own idea of the folder: another test moves USERPROFILE.
+        let images = generated_images().unwrap().to_string();
+        let home = images.trim_end_matches(r"\.codex\generated_images").to_string();
+        let made = format!(r"{images}\01a1004f\ig_0.png");
         assert_eq!(run(&format!("Copy-Item -LiteralPath '{made}' -Destination 'assets\\source\\images\\jp-0.png'")), Verdict::Allow);
         assert_eq!(run(&format!("cp \"{made}\" public/media/hero.png")), Verdict::Allow);
         // Anywhere else outside, or a way out of that folder: still asked.
