@@ -22,7 +22,8 @@ export interface ViewActions {
   openTarget(): void;
   openUrl(url: string): void;
   /** `terminal` gives the request back unanswered, for Claude Code to ask itself. */
-  decide(d: "allow" | "deny" | "terminal"): void;
+  /** `allow-all`: a team member asked for several steps at once. */
+  decide(d: "allow" | "deny" | "terminal" | "allow-all"): void;
   /** Answers the current field of the focused session's question, in its terminal. */
   answerQuestion(answer: QuestionAnswer): Promise<void>;
   toggleSound(): void;
@@ -434,7 +435,8 @@ function buildApproval(actions: ViewActions): ViewHost {
       // request: Deny / Allow, or Deny / Ask in terminal when the relay had to
       // cut the request — nobody can allow what nobody could read. "Always" is
       // gone until the remembered-rules list exists to back it.
-      const shape = req?.truncated ? "terminal" : "allow";
+      const more = req?.team?.more ?? 0;
+      const shape = req?.truncated ? "terminal" : more ? `allow+${more}` : "allow";
       if (rowKey === shape) return;
       rowKey = shape;
       clear(row);
@@ -444,6 +446,7 @@ function buildApproval(actions: ViewActions): ViewHost {
           ? btn("Ask in terminal", "primary", () => actions.decide("terminal"))
           : btn("Allow", "primary", () => actions.decide("allow"), "Y"),
       );
+      if (more) row.append(btn(`Allow all ${more + 1}`, "secondary", () => actions.decide("allow-all")));
     },
   };
 }

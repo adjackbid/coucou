@@ -552,7 +552,10 @@ pub struct PermissionView {
 #[derive(Debug, Clone, Default)]
 pub struct Live {
     pub activity: String,
-    pub permission: Option<PermissionView>,
+    /// Requests waiting for the person, oldest first. An agent may ask for
+    /// several at once (Codex runs steps in parallel): none may be dropped,
+    /// or the agent waits for an answer that never comes.
+    pub permissions: Vec<PermissionView>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -574,7 +577,10 @@ pub struct MemberView {
     /// The tool it is using right now.
     pub activity: String,
     pub turns: u32,
+    /// The oldest request waiting for the person…
     pub permission: Option<PermissionView>,
+    /// …and the ones behind it.
+    pub more_permissions: Vec<PermissionView>,
     pub lost_why: String,
     /// The last lines of its live screen.
     pub screen: Vec<super::screen::Line>,
@@ -619,7 +625,7 @@ impl State {
         if self.lost.contains_key(member) {
             return (MemberStatus::Lost, current, None);
         }
-        if let Some(p) = live.and_then(|l| l.permission.as_ref()) {
+        if let Some(p) = live.and_then(|l| l.permissions.first()) {
             let waiting = Waiting { on: YOU.into(), what: p.title.clone(), task: current.clone() };
             return (MemberStatus::WaitingYou, current, Some(waiting));
         }
@@ -670,7 +676,8 @@ impl State {
                     waiting,
                     activity: l.map(|l| l.activity.clone()).unwrap_or_default(),
                     turns: self.turns.get(&m.id).map(|t| t.count).unwrap_or(0),
-                    permission: l.and_then(|l| l.permission.clone()),
+                    permission: l.and_then(|l| l.permissions.first().cloned()),
+                    more_permissions: l.map(|l| l.permissions.iter().skip(1).cloned().collect()).unwrap_or_default(),
                     lost_why: self.lost.get(&m.id).cloned().unwrap_or_default(),
                     screen: Vec::new(),
                 }

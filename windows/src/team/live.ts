@@ -343,7 +343,8 @@ function bubbleText(snap: Snapshot, m: MemberView, d: Desk): string {
     case "waitingYou": {
       if (m.permission) {
         const raw = m.permission.rawInput && typeof m.permission.rawInput === "object" ? (m.permission.rawInput as Record<string, unknown>) : {};
-        return `等你批准:${short(typeof raw.command === "string" ? bare(raw.command) : m.permission.title, 90)}`;
+        const more = m.morePermissions.length ? `(還有 ${m.morePermissions.length} 個)` : "";
+        return `等你批准${more}:${short(typeof raw.command === "string" ? bare(raw.command) : m.permission.title, 90)}`;
       }
       const q = snap.questions.find((x) => x.by === m.id && x.answer === null);
       return q ? `想問你:${short(q.question, 90)}` : "等你回覆";

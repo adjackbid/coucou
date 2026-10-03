@@ -74,7 +74,10 @@ export interface MemberView {
   /** The tool it is using right now. */
   activity: string;
   turns: number;
+  /** The oldest request waiting for the person… */
   permission: Permission | null;
+  /** …and the ones behind it (an agent may ask for several steps at once). */
+  morePermissions: Permission[];
   lostWhy: string;
   /** The last lines of its live screen. */
   screen: Line[];

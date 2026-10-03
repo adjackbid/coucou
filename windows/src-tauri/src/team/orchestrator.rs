@@ -353,7 +353,7 @@ impl Team {
                         false
                     }
                     acp::Event::Permission(p) => {
-                        entry.permission = Some(PermissionView {
+                        entry.permissions.push(PermissionView {
                             request_id: p.request_id,
                             title: p.title,
                             kind: p.kind,
@@ -709,15 +709,33 @@ impl Teams {
         Ok(())
     }
 
-    /// The person answers the permission card a member's agent is holding.
-    pub async fn permit(&self, team: &str, member: &str, option_id: Option<String>) -> Result<(), String> {
+    /// The person answers the oldest request a member's agent is holding —
+    /// or, with `all`, every one it holds, each with its own option of the
+    /// same kind (allow once, reject once) as the one chosen.
+    pub async fn permit(&self, team: &str, member: &str, option_id: Option<String>, all: bool) -> Result<(), String> {
         let team = self.team(team)?;
-        let request = team.live.lock().unwrap().get_mut(member).and_then(|l| l.permission.take());
-        let request = request.ok_or("That member is not waiting for a permission.")?;
         let key = team.seats.get(member).map(|s| s.key.clone()).ok_or("That is not a member of the team.")?;
-        let sent = team.drive.answer(key, request.request_id, option_id).await;
+        let requests: Vec<PermissionView> = {
+            let mut live = team.live.lock().unwrap();
+            let held = live.get_mut(member).map(|l| &mut l.permissions).filter(|p| !p.is_empty());
+            let held = held.ok_or("That member is not waiting for a permission.")?;
+            if all { std::mem::take(held) } else { vec![held.remove(0)] }
+        };
+        let option_of = |r: &PermissionView, id: &str| r.options.iter().find(|o| o.get("optionId").and_then(Value::as_str) == Some(id)).cloned();
+        let kind = option_id.as_deref().and_then(|id| option_of(&requests[0], id)).and_then(|o| o.get("kind").and_then(Value::as_str).map(str::to_string));
+        let mut result = Ok(());
+        for (i, r) in requests.into_iter().enumerate() {
+            let option = if i == 0 {
+                option_id.clone()
+            } else {
+                kind.as_deref().and_then(|k| r.options.iter().find(|o| o.get("kind").and_then(Value::as_str) == Some(k))).and_then(|o| o.get("optionId").and_then(Value::as_str)).map(str::to_string)
+            };
+            if let Err(e) = team.drive.answer(key.clone(), r.request_id, option).await {
+                result = Err(e);
+            }
+        }
         team.changed();
-        sent
+        result
     }
 
     /// No new turns. The ones under way run to their end.
@@ -858,16 +876,20 @@ mod tests {
             let mate = Mate { teams, team: server.env["COUCOU_TEAM"].clone(), member: member.clone(), token: server.env["COUCOU_TEAM_TOKEN"].clone() };
             let script = self.script.clone();
             let hold = self.held.lock().unwrap().contains(&member).then(|| self.hold.clone());
-            let asks = self.asks.lock().unwrap().contains(&member);
+            // Listed n times: n requests at once, as Codex makes them.
+            let asks = self.asks.lock().unwrap().iter().filter(|m| **m == member).count();
             Box::pin(async move {
-                if asks {
+                for i in 0..asks {
                     events(acp::Event::Permission(acp::AcpPermission {
                         agent_id: seat.key.clone(),
-                        request_id: json!(7),
+                        request_id: json!(7 + i),
                         title: "Run rm -rf dist".into(),
                         kind: "execute".into(),
                         raw_input: json!({ "command": "rm -rf dist" }),
-                        options: vec![],
+                        options: vec![
+                            json!({ "optionId": format!("yes{i}"), "name": "Allow", "kind": "allow_once" }),
+                            json!({ "optionId": format!("no{i}"), "name": "Reject", "kind": "reject_once" }),
+                        ],
                         danger: Some(crate::policy::Danger::DeletesFolder),
                     }));
                 }
@@ -1232,10 +1254,37 @@ mod tests {
             assert_eq!(card.danger, Some(crate::policy::Danger::DeletesFolder));
             assert_eq!(waiting.members[0].waiting.as_ref().unwrap().on, YOU);
 
-            bench.teams.permit("shop", "ai1", Some("no".into())).await.unwrap();
-            assert_eq!(bench.drive.answered.lock().unwrap()[0], ("team:shop:ai1".to_string(), Some("no".to_string())));
+            bench.teams.permit("shop", "ai1", Some("no0".into()), false).await.unwrap();
+            assert_eq!(bench.drive.answered.lock().unwrap()[0], ("team:shop:ai1".to_string(), Some("no0".to_string())));
             assert_eq!(bench.member("ai1").status, MemberStatus::Working);
-            assert!(bench.teams.permit("shop", "ai1", None).await.is_err());
+            assert!(bench.teams.permit("shop", "ai1", None, false).await.is_err());
+            bench.drive.hold.notify_one();
+        });
+    }
+
+    /// Codex asks for several steps at once: every one waits for the person,
+    /// none is dropped, and they can be answered one by one or all together.
+    #[test]
+    fn several_requests_at_once_all_wait_and_can_be_answered_together() {
+        run(async {
+            let bench = bench(diligent());
+            bench.drive.held.lock().unwrap().push("ai1".into());
+            bench.drive.asks.lock().unwrap().extend(["ai1".to_string(), "ai1".to_string(), "ai1".to_string()]);
+            bench.start(shop(&work_dir()));
+            let waiting = bench.until("all three are held", |s| s.members[0].permission.is_some() && s.members[0].more_permissions.len() == 2).await;
+            assert_eq!(waiting.members[0].permission.as_ref().unwrap().request_id, json!(7));
+
+            bench.teams.permit("shop", "ai1", Some("yes0".into()), false).await.unwrap();
+            let one_left = bench.member("ai1");
+            assert_eq!(one_left.status, MemberStatus::WaitingYou);
+            assert_eq!(one_left.permission.unwrap().request_id, json!(8));
+            assert_eq!(one_left.more_permissions.len(), 1);
+
+            // "Reject all": each with its own reject option.
+            bench.teams.permit("shop", "ai1", Some("no1".into()), true).await.unwrap();
+            let answered: Vec<Option<String>> = bench.drive.answered.lock().unwrap().iter().map(|(_, o)| o.clone()).collect();
+            assert_eq!(answered, vec![Some("yes0".to_string()), Some("no1".to_string()), Some("no2".to_string())]);
+            assert_eq!(bench.member("ai1").status, MemberStatus::Working);
             bench.drive.hold.notify_one();
         });
     }

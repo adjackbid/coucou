@@ -124,6 +124,12 @@ export interface ApprovalInfo {
    * option ids it offered, through the agent's own connection.
    */
   acp?: { agentId: string; requestId: unknown; allowOption: string | null; denyOption: string | null };
+  /**
+   * A team member's request, held by the team: answered through the team,
+   * and taken off the island once it is answered anywhere (the Teamwork
+   * window has the same card).
+   */
+  team?: { team: string; member: string; requestId: unknown; allowOption: string | null; denyOption: string | null; more: number };
 }
 
 export interface ChatMessage {

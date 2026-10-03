@@ -19,6 +19,8 @@ import { USC, UploadSeq } from "../upload/sequence";
 import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../views/views";
 import { h } from "../views/dom";
 import { IslandStateMachine } from "./fsm";
+import { nextTeamCard, teamTaskId } from "./team";
+import type { Danger, MemberView, Snapshot } from "../team/types";
 
 const BOT_OVERHANG = 40;
 
@@ -43,6 +45,19 @@ const UPLOAD_VIEWS: ReadonlySet<IslandViewName> = new Set(["upload", "uploading"
 const PRE_PROGRESS = USC.T_PROG_START - USC.T_DROP;
 
 const modeOrder = (m: IslandMode) => (m === "hidden" ? 0 : m === "compact" ? 1 : 2);
+
+/** Why a team member's request waits for the person, in the island's words. */
+const DANGER_WORDS: Record<Danger, string> = {
+  "deletes-folder": "Deletes a folder",
+  "deletes-many": "Deletes several files at once",
+  installs: "Installs a package or a program",
+  downloads: "Downloads something from the internet",
+  "destructive-git": "This git command throws changes away",
+  "sends-out": "Sends or publishes something outside",
+  "outside-work-dir": "Touches something outside the team's folder",
+  system: "Changes the system or other programs",
+  opaque: "Coucou cannot tell what this command does",
+};
 
 export class Island {
   readonly fsm = new IslandStateMachine();
@@ -161,7 +176,13 @@ export class Island {
         // never offers Allow for a cut request, but a stale click must not
         // become one either.
         const d = choice === "allow" && req.truncated ? "terminal" : choice;
-        if (req.acp) {
+        if (req.team) {
+          // A team member's: answered through the team. The next request it
+          // holds, if any, comes up with the team's next picture.
+          Sound.play(d === "deny" ? "blip" : "approve");
+          const option = d === "deny" ? req.team.denyOption : req.team.allowOption;
+          void Bridge.teamPermit(req.team.team, req.team.member, option, d === "allow-all").catch(() => {});
+        } else if (req.acp) {
           // An agent the island started: the answer goes back down its own
           // connection, as one of the options it offered.
           Sound.play(d === "allow" ? "approve" : "blip");
@@ -174,7 +195,8 @@ export class Island {
           void Bridge.approvalDecline(req.requestId);
         } else {
           Sound.play(d === "deny" ? "blip" : "approve");
-          void Bridge.approvalDecision(req.requestId, d);
+          // A hook's request is always one: "all" is just it.
+          void Bridge.approvalDecision(req.requestId, d === "deny" ? "deny" : "allow");
         }
         State.pendingApproval = null;
         State.isPinned = false;
@@ -182,6 +204,8 @@ export class Island {
         State.updateTask(req.taskId, "working");
         State.setPillBadge(req.taskId, null);
         this.setView(State.defaultView());
+        // A team member's request that waited behind this card comes up now.
+        if (!req.team) nextTeamCard(this);
       },
       answerQuestion: async (answer) => {
         // The answer is keystrokes into the session's own terminal, the way
@@ -458,6 +482,58 @@ export class Island {
   /** An alert stopped waiting for an answer: let the island auto-close again. */
   dropPin() {
     this.fsm.pinned = false;
+  }
+
+  /**
+   * A team member waits for the person: the same card as a hook's request,
+   * on the team's pill, with everything the member asked for.
+   */
+  askTeamPermission(snap: Snapshot, m: MemberView, quiet = false) {
+    const p = m.permission;
+    if (!p) return;
+    const pick = (kinds: string[]) =>
+      kinds.map((k) => p.options.find((o) => o.kind === k)?.optionId).find((id) => id != null) ?? null;
+    const input = (p.rawInput && typeof p.rawInput === "object" ? p.rawInput : {}) as Record<string, unknown>;
+    const sections = Object.entries(input)
+      .filter(([, v]) => v != null)
+      .map(([label, v]) => ({ label, value: typeof v === "string" ? v : JSON.stringify(v, null, 2) }));
+    if (p.danger) sections.unshift({ label: "why", value: DANGER_WORDS[p.danger] });
+    if (m.morePermissions.length) {
+      const queued = m.morePermissions.map((x) => {
+        const raw = (x.rawInput && typeof x.rawInput === "object" ? x.rawInput : {}) as Record<string, unknown>;
+        return typeof raw.command === "string" ? raw.command : x.title;
+      });
+      sections.push({ label: `${queued.length} more waiting`, value: queued.join("\n") });
+    }
+    const taskId = teamTaskId(snap.id);
+    State.pendingApproval = {
+      requestId: `team:${snap.id}:${m.id}:${JSON.stringify(p.requestId)}`,
+      sessionId: "",
+      taskId,
+      tool: p.title,
+      command: `${m.name} · ${p.title}`,
+      sections,
+      lines: 2 + sections.reduce((n, s) => n + s.value.split("\n").length, 0),
+      truncated: false,
+      team: { team: snap.id, member: m.id, requestId: p.requestId, allowOption: pick(["allow_once", "allow_always"]), denyOption: pick(["reject_once", "reject_always"]), more: m.morePermissions.length },
+    };
+    State.setFocus(taskId);
+    State.isPinned = true;
+    if (!quiet) {
+      Sound.play("approval");
+      this.alert("approval");
+    }
+    State.notify();
+  }
+
+  /** A team's card was answered elsewhere (the Teamwork window): off the island. */
+  dropTeamApproval() {
+    if (!State.pendingApproval?.team) return;
+    State.pendingApproval = null;
+    State.isPinned = false;
+    this.fsm.pinned = false;
+    if (State.view === "approval") this.setView(State.defaultView());
+    State.notify();
   }
 
   /**

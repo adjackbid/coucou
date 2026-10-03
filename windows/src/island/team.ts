@@ -14,6 +14,25 @@ import type { Island } from "./island";
 
 /** What each team last looked like, to tell news from a repeat. */
 const last = new Map<string, { line: string; waiting: number; lost: number; status: Snapshot["status"] }>();
+/** Each team's latest picture: a request still held is raised once the island is free. */
+const latest = new Map<string, Snapshot>();
+
+/**
+ * Puts the oldest request a team member holds on the island, if the island
+ * has no card up. True when one was raised.
+ */
+export function nextTeamCard(island: Island): boolean {
+  if (State.pendingApproval) return false;
+  for (const snap of latest.values()) {
+    if (snap.status === "finished") continue;
+    const asking = snap.members.find((m) => m.permission);
+    if (asking) {
+      island.askTeamPermission(snap, asking);
+      return true;
+    }
+  }
+  return false;
+}
 
 export const teamTaskId = (team: string) => `team:${team}`;
 
@@ -51,13 +70,29 @@ function handle(island: Island, snap: Snapshot) {
   last.set(snap.id, { line, waiting, lost, status: snap.status });
 
   State.updateTask(id, snap.status === "finished" ? "finished" : waiting ? "approval" : lost ? "error" : snap.status === "running" ? "working" : "idle");
+
+  // A request a member holds is a full card on the island, as a hook's is.
+  // Answered in the Teamwork window, it leaves the island; the next one held
+  // comes up in its place.
+  latest.set(snap.id, snap);
+  const card = State.pendingApproval?.team;
+  if (card && card.team === snap.id) {
+    const holder = snap.members.find((m) => m.id === card.member);
+    const same = holder?.permission && JSON.stringify(holder.permission.requestId) === JSON.stringify(card.requestId);
+    if (!same) island.dropTeamApproval();
+    // More asked for behind it: the same card, now listing them — quietly.
+    else if ((holder?.morePermissions.length ?? 0) !== card.more) island.askTeamPermission(snap, holder!, true);
+  }
+  const raised = nextTeamCard(island);
   if (line !== before?.line) State.appendStep(id, line);
 
   // Only news is announced: one more member waiting, one more gone quiet, the end.
   const finished = snap.status === "finished" && before?.status !== "finished";
   const moreWaiting = waiting > (before?.waiting ?? 0);
   const moreLost = lost > (before?.lost ?? 0);
-  if (finished || moreWaiting || moreLost) {
+  if (raised) {
+    // The card has already called the person.
+  } else if (finished || moreWaiting || moreLost) {
     if (State.focusId !== id || State.mode !== "expanded") {
       State.setPillBadge(id, finished ? "finished" : moreWaiting ? "approval" : "error");
     }

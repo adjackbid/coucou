@@ -146,9 +146,12 @@ export const Bridge = {
   /** The person writes to the leader (`to` empty) or to one member. */
   teamInstruct: (team: string, to: string, text: string) => callOrThrow<void>("team_instruct", { team, to, text }),
   teamAnswer: (team: string, question: string, text: string) => callOrThrow<void>("team_answer", { team, question, text }),
-  /** Answers the card a member's agent is holding with one of its own options. */
-  teamPermit: (team: string, member: string, optionId: string | null) =>
-    callOrThrow<void>("team_permit", { team, member, optionId }),
+  /**
+   * Answers the oldest request a member's agent is holding with one of its own
+   * options — or, with `all`, every request it holds, each the same way.
+   */
+  teamPermit: (team: string, member: string, optionId: string | null, all = false) =>
+    callOrThrow<void>("team_permit", { team, member, optionId, all }),
   teamPause: (team: string) => callOrThrow<void>("team_pause", { team }),
   teamResume: (team: string) => callOrThrow<void>("team_resume", { team }),
   /** Pause, and interrupt every turn under way. */

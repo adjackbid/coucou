@@ -77,7 +77,7 @@ const task = (
 });
 
 /** A member as the snapshot shows it: the model is always there, empty for the agent's own. */
-const seat = (i: number) => ({ ...config.members[i], model: config.members[i].model ?? "", screen: screens[config.members[i].id] ?? [] });
+const seat = (i: number) => ({ ...config.members[i], model: config.members[i].model ?? "", screen: screens[config.members[i].id] ?? [], morePermissions: [] });
 
 let n = 0;
 const line = (kind: Line["kind"], text: string, extra: Partial<Line> = {}): Line => ({
@@ -204,6 +204,17 @@ export function demoSnapshot(): Snapshot {
       ...snapshot.members[2],
       status: "waitingYou",
       waiting: { on: "you", what: "Run rm -rf node_modules", task: "TASK-04" },
+      morePermissions: [1, 2].map((i) => ({
+        requestId: 12 + i,
+        title: `Run npm install --save-dev @types/node@${20 + i}`,
+        kind: "execute",
+        rawInput: { command: `npm install --save-dev @types/node@${20 + i}` },
+        options: [
+          { optionId: "allow", name: "Allow", kind: "allow_once" },
+          { optionId: "reject", name: "Reject", kind: "reject_once" },
+        ],
+        danger: "installs" as const,
+      })),
       permission: {
         requestId: 12,
         title: "Run rm -rf node_modules",

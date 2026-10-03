@@ -39,6 +39,8 @@ async function main() {
   void Sound.preload();
 
   const island = new Island(root);
+  // `npm run dev` in a plain browser: reach the island from the console.
+  if (!IS_TAURI && import.meta.env.DEV) Object.assign(window, { __island: island, __state: State });
 
   const boot = await Bridge.boot();
   if (boot) {

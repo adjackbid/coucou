@@ -338,6 +338,21 @@ fn is_dos_switch(token: &Token) -> bool {
 }
 
 /// The sub-command: the first argument that is not a flag.
+/// `npx vitest run` in a project whose node_modules has vitest: nothing is
+/// fetched. Not when a package is named (`-p`, `--package`, `name@version`).
+fn runs_local_bin(scope: &Scope, args: &[Token]) -> bool {
+    let mut names = args.iter().filter(|t| !is_flag(t) || t.text == "--");
+    if args.iter().any(|t| is_flag(t) && matches!(t.text.to_lowercase().as_str(), "-p" | "--package" | "-c" | "--call") || t.text.to_lowercase().starts_with("--package=")) {
+        return false;
+    }
+    let Some(name) = names.next().map(|t| t.text.as_str()).filter(|n| *n != "--") else { return false };
+    if name.is_empty() || name.contains(['@', '/', '\\', ':']) {
+        return false;
+    }
+    let bin = scope.work_dir.join("node_modules").join(".bin");
+    ["", ".cmd", ".ps1", ".exe"].iter().any(|ext| bin.join(format!("{name}{ext}")).is_file())
+}
+
 fn subcommand(args: &[Token]) -> String {
     args.iter().find(|t| !is_flag(t)).map(|t| t.text.to_lowercase()).unwrap_or_default()
 }
@@ -479,6 +494,9 @@ fn segment_danger(scope: &Scope, tokens: &[Token], depth: u8) -> Option<Danger> 
             "" if program == "yarn" => Some(Danger::Installs),
             _ => None,
         },
+        // npx runs the project's own copy when it has one; only fetching a
+        // package it does not have is installing.
+        "npx" if runs_local_bin(scope, args) => None,
         "npx" | "pnpx" | "bunx" | "uvx" | "pipx" => Some(Danger::Installs),
         "pip" | "pip3" | "uv" | "poetry" | "conda" | "mamba" | "gem" | "composer" => match subcommand(args).as_str() {
             "install" | "add" | "sync" | "update" | "upgrade" | "require" | "create" | "tool" | "pip" => Some(Danger::Installs),
@@ -585,14 +603,17 @@ fn segment_danger(scope: &Scope, tokens: &[Token], depth: u8) -> Option<Danger> 
                 return Some(Danger::DeletesMany);
             }
             let dos = matches!(program.as_str(), "move" | "copy" | "xcopy" | "robocopy" | "ren" | "rename" | "md");
+            let copies = matches!(program.as_str(), "cp" | "copy" | "copy-item" | "xcopy" | "robocopy");
             // A flag's value (`-Path x`) is a path like any other, so every
             // word that is not itself a flag is checked. For `cp`, a source
-            // outside the folder is only read, but it is rare enough to ask.
+            // outside the folder is only read, but it is rare enough to ask —
+            // except the images an agent generated itself, which it can only
+            // bring into the folder by copying them from where they were made.
             let outside = args
                 .iter()
                 .filter(|t| !is_flag(t) && !(dos && is_dos_switch(t)))
                 .filter(|t| looks_like_path(&t.text))
-                .any(|t| !scope.contains(&t.text));
+                .any(|t| !scope.contains(&t.text) && !(copies && is_generated_image(&t.text)));
             if outside { Some(Danger::OutsideWorkDir) } else { None }
         }
 
@@ -600,6 +621,16 @@ fn segment_danger(scope: &Scope, tokens: &[Token], depth: u8) -> Option<Danger> 
             if has_flag(args, &["-encodedcommand", "-enc"]) { Some(Danger::Opaque) } else { None }
         }
     }
+}
+
+/// Where an agent's own image generation leaves its pictures: Codex's
+/// `%USERPROFILE%\.codex\generated_images`.
+fn is_generated_image(path: &str) -> bool {
+    let Ok(home) = std::env::var("USERPROFILE") else { return false };
+    let root = Path::new(&home).join(".codex").join("generated_images").to_string_lossy().to_lowercase();
+    let path = path.trim_matches(['"', '\'']).replace('/', "\\").to_lowercase();
+    // No way out of it with `..`.
+    !path.contains("..") && path.strip_prefix(root.as_str()).is_some_and(|rest| rest.starts_with('\\'))
 }
 
 fn is_assignment(token: &str) -> bool {
@@ -633,6 +664,35 @@ mod tests {
 
     fn scope() -> Scope {
         Scope::new(r"D:\Work\shop")
+    }
+
+    #[test]
+    fn an_agent_may_bring_in_the_images_it_generated() {
+        let home = std::env::var("USERPROFILE").unwrap();
+        let made = format!(r"{home}\.codex\generated_images\01a1004f\ig_0.png");
+        assert_eq!(run(&format!("Copy-Item -LiteralPath '{made}' -Destination 'assets\\source\\images\\jp-0.png'")), Verdict::Allow);
+        assert_eq!(run(&format!("cp \"{made}\" public/media/hero.png")), Verdict::Allow);
+        // Anywhere else outside, or a way out of that folder: still asked.
+        assert_eq!(run(&format!(r"Copy-Item '{home}\Documents\secret.txt' assets\a.txt")), Verdict::Ask(Danger::OutsideWorkDir));
+        assert_eq!(run(&format!(r"Copy-Item '{home}\.codex\generated_images\..\auth.json' assets\a.json")), Verdict::Ask(Danger::OutsideWorkDir));
+        // Copying, not moving or writing there.
+        assert_eq!(run(&format!("Move-Item '{made}' assets\\a.png")), Verdict::Ask(Danger::OutsideWorkDir));
+    }
+
+    #[test]
+    fn npx_running_the_project_s_own_tool_installs_nothing() {
+        let dir = std::env::temp_dir().join(format!("coucou-npx-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("node_modules").join(".bin")).unwrap();
+        std::fs::write(dir.join("node_modules").join(".bin").join("vitest.cmd"), "").unwrap();
+        let scope = Scope::new(&dir);
+        let run = |c: &str| decide(&scope, &Request { kind: Kind::Execute, command: Some(c.into()), paths: vec![] });
+        assert_eq!(run("npx vitest run tests/ui/home.test.tsx 2>&1 | Select-String -Pattern Unable"), Verdict::Allow);
+        // Not there, a version, a named package: fetched, so asked.
+        assert_eq!(run("npx playwright test"), Verdict::Ask(Danger::Installs));
+        assert_eq!(run("npx vitest@latest run"), Verdict::Ask(Danger::Installs));
+        assert_eq!(run("npx -p vitest vitest run"), Verdict::Ask(Danger::Installs));
+        assert_eq!(run("npx --package=left-pad vitest"), Verdict::Ask(Danger::Installs));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn run(command: &str) -> Verdict {

@@ -543,8 +543,8 @@ fn team_answer(teams: State<Arc<Teams>>, team: String, question: String, text: S
 /// The person's answer to the card a member's agent is holding: one of the
 /// agent's own options, or nothing for "cancelled".
 #[tauri::command]
-async fn team_permit(teams: State<'_, Arc<Teams>>, team: String, member: String, option_id: Option<String>) -> Result<(), String> {
-    teams.permit(&team, &member, option_id).await
+async fn team_permit(teams: State<'_, Arc<Teams>>, team: String, member: String, option_id: Option<String>, all: Option<bool>) -> Result<(), String> {
+    teams.permit(&team, &member, option_id, all.unwrap_or(false)).await
 }
 
 #[tauri::command]

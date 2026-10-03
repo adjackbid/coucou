@@ -515,17 +515,34 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
     const command = typeof input.command === "string" ? input.command : "";
     const allow = p.options.find((o) => o.kind === "allow_once") ?? p.options.find((o) => o.kind === "allow_always");
     const reject = p.options.find((o) => o.kind === "reject_once") ?? p.options.find((o) => o.kind === "reject_always");
+    // Several at once (Codex runs steps side by side): every one is listed,
+    // and they can be answered together.
+    const more = m.morePermissions;
+    const commandOf = (x: typeof p) => {
+      const raw = x.rawInput && typeof x.rawInput === "object" ? (x.rawInput as Record<string, unknown>) : {};
+      return typeof raw.command === "string" ? raw.command : x.title;
+    };
     el.append(
       h(
         "div",
         { class: "ask" },
         h("div", { class: "ask-why", text: p.danger ? `要你批准:${DANGER[p.danger]}` : "要你批准" }),
         h("div", { class: "ask-what mono", text: command || p.title }),
+        more.length
+          ? h(
+              "details",
+              { class: "ask-more" },
+              h("summary", { text: `還有 ${more.length} 個請求在排隊` }),
+              ...more.map((x) => h("div", { class: "ask-what mono", text: commandOf(x) })),
+            )
+          : null,
         h(
           "div",
           { class: "row" },
           button("允許這一次", "primary", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null)), !allow),
           button("拒絕", "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null))),
+          more.length ? button(`全部允許(${more.length + 1})`, "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null, true)), !allow) : null,
+          more.length ? button("全部拒絕", "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null, true))) : null,
         ),
       ),
     );
