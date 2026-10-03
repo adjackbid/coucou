@@ -119,8 +119,10 @@ pub struct Team {
     /// Members whose current agent session has been told its role. A new
     /// session — the first, after a restart, after a crash — is told again.
     briefed: Mutex<HashSet<String>>,
-    seats: BTreeMap<String, Seat>,
-    tokens: BTreeMap<String, String>,
+    /// A member's session and its key to the team's tools. Members can join
+    /// while the team runs.
+    seats: Mutex<BTreeMap<String, Seat>>,
+    tokens: Mutex<BTreeMap<String, String>>,
     wake: Notify,
     drive: Arc<dyn Drive>,
     emit: Emit,
@@ -172,7 +174,7 @@ impl Team {
     pub fn snapshot(&self) -> Option<Snapshot> {
         let live = self.live.lock().unwrap().clone();
         let mut snapshot = self.store.lock().unwrap().state().snapshot(&live)?;
-        snapshot.detached = self.seats.is_empty();
+        snapshot.detached = !self.has_seats();
         Some(snapshot)
     }
 
@@ -229,17 +231,30 @@ impl Team {
         }
     }
 
+    fn seat(&self, member: &str) -> Option<Seat> {
+        self.seats.lock().unwrap().get(member).cloned()
+    }
+
+    fn seat_keys(&self) -> Vec<String> {
+        self.seats.lock().unwrap().values().map(|s| s.key.clone()).collect()
+    }
+
+    /// Agents stand behind the team (not a record from an earlier run).
+    fn has_seats(&self) -> bool {
+        !self.seats.lock().unwrap().is_empty()
+    }
+
     pub fn config(&self) -> Option<TeamConfig> {
         self.store.lock().unwrap().state().config.clone()
     }
 
     pub fn token_ok(&self, member: &str, given: &str) -> bool {
-        self.tokens.get(member).map(|t| !t.is_empty() && t == given).unwrap_or(false)
+        self.tokens.lock().unwrap().get(member).map(|t| !t.is_empty() && t == given).unwrap_or(false)
     }
 
     #[cfg(test)]
     pub fn token_for_tests(&self, member: &str) -> Option<String> {
-        self.tokens.get(member).cloned()
+        self.tokens.lock().unwrap().get(member).cloned()
     }
 
     /// Tells the screens, and lets the scheduler look again.
@@ -379,7 +394,7 @@ impl Team {
     }
 
     async fn run_turn(self: Arc<Self>, member: String, text: String, heard: Vec<(String, String)>) {
-        let Some(seat) = self.seats.get(&member).cloned() else { return };
+        let Some(seat) = self.seat(&member) else { return };
         log::line(format!("team {}: turn for {member} ({} characters)", self.id, text.chars().count()));
         let number = self.with_state(|s| s.turns.get(&member).map(|t| t.count).unwrap_or(0));
         self.on_screen(&member, |screen| {
@@ -455,8 +470,8 @@ impl Team {
             }
             if self.with_state(|s| s.status == TeamStatus::Finished) {
                 // The work is done: the agents have nothing left to wait for.
-                for seat in self.seats.values() {
-                    self.drive.stop(seat.key.clone()).await;
+                for key in self.seat_keys() {
+                    self.drive.stop(key).await;
                 }
                 log::line(format!("team {}: finished", self.id));
                 break;
@@ -487,7 +502,7 @@ impl Teams {
 
     /// Agents still stand behind this team: it is running, or paused in this run.
     pub fn is_live(&self, id: &str) -> bool {
-        self.get(id).is_some_and(|t| !t.seats.is_empty() && t.with_state(|s| s.status != TeamStatus::Finished))
+        self.get(id).is_some_and(|t| t.has_seats() && t.with_state(|s| s.status != TeamStatus::Finished))
     }
 
     /// The team's file is gone: its picture goes too.
@@ -565,8 +580,8 @@ impl Teams {
             live: Mutex::new(BTreeMap::new()),
             screens: Mutex::new(BTreeMap::new()),
             briefed: Mutex::new(HashSet::new()),
-            seats,
-            tokens,
+            seats: Mutex::new(seats),
+            tokens: Mutex::new(tokens),
             wake: Notify::new(),
             drive: self.drive.clone(),
             emit: self.emit.clone(),
@@ -581,7 +596,7 @@ impl Teams {
             store.append(Event::Message { id, from: SYSTEM.into(), to: leader, text: kickoff, task: None });
         }
         self.teams.lock().unwrap().insert(team.id.clone(), team.clone());
-        log::line(format!("team {}: started with {} member(s)", team.id, team.seats.len()));
+        log::line(format!("team {}: started with {} member(s)", team.id, team.seat_keys().len()));
         runtime.spawn(team.clone().run());
         team.snapshot().ok_or_else(|| "The team did not start.".to_string())
     }
@@ -593,7 +608,7 @@ impl Teams {
     pub fn revive(&self, id: &str, profiles: &[AgentProfile]) -> Result<Snapshot, String> {
         let runtime = runtime()?;
         let old = self.team(id)?;
-        if !old.seats.is_empty() {
+        if old.has_seats() {
             return Err(format!("The team '{id}' is already running."));
         }
         let config = old.config().ok_or("The team's record has no setup to pick up.")?;
@@ -610,8 +625,8 @@ impl Teams {
             live: Mutex::new(BTreeMap::new()),
             screens: Mutex::new(BTreeMap::new()),
             briefed: Mutex::new(HashSet::new()),
-            seats,
-            tokens,
+            seats: Mutex::new(seats),
+            tokens: Mutex::new(tokens),
             wake: Notify::new(),
             drive: self.drive.clone(),
             emit: self.emit.clone(),
@@ -647,10 +662,54 @@ impl Teams {
             settle(&mut store);
         }
         self.teams.lock().unwrap().insert(id.to_string(), team.clone());
-        log::line(format!("team {id}: picked up again with {} member(s)", team.seats.len()));
+        log::line(format!("team {id}: picked up again with {} member(s)", team.seat_keys().len()));
         runtime.spawn(team.clone().run());
         team.changed();
         team.snapshot().ok_or_else(|| "The team did not start.".to_string())
+    }
+
+    /// More hands for a running team: the members of `wanted` it does not
+    /// have yet join it now, each with its own agent session, and the leader
+    /// is told to give them work. Returns their names.
+    pub fn join(&self, id: &str, wanted: &TeamConfig, profiles: &[AgentProfile]) -> Result<Vec<String>, String> {
+        let team = self.team(id)?;
+        if !team.has_seats() {
+            return Err("This team was loaded from an earlier run. Press Continue to pick it up.".into());
+        }
+        let mut config = team.config().ok_or("The team has no setup.")?;
+        let new: Vec<super::MemberConfig> = wanted.members.iter().filter(|m| !config.has_member(&m.id)).cloned().collect();
+        if new.is_empty() {
+            return Err("There is nobody new to add: add a member in the setup first.".into());
+        }
+        for m in &new {
+            if !super::is_plain_id(&m.id) || m.id == SYSTEM || m.id == YOU {
+                return Err(format!("'{}' cannot be a member id.", m.id));
+            }
+            if !profiles.iter().any(|p| p.id == m.agent) {
+                return Err(format!("{} runs as agent '{}', which is not in Settings → Agents.", m.name, m.agent));
+            }
+        }
+        // Their seats are made exactly as at the start, from the running setup.
+        let mut theirs = config.clone();
+        theirs.members = new.clone();
+        let (seats, tokens) = self.seats_for(&theirs, profiles)?;
+        team.seats.lock().unwrap().extend(seats);
+        team.tokens.lock().unwrap().extend(tokens);
+        {
+            let mut store = team.store.lock().unwrap();
+            for m in &new {
+                store.append(Event::Joined { member: m.clone() });
+                config.members.push(m.clone());
+                let text = brief::joined(&config, &m.id);
+                let mid = store.state().next_message_id();
+                let leader = config.leader.clone();
+                store.append(Event::Message { id: mid, from: SYSTEM.into(), to: leader, text, task: None });
+            }
+            settle(&mut store);
+        }
+        log::line(format!("team {id}: {} joined", new.iter().map(|m| m.id.as_str()).collect::<Vec<_>>().join(", ")));
+        team.changed();
+        Ok(new.into_iter().map(|m| m.name).collect())
     }
 
     /// Brings back a team's record from disk, to look at. It comes back
@@ -666,8 +725,8 @@ impl Teams {
             live: Mutex::new(BTreeMap::new()),
             screens: Mutex::new(BTreeMap::new()),
             briefed: Mutex::new(HashSet::new()),
-            seats: BTreeMap::new(),
-            tokens: BTreeMap::new(),
+            seats: Mutex::new(BTreeMap::new()),
+            tokens: Mutex::new(BTreeMap::new()),
             wake: Notify::new(),
             drive: self.drive.clone(),
             emit: self.emit.clone(),
@@ -724,7 +783,7 @@ impl Teams {
     /// same kind (allow once, reject once) as the one chosen.
     pub async fn permit(&self, team: &str, member: &str, option_id: Option<String>, all: bool) -> Result<(), String> {
         let team = self.team(team)?;
-        let key = team.seats.get(member).map(|s| s.key.clone()).ok_or("That is not a member of the team.")?;
+        let key = team.seat(member).map(|s| s.key).ok_or("That is not a member of the team.")?;
         let requests: Vec<PermissionView> = {
             let mut live = team.live.lock().unwrap();
             let held = live.get_mut(member).map(|l| &mut l.permissions).filter(|p| !p.is_empty());
@@ -759,7 +818,7 @@ impl Teams {
 
     /// Turns again — and for a team loaded from an earlier run, agents again.
     pub fn resume(&self, team: &str, profiles: &[AgentProfile]) -> Result<(), String> {
-        if self.team(team)?.seats.is_empty() {
+        if !self.team(team)?.has_seats() {
             return self.revive(team, profiles).map(|_| ());
         }
         let team = self.team(team)?;
@@ -775,8 +834,8 @@ impl Teams {
         let team = self.team(team)?;
         let active: Vec<String> = team.with_state(|s| s.turns.iter().filter(|(_, t)| t.active).map(|(m, _)| m.clone()).collect());
         for member in active {
-            if let Some(seat) = team.seats.get(&member) {
-                let _ = team.drive.cancel(seat.key.clone()).await;
+            if let Some(seat) = team.seat(&member) {
+                let _ = team.drive.cancel(seat.key).await;
             }
         }
         Ok(())
@@ -786,7 +845,7 @@ impl Teams {
     /// carries on: the member is reminded of its open work in its next turn.
     pub async fn interrupt_member(&self, team: &str, member: &str) -> Result<(), String> {
         let team = self.team(team)?;
-        let seat = team.seats.get(member).cloned().ok_or("That is not a member of the team.")?;
+        let seat = team.seat(member).ok_or("That is not a member of the team.")?;
         if team.with_state(|s| s.turns.get(member).map(|t| t.active).unwrap_or(false)) {
             team.drive.cancel(seat.key).await?;
         }
@@ -796,10 +855,10 @@ impl Teams {
     /// A lost member gets another go: a fresh agent, and a reminder of where it stood.
     pub async fn recover(&self, team: &str, member: &str) -> Result<(), String> {
         let team = self.team(team)?;
-        if team.seats.is_empty() {
+        if !team.has_seats() {
             return Err("This team was loaded from an earlier run. Press Continue to pick it up.".into());
         }
-        let seat = team.seats.get(member).cloned().ok_or("That is not a member of the team.")?;
+        let seat = team.seat(member).ok_or("That is not a member of the team.")?;
         if !team.with_state(|s| s.lost.contains_key(member)) {
             return Ok(());
         }
@@ -826,8 +885,8 @@ impl Teams {
     pub async fn shutdown(&self) {
         let teams: Vec<Arc<Team>> = self.teams.lock().unwrap().values().cloned().collect();
         for team in teams {
-            for seat in team.seats.values() {
-                team.drive.stop(seat.key.clone()).await;
+            for key in team.seat_keys() {
+                team.drive.stop(key).await;
             }
         }
     }
@@ -1194,6 +1253,44 @@ mod tests {
         assert!(bench.teams.get("shop").is_none());
     }
 
+    /// Too few hands: a member added while the team runs joins it at once,
+    /// with its own seat, and the leader is told to give it work.
+    #[test]
+    fn a_member_can_join_a_running_team() {
+        run(async {
+            let bench = bench(diligent());
+            bench.drive.held.lock().unwrap().push("ai4".into());
+            let mut wanted = shop(&work_dir());
+            bench.start(wanted.clone());
+            bench.until("AI 4 is at work", |s| s.members[3].status == MemberStatus::Working).await;
+
+            let mut extra = wanted.members[2].clone();
+            extra.id = "ai5".into();
+            extra.name = "AI 5".into();
+            wanted.members.push(extra);
+            assert_eq!(bench.teams.join("shop", &wanted, &[AgentProfile::copilot()]).unwrap(), vec!["AI 5".to_string()]);
+            // Asked again, nobody new.
+            assert!(bench.teams.join("shop", &wanted, &[AgentProfile::copilot()]).is_err());
+
+            let snap = bench.snap();
+            assert_eq!(snap.members.len(), 5);
+            assert!(snap.feed.iter().any(|f| f.kind == "joined" && f.from == "ai5"));
+            let seat = bench.teams.get("shop").unwrap().seat("ai5").unwrap();
+            assert_eq!(seat.launch.mcp_servers[0].env["COUCOU_MEMBER"], "ai5");
+            bench.until("the leader hears of it", |_| bench.turns_of("ai1").iter().any(|t| t.contains("A new teammate has joined") && t.contains("ai5"))).await;
+
+            // An agent that does not exist is refused, and the team is unchanged.
+            let mut bad = wanted.clone();
+            let mut ghost = wanted.members[0].clone();
+            ghost.id = "ai6".into();
+            ghost.agent = "nobody".into();
+            bad.members.push(ghost);
+            assert!(bench.teams.join("shop", &bad, &[AgentProfile::copilot()]).unwrap_err().contains("not in Settings"));
+            assert_eq!(bench.snap().members.len(), 5);
+            bench.drive.hold.notify_one();
+        });
+    }
+
     #[test]
     fn a_team_left_by_an_earlier_run_is_picked_up_where_it_stopped() {
         run(async {
@@ -1306,7 +1403,7 @@ mod tests {
             let dir = work_dir();
             bench.start(shop(&dir));
             let team = bench.teams.get("shop").unwrap();
-            let seat = &team.seats["ai3"];
+            let seat = team.seat("ai3").unwrap();
             assert_eq!(seat.key, "team:shop:ai3");
             assert_eq!(seat.launch.cwd.as_deref(), Some(dir.as_str()));
             assert_eq!(seat.launch.auto, Some(Scope::new(&dir)));
@@ -1319,7 +1416,7 @@ mod tests {
             // Each member has its own token, and only its own opens the door.
             let token = server.env["COUCOU_TEAM_TOKEN"].clone();
             assert_eq!(token.len(), 32);
-            assert_ne!(token, team.seats["ai4"].launch.mcp_servers[0].env["COUCOU_TEAM_TOKEN"]);
+            assert_ne!(token, team.seat("ai4").unwrap().launch.mcp_servers[0].env["COUCOU_TEAM_TOKEN"]);
             assert!(bench.teams.act("shop", "ai3", &token, "team_status", &json!({})).is_ok());
             assert!(bench.teams.act("shop", "ai4", &token, "team_status", &json!({})).is_err());
             assert!(bench.teams.act("shop", "ai3", "", "team_status", &json!({})).is_err());
@@ -1329,7 +1426,7 @@ mod tests {
             careful.id = "careful".into();
             careful.auto_approve = false;
             bench.teams.start(careful, &[AgentProfile::copilot()]).unwrap();
-            assert_eq!(bench.teams.get("careful").unwrap().seats["ai3"].launch.auto, None);
+            assert_eq!(bench.teams.get("careful").unwrap().seat("ai3").unwrap().launch.auto, None);
             // And a team that cannot start says why.
             let mut broken = shop(&dir);
             broken.id = "broken".into();

@@ -81,6 +81,8 @@ pub enum Event {
     TurnEnded { member: String, ok: bool, outcome: String },
     Lost { member: String, why: String },
     Recovered { member: String },
+    /// Someone joined the team while it ran.
+    Joined { member: super::MemberConfig },
     /// Everything is accepted and the leader has been asked for the report
     /// (`on`), or work was added after that (`!on`).
     Wrapping { on: bool },
@@ -186,7 +188,7 @@ pub struct Turns {
 pub struct FeedItem {
     pub at: u64,
     /// message · task · delivered · accepted · rejected · blocked · asked ·
-    /// answered · lost · paused · finished
+    /// answered · lost · paused · finished · joined
     pub kind: &'static str,
     pub from: String,
     pub to: String,
@@ -496,6 +498,15 @@ impl State {
                     t.active = false;
                 }
                 self.say(at, "lost", member, YOU, why, None);
+            }
+            Event::Joined { member } => {
+                if let Some(config) = self.config.as_mut() {
+                    if !config.members.iter().any(|m| m.id == member.id) {
+                        config.members.push(member.clone());
+                    }
+                }
+                let text = if member.role.is_empty() { member.name.clone() } else { format!("{} · {}", member.name, member.role) };
+                self.say(at, "joined", &member.id, "", &text, None);
             }
             Event::Recovered { member } => {
                 self.lost.remove(member);

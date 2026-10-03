@@ -225,3 +225,16 @@ pub fn revived(open: &[&Task], to_review: &[&Task]) -> String {
     }
     out
 }
+
+/// The person added someone to the team while it runs: the leader puts them to work.
+pub fn joined(config: &TeamConfig, member: &str) -> String {
+    let m = config.members.iter().find(|m| m.id == member);
+    let what = m
+        .map(|m| [m.role.trim(), m.duty.trim()].iter().filter(|s| !s.is_empty()).cloned().collect::<Vec<_>>().join(": "))
+        .unwrap_or_default();
+    format!(
+        "A new teammate has joined to speed the work up: {}{}. They have nothing to do yet. Give them work now: create tasks for them with `task_create` (owner \"{member}\"), or move open work that has not started to them with `task_assign`. Split large tasks so they can work in parallel with the others.",
+        who(config, member),
+        if what.is_empty() { String::new() } else { format!(" — {what}") },
+    )
+}

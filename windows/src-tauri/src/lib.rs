@@ -565,6 +565,15 @@ async fn team_interrupt(teams: State<'_, Arc<Teams>>, team: String) -> Result<()
     teams.interrupt(&team).await
 }
 
+/// More hands while the team runs: the members the team file has and the
+/// running team does not join it now. Returns their names.
+#[tauri::command]
+fn team_join(shared: State<Shared>, teams: State<Arc<Teams>>, file: String) -> Result<Vec<String>, String> {
+    let config = read_team_file(&file)?;
+    let profiles = shared.settings.lock().unwrap().agents.clone();
+    teams.join(file.trim_end_matches(".json"), &config, &profiles)
+}
+
 /// Interrupts one member's turn; the team carries on.
 #[tauri::command]
 async fn team_interrupt_member(teams: State<'_, Arc<Teams>>, team: String, member: String) -> Result<(), String> {
@@ -1106,6 +1115,7 @@ pub fn run() {
             team_interrupt,
             team_recover,
             team_interrupt_member,
+            team_join,
             team_open,
             team_open_configs,
             team_save,

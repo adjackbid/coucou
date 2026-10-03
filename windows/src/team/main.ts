@@ -347,6 +347,13 @@ function nextMemberId(config: TeamConfig): string {
   for (let n = 1; ; n++) if (!config.members.some((m) => m.id === `ai${n}`)) return `ai${n}`;
 }
 
+/** A new member row in the form, to fill in. */
+function addMember(config: TeamConfig) {
+  const id = nextMemberId(config);
+  config.members.push({ id, name: `AI ${id.slice(2)}`, role: "", duty: "", agent: agents[0]?.id ?? "", color: "" });
+  unsaved = true;
+}
+
 async function save(): Promise<boolean> {
   if (!selected || !editing) return false;
   await Bridge.teamSave(selected, editing);
@@ -367,6 +374,8 @@ function setup(file: TeamFile): HTMLElement {
   // an earlier run, or a finished team, can be started again from scratch.
   const running = run?.status === "running" || (run?.status === "paused" && !run.detached);
   const again = !!run && !running;
+  // Members added to the form while the team runs: they can join it now.
+  const newcomers = running && run ? config.members.filter((m) => !run.members.some((x) => x.id === m.id)) : [];
 
   // ── Left: what the team is for ──
   const folder = bound("input", "workDir", config.workDir, (v) => (config.workDir = v), { placeholder: "選擇所有成員一起工作的資料夾" });
@@ -510,9 +519,7 @@ function setup(file: TeamFile): HTMLElement {
         type: "button",
         class: "add",
         onClick: () => {
-          const id = nextMemberId(config);
-          config.members.push({ id, name: `AI ${id.slice(2)}`, role: "", duty: "", agent: agents[0]?.id ?? "", color: "" });
-          unsaved = true;
+          addMember(config);
           render();
         },
       },
@@ -532,7 +539,21 @@ function setup(file: TeamFile): HTMLElement {
     h(
       "div",
       { class: "row end bar" },
-      running ? h("span", { class: "hint", text: "這個團隊正在執行;這裡的修改下次啟動才會套用。" }) : null,
+      running
+        ? h("span", { class: "hint", text: newcomers.length ? `${newcomers.map((m) => m.name).join("、")} 可以馬上加入;其他修改下次啟動才會套用。` : "這個團隊正在執行;這裡的修改下次啟動才會套用。" })
+        : null,
+      running && newcomers.length
+        ? button(`讓 ${newcomers.length} 位新成員加入 →`, "primary", () =>
+            void act(async () => {
+              if (!(await save())) return;
+              const again = files.find((f) => f.file === selected);
+              const theirs = again?.problems.filter((p) => newcomers.some((m) => p.startsWith(`${m.name} `))) ?? [];
+              if (theirs.length) throw new Error(theirs.join("\n"));
+              await Bridge.teamJoin(file.file);
+              tab = "monitor";
+            }),
+          )
+        : null,
       again ? h("span", { class: "hint", text: "重新開始會從頭跑一次;上一次的紀錄會保留在團隊紀錄資料夾。" }) : null,
       h("button", { class: `btn plain save${unsaved ? " due" : ""}`, type: "button", onClick: () => void act(save) }, "儲存"),
       button(
@@ -692,6 +713,24 @@ function stage(snap: Snapshot): HTMLElement {
       "div",
       { class: "stage-head" },
       h("h2", { text: "團隊現場" }),
+      snap.status !== "finished" && !snap.detached
+        ? h(
+            "button",
+            {
+              class: "btn plain more-hands",
+              type: "button",
+              title: "人手不夠時,加一位成員到這個執行中的團隊",
+              onClick: () => {
+                if (!editing) return;
+                addMember(editing);
+                tab = "setup";
+                render();
+                root.querySelector(".member-row:last-of-type")?.scrollIntoView({ block: "center", behavior: "smooth" });
+              },
+            },
+            "＋ 加人手",
+          )
+        : null,
       h("span", { class: "hint", text: "每位成員說的話、跑的指令和結果都即時出現在它的畫面上;隊友之間的交辦、訊息與交付會從一位飛到另一位。" }),
     ),
     h("div", { class: "desks" }, ...members.map((m) => desk(snap, m))),
@@ -741,6 +780,7 @@ const FEED_TITLE: Record<FeedItem["kind"], string> = {
   lost: "失聯",
   paused: "團隊暫停",
   finished: "團隊完成",
+  joined: "加入團隊",
 };
 
 function feed(snap: Snapshot): HTMLElement {

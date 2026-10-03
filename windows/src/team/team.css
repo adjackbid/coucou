@@ -1874,3 +1874,10 @@ h2 {
     grid-template-columns: 1fr;
   }
 }
+
+/* More hands for a running team, beside the stage's title. */
+.stage-head .more-hands {
+  order: 3;
+  margin-left: auto;
+  padding: 5px 12px;
+}
