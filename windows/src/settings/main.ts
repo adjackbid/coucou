@@ -561,6 +561,10 @@ const AGENT_PRESETS: { label: string; make: () => AgentProfile }[] = [
     make: () => ({ id: "", name: "Codex", command: "codex", args: ["app-server"], env: {}, cwd: "", protocol: "codex" }),
   },
   {
+    label: "Antigravity (agy, your Google login)",
+    make: () => ({ id: "", name: "Antigravity", command: "agy", args: [], env: {}, cwd: "", protocol: "agy" }),
+  },
+  {
     label: "Claude Code (your Claude login)",
     make: () => ({ id: "", name: "Claude Code", command: "claude", args: [], env: {}, cwd: "", protocol: "claude" }),
   },
@@ -595,7 +599,7 @@ function agentsSection(present: Record<string, boolean>): HTMLElement {
     h("h2", {}, h("span", { text: "Agents" })),
     h("div", {
       class: "hint",
-      text: "Coding agents the island can start and drive itself — over the Agent Client Protocol (Copilot CLI, with GitHub or your own endpoint), Codex's app server, or Claude Code's stream-json. Pick one in the chat bar and your question goes to it; in Teamwork, members run as one of these. Its tool calls show up as it works, and anything it needs permission for asks on the island. Keys go in the Windows Credential Manager; write {secret} where a key belongs in the environment.",
+      text: "Coding agents the island can start and drive itself — over the Agent Client Protocol (Copilot CLI, with GitHub or your own endpoint), Codex's app server, Claude Code's stream-json, or Antigravity's headless mode. Pick one in the chat bar and your question goes to it; in Teamwork, members run as one of these. Its tool calls show up as it works, and anything it needs permission for asks on the island. Keys go in the Windows Credential Manager; write {secret} where a key belongs in the environment.",
     }),
     list,
   );
@@ -638,6 +642,7 @@ function agentsSection(present: Record<string, boolean>): HTMLElement {
       h("option", { value: "acp", text: "ACP" }),
       h("option", { value: "codex", text: "Codex app-server" }),
       h("option", { value: "claude", text: "Claude Code (stream-json)" }),
+      h("option", { value: "agy", text: "Antigravity (agy headless)" }),
     );
     protocol.value = a.protocol ?? "acp";
     protocol.addEventListener("change", () => { live().protocol = protocol.value as AgentProfile["protocol"]; void save(); });

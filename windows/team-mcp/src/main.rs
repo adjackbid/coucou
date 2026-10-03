@@ -94,7 +94,40 @@ fn refusal(id: &Value, why: &str) -> String {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32000, "message": why } }).to_string()
 }
 
+/// `--gate`: Antigravity's PreToolUse hook. The step it is about to take
+/// comes on stdin; the team decides (the rules, or the person on a card);
+/// the decision goes to stdout. Outside a team it changes nothing: "ask" is
+/// what Antigravity would have done anyway. Coucou out of reach: refused —
+/// a member that cannot be watched does not run unchecked.
+fn gate() {
+    use std::io::Read;
+    let mut input = String::new();
+    let _ = std::io::stdin().read_to_string(&mut input);
+    let payload: Value = serde_json::from_str(&input).unwrap_or(Value::Null);
+    let call = payload.get("toolCall").cloned().unwrap_or(Value::Null);
+    let decision = if std::env::var("COUCOU_TEAM").map(|v| v.is_empty()).unwrap_or(true) {
+        json!({ "decision": "ask" })
+    } else {
+        match connect() {
+            Ok(mut link) => {
+                let request = json!({ "jsonrpc": "2.0", "id": 1, "method": "coucou/gate", "params": { "tool": call.get("name"), "args": call.get("args") } });
+                match link.send(&request.to_string()).and_then(|_| link.receive()) {
+                    Ok(line) => serde_json::from_str::<Value>(&line).ok().and_then(|v| v.get("result").cloned()).unwrap_or_else(|| json!({ "decision": "deny", "reason": "Coucou gave no answer." })),
+                    Err(_) => json!({ "decision": "deny", "reason": "Coucou was closed while this step waited." }),
+                }
+            }
+            Err(why) => json!({ "decision": "deny", "reason": why }),
+        }
+    };
+    let mut out = std::io::stdout();
+    let _ = writeln!(out, "{decision}");
+    let _ = out.flush();
+}
+
 fn main() {
+    if std::env::args().any(|a| a == "--gate") {
+        return gate();
+    }
     let mut link = connect();
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();

@@ -116,6 +116,9 @@ pub struct Team {
     store: Mutex<Store>,
     live: Mutex<BTreeMap<String, Live>>,
     screens: Mutex<BTreeMap<String, Shown>>,
+    /// Steps an agent's hook is holding until the person answers (agy):
+    /// card id → where the answer goes (true: allowed).
+    gates: Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>,
     /// Members whose current agent session has been told its role. A new
     /// session — the first, after a restart, after a crash — is told again.
     briefed: Mutex<HashSet<String>>,
@@ -139,6 +142,11 @@ pub struct Teams {
     root: Option<PathBuf>,
     /// coucou-team-mcp.exe, handed to every member as its MCP server.
     bridge: PathBuf,
+}
+
+/// A short unique tag for a card held at the gate.
+fn token_short() -> String {
+    token()[..12].to_string()
 }
 
 /// 128 bits nobody can guess, without a dependency: std seeds each
@@ -580,6 +588,7 @@ impl Teams {
             live: Mutex::new(BTreeMap::new()),
             screens: Mutex::new(BTreeMap::new()),
             briefed: Mutex::new(HashSet::new()),
+            gates: Mutex::new(HashMap::new()),
             seats: Mutex::new(seats),
             tokens: Mutex::new(tokens),
             wake: Notify::new(),
@@ -625,6 +634,7 @@ impl Teams {
             live: Mutex::new(BTreeMap::new()),
             screens: Mutex::new(BTreeMap::new()),
             briefed: Mutex::new(HashSet::new()),
+            gates: Mutex::new(HashMap::new()),
             seats: Mutex::new(seats),
             tokens: Mutex::new(tokens),
             wake: Notify::new(),
@@ -725,6 +735,7 @@ impl Teams {
             live: Mutex::new(BTreeMap::new()),
             screens: Mutex::new(BTreeMap::new()),
             briefed: Mutex::new(HashSet::new()),
+            gates: Mutex::new(HashMap::new()),
             seats: Mutex::new(BTreeMap::new()),
             tokens: Mutex::new(BTreeMap::new()),
             wake: Notify::new(),
@@ -799,12 +810,69 @@ impl Teams {
             } else {
                 kind.as_deref().and_then(|k| r.options.iter().find(|o| o.get("kind").and_then(Value::as_str) == Some(k))).and_then(|o| o.get("optionId").and_then(Value::as_str)).map(str::to_string)
             };
+            // A step held at the gate is answered there, not on the agent's connection.
+            let gated = r.request_id.as_str().and_then(|id| team.gates.lock().unwrap().remove(id));
+            if let Some(gate) = gated {
+                let allowed = option.as_deref().is_some_and(|o| r.options.iter().any(|x| x.get("optionId").and_then(Value::as_str) == Some(o) && x.get("kind").and_then(Value::as_str).is_some_and(|k| k.starts_with("allow"))));
+                let _ = gate.send(allowed);
+                continue;
+            }
             if let Err(e) = team.drive.answer(key.clone(), r.request_id, option).await {
                 result = Err(e);
             }
         }
         team.changed();
         result
+    }
+
+    /// An agent's hook asks before a step (agy, whose headless mode cannot
+    /// ask anyone): the rules answer what is safe at once; anything else
+    /// becomes a card like every other agent's and waits for the person.
+    /// The answer is the hook's: `{decision, reason}`.
+    pub async fn gate(&self, team: &str, member: &str, token: &str, tool: &str, args: &Value) -> Value {
+        let deny = |why: &str| serde_json::json!({ "decision": "deny", "reason": why });
+        let Ok(team) = self.team(team) else { return deny("Coucou has no such team running.") };
+        if !team.token_ok(member, token) {
+            return deny("This session is not a member of that team.");
+        }
+        let Some(seat) = team.seat(member) else { return deny("That is not a member of the team.") };
+        let asked = crate::agy::request_of(tool, args);
+        let verdict = seat.launch.auto.as_ref().map(|scope| crate::policy::decide(scope, &asked));
+        if verdict == Some(crate::policy::Verdict::Allow) {
+            return serde_json::json!({ "decision": "allow" });
+        }
+        let danger = match verdict {
+            Some(crate::policy::Verdict::Ask(why)) => Some(why),
+            _ => None,
+        };
+        let (title, kind) = crate::agy::title_of(tool, args);
+        log::line(format!("team {}: {member} {tool} waits for a person — {danger:?}", team.id));
+        let id = format!("gate:{}:{}", member, token_short());
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        team.gates.lock().unwrap().insert(id.clone(), tx);
+        let mut raw = serde_json::json!({});
+        if let Some(c) = &asked.command {
+            raw["command"] = serde_json::json!(c);
+        }
+        if !asked.paths.is_empty() {
+            raw["paths"] = serde_json::json!(asked.paths);
+        }
+        team.live.lock().unwrap().entry(member.to_string()).or_default().permissions.push(PermissionView {
+            request_id: serde_json::json!(id),
+            title,
+            kind: kind.to_string(),
+            raw_input: raw,
+            options: vec![
+                serde_json::json!({ "optionId": "allow", "name": "Allow", "kind": "allow_once" }),
+                serde_json::json!({ "optionId": "deny", "name": "Deny", "kind": "reject_once" }),
+            ],
+            danger,
+        });
+        team.changed();
+        match rx.await {
+            Ok(true) => serde_json::json!({ "decision": "allow" }),
+            _ => deny("The user declined this step. Do not try to do the same thing another way; carry on without it, or ask with ask_human."),
+        }
     }
 
     /// No new turns. The ones under way run to their end.
@@ -1251,6 +1319,46 @@ mod tests {
         let refused = bench.teams.start(shop(&work_dir()), &[AgentProfile::copilot()]).unwrap_err();
         assert!(refused.contains("async runtime"), "{refused}");
         assert!(bench.teams.get("shop").is_none());
+    }
+
+    /// Antigravity's hook asks before each step: what is safe passes at once,
+    /// what is not becomes a card, and the person's answer reaches the hook.
+    #[test]
+    fn the_gate_lets_safe_steps_through_and_holds_the_rest_for_the_person() {
+        run(async {
+            let bench = bench(diligent());
+            bench.drive.held.lock().unwrap().push("ai1".into());
+            bench.start(shop(&work_dir()));
+            let token = bench.teams.get("shop").unwrap().token_for_tests("ai3").unwrap();
+
+            let safe = bench.teams.gate("shop", "ai3", &token, "run_command", &json!({ "CommandLine": "npm test" })).await;
+            assert_eq!(safe["decision"], "allow");
+            let own = bench.teams.gate("shop", "ai3", &token, "call_mcp_tool", &json!({ "ServerName": "coucou-team", "ToolName": "deliver" })).await;
+            assert_eq!(own["decision"], "allow");
+            assert_eq!(bench.teams.gate("shop", "ai3", "wrong", "view_file", &json!({})).await["decision"], "deny");
+
+            // rm -rf of a folder: held until the person answers.
+            let teams = bench.teams.clone();
+            let held = tokio::spawn(async move { teams.gate("shop", "ai3", &token, "run_command", &json!({ "CommandLine": "rm -rf node_modules" })).await });
+            let waiting = bench.until("the card shows", |s| s.members[2].permission.is_some()).await;
+            let card = waiting.members[2].permission.clone().unwrap();
+            assert_eq!(waiting.members[2].status, MemberStatus::WaitingYou);
+            assert!(card.request_id.as_str().unwrap().starts_with("gate:ai3:"));
+            assert_eq!(card.raw_input["command"], "rm -rf node_modules");
+            bench.teams.permit("shop", "ai3", Some("allow".into()), false).await.unwrap();
+            assert_eq!(held.await.unwrap()["decision"], "allow");
+            // Nothing went to the agent's own connection.
+            assert!(bench.drive.answered.lock().unwrap().is_empty());
+
+            // Refused: the hook is told so.
+            let token = bench.teams.get("shop").unwrap().token_for_tests("ai3").unwrap();
+            let teams = bench.teams.clone();
+            let held = tokio::spawn(async move { teams.gate("shop", "ai3", &token, "run_command", &json!({ "CommandLine": "npm install left-pad" })).await });
+            bench.until("the second card shows", |s| s.members[2].permission.is_some()).await;
+            bench.teams.permit("shop", "ai3", Some("deny".into()), false).await.unwrap();
+            assert_eq!(held.await.unwrap()["decision"], "deny");
+            bench.drive.hold.notify_one();
+        });
     }
 
     /// Too few hands: a member added while the team runs joins it at once,

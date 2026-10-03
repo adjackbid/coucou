@@ -150,6 +150,19 @@ async fn serve(teams: Arc<Teams>, pipe: NamedPipeServer) {
         if line.trim().is_empty() {
             continue;
         }
+        // A step held at the gate waits for the person: answered here, async.
+        let message = serde_json::from_str::<Value>(&line).ok();
+        if let Some(gate) = message.as_ref().filter(|m| m.get("method").and_then(Value::as_str) == Some("coucou/gate")) {
+            let params = gate.get("params").cloned().unwrap_or(Value::Null);
+            let tool = params.get("tool").and_then(Value::as_str).unwrap_or("");
+            let args = params.get("args").cloned().unwrap_or(Value::Null);
+            let decision = teams.gate(&who.team, &who.member, &who.token, tool, &args).await;
+            let reply = json!({ "jsonrpc": "2.0", "id": gate.get("id").cloned().unwrap_or(Value::Null), "result": decision });
+            if write.write_all(format!("{reply}\n").as_bytes()).await.is_err() {
+                break;
+            }
+            continue;
+        }
         if let Some(reply) = answer(&teams, &who, &line) {
             if write.write_all(format!("{reply}\n").as_bytes()).await.is_err() {
                 break;

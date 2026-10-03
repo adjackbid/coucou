@@ -57,6 +57,8 @@ pub enum Protocol {
     Codex,
     /// Claude Code's stream-json protocol, the one the Agent SDK speaks; see claude.rs.
     Claude,
+    /// Antigravity's CLI in headless mode; see agy.rs.
+    Agy,
 }
 
 /// A coding agent the island can start and talk to.
@@ -246,6 +248,7 @@ pub(crate) struct Running {
     alive: Arc<AtomicBool>,
     pub(crate) codex: Arc<CodexState>,
     pub(crate) claude: Arc<ClaudeState>,
+    pub(crate) agy: Arc<crate::agy::AgyState>,
 }
 
 /// One session's place: the lock that keeps its turns in order, and the agent
@@ -350,6 +353,16 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
         Protocol::Claude => {
             cmd.args(crate::claude::args(model.as_deref(), &launch.mcp_servers));
         }
+        // A team member: agy's checks off, the team's gate in their place
+        // (agy.rs), and who it is in the environment its hook and its MCP
+        // server inherit.
+        Protocol::Agy => {
+            let team = launch.mcp_servers.first();
+            cmd.args(crate::agy::args(model.as_deref(), team.is_some()));
+            for (k, v) in team.map(|s| &s.env).into_iter().flatten() {
+                cmd.env(k, v);
+            }
+        }
         // Copilot CLI reads its model from the environment, whichever
         // provider it talks to. The MCP servers are Coucou's own, so their
         // tools run without a card each time.
@@ -435,6 +448,8 @@ pub(crate) struct Route {
     codex: Option<Arc<CodexState>>,
     /// Set for a Claude Code session: its lines are read by claude.rs.
     claude: Option<Arc<ClaudeState>>,
+    /// Set for an Antigravity session: its lines are read by agy.rs.
+    agy: Option<Arc<crate::agy::AgyState>>,
 }
 
 /// Brings the agent up, runs `initialize` and `session/new`, and keeps it.
@@ -445,6 +460,7 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
     let alive = Arc::new(AtomicBool::new(true));
     let codex = Arc::new(CodexState::default());
     let claude = Arc::new(ClaudeState::default());
+    let agy = Arc::new(crate::agy::AgyState::default());
 
     // The reader: responses settle the pending requests, notifications go to
     // the sink, and the agent's own requests to us are answered here.
@@ -457,6 +473,7 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
             auto: launch.auto.clone(),
             codex: (profile.protocol == Protocol::Codex).then(|| codex.clone()),
             claude: (profile.protocol == Protocol::Claude).then(|| claude.clone()),
+            agy: (profile.protocol == Protocol::Agy).then(|| agy.clone()),
         };
         let alive = alive.clone();
         tokio::spawn(async move {
@@ -484,6 +501,7 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
         alive,
         codex,
         claude,
+        agy,
     };
 
     let setup = setup(&mut running, key, profile, launch).await;
@@ -501,6 +519,7 @@ async fn setup(running: &mut Running, key: &str, profile: &AgentProfile, launch:
             return crate::codex::setup(running, key, &cwd, launch, model_of(profile, launch), SETUP_TIMEOUT).await;
         }
         Protocol::Claude => return crate::claude::setup(running, key, launch, SETUP_TIMEOUT).await,
+        Protocol::Agy => return crate::agy::setup(running, key, &working_dir(profile, launch), launch).await,
         Protocol::Acp => {}
     }
     let init = request(
@@ -620,6 +639,10 @@ async fn dispatch(route: &Route, msg: Value) {
     // Claude Code's lines are not JSON-RPC at all.
     if let Some(state) = route.claude.clone() {
         crate::claude::dispatch(route, &state, msg).await;
+        return;
+    }
+    if let Some(state) = route.agy.clone() {
+        crate::agy::dispatch(route, &state, msg).await;
         return;
     }
     let method = msg.get("method").and_then(Value::as_str);
@@ -782,6 +805,7 @@ impl Agents {
         match running.profile.protocol {
             Protocol::Codex => return crate::codex::prompt(&running, text, TURN_TIMEOUT).await,
             Protocol::Claude => return crate::claude::prompt(&running, text, TURN_TIMEOUT).await,
+            Protocol::Agy => return crate::agy::prompt(&running, text, TURN_TIMEOUT).await,
             Protocol::Acp => {}
         }
         let result = request(
@@ -809,6 +833,8 @@ impl Agents {
         let reply = match running.profile.protocol {
             Protocol::Codex => crate::codex::permission_reply(&request_id, option_id.as_deref()),
             Protocol::Claude => crate::claude::permission_reply(&running.claude, &request_id, option_id.as_deref()),
+            // agy's requests wait at the team's gate, not on its connection.
+            Protocol::Agy => return Err("Antigravity's requests are answered at the team's gate.".into()),
             Protocol::Acp => permission_reply(&request_id, option_id.as_deref()),
         };
         write_line(&running.writer, &reply).await
@@ -820,6 +846,7 @@ impl Agents {
         match running.profile.protocol {
             Protocol::Codex => return crate::codex::cancel(&running).await,
             Protocol::Claude => return crate::claude::cancel(&running).await,
+            Protocol::Agy => return crate::agy::cancel(&running).await,
             Protocol::Acp => {}
         }
         notify(&running.writer, "session/cancel", json!({ "sessionId": running.session_id })).await
@@ -847,6 +874,10 @@ impl Agents {
     pub async fn models(&self, profile: &AgentProfile) -> Result<Vec<ModelChoice>, String> {
         if profile.protocol == Protocol::Acp {
             return copilot_models(profile).await;
+        }
+        if profile.protocol == Protocol::Agy {
+            let exe = find_on_path(&profile.command).ok_or_else(|| format!("'{}' was not found on PATH.", profile.command))?;
+            return crate::agy::models(&exe.to_string_lossy()).await;
         }
         let nowhere: Sink = Arc::new(|_| {});
         let running = start(&self.opener, &nowhere, &format!("models:{}", profile.id), profile, &Launch::default()).await?;

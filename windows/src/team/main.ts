@@ -426,7 +426,7 @@ function setup(file: TeamFile): HTMLElement {
   // ── Right: who is in it ──
   const members = h("div", { class: "member-rows" });
   config.members.forEach((m, at) => {
-    const kindOf = (a: AgentProfile) => (a.protocol === "codex" ? "Codex" : a.protocol === "claude" ? "Claude Code" : a.command);
+    const kindOf = (a: AgentProfile) => (a.protocol === "codex" ? "Codex" : a.protocol === "claude" ? "Claude Code" : a.protocol === "agy" ? "Antigravity" : a.command);
     const agentChoices = agents.map((a) => ({ value: a.id, label: a.name, hint: kindOf(a) !== a.name ? kindOf(a) : undefined }));
     if (m.agent && !agents.some((a) => a.id === m.agent)) agentChoices.unshift({ value: m.agent, label: `${m.agent}(不存在)`, hint: "不在 設定 → Agents 裡" });
     const agent = dropdown({

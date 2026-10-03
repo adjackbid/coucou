@@ -329,7 +329,7 @@ fn antigravity_entry() -> Value {
 /// A path `cmd /c` reads as one word without quotes: as it is, or its short
 /// (8.3) name when it has a space. Short names can be turned off on a
 /// volume; the path then stays as it is and the entry says why in the log.
-fn cmd_safe_path(path: &std::path::Path) -> String {
+pub(crate) fn cmd_safe_path(path: &std::path::Path) -> String {
     let long = path.to_string_lossy().to_string();
     if !long.contains(' ') {
         return long;

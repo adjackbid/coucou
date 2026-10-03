@@ -140,8 +140,8 @@ export interface ChatMessage {
   kind?: "tool" | "streaming";
 }
 
-/** How an agent is driven: the Agent Client Protocol, Codex's app server, or Claude Code's stream-json. */
-export type AgentProtocol = "acp" | "codex" | "claude";
+/** How an agent is driven: the Agent Client Protocol, Codex's app server, Claude Code's stream-json, or Antigravity's headless mode. */
+export type AgentProtocol = "acp" | "codex" | "claude" | "agy";
 
 /** A coding agent the island can start and talk to — mirror of acp::AgentProfile. */
 export interface AgentProfile {
