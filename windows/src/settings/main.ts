@@ -531,9 +531,34 @@ function agentKey(a: AgentProfile): string {
   return `agent:${a.id}`;
 }
 
+/** Copilot CLI on the llm-share endpoint, the way the `cg` PowerShell function starts it. */
+function llmShare(name: string, model: string): AgentProfile {
+  return {
+    ...DEFAULT_AGENT,
+    id: "",
+    name,
+    protocol: "acp",
+    env: {
+      COPILOT_PROVIDER_TYPE: "openai",
+      COPILOT_PROVIDER_WIRE_API: "responses",
+      COPILOT_PROVIDER_BASE_URL: "https://llm-share.duotify.com/v1",
+      COPILOT_PROVIDER_API_KEY: "{secret}",
+      COPILOT_MODEL: model,
+      COPILOT_PROVIDER_MAX_PROMPT_TOKENS: "999424",
+      COPILOT_PROVIDER_MAX_OUTPUT_TOKENS: "131072",
+    },
+  };
+}
+
 /** Starting points for "Add agent". */
 const AGENT_PRESETS: { label: string; make: () => AgentProfile }[] = [
   { label: "Copilot CLI (GitHub login)", make: () => ({ ...DEFAULT_AGENT, id: "", env: {} }) },
+  { label: "cg · Copilot CLI on llm-share, glm-5.3-flash", make: () => llmShare("cg", "glm-5.3-flash") },
+  { label: "cg2 · Copilot CLI on llm-share, deepseek-v4.1-flash", make: () => llmShare("cg2", "deepseek-v4.1-flash") },
+  {
+    label: "Codex (codex app-server, ChatGPT login)",
+    make: () => ({ id: "", name: "Codex", command: "codex", args: ["app-server"], env: {}, cwd: "", protocol: "codex" }),
+  },
   {
     label: "Copilot CLI with your own endpoint (BYOK)",
     make: () => ({
@@ -565,7 +590,7 @@ function agentsSection(present: Record<string, boolean>): HTMLElement {
     h("h2", {}, h("span", { text: "Agents" })),
     h("div", {
       class: "hint",
-      text: "Coding agents the island can start and drive itself, over the Agent Client Protocol: pick one in the chat bar and your question goes to it, its tool calls show up as it works, and anything it needs permission for asks on the island. Keys go in the Windows Credential Manager; write {secret} where a key belongs in the environment.",
+      text: "Coding agents the island can start and drive itself — over the Agent Client Protocol (Copilot CLI, with GitHub or your own endpoint) or Codex's app server. Pick one in the chat bar and your question goes to it; in Teamwork, members run as one of these. Its tool calls show up as it works, and anything it needs permission for asks on the island. Keys go in the Windows Credential Manager; write {secret} where a key belongs in the environment.",
     }),
     list,
   );
@@ -603,6 +628,10 @@ function agentsSection(present: Record<string, boolean>): HTMLElement {
       redraw();
     });
 
+    const protocol = h("select", { title: "How Coucou talks to it" }) as HTMLSelectElement;
+    protocol.append(h("option", { value: "acp", text: "ACP" }), h("option", { value: "codex", text: "Codex app-server" }));
+    protocol.value = a.protocol ?? "acp";
+    protocol.addEventListener("change", () => { live().protocol = protocol.value as AgentProfile["protocol"]; void save(); });
     const command = h("input", { type: "text", value: a.command, placeholder: "copilot", style: "width:220px", spellcheck: "false" }) as HTMLInputElement;
     command.addEventListener("change", () => { live().command = command.value.trim(); void save(); });
     const args = h("input", { type: "text", value: a.args.join(" "), placeholder: "--acp --stdio", style: "flex:1 1 auto;min-width:0", spellcheck: "false" }) as HTMLInputElement;
@@ -665,6 +694,7 @@ function agentsSection(present: Record<string, boolean>): HTMLElement {
 
     card.append(
       h("div", { class: "row" }, name, h("span", { class: "spacer" }), remove),
+      h("div", { class: "row" }, h("label", { text: "Speaks" }), protocol),
       h("div", { class: "row" }, h("label", { text: "Command" }), command, args),
       h("div", { class: "row" }, h("label", { text: "Folder" }), cwd),
       h("div", { class: "row", style: "align-items:flex-start" }, h("label", { text: "Environment" }), env),

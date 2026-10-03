@@ -1,6 +1,7 @@
 // Coucou for Windows — app wiring and the commands the island calls.
 
 mod acp;
+mod codex;
 mod files;
 mod folder;
 mod glass;

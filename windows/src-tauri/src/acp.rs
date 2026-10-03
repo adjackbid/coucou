@@ -27,6 +27,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 use tokio::process::{Child, Command};
 use tokio::sync::{oneshot, Mutex as AsyncMutex};
 
+use crate::codex::CodexState;
 use crate::island::WINDOW_LABEL;
 use crate::log;
 use crate::policy::{self, Danger, Scope, Verdict};
@@ -43,7 +44,19 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
-/// A coding agent the island can start and talk to over ACP.
+/// The protocol an agent is driven by.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Protocol {
+    /// The Agent Client Protocol: Copilot CLI (with or without its own
+    /// provider), Gemini CLI, any ACP agent.
+    #[default]
+    Acp,
+    /// Codex's app server (`codex app-server`), see codex.rs.
+    Codex,
+}
+
+/// A coding agent the island can start and talk to.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentProfile {
@@ -61,6 +74,8 @@ pub struct AgentProfile {
     /// Where sessions start; empty means the home folder.
     #[serde(default)]
     pub cwd: String,
+    #[serde(default)]
+    pub protocol: Protocol,
 }
 
 impl AgentProfile {
@@ -73,6 +88,7 @@ impl AgentProfile {
             args: vec!["--acp".into(), "--stdio".into()],
             env: BTreeMap::new(),
             cwd: String::new(),
+            protocol: Protocol::Acp,
         }
     }
 
@@ -182,7 +198,7 @@ pub fn to_island(app: &AppHandle) -> Sink {
 // ── The running agent ─────────────────────────────────────────────────────────
 
 type Reader = Box<dyn AsyncRead + Send + Unpin>;
-type Writer = Arc<AsyncMutex<Box<dyn AsyncWrite + Send + Unpin>>>;
+pub(crate) type Writer = Arc<AsyncMutex<Box<dyn AsyncWrite + Send + Unpin>>>;
 type PendingMap = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, String>>>>>;
 
 /// The two ends of an agent, and the process behind them when there is one.
@@ -196,16 +212,18 @@ pub struct Transport {
 /// pipe with a scripted agent on the other end.
 pub type Opener = Arc<dyn Fn(&AgentProfile, &Launch) -> Result<Transport, String> + Send + Sync>;
 
-struct Running {
+pub(crate) struct Running {
     profile: AgentProfile,
     launch: Launch,
     child: AsyncMutex<Option<Child>>,
-    writer: Writer,
-    session_id: String,
+    pub(crate) writer: Writer,
+    /// The ACP session, or the Codex thread.
+    pub(crate) session_id: String,
     pending: PendingMap,
-    next_id: AtomicU64,
+    pub(crate) next_id: AtomicU64,
     /// Cleared by the reader when the agent closes its output.
     alive: Arc<AtomicBool>,
+    pub(crate) codex: Arc<CodexState>,
 }
 
 /// One session's place: the lock that keeps its turns in order, and the agent
@@ -254,7 +272,12 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
     }
 
     let mut cmd = Command::new(&exe);
-    cmd.args(&profile.args)
+    cmd.args(&profile.args);
+    // Codex takes its MCP servers as configuration, not from the thread.
+    if profile.protocol == Protocol::Codex {
+        cmd.args(crate::codex::mcp_args(&launch.mcp_servers));
+    }
+    cmd
         .current_dir(&cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -297,12 +320,14 @@ async fn stop(running: &Running) {
 
 /// What the reader needs to route one line from the agent.
 #[derive(Clone)]
-struct Route {
-    sink: Sink,
-    key: String,
+pub(crate) struct Route {
+    pub(crate) sink: Sink,
+    pub(crate) key: String,
     pending: PendingMap,
-    writer: Writer,
-    auto: Option<Scope>,
+    pub(crate) writer: Writer,
+    pub(crate) auto: Option<Scope>,
+    /// Set for a Codex session: its lines are read by codex.rs.
+    codex: Option<Arc<CodexState>>,
 }
 
 /// Brings the agent up, runs `initialize` and `session/new`, and keeps it.
@@ -311,6 +336,7 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
     let writer: Writer = Arc::new(AsyncMutex::new(writer));
     let pending: PendingMap = Default::default();
     let alive = Arc::new(AtomicBool::new(true));
+    let codex = Arc::new(CodexState::default());
 
     // The reader: responses settle the pending requests, notifications go to
     // the sink, and the agent's own requests to us are answered here.
@@ -321,6 +347,7 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
             pending: pending.clone(),
             writer: writer.clone(),
             auto: launch.auto.clone(),
+            codex: (profile.protocol == Protocol::Codex).then(|| codex.clone()),
         };
         let alive = alive.clone();
         tokio::spawn(async move {
@@ -346,6 +373,7 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
         pending,
         next_id: AtomicU64::new(1),
         alive,
+        codex,
     };
 
     let setup = setup(&mut running, key, profile, launch).await;
@@ -357,6 +385,10 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
 }
 
 async fn setup(running: &mut Running, key: &str, profile: &AgentProfile, launch: &Launch) -> Result<(), String> {
+    if profile.protocol == Protocol::Codex {
+        let cwd = working_dir(profile, launch);
+        return crate::codex::setup(running, key, &cwd, launch, SETUP_TIMEOUT).await;
+    }
     let init = request(
         running,
         "initialize",
@@ -417,7 +449,7 @@ async fn setup(running: &mut Running, key: &str, profile: &AgentProfile, launch:
 }
 
 /// Sends a request and waits for its response.
-async fn request(running: &Running, method: &str, params: Value, timeout: Duration) -> Result<Value, String> {
+pub(crate) async fn request(running: &Running, method: &str, params: Value, timeout: Duration) -> Result<Value, String> {
     let id = running.next_id.fetch_add(1, Ordering::Relaxed);
     let (tx, rx) = oneshot::channel();
     running.pending.lock().unwrap().insert(id, tx);
@@ -436,12 +468,12 @@ async fn request(running: &Running, method: &str, params: Value, timeout: Durati
     }
 }
 
-async fn notify(writer: &Writer, method: &str, params: Value) -> Result<(), String> {
+pub(crate) async fn notify(writer: &Writer, method: &str, params: Value) -> Result<(), String> {
     let line = json!({ "jsonrpc": "2.0", "method": method, "params": params }).to_string();
     write_line(writer, &line).await
 }
 
-async fn write_line(writer: &Writer, line: &str) -> Result<(), String> {
+pub(crate) async fn write_line(writer: &Writer, line: &str) -> Result<(), String> {
     let mut w = writer.lock().await;
     w.write_all(line.as_bytes()).await.map_err(|e| e.to_string())?;
     w.write_all(b"\n").await.map_err(|e| e.to_string())?;
@@ -472,6 +504,15 @@ async fn dispatch(route: &Route, msg: Value) {
     let method = msg.get("method").and_then(Value::as_str);
     let id = msg.get("id").cloned();
     let key = &route.key;
+
+    // Codex's notifications and requests are its own; answers to our
+    // requests are settled below the same way for both.
+    if method.is_some() {
+        if let Some(state) = route.codex.clone() {
+            crate::codex::dispatch(route, &state, msg).await;
+            return;
+        }
+    }
 
     match (method, id) {
         // A response to one of ours.
@@ -617,6 +658,9 @@ impl Agents {
             }
         };
 
+        if running.profile.protocol == Protocol::Codex {
+            return crate::codex::prompt(&running, text, TURN_TIMEOUT).await;
+        }
         let result = request(
             &running,
             "session/prompt",
@@ -639,12 +683,19 @@ impl Agents {
     /// Answers the agent's permission request with one of its options.
     pub async fn answer_permission(&self, key: &str, request_id: Value, option_id: Option<String>) -> Result<(), String> {
         let running = self.running(key).ok_or("that agent is not running")?;
-        write_line(&running.writer, &permission_reply(&request_id, option_id.as_deref())).await
+        let reply = match running.profile.protocol {
+            Protocol::Codex => crate::codex::permission_reply(&request_id, option_id.as_deref()),
+            Protocol::Acp => permission_reply(&request_id, option_id.as_deref()),
+        };
+        write_line(&running.writer, &reply).await
     }
 
     /// Interrupts the current turn.
     pub async fn cancel(&self, key: &str) -> Result<(), String> {
         let running = self.running(key).ok_or("that agent is not running")?;
+        if running.profile.protocol == Protocol::Codex {
+            return crate::codex::cancel(&running).await;
+        }
         notify(&running.writer, "session/cancel", json!({ "sessionId": running.session_id })).await
     }
 

@@ -134,7 +134,10 @@ export interface ChatMessage {
   kind?: "tool" | "streaming";
 }
 
-/** A coding agent the island can start and talk to over ACP — mirror of acp::AgentProfile. */
+/** How an agent is driven: the Agent Client Protocol, or Codex's app server. */
+export type AgentProtocol = "acp" | "codex";
+
+/** A coding agent the island can start and talk to — mirror of acp::AgentProfile. */
 export interface AgentProfile {
   id: string;
   name: string;
@@ -143,6 +146,8 @@ export interface AgentProfile {
   /** "{secret}" in a value becomes the key from the Credential Manager, in Rust. */
   env: Record<string, string>;
   cwd: string;
+  /** Absent in settings written before Codex: ACP. */
+  protocol?: AgentProtocol;
 }
 
 export const DEFAULT_AGENT: AgentProfile = {
