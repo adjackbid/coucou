@@ -576,6 +576,8 @@ pub struct MemberView {
     pub turns: u32,
     pub permission: Option<PermissionView>,
     pub lost_why: String,
+    /// The last lines of its live screen.
+    pub screen: Vec<super::screen::Line>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -667,6 +669,7 @@ impl State {
                     turns: self.turns.get(&m.id).map(|t| t.count).unwrap_or(0),
                     permission: l.and_then(|l| l.permission.clone()),
                     lost_why: self.lost.get(&m.id).cloned().unwrap_or_default(),
+                    screen: Vec::new(),
                 }
             })
             .collect();

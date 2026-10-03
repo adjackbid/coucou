@@ -3,7 +3,7 @@
 // `?state=waiting` to see a member holding a permission card and another
 // waiting for an answer.
 
-import type { Snapshot, TeamFile, TeamConfig } from "./types";
+import type { Line, ScreenPatch, Snapshot, TeamFile, TeamConfig } from "./types";
 
 const NOW = Date.now();
 const ago = (minutes: number) => NOW - minutes * 60_000;
@@ -77,7 +77,60 @@ const task = (
 });
 
 /** A member as the snapshot shows it: the model is always there, empty for the agent's own. */
-const seat = (i: number) => ({ ...config.members[i], model: config.members[i].model ?? "" });
+const seat = (i: number) => ({ ...config.members[i], model: config.members[i].model ?? "", screen: screens[config.members[i].id] ?? [] });
+
+let n = 0;
+const line = (kind: Line["kind"], text: string, extra: Partial<Line> = {}): Line => ({
+  n: ++n,
+  at: NOW,
+  kind,
+  text,
+  tool: "",
+  teamTool: "",
+  input: null,
+  status: "",
+  output: "",
+  ...extra,
+});
+const turn = (k: number, heard: { from: string; text: string }[]) => line("turn", String(k), { status: "start", input: heard });
+const tool = (title: string, kind: string, status: string, extra: Partial<Line> = {}) => line("tool", title, { tool: kind, status, ...extra });
+const team = (name: string, input: unknown, status = "done") => line("tool", `coucou-team.${name}`, { tool: "other", teamTool: name, input, status });
+
+/** What each member's screen shows, eighteen minutes in. */
+const screens: Record<string, Line[]> = {
+  ai1: [
+    turn(1, [{ from: "system", text: "The team has started. Plan the work for this goal and create the tasks now:" }]),
+    line("say", "我先看一下團隊與需求,再把工作拆成可以驗收的任務。"),
+    team("team_status", {}),
+    team("task_create", { title: "商品圖片", owner: "ai4" }),
+    team("task_create", { title: "購物車功能", owner: "ai3" }),
+    line("turn", "1", { status: "end" }),
+    turn(4, [{ from: "ai3", text: "請問優惠券是否需要支援滿額折扣?以及是否需要會員限定的優惠?" }]),
+    tool("Read docs/spec.md", "read", "done"),
+    line("say", "首版先完成基本結帳流程,優惠券規則後續再擴充。我回覆 AI 3,"),
+  ],
+  ai2: [
+    turn(1, [{ from: "system", text: "TASK-06 is yours and ready to start: 整合測試" }]),
+    line("say", "TASK-06 要等 AI 3 的購物車功能交付才能開始,我先把測試清單寫好。"),
+    tool("Edit tests/checklist.md", "edit", "done"),
+    line("turn", "1", { status: "end" }),
+  ],
+  ai3: [
+    turn(3, [{ from: "system", text: "AI 4 (ai4) handed in TASK-03 (商品圖片), which is meant for you: 6 張商品圖" }]),
+    line("say", "收到商品圖,接著把購物車頁面做出來。"),
+    team("task_update", { task: "TASK-04", status: "doing" }),
+    tool("Run npm install zustand", "execute", "done", { input: { command: '"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -NoProfile -Command npm install zustand' } }),
+    tool("Edit src/cart/CartPage.tsx", "edit", "done"),
+    tool("Run npm test -- cart", "execute", "running", { input: { command: "npm test -- cart" }, output: "PASS src/cart/add.test.ts\nPASS src/cart/qty.test.ts\nRUNS src/cart/total.test.ts" }),
+  ],
+  ai4: [
+    turn(2, [{ from: "system", text: "TASK-03 is yours and ready to start: 商品圖片" }]),
+    line("say", "六張商品圖都生成好了,放在 public/images。"),
+    tool("Generate an image", "other", "done"),
+    team("deliver", { task: "TASK-03", summary: "6 張商品圖:主圖、情境圖與細節圖", locator: "public/images" }),
+    line("turn", "2", { status: "end" }),
+  ],
+};
 
 export function demoSnapshot(): Snapshot {
   const waiting = new URLSearchParams(location.search).get("state") === "waiting";
@@ -167,4 +220,41 @@ export function demoSnapshot(): Snapshot {
     snapshot.tasks[3].blocked = null;
   }
   return snapshot;
+}
+
+/**
+ * A team at work, for a plain browser: words arrive a few at a time, a
+ * command runs and passes, and now and then something is handed across.
+ */
+export function demoStream(onScreen: (patch: ScreenPatch) => void, onChange: (snap: Snapshot) => void, snap: Snapshot) {
+  const words = "我回覆 AI 3:首版先專注在加入商品、調整數量與小計,優惠券下一版再做。接著我來檢查規格裡的結帳流程有沒有漏掉的地方。".split("");
+  const leader = snap.members[0].screen;
+  const say = leader[leader.length - 1];
+  const dev = snap.members[2].screen;
+  const test = dev[dev.length - 1];
+  let i = 0;
+  let beat = 0;
+  window.setInterval(() => {
+    if (i < words.length) {
+      say.text += words[i++] + (words[i] ?? "");
+      i++;
+      onScreen({ team: snap.id, member: "ai1", lines: [{ ...say }] });
+    }
+    beat++;
+    if (beat % 9 === 0) {
+      test.output += `\nPASS src/cart/case-${beat}.test.ts`;
+      onScreen({ team: snap.id, member: "ai3", lines: [{ ...test }] });
+    }
+    if (beat % 40 === 0) {
+      const kinds = [
+        { kind: "message" as const, from: "ai1", to: "ai3", text: "首版先做核心結帳流程", task: "TASK-04" },
+        { kind: "delivered" as const, from: "ai3", to: "ai2", text: "購物車功能", task: "TASK-04" },
+        { kind: "task" as const, from: "ai1", to: "ai2", text: "整合測試", task: "TASK-06" },
+        { kind: "accepted" as const, from: "ai1", to: "ai4", text: "", task: "TASK-03" },
+      ];
+      const k = kinds[(beat / 40 - 1) % kinds.length];
+      snap.feed = [...snap.feed, { at: Date.now(), ...k }];
+      onChange({ ...snap });
+    }
+  }, 90);
 }

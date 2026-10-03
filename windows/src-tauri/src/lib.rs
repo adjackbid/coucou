@@ -1018,12 +1018,17 @@ pub fn run() {
                     let _ = app.emit("team-changed", snapshot.clone());
                 })
             };
-            let teams = Arc::new(Teams::new(
-                Arc::new(AcpDrive(agents.clone())),
-                emit,
-                Some(settings::team_logs_dir()),
-                settings::team_mcp_exe_path(),
-            ));
+            // Each member's live screen goes to the Teamwork window alone.
+            let show: team::orchestrator::Show = {
+                let app = handle.clone();
+                Arc::new(move |patch| {
+                    let _ = app.emit_to("team", "team-screen", patch.clone());
+                })
+            };
+            let teams = Arc::new(
+                Teams::new(Arc::new(AcpDrive(agents.clone())), emit, Some(settings::team_logs_dir()), settings::team_mcp_exe_path())
+                    .with_screens(show),
+            );
             app.manage(teams.clone());
             team::mcp::start(teams);
 

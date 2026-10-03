@@ -2,8 +2,10 @@
    The window itself is transparent: Windows blurs whatever is behind it (see
    glass.rs) and the page lays panes of dark, see-through glass over that —
    the island's black, its hairlines, its accents. Nothing here paints a
-   background of its own, and nothing moves by itself: the only transitions
-   are on things the pointer touches. */
+   background of its own. What moves is the team at work: each member's
+   Mochi, its desk breathing while it works, its screen filling, and the
+   hand-offs flying between members (live.ts) — and only while the window
+   can be seen. */
 
 :root {
   color-scheme: dark;
@@ -651,7 +653,8 @@ h2 {
 .scroll {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-right: 2px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
@@ -858,44 +861,455 @@ h2 {
   background: linear-gradient(90deg, #7ab8ff, var(--blue));
 }
 
-/* ── Members ───────────────────────────────────────────────────────────────── */
+/* ── The team at work: desks, screens, hand-offs ───────────────────────────── */
 
-.members {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 10px;
-}
-
-.member {
+.stage {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   padding: 14px;
+  border-radius: 18px;
+  background: var(--sheet);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.stage-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stage-head .hint {
+  color: var(--dim-glass);
+}
+
+.desks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+  gap: 12px;
+}
+
+.desk {
+  --c: var(--blue);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px;
   border-radius: 18px;
   background: var(--solid);
   box-shadow: inset 0 0 0 1px var(--hairline);
 }
 
-.member.waitingYou,
-.member.lost {
-  box-shadow: inset 0 0 0 1px rgba(244, 80, 94, 0.6), 0 0 18px rgba(244, 80, 94, 0.18);
+/* At work: the desk glows softly in the member's colour, breathing. */
+.desk.working {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent), 0 0 20px color-mix(in srgb, var(--c) 20%, transparent);
+  animation: desk-glow 2.6s ease-in-out infinite;
 }
 
-.member header {
+@keyframes desk-glow {
+  50% {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 85%, transparent), 0 0 30px color-mix(in srgb, var(--c) 34%, transparent);
+  }
+}
+
+.desk.waitingYou,
+.desk.lost {
+  box-shadow: inset 0 0 0 1px rgba(244, 80, 94, 0.65), 0 0 22px rgba(244, 80, 94, 0.2);
+}
+
+.desk.done,
+.desk.idle {
+  background: rgba(var(--card), 0.66);
+}
+
+.desk-top {
   display: flex;
-  gap: 12px;
   align-items: center;
-}
-
-.member-head {
+  gap: 10px;
   min-width: 0;
 }
+
+/* The Mochi sits in a slot its own size; its canvas spills over for the
+   hops and sparks. */
+.seat {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+}
+
+.avatar {
+  position: relative;
+  display: inline-block;
+  flex: none;
+}
+
+.avatar canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.crown {
+  position: absolute;
+  left: 50%;
+  top: -13px;
+  transform: translateX(-50%) rotate(-8deg);
+  line-height: 0;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+}
+
+.desk .member-head {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.desk .member-name .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desk .member-role {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dim);
+}
+
+.zoom {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 9px;
+  font: 15px/1 var(--font);
+  color: var(--dim);
+  background: transparent;
+}
+
+.zoom:hover {
+  color: var(--ink);
+  background: var(--lift-2);
+}
+
+/* What the member says right now: a speech bubble under its Mochi. */
+.bubble {
+  position: relative;
+  min-height: 2.6em;
+  padding: 7px 11px;
+  border-radius: 13px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink-2);
+  background: color-mix(in srgb, var(--c) 13%, rgba(255, 255, 255, 0.05));
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.bubble::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 22px;
+  border: 6px solid transparent;
+  border-top: 0;
+  border-bottom-color: color-mix(in srgb, var(--c) 13%, rgba(255, 255, 255, 0.05));
+}
+
+.bubble.waitingYou,
+.bubble.lost {
+  color: var(--red-text);
+  background: rgba(244, 80, 94, 0.13);
+}
+
+.bubble.waitingYou::before,
+.bubble.lost::before {
+  border-bottom-color: rgba(244, 80, 94, 0.13);
+}
+
+.bubble.idle,
+.bubble.done,
+.bubble.waitingDelivery,
+.bubble.waitingReply {
+  color: var(--dim);
+}
+
+/* The member's screen: everything its agent says and does, as it happens. */
+.screen {
+  height: 230px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 10px 10px;
+  border-radius: 12px;
+  background: rgba(4, 5, 7, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+  line-height: 1.45;
+  user-select: text;
+  cursor: text;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  outline: none;
+}
+
+.screen:focus-visible {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 60%, transparent);
+}
+
+.desk.focused {
+  grid-column: 1 / -1;
+  order: -1;
+}
+
+.desk.focused .screen {
+  height: min(60vh, 620px);
+  font-size: 12.5px;
+}
+
+.stage.has-focus .desk:not(.focused) .screen {
+  height: 120px;
+}
+
+.line {
+  margin: 0 0 5px;
+  overflow-wrap: anywhere;
+}
+
+.line.quiet {
+  color: var(--dim-3);
+  margin-top: 4px;
+}
+
+.line.say p {
+  white-space: pre-wrap;
+  color: var(--ink);
+}
+
+/* Still being written: a caret in the member's colour. */
+.line.say.open p::after {
+  content: "▍";
+  margin-left: 1px;
+  color: var(--c);
+  animation: caret 1s steps(2, start) infinite;
+}
+
+@keyframes caret {
+  to {
+    visibility: hidden;
+  }
+}
+
+.line.think {
+  color: var(--dim);
+  font-style: italic;
+}
+
+.line.turn {
+  margin: 10px 0 6px;
+}
+
+.line.turn:first-child {
+  margin-top: 0;
+}
+
+.line.turn .rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dim-3);
+}
+
+.line.turn .rule::before,
+.line.turn .rule::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.line.turn.failed .rule,
+.line.turn .why {
+  color: var(--red-text);
+}
+
+.heard {
+  margin-top: 4px;
+  padding: 3px 8px;
+  border-left: 2px solid var(--from, var(--dim));
+  border-radius: 2px 8px 8px 2px;
+  color: var(--dim);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.heard b {
+  margin-right: 6px;
+  font-weight: 650;
+  color: var(--ink-2);
+}
+
+.line.tool {
+  display: grid;
+  grid-template-columns: 14px auto 1fr;
+  align-items: baseline;
+  column-gap: 6px;
+  color: var(--ink-2);
+}
+
+.line.tool.team {
+  grid-template-columns: 14px 1fr;
+  padding: 3px 8px;
+  border-radius: 8px;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+}
+
+.line.tool .kind {
+  color: var(--dim);
+  font-family: var(--mono);
+}
+
+.line.tool .what.mono {
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.line.tool .mark {
+  font-style: normal;
+  font-weight: 800;
+  font-size: 11px;
+  color: var(--green-2);
+}
+
+.line.tool.s-failed .mark,
+.line.tool.s-failed .out {
+  color: var(--red-text);
+}
+
+.line.tool .out {
+  grid-column: 2 / -1;
+  margin: 3px 0 0;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font: 11px/1.4 var(--mono);
+  white-space: pre-wrap;
+  color: var(--dim);
+  background: rgba(255, 255, 255, 0.04);
+  max-height: 6.4em;
+  overflow: hidden;
+}
+
+.line.tool.team .out {
+  grid-column: 2 / -1;
+}
+
+.spin {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.6px solid color-mix(in srgb, var(--c) 85%, white);
+  border-right-color: transparent;
+  animation: spin 0.8s linear infinite;
+  align-self: center;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.desk-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.desk-foot .chip {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desk-foot .chip.task {
+  flex: 0 1 auto;
+  color: var(--ink-2);
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+}
+
+.desk-foot .chip.agent {
+  flex: 0 1 auto;
+  margin-left: auto;
+}
+
+/* A hand-off on its way from one member to another. */
+.flyers {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.flyer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  color: #0b0c0e;
+  background: var(--c);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 16px color-mix(in srgb, var(--c) 55%, transparent);
+  will-change: transform, opacity;
+}
+
+.flyer b {
+  display: inline-grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  font-size: 11px;
+  color: var(--c);
+  background: #0b0c0e;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desk.working,
+  .line.say.open p::after,
+  .spin {
+    animation: none;
+  }
+}
+
+/* The badges each member wears. */
 
 .member-name {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  min-width: 0;
   font-weight: 650;
 }
 
@@ -903,20 +1317,8 @@ h2 {
   color: var(--ink-2);
 }
 
-.member-lines {
-  min-height: 38px;
-}
-
-.member footer {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  margin-top: auto;
-  font-size: 12px;
-}
-
 .badge {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -924,6 +1326,7 @@ h2 {
   border-radius: 999px;
   font-size: 11.5px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .badge b {

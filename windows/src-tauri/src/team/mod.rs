@@ -11,6 +11,7 @@
 //   brief.rs         the words a member is given: its role, a task, a nudge
 //   mcp.rs           the tools as an MCP server, behind coucou-team-mcp.exe
 //   orchestrator.rs  who gets the next turn, and what it is told
+//   screen.rs        what each member's agent is doing, for the live screens
 //
 // What a screen shows is always read from that record, never guessed from
 // what an agent wrote in passing.
@@ -18,6 +19,7 @@
 pub mod brief;
 pub mod mcp;
 pub mod orchestrator;
+pub mod screen;
 pub mod state;
 pub mod store;
 pub mod tools;

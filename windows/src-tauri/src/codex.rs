@@ -29,7 +29,7 @@ use std::time::Duration;
 use serde_json::{json, Value};
 use tokio::sync::oneshot;
 
-use crate::acp::{self, AcpOutcome, AcpPermission, AcpUpdate, Event, Launch, McpServer, Route, Running};
+use crate::acp::{self, AcpOutcome, AcpPermission, AcpUpdate, Event, Launch, McpServer, Route, Running, TEAM_SERVER};
 use crate::log;
 use crate::policy::{self, Kind, Verdict};
 
@@ -64,6 +64,8 @@ fn toml_str(s: &str) -> String {
 
 /// A session's MCP servers as Codex configuration overrides. Codex reads
 /// them from its config, not from the thread, so they go on the command line.
+/// They are Coucou's own servers, so their tools run without Codex asking:
+/// under "untrusted" it would otherwise ask before every call.
 pub fn mcp_args(servers: &[McpServer]) -> Vec<String> {
     let mut out = Vec::new();
     for s in servers {
@@ -77,6 +79,8 @@ pub fn mcp_args(servers: &[McpServer]) -> Vec<String> {
             out.push("-c".into());
             out.push(format!("{key}.env={{{}}}", env.join(", ")));
         }
+        out.push("-c".into());
+        out.push(format!("{key}.default_tools_approval_mode=\"approve\""));
     }
     out
 }
@@ -217,6 +221,43 @@ fn title_of(item: &Value) -> Option<(String, &'static str)> {
     }
 }
 
+/// What a step was called with, for the live screen.
+fn input_of(item: &Value) -> Value {
+    match item.get("type").and_then(Value::as_str).unwrap_or("") {
+        "commandExecution" => json!({ "command": item.get("command").cloned().unwrap_or(Value::Null) }),
+        "mcpToolCall" => item.get("arguments").cloned().unwrap_or(Value::Null),
+        "webSearch" => json!({ "query": item.get("query").cloned().unwrap_or(Value::Null) }),
+        _ => Value::Null,
+    }
+}
+
+/// How a step ended, and what it left to read.
+fn finished(item: &Value) -> Value {
+    let id = item.get("id").and_then(Value::as_str).unwrap_or("");
+    let status = match item.get("status").and_then(Value::as_str).unwrap_or("completed") {
+        "failed" | "declined" => "failed",
+        "inProgress" => "in_progress",
+        _ => "completed",
+    };
+    let text = match item.get("type").and_then(Value::as_str).unwrap_or("") {
+        "commandExecution" => item.get("aggregatedOutput").and_then(Value::as_str).map(str::to_string),
+        "mcpToolCall" => item.pointer("/error/message").and_then(Value::as_str).map(str::to_string).or_else(|| {
+            let parts: Vec<&str> = item
+                .pointer("/result/content")
+                .and_then(Value::as_array)
+                .map(|c| c.iter().filter_map(|x| x.get("text").and_then(Value::as_str)).collect())
+                .unwrap_or_default();
+            (!parts.is_empty()).then(|| parts.join("\n"))
+        }),
+        _ => None,
+    };
+    let mut update = json!({ "sessionUpdate": "tool_call_update", "toolCallId": id, "status": status });
+    if let Some(text) = text.filter(|t| !t.is_empty()) {
+        update["content"] = json!([{ "type": "content", "content": { "type": "text", "text": text } }]);
+    }
+    update
+}
+
 /// One line from Codex that is not an answer to one of our requests.
 pub async fn dispatch(route: &Route, state: &CodexState, msg: Value) {
     let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
@@ -238,7 +279,30 @@ pub async fn dispatch(route: &Route, state: &CodexState, msg: Value) {
                     state.edits.lock().unwrap().insert(id, paths);
                 }
                 if let Some((title, kind)) = title_of(&item) {
-                    update(route, json!({ "sessionUpdate": "tool_call", "title": title, "kind": kind, "status": "in_progress" }));
+                    let id = item.get("id").cloned().unwrap_or(Value::Null);
+                    update(
+                        route,
+                        json!({ "sessionUpdate": "tool_call", "toolCallId": id, "title": title, "kind": kind, "status": "in_progress", "rawInput": input_of(&item) }),
+                    );
+                }
+            }
+            "item/completed" => {
+                let item = params.get("item").cloned().unwrap_or(Value::Null);
+                if title_of(&item).is_some() {
+                    update(route, finished(&item));
+                }
+            }
+            "item/commandExecution/outputDelta" => {
+                let delta = params.get("delta").and_then(Value::as_str).unwrap_or("");
+                if !delta.is_empty() {
+                    let id = params.get("itemId").cloned().unwrap_or(Value::Null);
+                    update(route, json!({ "sessionUpdate": "tool_call_update", "toolCallId": id, "outputDelta": delta }));
+                }
+            }
+            "item/reasoning/summaryTextDelta" => {
+                let delta = params.get("delta").and_then(Value::as_str).unwrap_or("");
+                if !delta.is_empty() {
+                    update(route, json!({ "sessionUpdate": "agent_thought_chunk", "content": { "type": "text", "text": delta } }));
                 }
             }
             "item/agentMessage/delta" => {
@@ -291,9 +355,22 @@ pub async fn dispatch(route: &Route, state: &CodexState, msg: Value) {
 
     let Some((asked, title, kind)) = request else {
         // Nothing else is ours to answer: an MCP server's form is declined,
-        // everything else is refused, and Codex carries on without it.
+        // everything else is refused, and Codex carries on without it. The
+        // one form Coucou does fill in is Codex asking whether a tool of
+        // Coucou's own server may run, should it still ask.
         let reply = if method == "mcpServer/elicitation/request" {
-            json!({ "jsonrpc": "2.0", "id": id, "result": { "action": "decline", "content": null, "_meta": null } })
+            let ours = route.auto.is_some()
+                && params.get("serverName").and_then(Value::as_str) == Some(TEAM_SERVER)
+                && params.pointer("/_meta/codex_approval_kind").and_then(Value::as_str) == Some("mcp_tool_call");
+            if ours {
+                json!({ "jsonrpc": "2.0", "id": id, "result": { "action": "accept", "content": {}, "_meta": null } })
+            } else {
+                log::line(format!(
+                    "codex {key}: declined a form from {}",
+                    params.get("serverName").and_then(Value::as_str).unwrap_or("an MCP server")
+                ));
+                json!({ "jsonrpc": "2.0", "id": id, "result": { "action": "decline", "content": null, "_meta": null } })
+            }
         } else {
             log::line(format!("codex {key}: declined {method}"));
             json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32601, "message": format!("{method} is not offered by this client") } })
@@ -362,6 +439,8 @@ mod tests {
                 "mcp_servers.coucou-team.args=[]",
                 "-c",
                 r#"mcp_servers.coucou-team.env={"COUCOU_MEMBER"="ai3", "COUCOU_TEAM"="shop"}"#,
+                "-c",
+                r#"mcp_servers.coucou-team.default_tools_approval_mode="approve""#,
             ]
         );
         assert_eq!(toml_str("a\"b\nc"), r#""a\"b\nc""#);
@@ -490,6 +569,54 @@ mod tests {
         let models = runtime.block_on(Agents::default().models(&codex_profile())).expect("model/list");
         assert!(!models.is_empty());
     }
+
+    /// A real turn: Codex calls a tool of a server named like Coucou's team
+    /// server, without anyone asking and without Codex refusing it. Spends
+    /// one short turn. `cargo test -p coucou codex_calls -- --ignored`.
+    #[test]
+    #[ignore]
+    fn the_real_codex_calls_the_team_s_tools_without_asking() {
+        let (dir, marker, server) = acp::stand_in::team_server("codex");
+
+        let said = Arc::new(Mutex::new(String::new()));
+        let asked = Arc::new(Mutex::new(0));
+        let sink: acp::Sink = {
+            let said = said.clone();
+            let asked = asked.clone();
+            Arc::new(move |event| match event {
+                Event::Update(u) => {
+                    if let Some(t) = u.update.pointer("/content/text").and_then(Value::as_str) {
+                        said.lock().unwrap().push_str(t);
+                    }
+                }
+                Event::Permission(_) => *asked.lock().unwrap() += 1,
+                Event::Exit(_) => {}
+            })
+        };
+        let launch = Launch {
+            cwd: Some(dir.to_string_lossy().to_string()),
+            mcp_servers: vec![server],
+            auto: Some(policy::Scope::new(&dir)),
+            // The one a ChatGPT login is sure to have (what Steven's team runs).
+            model: Some("gpt-5.6-sol".into()),
+            ..Launch::default()
+        };
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let agents = Agents::default();
+        let outcome = runtime.block_on(agents.prompt(
+            &sink,
+            "test:codex-mcp",
+            &codex_profile(),
+            &launch,
+            "Call the `team_status` tool of the coucou-team MCP server once, then reply with the word it gives you and nothing else.".into(),
+        ));
+        runtime.block_on(agents.shutdown());
+        assert!(outcome.is_ok(), "{outcome:?}");
+        assert!(marker.is_file(), "the tool was never called; Codex said: {}", said.lock().unwrap());
+        assert!(said.lock().unwrap().contains("PAPAYA"), "Codex said: {}", said.lock().unwrap());
+        assert_eq!(*asked.lock().unwrap(), 0, "a person was asked");
+    }
+
 
     #[test]
     #[ignore]

@@ -284,6 +284,13 @@ fn working_dir(profile: &AgentProfile, launch: &Launch) -> std::path::PathBuf {
 }
 
 /// Starts the agent's process with its stdin and stdout piped.
+/// The name every team member knows Coucou's team server by.
+pub const TEAM_SERVER: &str = "coucou-team";
+
+fn is_copilot(exe: &std::path::Path) -> bool {
+    exe.file_stem().and_then(|s| s.to_str()).is_some_and(|s| s.eq_ignore_ascii_case("copilot"))
+}
+
 fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, String> {
     let exe = find_on_path(&profile.command)
         .ok_or_else(|| format!("'{}' was not found on PATH.", profile.command))?;
@@ -305,10 +312,14 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
             cmd.args(crate::claude::args(model.as_deref(), &launch.mcp_servers));
         }
         // Copilot CLI reads its model from the environment, whichever
-        // provider it talks to.
+        // provider it talks to. The MCP servers are Coucou's own, so their
+        // tools run without a card each time.
         Protocol::Acp => {
             if let Some(m) = &model {
                 cmd.env("COPILOT_MODEL", m);
+            }
+            if is_copilot(&exe) {
+                cmd.args(launch.mcp_servers.iter().map(|s| format!("--allow-tool={}", s.name)));
             }
         }
     }
@@ -824,6 +835,9 @@ impl Agents {
         let nowhere: Sink = Arc::new(|_| {});
         let running = start(&self.opener, &nowhere, &format!("test:{}", profile.id), profile, &Launch::default()).await?;
         stop(&running).await;
+        if running.claude.signed_out.load(Ordering::SeqCst) {
+            return Err(crate::claude::SIGNED_OUT.into());
+        }
         Ok(format!("{} answered the handshake and opened a session.", profile.name))
     }
 
@@ -1084,5 +1098,53 @@ mod tests {
             agents.reset("m").await;
             assert!(!agents.is_running("m"));
         });
+    }
+}
+
+/// For the tests that run a real agent: a folder to work in, and the smallest
+/// MCP server under the team server's name — one tool, `team_status`, that
+/// leaves a file behind when called and answers with the word PAPAYA.
+#[cfg(test)]
+pub(crate) mod stand_in {
+    use super::{McpServer, TEAM_SERVER};
+    use std::collections::BTreeMap;
+    use std::path::PathBuf;
+
+    const SERVER: &str = r#"import sys, json
+marker = sys.argv[1]
+for line in sys.stdin:
+    msg = json.loads(line)
+    mid = msg.get("id")
+    if mid is None:
+        continue
+    method = msg.get("method")
+    if method == "initialize":
+        r = {"protocolVersion": msg.get("params", {}).get("protocolVersion", "2025-06-18"), "capabilities": {"tools": {}}, "serverInfo": {"name": "coucou-team", "version": "0"}}
+    elif method == "tools/list":
+        r = {"tools": [{"name": "team_status", "description": "Where the team stands.", "inputSchema": {"type": "object", "properties": {}}}]}
+    elif method == "tools/call":
+        open(marker, "w").write("called")
+        r = {"content": [{"type": "text", "text": "The team is ready. The word is PAPAYA."}], "isError": False}
+    else:
+        print(json.dumps({"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": "not offered"}}), flush=True)
+        continue
+    print(json.dumps({"jsonrpc": "2.0", "id": mid, "result": r}), flush=True)
+"#;
+
+    /// (work folder, the file a call leaves, the server).
+    pub fn team_server(agent: &str) -> (PathBuf, PathBuf, McpServer) {
+        let dir = std::env::temp_dir().join(format!("coucou-{agent}-mcp-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let marker = dir.join("called.txt");
+        let _ = std::fs::remove_file(&marker);
+        let script = dir.join("team.py");
+        std::fs::write(&script, SERVER).unwrap();
+        let server = McpServer {
+            name: TEAM_SERVER.into(),
+            command: "python".into(),
+            args: vec![script.to_string_lossy().to_string(), marker.to_string_lossy().to_string()],
+            env: BTreeMap::new(),
+        };
+        (dir, marker, server)
     }
 }

@@ -19,6 +19,7 @@ use std::sync::{Arc, Mutex};
 use serde_json::Value;
 use tokio::sync::Notify;
 
+use super::screen::{Line, Screen};
 use super::state::{Event, Live, PermissionView, Snapshot, State, TaskStatus, TeamStatus};
 use super::store::Store;
 use super::{brief, tools, TeamConfig, SYSTEM, YOU};
@@ -32,6 +33,11 @@ pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 const MAX_REJECTIONS: u32 = 3;
 /// Turns in a row a member may end without a word about its open work.
 const MAX_SILENT_TURNS: u32 = 2;
+/// Lines of each member's screen in a snapshot.
+const SCREEN_LINES: usize = 150;
+/// A screen's changes go out at most this often: an agent writes a few
+/// characters at a time, and the window needs no more than a smooth line.
+const SCREEN_EVERY: std::time::Duration = std::time::Duration::from_millis(120);
 
 /// One member's session: its key, the agent it runs as and how it is started.
 #[derive(Clone, Debug)]
@@ -78,15 +84,37 @@ impl Drive for AcpDrive {
 /// Called with the team's new picture every time it changes.
 pub type Emit = Arc<dyn Fn(&Snapshot) + Send + Sync>;
 
+/// Lines of one member's live screen that changed.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenPatch {
+    pub team: String,
+    pub member: String,
+    pub lines: Vec<Line>,
+}
+
+/// Called with each member's screen as it changes.
+pub type Show = Arc<dyn Fn(&ScreenPatch) + Send + Sync>;
+
+/// A member's screen, and when the window was last told about it.
+#[derive(Default)]
+struct Shown {
+    screen: Screen,
+    sent: Option<std::time::Instant>,
+    pending: bool,
+}
+
 pub struct Team {
     pub id: String,
     store: Mutex<Store>,
     live: Mutex<BTreeMap<String, Live>>,
+    screens: Mutex<BTreeMap<String, Shown>>,
     seats: BTreeMap<String, Seat>,
     tokens: BTreeMap<String, String>,
     wake: Notify,
     drive: Arc<dyn Drive>,
     emit: Emit,
+    show: Show,
 }
 
 /// Every team this run of Coucou knows about.
@@ -94,6 +122,7 @@ pub struct Teams {
     teams: Mutex<HashMap<String, Arc<Team>>>,
     drive: Arc<dyn Drive>,
     emit: Emit,
+    show: Show,
     /// Where logs are kept; `None` keeps them in memory (tests).
     root: Option<PathBuf>,
     /// coucou-team-mcp.exe, handed to every member as its MCP server.
@@ -128,9 +157,64 @@ fn settle(store: &mut Store) {
 }
 
 impl Team {
+    /// The team's picture, as every change sends it: the screens are not in
+    /// it, they stream on their own (`with_screens`).
     pub fn snapshot(&self) -> Option<Snapshot> {
         let live = self.live.lock().unwrap().clone();
         self.store.lock().unwrap().state().snapshot(&live)
+    }
+
+    /// The picture with each member's last screen lines: for a window that
+    /// opens, or opens again.
+    pub fn full_snapshot(&self) -> Option<Snapshot> {
+        let mut snapshot = self.snapshot()?;
+        let screens = self.screens.lock().unwrap();
+        for m in &mut snapshot.members {
+            if let Some(shown) = screens.get(&m.id) {
+                m.screen = shown.screen.lines(SCREEN_LINES);
+            }
+        }
+        Some(snapshot)
+    }
+
+    /// Changes something on a member's screen, and has the window told soon.
+    fn on_screen(self: &Arc<Self>, member: &str, change: impl FnOnce(&mut Screen) -> bool) {
+        let wait = {
+            let mut screens = self.screens.lock().unwrap();
+            let shown = screens.entry(member.to_string()).or_default();
+            if !change(&mut shown.screen) || shown.pending {
+                return;
+            }
+            let wait = shown.sent.map(|t| SCREEN_EVERY.saturating_sub(t.elapsed())).unwrap_or_default();
+            shown.pending = !wait.is_zero();
+            wait
+        };
+        match tokio::runtime::Handle::try_current() {
+            Ok(runtime) if !wait.is_zero() => {
+                let team = Arc::downgrade(self);
+                let member = member.to_string();
+                runtime.spawn(async move {
+                    tokio::time::sleep(wait).await;
+                    if let Some(team) = team.upgrade() {
+                        team.send_screen(&member);
+                    }
+                });
+            }
+            _ => self.send_screen(member),
+        }
+    }
+
+    fn send_screen(&self, member: &str) {
+        let lines = {
+            let mut screens = self.screens.lock().unwrap();
+            let Some(shown) = screens.get_mut(member) else { return };
+            shown.pending = false;
+            shown.sent = Some(std::time::Instant::now());
+            shown.screen.take_changed()
+        };
+        if !lines.is_empty() {
+            (self.show)(&ScreenPatch { team: self.id.clone(), member: member.to_string(), lines });
+        }
     }
 
     pub fn config(&self) -> Option<TeamConfig> {
@@ -196,8 +280,9 @@ impl Team {
         Ok(text)
     }
 
-    /// Opens a turn for every member that is free and has something to hear.
-    fn next_turns(&self) -> Vec<(String, String)> {
+    /// Opens a turn for every member that is free and has something to hear:
+    /// who, what it is told, and what it hears in it (from, text).
+    fn next_turns(&self) -> Vec<(String, String, Vec<(String, String)>)> {
         let mut store = self.store.lock().unwrap();
         let mut out = Vec::new();
         let Some(config) = store.state().config.clone() else { return out };
@@ -222,9 +307,10 @@ impl Team {
             let mut text = if first { format!("{}\n\n", brief::role(&config, &member.id)) } else { String::new() };
             text.push_str(&brief::turn(&config, &unheard));
             let ids: Vec<String> = unheard.iter().map(|m| m.id.clone()).collect();
+            let heard: Vec<(String, String)> = unheard.iter().map(|m| (m.from.clone(), m.text.clone())).collect();
             store.append(Event::TurnStarted { member: member.id.clone() });
             store.append(Event::Heard { member: member.id.clone(), ids });
-            out.push((member.id.clone(), text));
+            out.push((member.id.clone(), text, heard));
         }
         out
     }
@@ -236,19 +322,22 @@ impl Team {
         let member = member.to_string();
         Arc::new(move |event| {
             let Some(team) = team.upgrade() else { return };
+            if let acp::Event::Update(u) = &event {
+                team.on_screen(&member, |screen| screen.update(&u.update));
+            }
             let changed = {
                 let mut live = team.live.lock().unwrap();
                 let entry = live.entry(member.clone()).or_default();
                 match event {
+                    // The screen shows it as it happens; the picture keeps
+                    // the tool's name for when the window opens.
                     acp::Event::Update(u) => {
                         let kind = u.update.get("sessionUpdate").and_then(Value::as_str).unwrap_or("");
                         let title = u.update.get("title").and_then(Value::as_str).unwrap_or("");
-                        if kind == "tool_call" && !title.is_empty() && entry.activity != title {
+                        if kind == "tool_call" && !title.is_empty() {
                             entry.activity = title.to_string();
-                            true
-                        } else {
-                            false
                         }
+                        false
                     }
                     acp::Event::Permission(p) => {
                         entry.permission = Some(PermissionView {
@@ -272,11 +361,20 @@ impl Team {
         })
     }
 
-    async fn run_turn(self: Arc<Self>, member: String, text: String) {
+    async fn run_turn(self: Arc<Self>, member: String, text: String, heard: Vec<(String, String)>) {
         let Some(seat) = self.seats.get(&member).cloned() else { return };
         log::line(format!("team {}: turn for {member} ({} characters)", self.id, text.chars().count()));
+        let number = self.with_state(|s| s.turns.get(&member).map(|t| t.count).unwrap_or(0));
+        self.on_screen(&member, |screen| {
+            screen.turn_started(number, heard);
+            true
+        });
         let result = self.drive.prompt(seat, text, self.sink(&member)).await;
         self.live.lock().unwrap().remove(&member);
+        self.on_screen(&member, |screen| {
+            screen.turn_ended(number, result.as_ref().err().map(String::as_str));
+            true
+        });
 
         {
             let mut store = self.store.lock().unwrap();
@@ -335,8 +433,8 @@ impl Team {
                     (self.emit)(&snapshot);
                 }
             }
-            for (member, text) in turns {
-                tokio::spawn(self.clone().run_turn(member, text));
+            for (member, text, heard) in turns {
+                tokio::spawn(self.clone().run_turn(member, text, heard));
             }
             if self.with_state(|s| s.status == TeamStatus::Finished) {
                 // The work is done: the agents have nothing left to wait for.
@@ -353,7 +451,13 @@ impl Team {
 
 impl Teams {
     pub fn new(drive: Arc<dyn Drive>, emit: Emit, root: Option<PathBuf>, bridge: PathBuf) -> Self {
-        Self { teams: Mutex::new(HashMap::new()), drive, emit, root, bridge }
+        Self { teams: Mutex::new(HashMap::new()), drive, emit, show: Arc::new(|_| {}), root, bridge }
+    }
+
+    /// Where the members' live screens go.
+    pub fn with_screens(mut self, show: Show) -> Self {
+        self.show = show;
+        self
     }
 
     pub fn get(&self, id: &str) -> Option<Arc<Team>> {
@@ -366,7 +470,7 @@ impl Teams {
 
     pub fn snapshots(&self) -> Vec<Snapshot> {
         let teams: Vec<Arc<Team>> = self.teams.lock().unwrap().values().cloned().collect();
-        let mut out: Vec<Snapshot> = teams.iter().filter_map(|t| t.snapshot()).collect();
+        let mut out: Vec<Snapshot> = teams.iter().filter_map(|t| t.full_snapshot()).collect();
         out.sort_by(|a, b| b.started_at.cmp(&a.started_at));
         out
     }
@@ -404,7 +508,7 @@ impl Teams {
                     ("COUCOU_MEMBER".to_string(), member.id.clone()),
                 ]),
                 mcp_servers: vec![McpServer {
-                    name: "coucou-team".into(),
+                    name: crate::acp::TEAM_SERVER.into(),
                     command: self.bridge.to_string_lossy().to_string(),
                     args: vec![],
                     env: BTreeMap::from([
@@ -424,11 +528,13 @@ impl Teams {
             id: config.id.clone(),
             store: Mutex::new(store),
             live: Mutex::new(BTreeMap::new()),
+            screens: Mutex::new(BTreeMap::new()),
             seats,
             tokens,
             wake: Notify::new(),
             drive: self.drive.clone(),
             emit: self.emit.clone(),
+            show: self.show.clone(),
         });
         {
             let mut store = team.store.lock().unwrap();
@@ -455,11 +561,13 @@ impl Teams {
             id: id.to_string(),
             store: Mutex::new(store),
             live: Mutex::new(BTreeMap::new()),
+            screens: Mutex::new(BTreeMap::new()),
             seats: BTreeMap::new(),
             tokens: BTreeMap::new(),
             wake: Notify::new(),
             drive: self.drive.clone(),
             emit: self.emit.clone(),
+            show: self.show.clone(),
         });
         let snapshot = team.snapshot()?;
         self.teams.lock().unwrap().insert(id.to_string(), team);

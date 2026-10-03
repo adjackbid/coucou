@@ -5,13 +5,16 @@
 // What the monitor shows comes whole from the team's snapshot as the
 // orchestrator sends it (`team-changed`); this page keeps nothing of its own
 // beyond what is being typed. The screen is drawn again on every change,
-// which is cheap at this size and leaves nothing to fall out of step.
+// which is cheap at this size and leaves nothing to fall out of step — except
+// the live pieces (live.ts): each member's Mochi, bubble and screen, which
+// stream between pictures (`team-screen`) and are moved into each new one.
 
 import "./team.css";
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import type { AgentProfile, ModelChoice } from "../core/state";
 import { h, clear } from "../views/dom";
-import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, Snapshot, Task, TeamConfig, TeamFile } from "./types";
+import * as live from "./live";
+import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
 
@@ -35,6 +38,8 @@ let recipient = "";
 const drafts = new Map<string, string>();
 /** The models each agent offers, asked once per window: agent id → list (or why not). */
 const modelLists = new Map<string, ModelChoice[] | string>();
+/** The member whose screen is shown large; null for everyone side by side. */
+let focused: string | null = null;
 
 const YOU = "you";
 /** Coucou's own accents, for members that were given no colour. */
@@ -99,6 +104,16 @@ function said(text: string): string {
     [/^The team '(.+)' is already running\.$/, (m) => `團隊「${m[1]}」已經在執行中`],
   ];
   for (const [pattern, to] of rules) {
+    const m = text.match(pattern);
+    if (m) return to(m);
+  }
+  // Agents' own errors, wherever they sit in what came back.
+  const inside: [RegExp, (m: RegExpMatchArray) => string][] = [
+    [/Claude Code is not signed in\./, () => "Claude Code 還沒登入:請在終端機執行 claude,輸入 /login 登入後,再按「重新啟動這位成員」"],
+    [/The '(.+?)' model is not supported when using Codex with a ChatGPT account/, (m) => `Codex 的 ChatGPT 帳號不能用「${m[1]}」模型,請在團隊設定替這位成員換一個模型`],
+    [/user rejected MCP tool call/, () => "Codex 擋下了團隊工具的呼叫"],
+  ];
+  for (const [pattern, to] of inside) {
     const m = text.match(pattern);
     if (m) return to(m);
   }
@@ -445,41 +460,46 @@ function setup(file: TeamFile): HTMLElement {
 
 // ── The monitor ───────────────────────────────────────────────────────────────
 
-function memberCard(snap: Snapshot, m: MemberView): HTMLElement {
+const CROWN = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#F5A524" stroke="#0b0c0e" stroke-width="1.2" stroke-linejoin="round" d="M3.5 8.5l4.6 3.6L12 5l3.9 7.1 4.6-3.6-1.9 10H5.4z"/></svg>';
+
+/**
+ * A member at its desk: its Mochi, what it says right now, what waits for
+ * the person, and its live screen.
+ */
+function desk(snap: Snapshot, m: MemberView): HTMLElement {
   const status = STATUS[m.status];
   const task = m.task ? snap.tasks.find((t) => t.id === m.task) : undefined;
-  const card = h("article", { class: `member ${m.status}` });
-  card.append(
+  const { avatar, bubble, screen } = live.parts(snap, m);
+  const big = focused === m.id;
+  const el = h("article", { class: `desk ${m.status}${big ? " focused" : ""}`, style: `--c:${colorOf(snap, m.id)}` });
+  el.append(
     h(
       "header",
-      {},
-      blob(colorOf(snap, m.id), 44),
+      { class: "desk-top" },
+      h("span", { class: "seat" }, avatar, m.isLeader ? h("i", { class: "crown", title: "Leader", html: CROWN }) : null),
       h(
         "div",
         { class: "member-head" },
-        h("div", { class: "member-name" }, m.name, h("span", { class: `badge ${m.status}` }, h("b", { text: status.mark }), status.label)),
-        h("div", { class: "member-role", text: m.isLeader ? `Leader · ${m.role}` : m.role }),
+        h("div", { class: "member-name" }, h("span", { class: "name", text: m.name }), h("span", { class: `badge ${m.status}` }, h("b", { text: status.mark }), status.label)),
+        h("div", { class: "member-role", title: m.duty, text: m.isLeader ? `Leader · ${m.role}` : m.role }),
+      ),
+      h(
+        "button",
+        {
+          class: "zoom",
+          type: "button",
+          title: big ? "縮回" : "放大這位成員的畫面",
+          "aria-label": big ? "縮回" : "放大這位成員的畫面",
+          onClick: () => {
+            focused = big ? null : m.id;
+            render();
+          },
+        },
+        big ? "⤡" : "⤢",
       ),
     ),
+    bubble,
   );
-
-  // What it is on, or what it is waiting for — always with a name.
-  const lines = h("div", { class: "member-lines" });
-  if (m.status === "waitingDelivery" && m.waiting) {
-    lines.append(h("div", { text: `等待${m.waiting.what}` }), h("div", { class: "dim", text: `來自 ${nameOf(snap, m.waiting.on)}` }));
-  } else if (m.status === "waitingReply" && m.waiting) {
-    lines.append(h("div", { text: `等 ${nameOf(snap, m.waiting.on)} 回覆` }), h("div", { class: "dim", text: m.waiting.what }));
-  } else if (m.status === "lost") {
-    lines.append(h("div", { class: "dim", text: said(m.lostWhy) }));
-  } else if (task) {
-    lines.append(h("div", { text: task.title }));
-    if (m.status === "working" && m.activity) lines.append(h("div", { class: "dim mono", text: m.activity }));
-  } else if (m.status === "working") {
-    lines.append(h("div", { text: m.activity || "思考中" }));
-  } else {
-    lines.append(h("div", { class: "dim", text: m.status === "done" ? "交辦的工作都已交付" : "目前沒有工作" }));
-  }
-  card.append(lines);
 
   // The three things that wait for the person, answered right on the card.
   if (m.permission) {
@@ -488,7 +508,7 @@ function memberCard(snap: Snapshot, m: MemberView): HTMLElement {
     const command = typeof input.command === "string" ? input.command : "";
     const allow = p.options.find((o) => o.kind === "allow_once") ?? p.options.find((o) => o.kind === "allow_always");
     const reject = p.options.find((o) => o.kind === "reject_once") ?? p.options.find((o) => o.kind === "reject_always");
-    card.append(
+    el.append(
       h(
         "div",
         { class: "ask" },
@@ -505,7 +525,7 @@ function memberCard(snap: Snapshot, m: MemberView): HTMLElement {
   }
   const question = snap.questions.find((q) => q.by === m.id && q.answer === null);
   if (question) {
-    card.append(
+    el.append(
       h(
         "div",
         { class: "ask" },
@@ -521,13 +541,36 @@ function memberCard(snap: Snapshot, m: MemberView): HTMLElement {
     );
   }
   if (m.status === "lost") {
-    card.append(h("div", { class: "row" }, button("重新啟動這位成員", "primary", () => void act(() => Bridge.teamRecover(snap.id, m.id)))));
+    el.append(h("div", { class: "row" }, button("重新啟動這位成員", "primary", () => void act(() => Bridge.teamRecover(snap.id, m.id)))));
   }
 
-  card.append(
-    h("footer", {}, h("span", { class: "dim", text: m.duty }), h("span", { class: "chip agent", title: "使用的代理與模型 · 已進行的回合數", text: `${m.agent}${m.model ? ` · ${m.model}` : ""} · ${m.turns} 回合` })),
+  el.append(
+    screen,
+    h(
+      "footer",
+      { class: "desk-foot" },
+      task ? h("span", { class: "chip task", title: task.detail || task.title, text: `${task.id} · ${task.title}` }) : h("span", { class: "chip", title: m.duty, text: "沒有進行中的任務" }),
+      h("span", { class: "chip agent", title: `使用的代理與模型 · 已進行的回合數\n${m.agent}${m.model ? ` · ${m.model}` : ""} · ${m.turns} 回合`, text: `${m.agent}${m.model ? ` · ${m.model}` : ""} · ${m.turns} 回合` }),
+    ),
   );
-  return card;
+  return el;
+}
+
+/** Everyone at their desks: the leader first, then as the team lists them. */
+function stage(snap: Snapshot): HTMLElement {
+  if (focused && !snap.members.some((m) => m.id === focused)) focused = null;
+  const members = [...snap.members].sort((a, b) => Number(b.isLeader) - Number(a.isLeader));
+  return h(
+    "section",
+    { class: `stage${focused ? " has-focus" : ""}` },
+    h(
+      "div",
+      { class: "stage-head" },
+      h("h2", { text: "團隊現場" }),
+      h("span", { class: "hint", text: "每位成員說的話、跑的指令和結果都即時出現在它的畫面上;隊友之間的交辦、訊息與交付會從一位飛到另一位。" }),
+    ),
+    h("div", { class: "desks" }, ...members.map((m) => desk(snap, m))),
+  );
 }
 
 function taskCard(snap: Snapshot, t: Task): HTMLElement {
@@ -646,9 +689,6 @@ function composer(snap: Snapshot): HTMLElement {
 function monitor(snap: Snapshot): HTMLElement {
   const percent = snap.total ? Math.round((snap.done / snap.total) * 100) : 0;
   const minutes = Math.max(0, Math.floor(((snap.finishedAt || Date.now()) - snap.startedAt) / 60_000));
-  // Whoever waits on the person comes first.
-  const order = (m: MemberView) => (m.status === "waitingYou" ? 0 : m.status === "lost" ? 1 : 2);
-  const members = [...snap.members].sort((a, b) => order(a) - order(b));
 
   return h(
     "div",
@@ -663,7 +703,7 @@ function monitor(snap: Snapshot): HTMLElement {
       h("span", { class: "dim", text: `${snap.totalTurns} / ${snap.maxTurns} 回合` }),
       h("span", { class: "dim", text: `已執行 ${minutes} 分鐘` }),
     ),
-    h("div", { class: "members" }, ...members.map((m) => memberCard(snap, m))),
+    stage(snap),
     h("div", { class: "split" }, board(snap), feed(snap)),
     deliverables(snap),
     snap.status === "finished" ? null : composer(snap),
@@ -768,6 +808,7 @@ function render() {
 
   const scroller = root.querySelector(".scroll");
   if (scroller) scroller.scrollTop = scroll;
+  live.afterRender();
   if (key) {
     const again = root.querySelector<HTMLInputElement>(`[data-key="${CSS.escape(key)}"]`);
     if (again) {
@@ -783,7 +824,10 @@ async function load() {
     dir = listed?.dir ?? "";
     files = listed?.files ?? [];
     agents = (await Bridge.boot())?.settings.agents ?? [];
-    for (const snap of (await Bridge.teamSnapshots()) ?? []) runs.set(snap.id, snap);
+    for (const snap of (await Bridge.teamSnapshots()) ?? []) {
+      runs.set(snap.id, snap);
+      live.applySnapshot(snap);
+    }
   } else if (import.meta.env.DEV) {
     // A plain browser: the drafts' team, to look at the screen without the app.
     const demo = await import("./demo");
@@ -792,7 +836,17 @@ async function load() {
     dir = demo.demoFiles.dir;
     files = demo.demoFiles.files;
     agents = demo.demoAgents;
-    runs.set("shop", demo.demoSnapshot());
+    if (!runs.has("shop")) {
+      const snap = demo.demoSnapshot();
+      runs.set("shop", snap);
+      live.applySnapshot(snap);
+      tab = "monitor";
+      demo.demoStream(live.applyPatch, (next) => {
+        runs.set(next.id, next);
+        live.applySnapshot(next);
+        if (tab === "monitor") render();
+      }, snap);
+    }
   }
   if (!selected || !files.some((f) => f.file === selected)) {
     // The team that is running, else the first.
@@ -808,11 +862,15 @@ async function load() {
 }
 
 async function start() {
+  live.setSaid(said);
   await onEvent<Snapshot>("team-changed", (snap) => {
     runs.set(snap.id, snap);
+    live.applySnapshot(snap);
     // Typing in the form is not interrupted by a team at work behind it.
     if (tab === "monitor" || !unsaved) render();
   });
+  // Each member's screen, as it happens: no redraw, just the lines.
+  await onEvent<ScreenPatch>("team-screen", live.applyPatch);
   // Agents may have been added in the settings window meanwhile.
   await onEvent<{ agents: AgentProfile[] }>("settings-changed", (s) => {
     agents = s.agents ?? agents;

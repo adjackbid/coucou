@@ -76,6 +76,35 @@ export interface MemberView {
   turns: number;
   permission: Permission | null;
   lostWhy: string;
+  /** The last lines of its live screen. */
+  screen: Line[];
+}
+
+/** One line of a member's live screen — mirror of team::screen::Line. */
+export interface Line {
+  /** Its number on the screen; a changed line comes again under the same number. */
+  n: number;
+  at: number;
+  kind: "say" | "think" | "tool" | "turn";
+  /** Say/think: the text so far. Tool: its title. Turn: the turn's number. */
+  text: string;
+  /** Tool: read, edit, execute… */
+  tool: string;
+  /** Tool: which of Coucou's team tools, else "". */
+  teamTool: string;
+  /** Tool: what it was called with. Turn: what was heard, [{from, text}]. */
+  input: unknown;
+  /** Tool: running/done/failed. Turn: start/end/failed. */
+  status: string;
+  /** Tool: the end of what it printed. Turn: why it failed. */
+  output: string;
+}
+
+/** Lines of one member's screen that changed — `team-screen`. */
+export interface ScreenPatch {
+  team: string;
+  member: string;
+  lines: Line[];
 }
 
 export interface Task {

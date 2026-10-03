@@ -19,7 +19,7 @@
 // The shapes were checked against Claude Code 2.1 on this machine.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -49,7 +49,14 @@ pub struct ClaudeState {
     asked: Mutex<HashMap<String, Value>>,
     next: AtomicU64,
     pub models: Mutex<Vec<ModelChoice>>,
+    /// The message being written was already shown piece by piece.
+    streamed: AtomicBool,
+    /// Claude Code has no login and no key: every turn would fail.
+    pub signed_out: AtomicBool,
 }
+
+/// Said instead of starting a turn that cannot run.
+pub const SIGNED_OUT: &str = "Claude Code is not signed in. Open a terminal, run `claude`, and sign in with /login.";
 
 /// What the driver adds to the profile's own arguments: the protocol, the
 /// permission route, the model and the session's MCP servers.
@@ -65,6 +72,8 @@ pub fn args(model: Option<&str>, servers: &[McpServer]) -> Vec<String> {
         "stdio",
         "--permission-mode",
         "default",
+        // Text as it is written, not a whole message at the end.
+        "--include-partial-messages",
     ]
     .iter()
     .map(|s| s.to_string())
@@ -125,6 +134,9 @@ pub async fn setup(running: &mut Running, key: &str, launch: &Launch, timeout: D
         })
         .unwrap_or_default();
     *running.claude.models.lock().unwrap() = models;
+    // Its models are listed either way; its turns need an account or a key.
+    let signed_out = init.pointer("/account/tokenSource").and_then(Value::as_str) == Some("none");
+    running.claude.signed_out.store(signed_out, Ordering::SeqCst);
     running.session_id = "claude".into();
     log::line(format!(
         "claude {key}: ready ({} MCP server(s), {})",
@@ -135,6 +147,9 @@ pub async fn setup(running: &mut Running, key: &str, launch: &Launch, timeout: D
 }
 
 pub async fn prompt(running: &Running, text: String, timeout: Duration) -> Result<AcpOutcome, String> {
+    if running.claude.signed_out.load(Ordering::SeqCst) {
+        return Err(SIGNED_OUT.into());
+    }
     let (tx, rx) = oneshot::channel();
     *running.claude.done.lock().unwrap() = Some(tx);
     let line = json!({
@@ -259,11 +274,27 @@ pub async fn dispatch(route: &Route, state: &ClaudeState, msg: Value) {
                 danger,
             }));
         }
+        "stream_event" => {
+            let delta = msg.pointer("/event/delta").cloned().unwrap_or(Value::Null);
+            let (kind, text) = match delta.get("type").and_then(Value::as_str) {
+                Some("text_delta") => ("agent_message_chunk", delta.get("text")),
+                Some("thinking_delta") => ("agent_thought_chunk", delta.get("thinking")),
+                _ => return,
+            };
+            let text = text.and_then(Value::as_str).unwrap_or("");
+            if !text.is_empty() {
+                state.streamed.store(true, Ordering::SeqCst);
+                update(route, json!({ "sessionUpdate": kind, "content": { "type": "text", "text": text } }));
+            }
+        }
         "assistant" => {
+            // Its text was shown as it was written, unless this Claude Code
+            // does not stream: then it is shown whole, now.
+            let streamed = state.streamed.swap(false, Ordering::SeqCst);
             let content = msg.get("message").and_then(|m| m.get("content")).and_then(Value::as_array).cloned().unwrap_or_default();
             for block in content {
                 match block.get("type").and_then(Value::as_str) {
-                    Some("text") => {
+                    Some("text") if !streamed => {
                         let text = block.get("text").and_then(Value::as_str).unwrap_or("");
                         if !text.is_empty() {
                             update(route, json!({ "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": text } }));
@@ -271,12 +302,34 @@ pub async fn dispatch(route: &Route, state: &ClaudeState, msg: Value) {
                     }
                     Some("tool_use") => {
                         let tool = block.get("name").and_then(Value::as_str).unwrap_or("");
+                        let id = block.get("id").cloned().unwrap_or(Value::Null);
                         let input = block.get("input").cloned().unwrap_or(Value::Null);
                         let (_, title, kind) = request_of(tool, &input);
-                        update(route, json!({ "sessionUpdate": "tool_call", "title": title, "kind": kind, "status": "in_progress" }));
+                        update(
+                            route,
+                            json!({ "sessionUpdate": "tool_call", "toolCallId": id, "title": title, "kind": kind, "status": "in_progress", "rawInput": input }),
+                        );
                     }
                     _ => {}
                 }
+            }
+        }
+        // What the tools gave back.
+        "user" => {
+            let content = msg.pointer("/message/content").and_then(Value::as_array).cloned().unwrap_or_default();
+            for block in content.iter().filter(|b| b.get("type").and_then(Value::as_str) == Some("tool_result")) {
+                let id = block.get("tool_use_id").cloned().unwrap_or(Value::Null);
+                let failed = block.get("is_error").and_then(Value::as_bool).unwrap_or(false);
+                let text = match block.get("content") {
+                    Some(Value::String(s)) => s.clone(),
+                    Some(Value::Array(parts)) => parts.iter().filter_map(|p| p.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("\n"),
+                    _ => String::new(),
+                };
+                let mut out = json!({ "sessionUpdate": "tool_call_update", "toolCallId": id, "status": if failed { "failed" } else { "completed" } });
+                if !text.is_empty() {
+                    out["content"] = json!([{ "type": "content", "content": { "type": "text", "text": text } }]);
+                }
+                update(route, out);
             }
         }
         "result" => {
@@ -340,6 +393,52 @@ mod tests {
         assert_eq!(request_of("Read", &json!({})).0.kind, Kind::Read);
         assert_eq!(request_of("mcp__coucou-team__deliver", &json!({})).0.kind, Kind::Think);
         assert_eq!(request_of("mcp__other__thing", &json!({})).0.kind, Kind::Other);
+    }
+
+    /// A real turn: Claude Code calls a team tool through the rules (no card),
+    /// its words arrive as they are written, and the tool's result comes
+    /// back. Spends one short turn. `cargo test -p coucou claude_calls -- --ignored`.
+    #[test]
+    #[ignore]
+    fn the_real_claude_code_calls_the_team_s_tools_and_streams() {
+        let (dir, marker, server) = crate::acp::stand_in::team_server("claude");
+        let heard = Arc::new(Mutex::new(Vec::<Value>::new()));
+        let asked = Arc::new(Mutex::new(0));
+        let sink: Sink = {
+            let heard = heard.clone();
+            let asked = asked.clone();
+            Arc::new(move |event| match event {
+                Event::Update(u) => heard.lock().unwrap().push(u.update),
+                Event::Permission(_) => *asked.lock().unwrap() += 1,
+                Event::Exit(_) => {}
+            })
+        };
+        let launch = Launch {
+            cwd: Some(dir.to_string_lossy().to_string()),
+            mcp_servers: vec![server],
+            auto: Some(Scope::new(&dir)),
+            model: Some("haiku".into()),
+            ..Launch::default()
+        };
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let agents = Agents::default();
+        let outcome = runtime.block_on(agents.prompt(
+            &sink,
+            "test:claude-mcp",
+            &claude_profile(),
+            &launch,
+            "Call the `team_status` tool of the coucou-team MCP server once, then tell me in one short sentence the word it gave you.".into(),
+        ));
+        runtime.block_on(agents.shutdown());
+        let heard = heard.lock().unwrap();
+        let said: String = heard.iter().filter(|u| u["sessionUpdate"] == "agent_message_chunk").filter_map(|u| u["content"]["text"].as_str()).collect();
+        assert!(outcome.is_ok(), "{outcome:?}");
+        assert!(marker.is_file(), "the tool was never called; Claude said: {said}");
+        assert!(said.contains("PAPAYA"), "Claude said: {said}");
+        let pieces = heard.iter().filter(|u| u["sessionUpdate"] == "agent_message_chunk").count();
+        assert!(pieces > 1, "the words came whole, not as they were written");
+        assert!(heard.iter().any(|u| u["sessionUpdate"] == "tool_call_update" && u["status"] == "completed"), "no tool result: {heard:?}");
+        assert_eq!(*asked.lock().unwrap(), 0, "a person was asked");
     }
 
     /// Claude Code on the other end of a pipe: each user message makes it
