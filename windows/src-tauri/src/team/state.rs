@@ -569,6 +569,10 @@ pub struct Live {
     pub permissions: Vec<PermissionView>,
 }
 
+/// Coucou's accents, for members given no colour — the same list and order
+/// as the Teamwork window's setup form (src/team/main.ts PALETTE).
+const PALETTE: [&str; 6] = ["#3B9EFF", "#34D399", "#A78BFA", "#F5A524", "#F472B6", "#22D3EE"];
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct MemberView {
@@ -670,7 +674,8 @@ impl State {
         let members = config
             .members
             .iter()
-            .map(|m| {
+            .enumerate()
+            .map(|(at, m)| {
                 let l = live.get(&m.id);
                 let (status, task, waiting) = self.member_status(&m.id, l);
                 MemberView {
@@ -680,7 +685,8 @@ impl State {
                     duty: m.duty.clone(),
                     agent: m.agent.clone(),
                     model: m.model.clone(),
-                    color: m.color.clone(),
+                    // No colour of its own: Coucou's accents in turn, as the setup form shows them.
+                    color: if m.color.trim().is_empty() { PALETTE[at % PALETTE.len()].to_string() } else { m.color.clone() },
                     is_leader: m.id == config.leader,
                     status,
                     task,
