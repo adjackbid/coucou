@@ -20,6 +20,8 @@ const SYSTEM = "system";
 const BODY = 50;
 /** Lines kept on a screen. */
 const KEEP = 300;
+/** A member at work this long without a sign of life may be stuck. */
+const QUIET_MS = 4 * 60_000;
 
 interface Desk {
   team: string;
@@ -31,6 +33,8 @@ interface Desk {
   size: number;
   bubble: HTMLElement;
   screen: HTMLElement;
+  /** Its last sign of life, kept current by the clock. */
+  pulse: HTMLElement;
   lines: Map<number, Line>;
   rows: Map<number, HTMLElement>;
   /** Following the newest line, or left where the reader scrolled to. */
@@ -202,6 +206,7 @@ function row(snap: Snapshot | undefined, l: Line): HTMLElement {
         mark,
         team ? null : h("span", { class: "kind", text: TOOL_MARK[l.tool] ?? "⚙" }),
         h("span", { class: team ? "what" : "what mono", text: team ? teamWords(snap, l) : toolWords(l) }),
+        l.status === "running" ? h("span", { class: "took", "data-since": String(l.since) }) : null,
       );
       // The end of what it printed: while it runs, and when it failed.
       const out = l.output.trim();
@@ -247,6 +252,7 @@ function desk(snap: Snapshot, m: MemberView): Desk {
     size,
     bubble: h("div", { class: "bubble" }),
     screen,
+    pulse: h("span", { class: "pulse" }),
     lines: new Map(),
     rows: new Map(),
     follow: true,
@@ -378,14 +384,14 @@ function refresh(snap: Snapshot, m: MemberView) {
 // ── What main.ts uses ─────────────────────────────────────────────────────────
 
 /** The member's lasting pieces, to be put into the page being drawn. */
-export function parts(snap: Snapshot, m: MemberView): { avatar: HTMLElement; bubble: HTMLElement; screen: HTMLElement } {
+export function parts(snap: Snapshot, m: MemberView): { avatar: HTMLElement; bubble: HTMLElement; screen: HTMLElement; pulse: HTMLElement } {
   const d = desk(snap, m);
   if (!d.rows.size) {
     for (const l of m.screen) put(snap, d, l);
     refresh(snap, m);
   }
   if (!d.rows.size && !d.screen.firstChild) d.screen.append(h("div", { class: "line quiet", text: "還沒有動靜。輪到這位成員時,它說的話、跑的指令和結果都會即時出現在這裡。" }));
-  return { avatar: d.avatar, bubble: d.bubble, screen: d.screen };
+  return { avatar: d.avatar, bubble: d.bubble, screen: d.screen, pulse: d.pulse };
 }
 
 /** A new picture of a team. */
@@ -421,13 +427,79 @@ export function applyPatch(patch: ScreenPatch) {
   refresh(snap, m);
   stick(d);
   wake();
+  signs();
 }
 
 /** After the page was drawn: screens back where they were, Mochis moving. */
 export function afterRender() {
   for (const d of desks.values()) stick(d);
   wake();
+  beat();
 }
+
+// ── Signs of life ─────────────────────────────────────────────────────────────
+
+function ago(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s} 秒`;
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m} 分鐘` : `${Math.floor(m / 60)} 小時 ${m % 60} 分`;
+}
+
+function clockOf(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(s / 60);
+  return m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}` : `${m}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** Each desk's last sign of life, how long its running steps have taken, and whether it has gone quiet. */
+function signs() {
+  const now = Date.now();
+  for (const d of desks.values()) {
+    if (!d.pulse.isConnected) continue;
+    const snap = snaps.get(d.team);
+    const m = snap?.members.find((x) => x.id === d.member);
+    const lines = [...d.lines.values()];
+    const last = lines.reduce((t, l) => Math.max(t, l.at), 0);
+    const working = m?.status === "working";
+    const quiet = working && last > 0 && now - last > QUIET_MS;
+    let text = "";
+    if (working && last) {
+      const running = lines.filter((l) => l.kind === "tool" && l.status === "running").sort((a, b) => b.n - a.n)[0];
+      const on = running ? `,停在「${short(running.teamTool ? teamWords(snap, running) : toolWords(running), 40)}」${ago(now - running.since)}` : "";
+      text = quiet ? `⚠ 已經 ${ago(now - last)}沒有動靜${on}` : now - last < 15_000 ? "● 正在動" : `● ${ago(now - last)}前有動靜${on}`;
+    } else if (last) {
+      text = `上次動靜:${ago(now - last)}前`;
+    }
+    if (d.pulse.textContent !== text) d.pulse.textContent = text;
+    d.pulse.className = `pulse${working ? " on" : ""}${quiet ? " quiet" : ""}`;
+    d.pulse.closest(".desk")?.classList.toggle("stalled", !!quiet);
+    for (const took of d.screen.querySelectorAll<HTMLElement>(".took[data-since]")) {
+      took.textContent = clockOf(now - Number(took.dataset.since));
+    }
+  }
+}
+
+let clock = 0;
+
+/** The signs move on their own, every few seconds — while someone can see them. */
+function beat() {
+  signs();
+  if (clock || document.hidden) return;
+  clock = window.setInterval(() => {
+    const shown = [...desks.values()].some((d) => d.pulse.isConnected);
+    if (document.hidden || !shown) {
+      window.clearInterval(clock);
+      clock = 0;
+      return;
+    }
+    signs();
+  }, 5000);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) beat();
+});
 
 // ── Hand-offs flying between members ──────────────────────────────────────────
 

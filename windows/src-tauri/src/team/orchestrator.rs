@@ -754,6 +754,17 @@ impl Teams {
         Ok(())
     }
 
+    /// Interrupts one member's turn — one that has gone quiet, say. The team
+    /// carries on: the member is reminded of its open work in its next turn.
+    pub async fn interrupt_member(&self, team: &str, member: &str) -> Result<(), String> {
+        let team = self.team(team)?;
+        let seat = team.seats.get(member).cloned().ok_or("That is not a member of the team.")?;
+        if team.with_state(|s| s.turns.get(member).map(|t| t.active).unwrap_or(false)) {
+            team.drive.cancel(seat.key).await?;
+        }
+        Ok(())
+    }
+
     /// A lost member gets another go: a fresh agent, and a reminder of where it stood.
     pub async fn recover(&self, team: &str, member: &str) -> Result<(), String> {
         let team = self.team(team)?;

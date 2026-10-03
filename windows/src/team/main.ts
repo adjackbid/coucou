@@ -476,7 +476,7 @@ const CROWN = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true
 function desk(snap: Snapshot, m: MemberView): HTMLElement {
   const status = STATUS[m.status];
   const task = m.task ? snap.tasks.find((t) => t.id === m.task) : undefined;
-  const { avatar, bubble, screen } = live.parts(snap, m);
+  const { avatar, bubble, screen, pulse } = live.parts(snap, m);
   const big = focused === m.id;
   const el = h("article", { class: `desk ${m.status}${big ? " focused" : ""}`, style: `--c:${colorOf(snap, m.id)}` });
   el.append(
@@ -553,6 +553,18 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
     el.append(h("div", { class: "row" }, button("重新啟動這位成員", "primary", () => void act(() => Bridge.teamRecover(snap.id, m.id)))));
   }
 
+  // Whether it is alive: its last sign of life, and — when it has gone quiet
+  // in the middle of a turn — a way to interrupt just this turn.
+  el.append(
+    h(
+      "div",
+      { class: "pulse-row" },
+      pulse,
+      m.status === "working"
+        ? h("button", { class: "btn plain stall", type: "button", title: "停掉它這一輪;它下一輪會被提醒手上的工作", onClick: () => void act(() => Bridge.teamInterruptMember(snap.id, m.id)) }, "打斷這一輪")
+        : null,
+    ),
+  );
   el.append(
     screen,
     h(

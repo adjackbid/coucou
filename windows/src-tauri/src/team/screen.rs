@@ -37,6 +37,9 @@ pub enum LineKind {
 pub struct Line {
     /// Its number on the member's screen; a changed line is sent again under it.
     pub n: u64,
+    /// When it appeared.
+    pub since: u64,
+    /// When it last changed: what an agent's last sign of life is read from.
     pub at: u64,
     pub kind: LineKind,
     /// Say and think: the text so far. Tool: its title. Turn: the turn's number.
@@ -134,9 +137,11 @@ impl Screen {
     fn push(&mut self, kind: LineKind, text: String) -> &mut Line {
         self.next += 1;
         let n = self.next;
+        let at = now();
         self.lines.push_back(Line {
             n,
-            at: now(),
+            since: at,
+            at,
             kind,
             text,
             tool: String::new(),
@@ -186,6 +191,7 @@ impl Screen {
         // A tool still running when the turn ends never finished.
         for line in self.lines.iter_mut().filter(|l| l.kind == LineKind::Tool && l.status == "running") {
             line.status = "failed".into();
+            line.at = now();
             self.dirty.insert(line.n);
         }
         let line = self.push(LineKind::Turn, number.to_string());
@@ -207,6 +213,7 @@ impl Screen {
                 match self.lines.back_mut() {
                     Some(last) if open && last.kind == kind => {
                         last.text.push_str(text);
+                        last.at = now();
                         let n = last.n;
                         self.dirty.insert(n);
                     }
@@ -222,6 +229,7 @@ impl Screen {
                 let title = update.get("title").and_then(Value::as_str).unwrap_or("").to_string();
                 let status = status_of(update).unwrap_or("running");
                 if let Some(line) = self.find(&id) {
+                    line.at = now();
                     if !title.is_empty() {
                         line.team_tool = team_tool(&title);
                         line.text = title;
@@ -246,6 +254,7 @@ impl Screen {
             "tool_call_update" => {
                 let id = update.get("toolCallId").and_then(Value::as_str).unwrap_or("").to_string();
                 let Some(line) = self.find(&id) else { return false };
+                line.at = now();
                 if let Some(status) = status_of(update) {
                     line.status = status.into();
                 }

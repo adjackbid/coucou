@@ -564,6 +564,12 @@ async fn team_interrupt(teams: State<'_, Arc<Teams>>, team: String) -> Result<()
     teams.interrupt(&team).await
 }
 
+/// Interrupts one member's turn; the team carries on.
+#[tauri::command]
+async fn team_interrupt_member(teams: State<'_, Arc<Teams>>, team: String, member: String) -> Result<(), String> {
+    teams.interrupt_member(&team, &member).await
+}
+
 #[tauri::command]
 async fn team_recover(teams: State<'_, Arc<Teams>>, team: String, member: String) -> Result<(), String> {
     teams.recover(&team, &member).await
@@ -996,6 +1002,7 @@ pub fn run() {
             team_resume,
             team_interrupt,
             team_recover,
+            team_interrupt_member,
             team_open,
             team_open_configs,
             team_save,

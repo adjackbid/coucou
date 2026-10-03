@@ -154,6 +154,8 @@ export const Bridge = {
   /** Pause, and interrupt every turn under way. */
   teamInterrupt: (team: string) => callOrThrow<void>("team_interrupt", { team }),
   teamRecover: (team: string, member: string) => callOrThrow<void>("team_recover", { team, member }),
+  /** Interrupts one member's turn — one that has gone quiet; the team carries on. */
+  teamInterruptMember: (team: string, member: string) => callOrThrow<void>("team_interrupt_member", { team, member }),
   /** Opens something a member handed in: a URL, or a path in Explorer. */
   teamOpen: (team: string, locator: string) => callOrThrow<void>("team_open", { team, locator }),
   teamOpenConfigs: () => call<void>("team_open_configs"),

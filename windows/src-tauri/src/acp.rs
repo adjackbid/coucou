@@ -291,6 +291,45 @@ fn is_copilot(exe: &std::path::Path) -> bool {
     exe.file_stem().and_then(|s| s.to_str()).is_some_and(|s| s.eq_ignore_ascii_case("copilot"))
 }
 
+/// Copilot CLI over ACP accepts the `mcpServers` of `session/new` and starts
+/// none of them; it takes its servers from its own configuration. So a
+/// session's servers go into a file in that format, handed over with
+/// `--additional-mcp-config @file` — a file, because the command line goes
+/// through cmd.exe (copilot is an npm shim) and JSON does not survive it.
+/// Files older than two days are swept away.
+fn copilot_mcp_file(servers: &[McpServer]) -> Result<std::path::PathBuf, String> {
+    let mut map = serde_json::Map::new();
+    for s in servers {
+        map.insert(
+            s.name.clone(),
+            json!({ "type": "local", "command": s.command, "args": s.args, "env": s.env, "tools": ["*"] }),
+        );
+    }
+    let text = json!({ "mcpServers": map }).to_string();
+    let dir = std::env::temp_dir().join("coucou-mcp");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not prepare the agent's MCP servers: {e}"))?;
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        let old = std::time::SystemTime::now() - Duration::from_secs(2 * 24 * 3600);
+        for entry in entries.flatten() {
+            if entry.metadata().and_then(|m| m.modified()).map(|t| t < old).unwrap_or(false) {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+    // Named after what is in it: the same servers, the same file.
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut h);
+    let file = dir.join(format!("{:016x}.json", h.finish()));
+    std::fs::write(&file, text).map_err(|e| format!("Could not prepare the agent's MCP servers: {e}"))?;
+    Ok(file)
+}
+
+/// Whether a profile runs Copilot CLI, whose MCP servers go on its command line.
+fn runs_copilot(profile: &AgentProfile) -> bool {
+    profile.protocol == Protocol::Acp && is_copilot(std::path::Path::new(&profile.command))
+}
+
 fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, String> {
     let exe = find_on_path(&profile.command)
         .ok_or_else(|| format!("'{}' was not found on PATH.", profile.command))?;
@@ -318,8 +357,9 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
             if let Some(m) = &model {
                 cmd.env("COPILOT_MODEL", m);
             }
-            if is_copilot(&exe) {
+            if runs_copilot(profile) && !launch.mcp_servers.is_empty() {
                 cmd.args(launch.mcp_servers.iter().map(|s| format!("--allow-tool={}", s.name)));
+                cmd.arg("--additional-mcp-config").arg(format!("@{}", copilot_mcp_file(&launch.mcp_servers)?.display()));
             }
         }
     }
@@ -487,7 +527,9 @@ async fn setup(running: &mut Running, key: &str, profile: &AgentProfile, launch:
         .to_string();
 
     let cwd = working_dir(profile, launch);
-    let servers: Vec<Value> = launch.mcp_servers.iter().map(McpServer::to_json).collect();
+    // Copilot's came on its command line (see copilot_mcp_file); naming them
+    // here as well would only risk a second copy.
+    let servers: Vec<Value> = if runs_copilot(profile) { Vec::new() } else { launch.mcp_servers.iter().map(McpServer::to_json).collect() };
     let session = request(
         running,
         "session/new",
@@ -857,6 +899,93 @@ mod tests {
     use super::*;
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
+    /// A real Copilot agent from Settings (Steven's cg): does a session get
+    /// the team's MCP server started? Opens a session, sends no prompt.
+    /// `cargo test -p coucou the_real_copilot_starts -- --ignored`.
+    #[test]
+    #[ignore]
+    fn the_real_copilot_starts_the_team_s_server() {
+        let profile = crate::settings::load()
+            .agents
+            .into_iter()
+            .find(|a| a.protocol == Protocol::Acp && a.command == "copilot")
+            .expect("a Copilot agent in Settings");
+        let (dir, marker, server) = stand_in::team_server("copilot");
+        let up = std::path::PathBuf::from(format!("{}.up", marker.display()));
+        let _ = std::fs::remove_file(&up);
+        let launch = Launch {
+            cwd: Some(dir.to_string_lossy().to_string()),
+            mcp_servers: vec![server],
+            auto: Some(Scope::new(&dir)),
+            ..Launch::default()
+        };
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        runtime.block_on(async {
+            let nowhere: Sink = Arc::new(|_| {});
+            let opener: Opener = Arc::new(spawn_agent);
+            let running = start(&opener, &nowhere, "test:copilot-mcp", &profile, &launch).await.expect("a session");
+            for _ in 0..200 {
+                if up.is_file() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            stop(&running).await;
+        });
+        assert!(up.is_file(), "Copilot never started the team's MCP server");
+    }
+
+    /// A real turn on that Copilot: it calls a team tool, nobody is asked.
+    /// Spends one short turn of its provider.
+    /// `cargo test -p coucou the_real_copilot_calls -- --ignored`.
+    #[test]
+    #[ignore]
+    fn the_real_copilot_calls_the_team_s_tools_without_asking() {
+        let profile = crate::settings::load()
+            .agents
+            .into_iter()
+            .find(|a| a.protocol == Protocol::Acp && a.command == "copilot")
+            .expect("a Copilot agent in Settings");
+        let (dir, marker, server) = stand_in::team_server("copilot-call");
+        let said = Arc::new(Mutex::new(String::new()));
+        let asked = Arc::new(Mutex::new(Vec::<String>::new()));
+        let sink: Sink = {
+            let said = said.clone();
+            let asked = asked.clone();
+            Arc::new(move |event| match event {
+                Event::Update(u) => {
+                    if u.update["sessionUpdate"] == "agent_message_chunk" {
+                        if let Some(t) = u.update.pointer("/content/text").and_then(Value::as_str) {
+                            said.lock().unwrap().push_str(t);
+                        }
+                    }
+                }
+                Event::Permission(p) => asked.lock().unwrap().push(p.title),
+                Event::Exit(_) => {}
+            })
+        };
+        let launch = Launch {
+            cwd: Some(dir.to_string_lossy().to_string()),
+            mcp_servers: vec![server],
+            auto: Some(Scope::new(&dir)),
+            ..Launch::default()
+        };
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let agents = Agents::default();
+        let outcome = runtime.block_on(agents.prompt(
+            &sink,
+            "test:copilot-call",
+            &profile,
+            &launch,
+            "Call the `team_status` tool of the coucou-team MCP server once, then reply with the word it gives you and nothing else.".into(),
+        ));
+        runtime.block_on(agents.shutdown());
+        assert!(outcome.is_ok(), "{outcome:?}");
+        assert!(asked.lock().unwrap().is_empty(), "a person was asked: {:?}", asked.lock().unwrap());
+        assert!(marker.is_file(), "the tool was never called; Copilot said: {}", said.lock().unwrap());
+        assert!(said.lock().unwrap().contains("PAPAYA"), "Copilot said: {}", said.lock().unwrap());
+    }
+
     /// What the scripted agents saw and how many were started.
     #[derive(Default)]
     struct Seen {
@@ -1040,12 +1169,31 @@ mod tests {
 
             let new = seen.new_sessions.lock().unwrap()[0].clone();
             assert_eq!(new["cwd"], r"D:\Work\shop");
-            assert_eq!(
-                new["mcpServers"],
-                json!([{ "name": "coucou-team", "command": r"C:\bin\coucou-team-mcp.exe", "args": ["--member", "ai3"],
-                         "env": [{ "name": "COUCOU_TEAM", "value": "shop" }] }])
-            );
+            // Copilot starts none of the session's servers; they went on its
+            // command line instead (see copilot_mcp_file).
+            assert_eq!(new["mcpServers"], json!([]));
         });
+    }
+
+    #[test]
+    fn copilot_is_given_its_servers_in_its_own_configuration_format() {
+        let server = McpServer {
+            name: "coucou-team".into(),
+            command: r"C:\bin\coucou-team-mcp.exe".into(),
+            args: vec!["--member".into(), "ai3".into()],
+            env: BTreeMap::from([("COUCOU_TEAM".to_string(), "shop".to_string())]),
+        };
+        let file = copilot_mcp_file(std::slice::from_ref(&server)).unwrap();
+        let config: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(
+            config,
+            json!({ "mcpServers": { "coucou-team": { "type": "local", "command": r"C:\bin\coucou-team-mcp.exe",
+                "args": ["--member", "ai3"], "env": { "COUCOU_TEAM": "shop" }, "tools": ["*"] } } })
+        );
+        // The same servers, the same file.
+        assert_eq!(copilot_mcp_file(&[server]).unwrap(), file);
+        assert!(runs_copilot(&AgentProfile::copilot()));
+        assert!(!runs_copilot(&AgentProfile { command: "gemini".into(), ..AgentProfile::copilot() }));
     }
 
     #[test]
@@ -1119,6 +1267,7 @@ for line in sys.stdin:
         continue
     method = msg.get("method")
     if method == "initialize":
+        open(marker + ".up", "w").write("up")
         r = {"protocolVersion": msg.get("params", {}).get("protocolVersion", "2025-06-18"), "capabilities": {"tools": {}}, "serverInfo": {"name": "coucou-team", "version": "0"}}
     elif method == "tools/list":
         r = {"tools": [{"name": "team_status", "description": "Where the team stands.", "inputSchema": {"type": "object", "properties": {}}}]}

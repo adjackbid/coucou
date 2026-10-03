@@ -84,6 +84,9 @@ export interface MemberView {
 export interface Line {
   /** Its number on the screen; a changed line comes again under the same number. */
   n: number;
+  /** When it appeared. */
+  since: number;
+  /** When it last changed: the member's last sign of life is read from it. */
   at: number;
   kind: "say" | "think" | "tool" | "turn";
   /** Say/think: the text so far. Tool: its title. Turn: the turn's number. */

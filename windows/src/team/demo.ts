@@ -82,6 +82,7 @@ const seat = (i: number) => ({ ...config.members[i], model: config.members[i].mo
 let n = 0;
 const line = (kind: Line["kind"], text: string, extra: Partial<Line> = {}): Line => ({
   n: ++n,
+  since: NOW - 60_000,
   at: NOW,
   kind,
   text,
@@ -219,6 +220,13 @@ export function demoSnapshot(): Snapshot {
     snapshot.questions = [{ id: "Q-1", by: "ai1", question: "首版要支援手機版嗎?", task: "TASK-05", at: ago(1), answer: null }];
     snapshot.members[3] = { ...snapshot.members[3], status: "lost", lostWhy: "It ended two turns in a row without a word about its open work." };
     snapshot.tasks[3].blocked = null;
+  }
+  // `?state=quiet`: AI 3 has been stuck in one command for seven minutes.
+  if (new URLSearchParams(location.search).get("state") === "quiet") {
+    for (const l of snapshot.members[2].screen) {
+      l.at = NOW - 7 * 60_000;
+      l.since = Math.min(l.since, l.at);
+    }
   }
   // `?state=earlier`: the record of a run Coucou was closed in the middle of.
   if (new URLSearchParams(location.search).get("state") === "earlier") {
