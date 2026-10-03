@@ -274,6 +274,9 @@ pub async fn dispatch(route: &Route, state: &ClaudeState, msg: Value) {
                 danger,
             }));
         }
+        // A sub-agent of Claude Code's own (the Task tool) speaks under its
+        // parent's tool call; the member's screen shows that call, not its chatter.
+        "stream_event" | "assistant" | "user" if msg.get("parent_tool_use_id").is_some_and(|p| !p.is_null()) => {}
         "stream_event" => {
             let delta = msg.pointer("/event/delta").cloned().unwrap_or(Value::Null);
             let (kind, text) = match delta.get("type").and_then(Value::as_str) {

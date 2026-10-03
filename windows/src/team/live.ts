@@ -131,6 +131,7 @@ function toolWords(l: Line): string {
     .replace(/^Edit\s+/, "編輯 ")
     .replace(/^Read\s+/, "讀取 ")
     .replace(/^Search the web$/, "搜尋網路")
+    .replace(/^Sub-agent\s+(.*)$/, "子代理 $1 分頭處理")
     .replace(/^Generate an image$/, "生成圖片");
 }
 

@@ -258,6 +258,18 @@ fn finished(item: &Value) -> Value {
     update
 }
 
+/// One of Codex's own sub-agents starting or finishing, as a step of the
+/// thread that spawned it.
+fn helper(item: &Value) -> Option<Value> {
+    let thread = item.get("agentThreadId").and_then(Value::as_str)?;
+    let name = item.get("agentPath").and_then(Value::as_str).unwrap_or("").rsplit('/').next().unwrap_or("").to_string();
+    Some(match item.get("kind").and_then(Value::as_str)? {
+        "started" => json!({ "sessionUpdate": "tool_call", "toolCallId": thread, "title": format!("Sub-agent {name}"), "kind": "think", "status": "in_progress" }),
+        "completed" => json!({ "sessionUpdate": "tool_call_update", "toolCallId": thread, "status": "completed" }),
+        _ => return None,
+    })
+}
+
 /// One line from Codex that is not an answer to one of our requests.
 pub async fn dispatch(route: &Route, state: &CodexState, msg: Value) {
     let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
@@ -265,7 +277,17 @@ pub async fn dispatch(route: &Route, state: &CodexState, msg: Value) {
     let key = &route.key;
 
     let Some(id) = msg.get("id").cloned() else {
-        // A notification.
+        // A notification. Codex may spawn sub-agents of its own, each on a
+        // thread of its own whose notifications come down the same pipe:
+        // only the thread Coucou opened speaks for the member — above all,
+        // only its `turn/completed` ends the member's turn.
+        let ours = {
+            let thread = state.thread.lock().unwrap();
+            thread.is_empty() || params.get("threadId").and_then(Value::as_str).map(|t| t == thread.as_str()).unwrap_or(true)
+        };
+        if !ours {
+            return;
+        }
         match method {
             "item/started" => {
                 let item = params.get("item").cloned().unwrap_or(Value::Null);
@@ -290,6 +312,10 @@ pub async fn dispatch(route: &Route, state: &CodexState, msg: Value) {
                 let item = params.get("item").cloned().unwrap_or(Value::Null);
                 if title_of(&item).is_some() {
                     update(route, finished(&item));
+                } else if item.get("type").and_then(Value::as_str) == Some("subAgentActivity") {
+                    if let Some(u) = helper(&item) {
+                        update(route, u);
+                    }
                 }
             }
             "item/commandExecution/outputDelta" => {
@@ -504,7 +530,10 @@ mod tests {
                         None => {
                             // Our decision; report it and end the turn.
                             let decision = msg["result"]["decision"].as_str().unwrap().to_string();
-                            out.push(json!({ "method": "item/agentMessage/delta", "params": { "delta": decision } }));
+                            // A sub-agent of its own talks and finishes first, on its own thread.
+                            out.push(json!({ "method": "item/agentMessage/delta", "params": { "threadId": "th-sub", "delta": "chatter" } }));
+                            out.push(json!({ "method": "turn/completed", "params": { "threadId": "th-sub", "turn": { "id": "sub", "status": "completed" } } }));
+                            out.push(json!({ "method": "item/agentMessage/delta", "params": { "threadId": "th1", "delta": decision } }));
                             out.push(json!({ "method": "turn/completed", "params": { "threadId": "th1", "turn": { "id": format!("tu{turn}"), "status": "completed" } } }));
                         }
                     }
