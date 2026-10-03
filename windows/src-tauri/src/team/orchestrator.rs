@@ -624,6 +624,10 @@ impl Teams {
                 } else {
                     continue;
                 };
+                // Picked up before, and not heard yet: once is enough.
+                if state.unheard(&member.id).iter().any(|m| m.text == text) {
+                    continue;
+                }
                 let id = state.next_message_id();
                 store.append(Event::Message { id, from: SYSTEM.into(), to: member.id.clone(), text, task: None });
             }
