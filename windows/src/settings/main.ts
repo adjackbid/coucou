@@ -6,6 +6,7 @@ import "./settings.css";
 import { Bridge, onEvent, type HookAgent, type HookStatus } from "../core/bridge";
 import { DEFAULT_AGENT, DEFAULT_PROVIDER, DEFAULT_SETTINGS, type AgentProfile, type Provider, type Settings } from "../core/state";
 import { h, clear } from "../views/dom";
+import { glassify } from "../team/ui";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
 let version = "";
@@ -975,6 +976,8 @@ function generalSection(): HTMLElement {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function main() {
+  // Native dropdowns and model lists are drawn by Windows as a white list: the window's own instead.
+  glassify(root);
   const boot = await Bridge.boot();
   if (boot) {
     settings = { ...settings, ...boot.settings };

@@ -14,6 +14,7 @@ import { Bridge, IS_TAURI, onDragDrop, onEvent } from "../core/bridge";
 import type { AgentProfile, ModelChoice } from "../core/state";
 import { h, clear } from "../views/dom";
 import * as live from "./live";
+import { dropdown, menuOpen, onMenuClosed, refreshSuggestions, suggest } from "./ui";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
@@ -415,25 +416,32 @@ function setup(file: TeamFile): HTMLElement {
   // ── Right: who is in it ──
   const members = h("div", { class: "member-rows" });
   config.members.forEach((m, at) => {
-    const agent = h("select", { class: "field", title: "這位成員用哪個代理執行" }) as HTMLSelectElement;
-    if (!agents.some((a) => a.id === m.agent)) agent.append(h("option", { value: m.agent, text: m.agent ? `${m.agent}(不存在)` : "選擇代理…" }));
-    for (const a of agents) agent.append(h("option", { value: a.id, text: a.name }));
-    agent.value = m.agent;
-    agent.addEventListener("change", () => {
-      m.agent = agent.value;
-      unsaved = true;
-      render();
+    const kindOf = (a: AgentProfile) => (a.protocol === "codex" ? "Codex" : a.protocol === "claude" ? "Claude Code" : a.command);
+    const agentChoices = agents.map((a) => ({ value: a.id, label: a.name, hint: kindOf(a) !== a.name ? kindOf(a) : undefined }));
+    if (m.agent && !agents.some((a) => a.id === m.agent)) agentChoices.unshift({ value: m.agent, label: `${m.agent}(不存在)`, hint: "不在 設定 → Agents 裡" });
+    const agent = dropdown({
+      value: m.agent,
+      choices: agentChoices,
+      placeholder: "選擇代理…",
+      title: "這位成員用哪個代理執行",
+      onChange: (v) => {
+        m.agent = v;
+        unsaved = true;
+        render();
+      },
     });
     const isLeader = config.leader === m.id;
     const profile = agents.find((a) => a.id === m.agent);
-    const listId = `models-${at}`;
-    const list = h("datalist", { id: listId }) as HTMLDataListElement;
     const known = modelLists.get(m.agent);
-    if (Array.isArray(known)) for (const c of known) list.append(h("option", { value: c.id, text: c.label }));
     const model = bound("input", `m${at}.model`, m.model ?? "", (v) => (m.model = v.trim()), {
       placeholder: profile?.model ? `模型:${profile.model}(代理預設)` : "模型:代理預設",
-      list: listId,
       title: typeof known === "string" ? known : "留空就用代理自己的預設模型",
+      autocomplete: "off",
+    });
+    suggest(model, () => {
+      const got = modelLists.get(m.agent);
+      if (got === undefined) return "讀取這個代理提供的模型…";
+      return Array.isArray(got) ? got.map((c) => ({ value: c.id, label: c.id, hint: c.label !== c.id ? c.label : undefined })) : got;
     });
     // The list is asked for the first time the field is used: a handshake
     // with the agent, nothing spent.
@@ -441,11 +449,9 @@ function setup(file: TeamFile): HTMLElement {
       if (!profile || modelLists.has(profile.id)) return;
       modelLists.set(profile.id, "載入中…");
       Bridge.agentModels(profile)
-        .then((found) => {
-          modelLists.set(profile.id, found);
-          for (const c of found) list.append(h("option", { value: c.id, text: c.label }));
-        })
-        .catch((err) => modelLists.set(profile.id, String(err).replace(/^Error:\s*/, "")));
+        .then((found) => modelLists.set(profile.id, found))
+        .catch((err) => modelLists.set(profile.id, String(err).replace(/^Error:\s*/, "")))
+        .finally(() => refreshSuggestions(model));
     });
     members.append(
       h(
@@ -462,7 +468,7 @@ function setup(file: TeamFile): HTMLElement {
             bound("input", `m${at}.role`, m.role, (v) => (m.role = v), { placeholder: "角色,例如:網站開發" }),
             agent,
           ),
-          h("div", { class: "row nowrap" }, model, list),
+          h("div", { class: "row nowrap" }, model),
           bound("input", `m${at}.duty`, m.duty, (v) => (m.duty = v), { placeholder: "職責:這位成員負責什麼" }),
         ),
         h(
@@ -783,11 +789,20 @@ function deliverables(snap: Snapshot): HTMLElement {
 }
 
 function composer(snap: Snapshot): HTMLElement {
-  const to = h("select", { class: "field narrow", title: "傳給誰" }) as HTMLSelectElement;
-  to.append(h("option", { value: "", text: "給 Leader" }));
-  for (const m of snap.members) if (!m.isLeader) to.append(h("option", { value: m.id, text: `給 ${m.name}` }));
-  to.value = recipient;
-  to.addEventListener("change", () => (recipient = to.value));
+  const leader = snap.members.find((m) => m.isLeader);
+  const to = dropdown({
+    value: recipient,
+    choices: [
+      { value: "", label: "給 Leader", hint: leader?.name },
+      ...snap.members.filter((m) => !m.isLeader).map((m) => ({ value: m.id, label: `給 ${m.name}`, hint: m.role })),
+    ],
+    title: "傳給誰",
+    className: "narrow",
+    onChange: (v) => {
+      recipient = v;
+      render();
+    },
+  });
   const files = attachments.get(snap.id) ?? [];
   // The pictures go as full paths in the message: every agent can open an
   // image file in the team's folder with its own tool.
@@ -988,7 +1003,20 @@ function main(): HTMLElement {
   );
 }
 
+/** Drawing again waits while a menu is open: it hangs from a field that would be replaced. */
+let renderWaiting = false;
+onMenuClosed(() => {
+  if (renderWaiting) {
+    renderWaiting = false;
+    render();
+  }
+});
+
 function render() {
+  if (menuOpen()) {
+    renderWaiting = true;
+    return;
+  }
   // Drawing again must not take the caret out of a field someone is typing in.
   const active = document.activeElement as HTMLInputElement | null;
   const key = active?.dataset?.key;
