@@ -33,6 +33,13 @@ pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 const MAX_REJECTIONS: u32 = 3;
 /// Turns in a row a member may end without a word about its open work.
 const MAX_SILENT_TURNS: u32 = 2;
+
+/// Where a team's scheduler runs. Asked before anything is changed: called
+/// from outside the async runtime (a synchronous Tauri command runs on the
+/// window's thread), spawning would panic and take the app down.
+fn runtime() -> Result<tokio::runtime::Handle, String> {
+    tokio::runtime::Handle::try_current().map_err(|_| "Coucou cannot run a team from here: it was asked outside its async runtime.".to_string())
+}
 /// Lines of each member's screen in a snapshot.
 const SCREEN_LINES: usize = 150;
 /// A screen's changes go out at most this often: an agent writes a few
@@ -523,6 +530,7 @@ impl Teams {
     /// Starts a team: a fresh log, an agent session per member, and the goal
     /// handed to the leader. Must be called from inside the async runtime.
     pub fn start(&self, config: TeamConfig, profiles: &[AgentProfile]) -> Result<Snapshot, String> {
+        let runtime = runtime()?;
         let known: Vec<String> = profiles.iter().map(|p| p.id.clone()).collect();
         let problems = config.problems(&known);
         if !problems.is_empty() {
@@ -564,7 +572,7 @@ impl Teams {
         }
         self.teams.lock().unwrap().insert(team.id.clone(), team.clone());
         log::line(format!("team {}: started with {} member(s)", team.id, team.seats.len()));
-        tokio::spawn(team.clone().run());
+        runtime.spawn(team.clone().run());
         team.snapshot().ok_or_else(|| "The team did not start.".to_string())
     }
 
@@ -573,6 +581,7 @@ impl Teams {
     /// sessions — what they knew went with Coucou — so each is told its role
     /// again and where its work stands; lost members come back with them.
     pub fn revive(&self, id: &str, profiles: &[AgentProfile]) -> Result<Snapshot, String> {
+        let runtime = runtime()?;
         let old = self.team(id)?;
         if !old.seats.is_empty() {
             return Err(format!("The team '{id}' is already running."));
@@ -625,7 +634,7 @@ impl Teams {
         }
         self.teams.lock().unwrap().insert(id.to_string(), team.clone());
         log::line(format!("team {id}: picked up again with {} member(s)", team.seats.len()));
-        tokio::spawn(team.clone().run());
+        runtime.spawn(team.clone().run());
         team.changed();
         team.snapshot().ok_or_else(|| "The team did not start.".to_string())
     }
@@ -1126,6 +1135,16 @@ mod tests {
             bench.teams.resume("shop", &[AgentProfile::copilot()]).unwrap();
             bench.until("the team finishes", |s| s.status == TeamStatus::Finished).await;
         });
+    }
+
+    /// A synchronous command runs on the window's thread, outside the
+    /// runtime: starting a team from there is refused, never a panic.
+    #[test]
+    fn a_team_asked_to_start_outside_the_runtime_says_so() {
+        let bench = bench(diligent());
+        let refused = bench.teams.start(shop(&work_dir()), &[AgentProfile::copilot()]).unwrap_err();
+        assert!(refused.contains("async runtime"), "{refused}");
+        assert!(bench.teams.get("shop").is_none());
     }
 
     #[test]
