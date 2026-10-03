@@ -575,6 +575,66 @@ async fn team_recover(teams: State<'_, Arc<Teams>>, team: String, member: String
     teams.recover(&team, &member).await
 }
 
+// ── Pictures with an instruction ───────────────────────────────────────────
+//
+// An instruction to a member can carry images: they are copied into the
+// team's own folder, under .coucou/attachments, and the message names them
+// by full path. Every agent can open an image file there (Claude Code's
+// Read, Codex's view_image, Copilot's view), whatever its protocol.
+
+/// Largest file an instruction takes.
+const ATTACHMENT_MAX: usize = 30 * 1024 * 1024;
+
+fn attachment_path(teams: &Teams, team: &str, name: &str) -> Result<std::path::PathBuf, String> {
+    let work_dir = teams.get(team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or("There is no such team.")?;
+    let dir = std::path::Path::new(&work_dir).join(".coucou").join("attachments");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not make {}: {e}", dir.display()))?;
+    // A name that stays a name: no folders, nothing Windows refuses.
+    let clean: String = std::path::Path::new(name)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default()
+        .chars()
+        .map(|c| if c.is_control() || "<>:\"/\\|?*".contains(c) { '_' } else { c })
+        .collect();
+    let clean = if clean.trim().is_empty() { "image.png".to_string() } else { clean };
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    Ok(dir.join(format!("{stamp}-{clean}")))
+}
+
+/// An image pasted or picked in the Teamwork window: its bytes as the request
+/// body, the team and the file name (URL-encoded) in headers. Returns where
+/// it now is.
+#[tauri::command]
+fn team_attach_bytes(teams: State<Arc<Teams>>, request: tauri::ipc::Request<'_>) -> Result<String, String> {
+    let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(percent_decode);
+    let team = header("x-team").ok_or("Which team is this for?")?;
+    let name = header("x-file-name").unwrap_or_else(|| "image.png".into());
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Err("expected the file's bytes".into()) };
+    if bytes.len() > ATTACHMENT_MAX {
+        return Err(format!("{name} is larger than {} MB.", ATTACHMENT_MAX / 1024 / 1024));
+    }
+    let path = attachment_path(&teams, &team, &name)?;
+    std::fs::write(&path, bytes).map_err(|e| format!("Could not save {name}: {e}"))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// A file dragged onto the Teamwork window: copied in the same way.
+#[tauri::command]
+fn team_attach_path(teams: State<Arc<Teams>>, team: String, path: String) -> Result<String, String> {
+    let from = std::path::Path::new(&path);
+    let size = std::fs::metadata(from).map_err(|e| format!("Could not read {path}: {e}"))?.len() as usize;
+    if !from.is_file() {
+        return Err(format!("{path} is not a file."));
+    }
+    if size > ATTACHMENT_MAX {
+        return Err(format!("{path} is larger than {} MB.", ATTACHMENT_MAX / 1024 / 1024));
+    }
+    let to = attachment_path(&teams, &team, &from.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default())?;
+    std::fs::copy(from, &to).map_err(|e| format!("Could not copy {path}: {e}"))?;
+    Ok(to.to_string_lossy().to_string())
+}
+
 /// Opens something a member handed in: a URL in the browser, a path in
 /// Explorer. No shell: the locator is an argument, never a command line.
 #[tauri::command]
@@ -996,6 +1056,8 @@ pub fn run() {
             team_snapshots,
             team_start,
             team_instruct,
+            team_attach_bytes,
+            team_attach_path,
             team_answer,
             team_permit,
             team_pause,

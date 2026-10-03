@@ -145,6 +145,18 @@ export const Bridge = {
   teamStart: (file: string) => callOrThrow<Snapshot>("team_start", { file }),
   /** The person writes to the leader (`to` empty) or to one member. */
   teamInstruct: (team: string, to: string, text: string) => callOrThrow<void>("team_instruct", { team, to, text }),
+  /**
+   * An image (or any file) for an instruction, from its bytes: copied into the
+   * team's folder (.coucou/attachments). Returns its full path there.
+   */
+  teamAttachBytes: (team: string, name: string, bytes: ArrayBuffer) => {
+    if (!IS_TAURI) return Promise.resolve(`D:\\demo\\.coucou\\attachments\\${name}`);
+    return invoke<string>("team_attach_bytes", new Uint8Array(bytes), {
+      headers: { "x-team": encodeURIComponent(team), "x-file-name": encodeURIComponent(name) },
+    });
+  },
+  /** The same for a file dragged onto the window, by its path. */
+  teamAttachPath: (team: string, path: string) => callOrThrow<string>("team_attach_path", { team, path }),
   teamAnswer: (team: string, question: string, text: string) => callOrThrow<void>("team_answer", { team, question, text }),
   /**
    * Answers the oldest request a member's agent is holding with one of its own

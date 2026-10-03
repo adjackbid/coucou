@@ -1687,6 +1687,87 @@ h2 {
   border-radius: 999px;
 }
 
+/* Pictures going out with the next instruction, above the box. */
+.composer-wrap {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.composer-wrap .composer {
+  position: static;
+}
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 14px;
+  background: rgba(11, 12, 14, 0.82);
+  box-shadow: var(--edge);
+}
+
+.attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 3px 4px 3px 3px;
+  border-radius: 10px;
+  background: var(--lift);
+}
+
+.attachment img {
+  width: 36px;
+  height: 36px;
+  border-radius: 7px;
+  object-fit: cover;
+}
+
+.attachment i {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  font-style: normal;
+  color: var(--dim);
+  background: var(--lift-2);
+}
+
+.attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.attachment-x {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--dim);
+  background: transparent;
+  font: 14px/1 var(--font);
+}
+
+.attachment-x:hover {
+  color: var(--ink);
+  background: var(--lift-2);
+}
+
+.composer .clip {
+  flex: none;
+  padding: 0 12px;
+}
+
 @media (max-width: 980px) {
   .split,
   .setup-grid {

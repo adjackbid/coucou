@@ -10,7 +10,7 @@
 // stream between pictures (`team-screen`) and are moved into each new one.
 
 import "./team.css";
-import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
+import { Bridge, IS_TAURI, onDragDrop, onEvent } from "../core/bridge";
 import type { AgentProfile, ModelChoice } from "../core/state";
 import { h, clear } from "../views/dom";
 import * as live from "./live";
@@ -40,6 +40,29 @@ const drafts = new Map<string, string>();
 const modelLists = new Map<string, ModelChoice[] | string>();
 /** The member whose screen is shown large; null for everyone side by side. */
 let focused: string | null = null;
+
+/** A file going out with the next instruction: already in the team's folder. */
+interface Attachment {
+  path: string;
+  name: string;
+  /** A thumbnail, for an image whose bytes the page had. */
+  preview: string | null;
+}
+/** What the next instruction carries, per team. */
+const attachments = new Map<string, Attachment[]>();
+const IMAGE = /\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i;
+
+async function attach(team: string, add: () => Promise<Attachment>) {
+  await act(async () => {
+    const a = await add();
+    attachments.set(team, [...(attachments.get(team) ?? []), a]);
+  });
+}
+
+function attachBlob(team: string, file: File) {
+  const name = file.name || `pasted-${Date.now()}.png`;
+  void attach(team, async () => ({ path: await Bridge.teamAttachBytes(team, name, await file.arrayBuffer()), name, preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : null }));
+}
 
 const YOU = "you";
 /** Coucou's own accents, for members that were given no colour. */
@@ -707,20 +730,76 @@ function composer(snap: Snapshot): HTMLElement {
   for (const m of snap.members) if (!m.isLeader) to.append(h("option", { value: m.id, text: `給 ${m.name}` }));
   to.value = recipient;
   to.addEventListener("change", () => (recipient = to.value));
-  const send = (text: string) =>
+  const files = attachments.get(snap.id) ?? [];
+  // The pictures go as full paths in the message: every agent can open an
+  // image file in the team's folder with its own tool.
+  const send = (text: string) => {
+    if (!text && !files.length) return;
+    let body = text || (files.some((f) => IMAGE.test(f.name)) ? "請看附上的圖片。" : "請看附上的檔案。");
+    if (files.length) {
+      body += `\n\n附上的${files.every((f) => IMAGE.test(f.name)) ? "圖片" : "檔案"}(在團隊資料夾裡,請用你讀檔或看圖片的工具打開):\n${files.map((f) => `- ${f.path}`).join("\n")}`;
+    }
     void act(
-      () => Bridge.teamInstruct(snap.id, recipient, text),
-      () => drafts.delete(`instruct:${snap.id}`),
+      () => Bridge.teamInstruct(snap.id, recipient, body),
+      () => {
+        drafts.delete(`instruct:${snap.id}`);
+        for (const f of files) if (f.preview) URL.revokeObjectURL(f.preview);
+        attachments.delete(snap.id);
+      },
     );
-  const input = field(`instruct:${snap.id}`, "傳送新指示…(對方這一輪結束後才會讀到)", send);
+  };
+  const input = field(`instruct:${snap.id}`, "傳送新指示…可貼上、拖進或附上圖片(對方這一輪結束後才會讀到)", (t) => send(t));
+  // Ctrl+V of a screenshot attaches it.
+  input.addEventListener("paste", (e) => {
+    const pasted = [...(e.clipboardData?.files ?? [])];
+    if (!pasted.length) return;
+    e.preventDefault();
+    for (const f of pasted) attachBlob(snap.id, f);
+  });
+  const picker = h("input", { type: "file", accept: "image/*", multiple: true, style: "display:none" }) as HTMLInputElement;
+  picker.addEventListener("change", () => {
+    for (const f of picker.files ?? []) attachBlob(snap.id, f);
+    picker.value = "";
+  });
+  const clip = h("button", { class: "btn plain clip", type: "button", title: "附上圖片(也可以直接貼上或拖進視窗)", "aria-label": "附上圖片", onClick: () => picker.click() }, "＋圖");
+  const tray = files.length
+    ? h(
+        "div",
+        { class: "attachments" },
+        ...files.map((f) =>
+          h(
+            "span",
+            { class: "attachment", title: f.path },
+            f.preview ? h("img", { src: f.preview, alt: f.name }) : h("i", { text: IMAGE.test(f.name) ? "▣" : "▤" }),
+            h("span", { class: "attachment-name", text: f.name }),
+            h("button", {
+              type: "button",
+              class: "attachment-x",
+              title: "拿掉",
+              "aria-label": `拿掉 ${f.name}`,
+              onClick: () => {
+                if (f.preview) URL.revokeObjectURL(f.preview);
+                attachments.set(snap.id, files.filter((x) => x !== f));
+                render();
+              },
+            }, "×"),
+          ),
+        ),
+      )
+    : null;
   return h(
     "div",
-    { class: "composer" },
-    to,
-    input,
-    button("送出", "primary", () => {
-      if (input.value.trim()) send(input.value.trim());
-    }),
+    { class: `composer-wrap${files.length ? " has-files" : ""}` },
+    tray,
+    h(
+      "div",
+      { class: "composer" },
+      to,
+      clip,
+      picker,
+      input,
+      button("送出", "primary", () => send(input.value.trim())),
+    ),
   );
 }
 
@@ -923,6 +1002,17 @@ async function start() {
     live.applySnapshot(snap);
     // Typing in the form is not interrupted by a team at work behind it.
     if (tab === "monitor" || !unsaved) render();
+  });
+  // Files dragged onto the window go with the next instruction to the team on screen.
+  await onDragDrop((e) => {
+    if (e.type !== "drop" || !e.paths?.length || tab !== "monitor") return;
+    const file = files.find((f) => f.file === selected);
+    const team = file?.config ? runs.get(file.config.id) : undefined;
+    if (!team || team.status === "finished") return;
+    for (const path of e.paths) {
+      const name = path.split(/[\\/]/).pop() ?? path;
+      void attach(team.id, async () => ({ path: await Bridge.teamAttachPath(team.id, path), name, preview: null }));
+    }
   });
   // Each member's screen, as it happens: no redraw, just the lines.
   await onEvent<ScreenPatch>("team-screen", live.applyPatch);
