@@ -584,6 +584,9 @@ pub struct MemberView {
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub id: String,
+    /// Loaded from an earlier run: no agent stands behind it until it is
+    /// picked up again (or started afresh).
+    pub detached: bool,
     pub name: String,
     pub goal: String,
     pub work_dir: String,
@@ -675,6 +678,7 @@ impl State {
             .collect();
         Some(Snapshot {
             id: config.id.clone(),
+            detached: false,
             name: config.name.clone(),
             goal: config.goal.clone(),
             work_dir: config.work_dir.clone(),

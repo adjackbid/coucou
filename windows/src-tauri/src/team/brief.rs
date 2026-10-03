@@ -207,3 +207,21 @@ pub fn turn(config: &TeamConfig, messages: &[&Message]) -> String {
     }
     out
 }
+
+/// Coucou was closed while the team worked, and is picking it up again: the
+/// member's agent is a new session that remembers nothing.
+pub fn revived(open: &[&Task], to_review: &[&Task]) -> String {
+    let mut out = "Coucou was closed while the team was working and has now picked the team up again. Your session is a new one: call `team_status` to see where the team stands.".to_string();
+    if !open.is_empty() {
+        let list: Vec<String> = open
+            .iter()
+            .map(|t| format!("{} ({}, {})", t.id, t.title, if t.status == TaskStatus::Doing { "doing" } else { "not started" }))
+            .collect();
+        out.push_str(&format!(" Then carry on with: {}.", list.join("; ")));
+    }
+    if !to_review.is_empty() {
+        let list: Vec<String> = to_review.iter().map(|t| format!("{} ({})", t.id, t.title)).collect();
+        out.push_str(&format!(" Handed in and waiting for your `review`: {}.", list.join("; ")));
+    }
+    out
+}

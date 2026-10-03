@@ -102,6 +102,9 @@ function said(text: string): string {
     [/^The team id may only use letters, digits, '-' and '_'\.$/, () => "團隊 id 只能用英數字、- 與 _"],
     [/^A link joins '(.+)' and '(.+)', and one of them is not a member\.$/, (m) => `協作關係連到「${m[1]}」與「${m[2]}」,其中一個不是成員`],
     [/^The team '(.+)' is already running\.$/, (m) => `團隊「${m[1]}」已經在執行中`],
+    [/^That is not a member of the team\.$/, () => "這不是團隊成員"],
+    [/^This team was loaded from an earlier run\. Press Continue to pick it up\.$/, () => "這是上次執行留下的紀錄:按上方「從中斷處繼續」,它會和其他成員一起重新啟動"],
+    [/^The team's record has no setup to pick up\.$/, () => "這份紀錄裡沒有團隊設定,沒辦法接著做;請到「團隊設定」重新開始"],
   ];
   for (const [pattern, to] of rules) {
     const m = text.match(pattern);
@@ -278,7 +281,10 @@ function setup(file: TeamFile): HTMLElement {
     return h("section", { class: "panel" }, h("h2", { text: file.file }), h("p", { class: "problem", text: file.problems.map(said).join("\n") }));
   }
   const run = runs.get(config.id);
-  const running = run?.status === "running" || run?.status === "paused";
+  // Agents still behind it: the form waits for the next start. A record from
+  // an earlier run, or a finished team, can be started again from scratch.
+  const running = run?.status === "running" || (run?.status === "paused" && !run.detached);
+  const again = !!run && !running;
 
   // ── Left: what the team is for ──
   const folder = bound("input", "workDir", config.workDir, (v) => (config.workDir = v), { placeholder: "選擇所有成員一起工作的資料夾" });
@@ -440,9 +446,10 @@ function setup(file: TeamFile): HTMLElement {
       "div",
       { class: "row end bar" },
       running ? h("span", { class: "hint", text: "這個團隊正在執行;這裡的修改下次啟動才會套用。" }) : null,
+      again ? h("span", { class: "hint", text: "重新開始會從頭跑一次;上一次的紀錄會保留在團隊紀錄資料夾。" }) : null,
       h("button", { class: `btn plain save${unsaved ? " due" : ""}`, type: "button", onClick: () => void act(save) }, "儲存"),
       button(
-        "啟動 Teamwork →",
+        again ? "重新開始 →" : "啟動 Teamwork →",
         "primary",
         () =>
           void act(async () => {
@@ -540,7 +547,9 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
       ),
     );
   }
-  if (m.status === "lost") {
+  if (m.status === "lost" && snap.detached) {
+    el.append(h("div", { class: "hint", text: "按上方「從中斷處繼續」,它會和其他成員一起重新啟動。" }));
+  } else if (m.status === "lost") {
     el.append(h("div", { class: "row" }, button("重新啟動這位成員", "primary", () => void act(() => Bridge.teamRecover(snap.id, m.id)))));
   }
 
@@ -730,7 +739,9 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
       button("全部中斷", "danger", () => void act(() => Bridge.teamInterrupt(snap.id))),
     );
   } else if (snap?.status === "paused") {
-    actions.append(button("繼續", "primary", () => void act(() => Bridge.teamResume(snap.id))));
+    // A team from an earlier run gets its agents back, and its members
+    // their work, where it stopped.
+    actions.append(button(snap.detached ? "從中斷處繼續" : "繼續", "primary", () => void act(() => Bridge.teamResume(snap.id))));
   }
   return h(
     "header",
@@ -740,7 +751,9 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
       { class: "top-title", "data-drag": "" },
       h("h1", { "data-drag": "" }, name, snap ? h("span", { class: `state ${snap.status}`, text: TEAM_STATUS[snap.status] }) : null),
       h("p", { class: "dim", "data-drag": "", text: goal ? `${goal} · ${count} 位 AI 成員` : `${count} 位 AI 成員` }),
-      snap?.status === "paused" && snap.pausedWhy ? h("p", { class: "paused-why", text: said(snap.pausedWhy) }) : null,
+      snap?.status === "paused" && snap.pausedWhy
+        ? h("p", { class: "paused-why", text: snap.detached ? `${said(snap.pausedWhy)} · 按「從中斷處繼續」接著做,或到「團隊設定」重新開始` : said(snap.pausedWhy) })
+        : null,
     ),
     actions,
     windowButtons(),

@@ -136,6 +136,7 @@ export function demoSnapshot(): Snapshot {
   const waiting = new URLSearchParams(location.search).get("state") === "waiting";
   const snapshot: Snapshot = {
     id: "shop",
+    detached: false,
     name: config.name,
     goal: config.goal,
     workDir: config.workDir,
@@ -218,6 +219,14 @@ export function demoSnapshot(): Snapshot {
     snapshot.questions = [{ id: "Q-1", by: "ai1", question: "首版要支援手機版嗎?", task: "TASK-05", at: ago(1), answer: null }];
     snapshot.members[3] = { ...snapshot.members[3], status: "lost", lostWhy: "It ended two turns in a row without a word about its open work." };
     snapshot.tasks[3].blocked = null;
+  }
+  // `?state=earlier`: the record of a run Coucou was closed in the middle of.
+  if (new URLSearchParams(location.search).get("state") === "earlier") {
+    snapshot.status = "paused";
+    snapshot.detached = true;
+    snapshot.pausedWhy = "Coucou was closed while the team was running.";
+    snapshot.members = snapshot.members.map((m) => ({ ...m, status: m.status === "working" ? "idle" : m.status }));
+    snapshot.members[0] = { ...snapshot.members[0], status: "lost", lostWhy: "It ended two turns in a row without a word about its open work." };
   }
   return snapshot;
 }

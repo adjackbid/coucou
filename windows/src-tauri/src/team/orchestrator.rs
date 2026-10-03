@@ -10,7 +10,7 @@
 // Members run through a `Drive` (ACP today). Their tool calls come back in
 // through `act`, from the MCP server in mcp.rs.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -109,6 +109,9 @@ pub struct Team {
     store: Mutex<Store>,
     live: Mutex<BTreeMap<String, Live>>,
     screens: Mutex<BTreeMap<String, Shown>>,
+    /// Members whose current agent session has been told its role. A new
+    /// session — the first, after a restart, after a crash — is told again.
+    briefed: Mutex<HashSet<String>>,
     seats: BTreeMap<String, Seat>,
     tokens: BTreeMap<String, String>,
     wake: Notify,
@@ -161,7 +164,9 @@ impl Team {
     /// it, they stream on their own (`with_screens`).
     pub fn snapshot(&self) -> Option<Snapshot> {
         let live = self.live.lock().unwrap().clone();
-        self.store.lock().unwrap().state().snapshot(&live)
+        let mut snapshot = self.store.lock().unwrap().state().snapshot(&live)?;
+        snapshot.detached = self.seats.is_empty();
+        Some(snapshot)
     }
 
     /// The picture with each member's last screen lines: for a window that
@@ -303,7 +308,8 @@ impl Team {
                 store.append(Event::Paused { why: format!("The team has used its {} turns.", config.max_turns) });
                 break;
             }
-            let first = state.turns.get(&member.id).map(|t| t.count == 0).unwrap_or(true);
+            // A session that has not heard its role yet hears it first.
+            let first = self.briefed.lock().unwrap().insert(member.id.clone());
             let mut text = if first { format!("{}\n\n", brief::role(&config, &member.id)) } else { String::new() };
             text.push_str(&brief::turn(&config, &unheard));
             let ids: Vec<String> = unheard.iter().map(|m| m.id.clone()).collect();
@@ -350,7 +356,11 @@ impl Team {
                         });
                         true
                     }
-                    acp::Event::Exit(_) => false,
+                    // The agent is gone; the next one is a new session.
+                    acp::Event::Exit(_) => {
+                        team.briefed.lock().unwrap().remove(&member);
+                        false
+                    }
                 }
             };
             if changed {
@@ -475,25 +485,8 @@ impl Teams {
         out
     }
 
-    /// Starts a team: a fresh log, an agent session per member, and the goal
-    /// handed to the leader. Must be called from inside the async runtime.
-    pub fn start(&self, config: TeamConfig, profiles: &[AgentProfile]) -> Result<Snapshot, String> {
-        let known: Vec<String> = profiles.iter().map(|p| p.id.clone()).collect();
-        let problems = config.problems(&known);
-        if !problems.is_empty() {
-            return Err(problems.join("\n"));
-        }
-        if let Some(existing) = self.get(&config.id) {
-            if existing.with_state(|s| s.status == TeamStatus::Running || s.turns.values().any(|t| t.active)) {
-                return Err(format!("The team '{}' is already running.", config.name));
-            }
-        }
-
-        let store = match &self.root {
-            Some(root) => Store::fresh(&root.join(&config.id)).map_err(|e| format!("Could not open the team's log: {e}"))?,
-            None => Store::memory(),
-        };
-
+    /// An agent session per member, each with its own way into the team's tools.
+    fn seats_for(&self, config: &TeamConfig, profiles: &[AgentProfile]) -> Result<(BTreeMap<String, Seat>, BTreeMap<String, String>), String> {
         let mut seats = BTreeMap::new();
         let mut tokens = BTreeMap::new();
         for member in &config.members {
@@ -524,11 +517,36 @@ impl Teams {
             tokens.insert(member.id.clone(), secret);
         }
 
+        Ok((seats, tokens))
+    }
+
+    /// Starts a team: a fresh log, an agent session per member, and the goal
+    /// handed to the leader. Must be called from inside the async runtime.
+    pub fn start(&self, config: TeamConfig, profiles: &[AgentProfile]) -> Result<Snapshot, String> {
+        let known: Vec<String> = profiles.iter().map(|p| p.id.clone()).collect();
+        let problems = config.problems(&known);
+        if !problems.is_empty() {
+            return Err(problems.join("\n"));
+        }
+        if let Some(existing) = self.get(&config.id) {
+            if existing.with_state(|s| s.status == TeamStatus::Running || s.turns.values().any(|t| t.active)) {
+                return Err(format!("The team '{}' is already running.", config.name));
+            }
+        }
+
+        let store = match &self.root {
+            Some(root) => Store::fresh(&root.join(&config.id)).map_err(|e| format!("Could not open the team's log: {e}"))?,
+            None => Store::memory(),
+        };
+
+        let (seats, tokens) = self.seats_for(&config, profiles)?;
+
         let team = Arc::new(Team {
             id: config.id.clone(),
             store: Mutex::new(store),
             live: Mutex::new(BTreeMap::new()),
             screens: Mutex::new(BTreeMap::new()),
+            briefed: Mutex::new(HashSet::new()),
             seats,
             tokens,
             wake: Notify::new(),
@@ -550,6 +568,68 @@ impl Teams {
         team.snapshot().ok_or_else(|| "The team did not start.".to_string())
     }
 
+    /// Picks a team loaded from an earlier run up where it stopped: its
+    /// record as it is, an agent per member again. The agents are new
+    /// sessions — what they knew went with Coucou — so each is told its role
+    /// again and where its work stands; lost members come back with them.
+    pub fn revive(&self, id: &str, profiles: &[AgentProfile]) -> Result<Snapshot, String> {
+        let old = self.team(id)?;
+        if !old.seats.is_empty() {
+            return Err(format!("The team '{id}' is already running."));
+        }
+        let config = old.config().ok_or("The team's record has no setup to pick up.")?;
+        let known: Vec<String> = profiles.iter().map(|p| p.id.clone()).collect();
+        let problems = config.problems(&known);
+        if !problems.is_empty() {
+            return Err(problems.join("\n"));
+        }
+        let (seats, tokens) = self.seats_for(&config, profiles)?;
+        let store = std::mem::replace(&mut *old.store.lock().unwrap(), Store::memory());
+        let team = Arc::new(Team {
+            id: id.to_string(),
+            store: Mutex::new(store),
+            live: Mutex::new(BTreeMap::new()),
+            screens: Mutex::new(BTreeMap::new()),
+            briefed: Mutex::new(HashSet::new()),
+            seats,
+            tokens,
+            wake: Notify::new(),
+            drive: self.drive.clone(),
+            emit: self.emit.clone(),
+            show: self.show.clone(),
+        });
+        {
+            let mut store = team.store.lock().unwrap();
+            let lost: Vec<String> = store.state().lost.keys().cloned().collect();
+            store.append_all(lost.into_iter().map(|member| Event::Recovered { member }).collect());
+            for member in &config.members {
+                let state = store.state();
+                let is_leader = member.id == config.leader;
+                let open = state.open_tasks(&member.id);
+                let to_review: Vec<&super::state::Task> =
+                    if is_leader { state.tasks.iter().filter(|t| t.status == TaskStatus::Delivered).collect() } else { Vec::new() };
+                let text = if is_leader && state.tasks.is_empty() {
+                    brief::kickoff(&config)
+                } else if is_leader || !open.is_empty() {
+                    brief::revived(&open, &to_review)
+                } else {
+                    continue;
+                };
+                let id = state.next_message_id();
+                store.append(Event::Message { id, from: SYSTEM.into(), to: member.id.clone(), text, task: None });
+            }
+            if store.state().status == TeamStatus::Paused {
+                store.append(Event::Resumed);
+            }
+            settle(&mut store);
+        }
+        self.teams.lock().unwrap().insert(id.to_string(), team.clone());
+        log::line(format!("team {id}: picked up again with {} member(s)", team.seats.len()));
+        tokio::spawn(team.clone().run());
+        team.changed();
+        team.snapshot().ok_or_else(|| "The team did not start.".to_string())
+    }
+
     /// Brings back a team's record from disk, to look at. It comes back
     /// paused; picking the work up again is a later step.
     pub fn load(&self, id: &str) -> Option<Snapshot> {
@@ -562,6 +642,7 @@ impl Teams {
             store: Mutex::new(store),
             live: Mutex::new(BTreeMap::new()),
             screens: Mutex::new(BTreeMap::new()),
+            briefed: Mutex::new(HashSet::new()),
             seats: BTreeMap::new(),
             tokens: BTreeMap::new(),
             wake: Notify::new(),
@@ -635,11 +716,12 @@ impl Teams {
         Ok(())
     }
 
-    pub fn resume(&self, team: &str) -> Result<(), String> {
-        let team = self.team(team)?;
-        if team.seats.is_empty() {
-            return Err("This team was loaded from an earlier run. Start it again to continue.".into());
+    /// Turns again — and for a team loaded from an earlier run, agents again.
+    pub fn resume(&self, team: &str, profiles: &[AgentProfile]) -> Result<(), String> {
+        if self.team(team)?.seats.is_empty() {
+            return self.revive(team, profiles).map(|_| ());
         }
+        let team = self.team(team)?;
         if team.with_state(|s| s.status == TeamStatus::Paused) {
             team.record(vec![Event::Resumed]);
         }
@@ -662,11 +744,15 @@ impl Teams {
     /// A lost member gets another go: a fresh agent, and a reminder of where it stood.
     pub async fn recover(&self, team: &str, member: &str) -> Result<(), String> {
         let team = self.team(team)?;
+        if team.seats.is_empty() {
+            return Err("This team was loaded from an earlier run. Press Continue to pick it up.".into());
+        }
         let seat = team.seats.get(member).cloned().ok_or("That is not a member of the team.")?;
         if !team.with_state(|s| s.lost.contains_key(member)) {
             return Ok(());
         }
         team.drive.stop(seat.key).await;
+        team.briefed.lock().unwrap().remove(member);
         let (id, text) = team.with_state(|s| {
             let open = s.open_tasks(member);
             let text = if open.is_empty() {
@@ -790,6 +876,11 @@ mod tests {
     }
 
     fn bench(script: Script) -> Bench {
+        bench_in(script, None)
+    }
+
+    /// A bench whose team logs are kept in `root`, as the app keeps them.
+    fn bench_in(script: Script, root: Option<PathBuf>) -> Bench {
         let drive = Arc::new(Scripted {
             teams: Mutex::new(Weak::new()),
             script,
@@ -805,7 +896,7 @@ mod tests {
         let emit: Emit = Arc::new(move |_| {
             count.fetch_add(1, Ordering::Relaxed);
         });
-        let teams = Arc::new(Teams::new(drive.clone(), emit, None, PathBuf::from(r"C:\bin\coucou-team-mcp.exe")));
+        let teams = Arc::new(Teams::new(drive.clone(), emit, root, PathBuf::from(r"C:\bin\coucou-team-mcp.exe")));
         *drive.teams.lock().unwrap() = Arc::downgrade(&teams);
         Bench { teams, drive, emitted }
     }
@@ -1032,8 +1123,53 @@ mod tests {
             assert!(bench.turns_of("ai4").is_empty());
             assert_eq!(bench.snap().status, TeamStatus::Paused);
 
-            bench.teams.resume("shop").unwrap();
+            bench.teams.resume("shop", &[AgentProfile::copilot()]).unwrap();
             bench.until("the team finishes", |s| s.status == TeamStatus::Finished).await;
+        });
+    }
+
+    #[test]
+    fn a_team_left_by_an_earlier_run_is_picked_up_where_it_stopped() {
+        run(async {
+            let root = std::env::temp_dir().join(format!("coucou-revive-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            let diligent = diligent();
+            // A new session told to carry on does so; otherwise it is the diligent member.
+            let carries_on: Script = Arc::new(move |mate, text| {
+                if let Some(task) = task_in(text, "carry on with: ") {
+                    mate.tool("task_update", json!({ "task": task, "status": "doing" }));
+                    mate.tool("deliver", json!({ "task": task, "locator": "http://localhost:5173/", "summary": "接著做完" }));
+                }
+                diligent(mate, text)
+            });
+
+            // The first run: the plan is made, and Coucou closes while AI 4 is at its task.
+            let first = bench_in(carries_on.clone(), Some(root.clone()));
+            first.drive.held.lock().unwrap().push("ai4".into());
+            first.start(shop(&work_dir()));
+            first.until("AI 4 is at work", |s| s.members[3].status == MemberStatus::Working).await;
+
+            // Coucou again: the team comes back as a record, paused, with nobody behind it.
+            let second = bench_in(carries_on, Some(root.clone()));
+            let loaded = second.teams.load("shop").unwrap();
+            assert!(loaded.detached);
+            assert_eq!(loaded.status, TeamStatus::Paused);
+            assert!(second.teams.recover("shop", "ai4").await.unwrap_err().contains("Press Continue"));
+
+            second.teams.resume("shop", &[AgentProfile::copilot()]).unwrap();
+            assert!(!second.snap().detached);
+            let done = second.until("the team finishes", |s| s.status == TeamStatus::Finished).await;
+            assert_eq!((done.done, done.total), (3, 3));
+
+            // Each new session hears its role again, then where its work stands.
+            let ai4 = second.turns_of("ai4");
+            assert!(ai4[0].starts_with("You are"), "{}", ai4[0]);
+            assert!(ai4[0].contains("picked the team up again") && ai4[0].contains("TASK-01"), "{}", ai4[0]);
+            assert!(second.turns_of("ai1")[0].starts_with("You are"));
+            // The earlier run's record is the same log, carried on.
+            let log = std::fs::read_to_string(root.join("shop").join("events.jsonl")).unwrap();
+            assert!(log.contains("\"interrupted\"") && log.contains("\"resumed\""));
+            let _ = std::fs::remove_dir_all(&root);
         });
     }
 

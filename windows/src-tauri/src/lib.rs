@@ -553,8 +553,9 @@ fn team_pause(teams: State<Arc<Teams>>, team: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn team_resume(teams: State<Arc<Teams>>, team: String) -> Result<(), String> {
-    teams.resume(&team)
+fn team_resume(shared: State<Shared>, teams: State<Arc<Teams>>, team: String) -> Result<(), String> {
+    let profiles = shared.settings.lock().unwrap().agents.clone();
+    teams.resume(&team, &profiles)
 }
 
 /// Pause, and interrupt every turn under way.

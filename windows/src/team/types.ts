@@ -177,6 +177,8 @@ export interface FeedItem {
 
 export interface Snapshot {
   id: string;
+  /** Loaded from an earlier run: no agent stands behind it until it is picked up again. */
+  detached: boolean;
   name: string;
   goal: string;
   workDir: string;

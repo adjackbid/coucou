@@ -156,6 +156,7 @@ function heardWords(text: string): string {
     [/^No task exists yet/, () => "還沒有任務,請馬上建立"],
     [/^You ended your turn, but this is still open/, () => "提醒:手上的工作還沒回報"],
     [/^You were restarted/, () => "你被重新啟動了"],
+    [/^Coucou was closed while the team was working/, () => "Coucou 重新開啟了,從中斷的地方接著做"],
     [/^Every task has been accepted\./, () => "全部驗收完成,請寫最終報告"],
     [/^You asked: [\s\S]*?\nThe user answers: ([\s\S]+)/, (m) => `你的回覆:${m[1]}`],
   ];
