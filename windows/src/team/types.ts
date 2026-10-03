@@ -184,6 +184,16 @@ export interface FeedItem {
   task: string | null;
 }
 
+/** An earlier run of a team — mirror of team::orchestrator::PastRun. */
+export interface PastRun {
+  archivedAt: number;
+  startedAt: number;
+  finishedAt: number;
+  done: number;
+  total: number;
+  status: TeamStatus;
+}
+
 export interface Snapshot {
   id: string;
   /** The last event of the team's log in this picture; never smaller in a later picture of the same run. */

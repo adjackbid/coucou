@@ -135,6 +135,19 @@ pub struct Team {
     show: Show,
 }
 
+/// An earlier run of a team, as the history list shows it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PastRun {
+    /// When its log was put aside (ms): the run's id in the history.
+    pub archived_at: u64,
+    pub started_at: u64,
+    pub finished_at: u64,
+    pub done: usize,
+    pub total: usize,
+    pub status: TeamStatus,
+}
+
 /// Every team this run of Coucou knows about.
 pub struct Teams {
     teams: Mutex<HashMap<String, Arc<Team>>>,
@@ -757,6 +770,31 @@ impl Teams {
         let snapshot = team.snapshot()?;
         self.teams.lock().unwrap().insert(id.to_string(), team);
         Some(snapshot)
+    }
+
+    /// The runs a team's log was started again over, newest first: when each
+    /// was put aside, when it started and ended, how far it got.
+    pub fn history(&self, id: &str) -> Vec<PastRun> {
+        let Some(root) = self.root.as_ref() else { return Vec::new() };
+        Store::earlier(&root.join(id))
+            .into_iter()
+            .filter_map(|(archived_at, file)| {
+                let (state, _) = Store::read(&file).ok()?;
+                let snap = state.snapshot(&BTreeMap::new())?;
+                Some(PastRun { archived_at, started_at: snap.started_at, finished_at: snap.finished_at, done: snap.done, total: snap.total, status: snap.status })
+            })
+            .collect()
+    }
+
+    /// An earlier run as it ended: a picture nobody stands behind.
+    pub fn past(&self, id: &str, archived_at: u64) -> Option<Snapshot> {
+        let root = self.root.as_ref()?;
+        let (_, file) = Store::earlier(&root.join(id)).into_iter().find(|(at, _)| *at == archived_at)?;
+        let (state, seq) = Store::read(&file).ok()?;
+        let mut snap = state.snapshot(&BTreeMap::new())?;
+        snap.seq = seq;
+        snap.detached = true;
+        Some(snap)
     }
 
     /// A member's tool call. The token is the one its bridge was started with.

@@ -69,6 +69,37 @@ impl Store {
         &self.state
     }
 
+    /// An earlier run's log, replayed and left as it was: nothing is
+    /// appended, nothing is changed on disk.
+    pub fn read(file: &Path) -> std::io::Result<(State, u64)> {
+        let text = std::fs::read_to_string(file)?;
+        let mut state = State::default();
+        let mut seq = 0;
+        for line in text.lines().filter(|l| !l.trim().is_empty()) {
+            let Ok(record) = serde_json::from_str::<Record>(line) else { continue };
+            seq = seq.max(record.seq);
+            state.apply(&record);
+        }
+        Ok((state, seq))
+    }
+
+    /// The logs earlier runs left beside the current one (`events-<ms>.jsonl`,
+    /// named after when they were put aside), newest first.
+    pub fn earlier(dir: &Path) -> Vec<(u64, PathBuf)> {
+        let mut runs: Vec<(u64, PathBuf)> = std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok())
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                let ms = name.strip_prefix("events-")?.strip_suffix(".jsonl")?.parse::<u64>().ok()?;
+                Some((ms, e.path()))
+            })
+            .collect();
+        runs.sort_by(|a, b| b.0.cmp(&a.0));
+        runs
+    }
+
     /// Records the event and applies it. A disk that will not take the line
     /// is logged; the team goes on with what it has in memory.
     pub fn append(&mut self, event: Event) {
@@ -166,6 +197,30 @@ mod tests {
         assert!(second.state().tasks.is_empty());
         let kept = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().starts_with("events-")).count();
         assert_eq!(kept, 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn earlier_runs_are_listed_newest_first_and_read_without_changing_them() {
+        let dir = temp("earlier");
+        let mut first = Store::fresh(&dir).unwrap();
+        first.append(Event::Started { config: shop("D:\\shop") });
+        drop(first);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let mut second = Store::fresh(&dir).unwrap();
+        second.append(Event::Started { config: shop("D:\\shop") });
+        drop(second);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let _third = Store::fresh(&dir).unwrap();
+
+        let runs = Store::earlier(&dir);
+        assert_eq!(runs.len(), 2);
+        assert!(runs[0].0 > runs[1].0);
+        let before = std::fs::read_to_string(&runs[0].1).unwrap();
+        let (state, seq) = Store::read(&runs[0].1).unwrap();
+        assert_eq!(seq, 1);
+        assert!(state.config.is_some());
+        assert_eq!(std::fs::read_to_string(&runs[0].1).unwrap(), before);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

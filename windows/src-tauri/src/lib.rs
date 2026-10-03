@@ -669,6 +669,24 @@ fn team_open(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<
     cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// A team's earlier runs, newest first.
+#[tauri::command]
+fn team_history(teams: State<Arc<Teams>>, team: String) -> Vec<team::orchestrator::PastRun> {
+    if !team::is_plain_id(&team) {
+        return Vec::new();
+    }
+    teams.history(&team)
+}
+
+/// One earlier run, as it ended. Read only.
+#[tauri::command]
+fn team_past(teams: State<Arc<Teams>>, team: String, archived_at: u64) -> Result<Snapshot, String> {
+    if !team::is_plain_id(&team) {
+        return Err("There is no such team.".into());
+    }
+    teams.past(&team, archived_at).ok_or_else(|| "That run's log is no longer there.".into())
+}
+
 /// The bytes of a deliverable that is a picture in the team's work folder,
 /// for the Office's wall and drawer. See team::preview_path for what is refused.
 #[tauri::command]
@@ -1128,6 +1146,8 @@ pub fn run() {
             team_join,
             team_open,
             team_preview,
+            team_history,
+            team_past,
             team_open_configs,
             team_save,
             team_new,

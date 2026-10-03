@@ -2,7 +2,7 @@
 // commands that are accepted before they are applied.
 
 import { describe, expect, it, vi } from "vitest";
-import { RealAdapter, teamEntities } from "./adapter-real";
+import { RealAdapter, fileFromSnapshot, teamEntities } from "./adapter-real";
 import { OfficeStore } from "./store";
 import { demoFiles, demoSnapshot } from "../demo";
 import type { Snapshot } from "../types";
@@ -52,6 +52,24 @@ describe("teamEntities", () => {
     expect(teamEntities(shopFile, snap, 1).run.status).toBe("pausing");
     snap.members = snap.members.map((m) => ({ ...m, status: m.status === "working" ? "idle" : m.status }));
     expect(teamEntities(shopFile, snap, 1).run.status).toBe("paused");
+  });
+});
+
+describe("an earlier run", () => {
+  it("is read with the members it had then, in a store of its own", () => {
+    const now = company();
+    const live = new RealAdapter({ pause: vi.fn(), resume: vi.fn(), instruct: vi.fn() });
+    const main = new OfficeStore();
+    main.loadSnapshot(live.snapshot(now.files, now.runs));
+    const old = { ...demoSnapshot(), startedAt: 1000, status: "finished" as const, detached: true };
+    old.members = old.members.slice(0, 2);
+    const past = new OfficeStore();
+    past.loadSnapshot(new RealAdapter({ pause: vi.fn(), resume: vi.fn(), instruct: vi.fn() }).snapshot([fileFromSnapshot(old)], new Map([["shop", old]])));
+    expect(past.members("shop").map((m) => m.memberId)).toEqual(["ai1", "ai2"]);
+    expect(past.team("shop")?.leaderMemberId).toBe("ai1");
+    expect(past.run(past.team("shop")!.currentRunId)?.status).toBe("completed");
+    // The live company is untouched.
+    expect(main.members("shop")).toHaveLength(4);
   });
 });
 

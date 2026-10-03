@@ -10,10 +10,10 @@ import "./office.css";
 import { h } from "../../views/dom";
 import type { Artifact, CommandRecord, MemberSnapshot, Message, TeamRun, Capabilities } from "./contracts";
 import { OfficeStore } from "./store";
-import { RealAdapter } from "./adapter-real";
+import { RealAdapter, fileFromSnapshot } from "./adapter-real";
 import { MockAdapter } from "./adapter-mock";
 import { loadArt, MAX_DESKS, STATUS, TeamScene, wake } from "./scene";
-import type { Snapshot, TeamFile } from "../types";
+import type { PastRun, Snapshot, TeamFile } from "../types";
 
 export interface OfficeHost {
   render(): void;
@@ -25,6 +25,9 @@ export interface OfficeHost {
   openArtifact(teamId: string, ref: string): void;
   /** A deliverable that is a picture, as bytes; rejects when it is not one or cannot be read. */
   preview?(teamId: string, ref: string): Promise<ArrayBuffer>;
+  /** A team's earlier runs, newest first, and one of them as it ended. */
+  history?(teamId: string): Promise<PastRun[]>;
+  past?(teamId: string, archivedAt: number): Promise<Snapshot>;
   pause(teamId: string): Promise<unknown>;
   resume(teamId: string): Promise<unknown>;
   /** Resolves to the message's id; the same request id is sent once. */
@@ -38,7 +41,14 @@ const clock = (iso: string) => {
 };
 
 export class Office {
-  readonly store: OfficeStore;
+  /** The company as it is now. */
+  readonly main: OfficeStore;
+  /** An earlier run being looked at, read only; null for the current one. */
+  private viewing: OfficeStore | null = null;
+  /** What the screens read: the run on screen. */
+  get store(): OfficeStore {
+    return this.viewing ?? this.main;
+  }
   readonly demo: boolean;
   private real: RealAdapter | null = null;
   private mock: MockAdapter | null = null;
@@ -60,24 +70,27 @@ export class Office {
   private files: TeamFile[] = [];
   /** Pictures of deliverables: an object URL, null when there is none to show, or pending. */
   private previews = new Map<string, string | null | "pending">();
+  /** Each team's earlier runs, as last asked; and the one picked, with its record. */
+  private histories = new Map<string, PastRun[] | "pending">();
+  private picked = new Map<string, { at: number; store: OfficeStore | null; error?: string }>();
   private runs = new Map<string, Snapshot>();
 
   constructor(private host: OfficeHost, opts: { demo?: boolean } = {}) {
     this.demo = !!opts.demo;
-    this.store = new OfficeStore(() => this.resync());
+    this.main = new OfficeStore(() => this.resync());
     if (this.demo) {
       this.mock = new MockAdapter();
-      this.store.loadSnapshot(this.mock.snapshot());
-      this.mock.subscribe((e) => this.store.receive(e));
-      this.store.setConnection({ status: "live", lastAppliedSeq: this.store.cursor, lastServerTime: this.store.serverTime });
+      this.main.loadSnapshot(this.mock.snapshot());
+      this.mock.subscribe((e) => this.main.receive(e));
+      this.main.setConnection({ status: "live", lastAppliedSeq: this.main.cursor, lastServerTime: this.main.serverTime });
     } else {
       this.real = new RealAdapter({ pause: (t) => host.pause(t), resume: (t) => host.resume(t), instruct: (t, text, request) => host.instruct(t, text, request) });
     }
-    this.store.onChange(() => {
+    this.main.onChange(() => {
       for (const s of this.scenes.values()) s.update();
       for (const s of this.minis.values()) s.update();
       // A member that went away closes its drawer.
-      if (this.sel && !this.store.member(this.sel.teamId, this.sel.memberId)) {
+      if (this.sel && !this.viewing && !this.main.member(this.sel.teamId, this.sel.memberId)) {
         this.sel = null;
         this.notice = "這位成員已移出團隊。";
       }
@@ -98,19 +111,19 @@ export class Office {
     this.files = files;
     this.runs = runs;
     this.real.settle(runs);
-    if (this.store.cursor < 0) {
-      this.store.loadSnapshot(this.real.snapshot(files, runs));
-      this.store.setConnection({ status: "live", lastAppliedSeq: this.store.cursor, lastServerTime: this.store.serverTime });
+    if (this.main.cursor < 0) {
+      this.main.loadSnapshot(this.real.snapshot(files, runs));
+      this.main.setConnection({ status: "live", lastAppliedSeq: this.main.cursor, lastServerTime: this.main.serverTime });
       return;
     }
     const e = this.real.diff(files, runs);
-    if (e) this.store.receive(e);
+    if (e) this.main.receive(e);
   }
 
   private resync() {
     // The stream skipped or changed scope: start again from a whole picture.
-    if (this.real) queueMicrotask(() => this.store.loadSnapshot(this.real!.snapshot(this.files, this.runs)));
-    else if (this.mock) queueMicrotask(() => this.store.loadSnapshot(this.mock!.snapshot()));
+    if (this.real) queueMicrotask(() => this.main.loadSnapshot(this.real!.snapshot(this.files, this.runs)));
+    else if (this.mock) queueMicrotask(() => this.main.loadSnapshot(this.mock!.snapshot()));
   }
 
   /** The demo's next recorded event. */
@@ -124,7 +137,8 @@ export class Office {
 
   private scene(teamId: string, mini = false): TeamScene {
     const map = mini ? this.minis : this.scenes;
-    let s = map.get(teamId);
+    const key = this.viewing ? `${teamId}#${this.picked.get(teamId)?.at}` : teamId;
+    let s = map.get(key);
     if (!s) {
       s = new TeamScene(teamId, this.store, {
         mini,
@@ -137,7 +151,7 @@ export class Office {
           if (this.sel?.teamId === teamId) this.close(teamId, false);
         },
       });
-      map.set(teamId, s);
+      map.set(key, s);
     }
     s.selected = !mini && this.sel?.teamId === teamId ? this.sel.memberId : null;
     s.bubblesOn = this.bubbles;
@@ -232,6 +246,7 @@ export class Office {
   // ── The company ──────────────────────────────────────────────────────────────
 
   company(): HTMLElement {
+    this.viewing = null;
     const teams = this.store.teams();
     const count = this.store.headcount();
     if (!teams.length) return h("div", { class: "office-empty" }, h("p", { text: "還沒有團隊。按左下角的「新增團隊」開始。" }));
@@ -374,6 +389,8 @@ export class Office {
   // ── A team's office ──────────────────────────────────────────────────────────
 
   team(teamId: string): HTMLElement {
+    const pick = this.picked.get(teamId);
+    this.viewing = pick?.store ?? null;
     const team = this.store.team(teamId);
     if (!team) return h("div", { class: "office-empty", text: "這個團隊還沒有資料。" });
     // A drawer from another team is not this team's business.
@@ -381,14 +398,19 @@ export class Office {
     const run = this.store.run(team.currentRunId);
     const members = this.store.members(teamId);
     const scene = this.scene(teamId);
-    const caps = this.capabilities(run);
+    const past = !!this.viewing;
+    const caps: Capabilities = past
+      ? { canPause: false, canResume: false, canSendInstruction: false, pauseMode: "cooperative", unavailableReasons: { pause: "這是歷史執行", resume: "這是歷史執行", instruction: "這是歷史執行,只能查看" } }
+      : this.capabilities(run);
     const toggles = h(
       "div",
       { class: "office-toggles" },
       h("label", {}, h("input", { type: "checkbox", checked: this.bubbles, onChange: (e: Event) => { this.bubbles = (e.target as HTMLInputElement).checked; this.host.render(); } }), "溝通泡泡"),
       h("label", { title: "只調整畫面動畫,不影響團隊工作" }, h("input", { type: "checkbox", checked: this.calm, onChange: (e: Event) => { this.calm = (e.target as HTMLInputElement).checked; this.host.render(); } }), "減少動態"),
     );
-    const pauseBtn = caps.canPause
+    const pauseBtn = past
+      ? null
+      : caps.canPause
       ? h("button", { class: "btn plain", type: "button", title: "暫停團隊:不再派新回合,正在做的會做完", onClick: () => void this.command(teamId, "pause") }, "暫停團隊")
       : caps.canResume
         ? h("button", { class: "btn primary", type: "button", onClick: () => void this.command(teamId, "resume") }, "繼續")
@@ -416,14 +438,61 @@ export class Office {
       { class: "office office-team" },
       h("div", { class: "office-head" },
         h("div", { class: "office-head-main" }, this.runLabel(run), this.progressBar(teamId), this.demoTag()),
+        this.runPicker(teamId),
         toggles,
         pauseBtn),
+      past ? h("div", { class: "office-stale history", role: "status", text: `歷史執行 · ${this.when(pick!.at)} 收起的紀錄 · 只能查看,不會影響正在進行的工作` }) : null,
+      pick?.error ? h("div", { class: "office-notice", role: "alert", text: pick.error }) : null,
       this.connection(),
       this.notice ? h("div", { class: "office-notice", role: "status", text: this.notice }) : null,
       h("div", { class: "office-body" },
         h("div", { class: "office-main" }, h("div", { class: "office-frame" }, scene.el), extra, roster),
         side),
     );
+  }
+
+  private when(ms: number) {
+    const d = new Date(ms);
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+
+  /** 本輪 or one of the earlier runs, when Coucou keeps any. */
+  private runPicker(teamId: string): HTMLElement | null {
+    if (!this.host.history) return null;
+    const list = this.histories.get(teamId);
+    if (list === undefined) {
+      this.histories.set(teamId, "pending");
+      this.host.history(teamId).then((runs) => { this.histories.set(teamId, runs); if (runs.length) this.host.render(); }, () => this.histories.set(teamId, []));
+      return null;
+    }
+    if (list === "pending" || !list.length) return null;
+    const sel = h("select", { class: "office-run-pick", "aria-label": "執行輪次" },
+      h("option", { value: "", text: "本輪" }),
+      ...list.map((r) => h("option", { value: String(r.archivedAt), text: `歷史 · ${this.when(r.startedAt || r.archivedAt)}${r.total ? ` · ${r.done}/${r.total}` : ""}` }))) as HTMLSelectElement;
+    sel.value = String(this.picked.get(teamId)?.at ?? "");
+    sel.addEventListener("change", () => void this.pickRun(teamId, sel.value ? Number(sel.value) : null));
+    return sel;
+  }
+
+  private async pickRun(teamId: string, at: number | null) {
+    this.sel = null;
+    if (at === null || !this.host.past) {
+      this.picked.delete(teamId);
+      this.host.render();
+      return;
+    }
+    this.picked.set(teamId, { at, store: null });
+    try {
+      const snap = await this.host.past(teamId, at);
+      const file = fileFromSnapshot(snap);
+      const store = new OfficeStore();
+      const runs = new Map([[teamId, snap]]);
+      store.loadSnapshot(new RealAdapter({ pause: async () => {}, resume: async () => {}, instruct: async () => "" }).snapshot([file], runs));
+      this.picked.set(teamId, { at, store });
+    } catch (err) {
+      this.picked.set(teamId, { at, store: null, error: `讀不到這一輪的紀錄:${String(err instanceof Error ? err.message : err)}` });
+    }
+    this.host.render();
   }
 
   /** What happened in the office, newest first: hand-offs, questions, deliveries. */
@@ -510,7 +579,7 @@ export class Office {
         h("button", { class: `tab${this.tab === "work" ? " on" : ""}`, type: "button", role: "tab", "aria-selected": String(this.tab === "work"), onClick: () => { this.tab = "work"; this.host.render(); } }, `成果 (${files.length})`),
         h("button", { class: `tab${this.tab === "talk" ? " on" : ""}`, type: "button", role: "tab", "aria-selected": String(this.tab === "talk"), onClick: () => { this.tab = "talk"; this.host.render(); } }, `對話 (${talk.length})`)),
       this.tab === "talk" ? this.thread(teamId, talk) : this.filesList(teamId, files),
-      this.composer(teamId),
+      this.viewing ? null : this.composer(teamId),
     );
     return el;
   }

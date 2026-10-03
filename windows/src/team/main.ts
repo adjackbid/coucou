@@ -940,7 +940,7 @@ function composer(snap: Snapshot): HTMLElement {
 
 function monitor(snap: Snapshot): HTMLElement {
   // The board and the Office read progress from the same calculation.
-  const shared = office.store.progress(snap.id);
+  const shared = office.main.progress(snap.id);
   const percent = shared.percent ?? 0;
   const minutes = Math.max(0, Math.floor(((snap.finishedAt || Date.now()) - snap.startedAt) / 60_000));
 
@@ -1123,6 +1123,9 @@ const office = new Office(
     },
     openArtifact: (teamId, ref) => void act(() => Bridge.teamOpen(teamId, ref)),
     preview: IS_TAURI ? (teamId, ref) => Bridge.teamPreview(teamId, ref) : undefined,
+    // A plain browser (`npm run dev`) shows one made-up earlier run of the demo team.
+    history: IS_TAURI ? (teamId) => Bridge.teamHistory(teamId) : import.meta.env.DEV ? async (teamId) => (teamId === "shop" ? (await import("./demo")).demoHistory() : []) : undefined,
+    past: IS_TAURI ? (teamId, at) => Bridge.teamPast(teamId, at) : import.meta.env.DEV ? async () => (await import("./demo")).demoPast() : undefined,
     pause: (teamId) => Bridge.teamPause(teamId),
     resume: (teamId) => Bridge.teamResume(teamId),
     instruct: (teamId, text, request) => Bridge.teamInstruct(teamId, "", text, request),

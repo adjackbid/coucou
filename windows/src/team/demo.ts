@@ -3,7 +3,7 @@
 // `?state=waiting` to see a member holding a permission card and another
 // waiting for an answer.
 
-import type { Line, ScreenPatch, Snapshot, TeamFile, TeamConfig } from "./types";
+import type { Line, PastRun, ScreenPatch, Snapshot, TeamFile, TeamConfig } from "./types";
 
 const NOW = Date.now();
 const ago = (minutes: number) => NOW - minutes * 60_000;
@@ -293,4 +293,26 @@ export function demoStream(onScreen: (patch: ScreenPatch) => void, onChange: (sn
       onChange({ ...snap });
     }
   }, 90);
+}
+
+/** An earlier run of the demo team: yesterday's, finished, three members. */
+export function demoHistory(): PastRun[] {
+  const at = NOW - 26 * 60 * 60_000;
+  return [{ archivedAt: at + 2 * 60 * 60_000, startedAt: at, finishedAt: at + 90 * 60_000, done: 3, total: 3, status: "finished" }];
+}
+
+export function demoPast(): Snapshot {
+  const snap = demoSnapshot();
+  const at = NOW - 26 * 60 * 60_000;
+  snap.startedAt = at;
+  snap.finishedAt = at + 90 * 60_000;
+  snap.status = "finished";
+  snap.detached = true;
+  snap.members = snap.members.slice(0, 3).map((m) => ({ ...m, status: "done", phase: null, task: null, waiting: null, activity: "" }));
+  snap.tasks = snap.tasks.slice(0, 3).map((t) => ({ ...t, status: "done", owner: t.owner === "ai4" ? "ai3" : t.owner }));
+  snap.done = 3;
+  snap.total = 3;
+  snap.messages = snap.messages.slice(0, 2);
+  snap.deliverables = [];
+  return snap;
 }

@@ -538,6 +538,20 @@
   color: var(--ink);
 }
 
+.office-stale.history {
+  background: rgba(167, 139, 250, 0.16);
+  color: #c4b5fd;
+}
+
+.office-run-pick {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--lift);
+  color: var(--ink);
+  font: inherit;
+}
+
 .office-side {
   display: flex;
   flex-direction: column;

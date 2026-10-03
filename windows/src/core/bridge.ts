@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentProfile, ModelChoice, Provider, Settings } from "./state";
-import type { Snapshot, TeamConfig, TeamFile } from "../team/types";
+import type { PastRun, Snapshot, TeamConfig, TeamFile } from "../team/types";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -144,6 +144,9 @@ export const Bridge = {
   /** Starts the team a file describes — only ever from an explicit click. */
   teamStart: (file: string) => callOrThrow<Snapshot>("team_start", { file }),
   /** The person writes to the leader (`to` empty) or to one member. */
+  /** A team's earlier runs, newest first; one of them as it ended. */
+  teamHistory: (team: string) => callOrThrow<PastRun[]>("team_history", { team }),
+  teamPast: (team: string, archivedAt: number) => callOrThrow<Snapshot>("team_past", { team, archivedAt }),
   /** A deliverable that is a picture in the team's work folder, as bytes. */
   teamPreview: (team: string, locator: string) => callOrThrow<ArrayBuffer>("team_preview", { team, locator }),
   /** Returns the message's id; the same `request` sent again is not sent twice. */

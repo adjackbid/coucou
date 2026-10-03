@@ -69,6 +69,20 @@ const NEXT: Partial<Record<WorkStatus, string>> = {
   blocked: "等對方回覆",
 };
 
+/** A team file as an earlier run recorded it: who was in it then, who led. */
+export function fileFromSnapshot(snap: Snapshot): TeamFile {
+  const leader = snap.members.find((m) => m.isLeader)?.id ?? snap.members[0]?.id ?? "";
+  return {
+    file: `${snap.id}.json`,
+    problems: [],
+    config: {
+      id: snap.id, name: snap.name, goal: snap.goal, scope: [], workDir: snap.workDir, leader, autoApprove: false,
+      members: snap.members.map((m) => ({ id: m.id, name: m.name, role: m.role, duty: m.duty, agent: m.agent, model: m.model, color: m.color })),
+      links: [], expected: [], directTalk: true, sharedBoard: true, maxTurns: snap.maxTurns,
+    },
+  };
+}
+
 /** One team, as contract entities. */
 export function teamEntities(file: TeamFile, snap: Snapshot | undefined, revision: number) {
   const cfg = file.config!;
