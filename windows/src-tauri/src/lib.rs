@@ -533,8 +533,8 @@ async fn team_start(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, fil
 
 /// The person writes to the leader (`to` empty) or to one member.
 #[tauri::command]
-fn team_instruct(teams: State<Arc<Teams>>, team: String, to: String, text: String) -> Result<(), String> {
-    teams.instruct(&team, &to, &text)
+fn team_instruct(teams: State<Arc<Teams>>, team: String, to: String, text: String, request: Option<String>) -> Result<String, String> {
+    teams.instruct(&team, &to, &text, request.as_deref())
 }
 
 #[tauri::command]

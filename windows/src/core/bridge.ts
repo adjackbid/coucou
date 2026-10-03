@@ -144,7 +144,8 @@ export const Bridge = {
   /** Starts the team a file describes — only ever from an explicit click. */
   teamStart: (file: string) => callOrThrow<Snapshot>("team_start", { file }),
   /** The person writes to the leader (`to` empty) or to one member. */
-  teamInstruct: (team: string, to: string, text: string) => callOrThrow<void>("team_instruct", { team, to, text }),
+  /** Returns the message's id; the same `request` sent again is not sent twice. */
+  teamInstruct: (team: string, to: string, text: string, request?: string) => callOrThrow<string>("team_instruct", { team, to, text, request }),
   /**
    * An image (or any file) for an instruction, from its bytes: copied into the
    * team's folder (.coucou/attachments). Returns its full path there.

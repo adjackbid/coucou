@@ -22,6 +22,11 @@ pub struct Store {
 }
 
 impl Store {
+    /// The last event written or read.
+    pub fn seq(&self) -> u64 {
+        self.seq
+    }
+
     pub fn memory() -> Self {
         Self { file: None, state: State::default(), seq: 0 }
     }

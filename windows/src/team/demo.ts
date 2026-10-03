@@ -137,6 +137,7 @@ export function demoSnapshot(): Snapshot {
   const waiting = new URLSearchParams(location.search).get("state") === "waiting";
   const snapshot: Snapshot = {
     id: "shop",
+    seq: 40,
     detached: false,
     name: config.name,
     goal: config.goal,

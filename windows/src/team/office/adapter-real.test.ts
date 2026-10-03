@@ -31,6 +31,15 @@ describe("teamEntities", () => {
     expect(done.workStatus).toBe("completed");
   });
 
+  it("planning and reviewing come from Coucou's own reading of the board", () => {
+    const snap = demoSnapshot();
+    snap.members[0] = { ...snap.members[0], status: "working", phase: "planning" };
+    snap.members[1] = { ...snap.members[1], status: "working", phase: "reviewing" };
+    const e = teamEntities(shopFile, snap, 1);
+    expect(e.members[0].workStatus).toBe("planning");
+    expect(e.members[1].workStatus).toBe("reviewing");
+  });
+
   it("a team that never ran has a room, idle, with no progress yet", () => {
     const e = teamEntities(docsFile, undefined, 1);
     expect(e.run.status).toBe("idle");
@@ -76,7 +85,7 @@ describe("RealAdapter", () => {
   });
 
   it("an instruction is accepted at once, applied when the leader has it, and a retry is the same command", async () => {
-    const instruct = vi.fn().mockResolvedValue(undefined);
+    const instruct = vi.fn().mockResolvedValue("m-you");
     const a = new RealAdapter({ pause: vi.fn(), resume: vi.fn(), instruct });
     const req = { kind: "instruction" as const, teamId: "shop", runId: "r", clientRequestId: "c1", expectedRunRevision: 1, payload: { text: "先做結帳", target: "leader" as const } };
     const ack = await a.sendCommand(req);
@@ -87,15 +96,21 @@ describe("RealAdapter", () => {
     let snap = a.snapshot(files, runs);
     expect(snap.commands.find((c) => c.commandId === ack.commandId)?.status).toBe("accepted");
     const shop = structuredClone(runs.get("shop")!);
+    // Recorded, not yet read by the leader: applying.
     shop.messages.push({ id: "m-you", from: "you", to: "ai1", text: "先做結帳", task: null, at: Date.now(), heard: false });
     runs.set("shop", shop);
+    a.settle(runs);
+    snap = a.snapshot(files, runs);
+    expect(snap.commands.find((c) => c.commandId === ack.commandId)?.status).toBe("applying");
+    // The leader's next turn heard it: applied.
+    shop.messages[shop.messages.length - 1].heard = true;
     a.settle(runs);
     snap = a.snapshot(files, runs);
     expect(snap.commands.find((c) => c.commandId === ack.commandId)?.status).toBe("applied");
   });
 
   it("a failed command says why and can be retried", async () => {
-    const instruct = vi.fn().mockRejectedValueOnce(new Error("There is no such team.")).mockResolvedValue(undefined);
+    const instruct = vi.fn().mockRejectedValueOnce(new Error("There is no such team.")).mockResolvedValue("m-2");
     const a = new RealAdapter({ pause: vi.fn(), resume: vi.fn(), instruct });
     const req = { kind: "instruction" as const, teamId: "shop", runId: "r", clientRequestId: "c2", expectedRunRevision: 1, payload: { text: "hi", target: "leader" as const } };
     await expect(a.sendCommand(req)).rejects.toThrow("no such team");

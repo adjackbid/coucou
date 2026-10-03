@@ -25,7 +25,8 @@ export interface OfficeHost {
   openArtifact(teamId: string, ref: string): void;
   pause(teamId: string): Promise<unknown>;
   resume(teamId: string): Promise<unknown>;
-  instruct(teamId: string, text: string): Promise<unknown>;
+  /** Resolves to the message's id; the same request id is sent once. */
+  instruct(teamId: string, text: string, request: string): Promise<string>;
 }
 
 const MAX_INSTRUCTION = 2000;
@@ -64,7 +65,7 @@ export class Office {
       this.mock.subscribe((e) => this.store.receive(e));
       this.store.setConnection({ status: "live", lastAppliedSeq: this.store.cursor, lastServerTime: this.store.serverTime });
     } else {
-      this.real = new RealAdapter({ pause: (t) => host.pause(t), resume: (t) => host.resume(t), instruct: (t, text) => host.instruct(t, text) });
+      this.real = new RealAdapter({ pause: (t) => host.pause(t), resume: (t) => host.resume(t), instruct: (t, text, request) => host.instruct(t, text, request) });
     }
     this.store.onChange(() => {
       for (const s of this.scenes.values()) s.update();
@@ -452,7 +453,10 @@ export class Office {
     const caps = this.capabilities(this.store.run(team.currentRunId));
     const s = this.sending.get(teamId);
     const cmd: CommandRecord | undefined = s?.commandId ? this.store.command(s.commandId) : undefined;
-    const state = s?.error ? `失敗:${s.error}` : !s ? "" : !s.commandId ? "送出中…" : cmd?.status === "applied" ? "已套用 · Leader 已收到" : cmd?.status === "failed" ? `失敗:${cmd.errorMessage ?? ""}` : "已接受 · 等待 Leader 收到";
+    const state = s?.error ? `失敗:${s.error}` : !s ? "" : !s.commandId ? "送出中…"
+      : cmd?.status === "applied" ? "已套用 · Leader 已讀到"
+      : cmd?.status === "applying" ? "已記錄 · Leader 下一輪會讀到"
+      : cmd?.status === "failed" ? `失敗:${cmd.errorMessage ?? ""}` : "已接受";
     const leader = this.store.member(teamId, team.leaderMemberId);
     const area = h("textarea", {
       class: "office-input", rows: "2", maxlength: String(MAX_INSTRUCTION), "data-key": `office-instruct-${teamId}`,

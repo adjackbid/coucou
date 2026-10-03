@@ -57,13 +57,8 @@ function workStatus(m: MemberView, snap: Snapshot): WorkStatus {
     case "waitingReply": return "blocked";
     case "waitingDelivery": return snap.status === "paused" ? "paused" : "waiting_dependency";
     case "done": return "completed";
-    case "working": {
-      // Read from the board, never from what the agent wrote: a leader at work
-      // before there is any task is planning; one with hand-ins to look at is reviewing.
-      if (m.isLeader && !snap.tasks.length) return "planning";
-      const reviewing = snap.tasks.some((t) => t.status === "delivered" && (t.deliverTo ?? (m.isLeader ? m.id : null)) === m.id);
-      return reviewing && !m.task ? "reviewing" : "working";
-    }
+    // Coucou reads planning and reviewing from the board, never from what the agent wrote.
+    case "working": return m.phase ?? "working";
     default: return snap.status === "paused" ? "paused" : "idle";
   }
 }
@@ -155,12 +150,14 @@ export class RealAdapter {
   private last: Partial<Bag> = {};
   private revisions = new Map<string, number>();
   private commands = new Map<Id, CommandRecord>();
+  /** Each instruction's message, once Coucou has recorded it. */
+  private messageOf = new Map<Id, string>();
 
   constructor(
     private send: {
       pause: (team: Id) => Promise<unknown>;
       resume: (team: Id) => Promise<unknown>;
-      instruct: (team: Id, text: string) => Promise<unknown>;
+      instruct: (team: Id, text: string, request: string) => Promise<string>;
     },
   ) {}
 
@@ -260,7 +257,7 @@ export class RealAdapter {
     try {
       if (req.kind === "pause") await this.send.pause(req.teamId);
       else if (req.kind === "resume") await this.send.resume(req.teamId);
-      else if (req.payload) await this.send.instruct(req.teamId, req.payload.text);
+      else if (req.payload) this.messageOf.set(commandId, await this.send.instruct(req.teamId, req.payload.text, req.clientRequestId));
     } catch (err) {
       const failed = { ...record, status: "failed" as const, errorCode: "rejected", errorMessage: String(err instanceof Error ? err.message : err), revision: record.revision + 1 };
       this.commands.set(commandId, failed);
@@ -279,8 +276,9 @@ export class RealAdapter {
       if (c.kind === "pause") status = snap.status === "paused" ? (snap.members.some((m) => m.status === "working") ? "applying" : "applied") : status;
       else if (c.kind === "resume") status = snap.status === "running" ? "applied" : status;
       else if (c.kind === "instruction") {
-        const sent = snap.messages.some((m) => m.from === YOU && Date.parse(c.createdAt) - 5000 <= m.at);
-        status = sent ? "applied" : status;
+        // Recorded is applying; the leader having heard it is applied.
+        const msg = snap.messages.find((m) => m.id === this.messageOf.get(c.commandId));
+        status = msg?.heard ? "applied" : msg ? "applying" : status;
       }
       if (status !== c.status) this.commands.set(c.commandId, { ...c, status, revision: c.revision + 1, updatedAt: new Date().toISOString() });
     }

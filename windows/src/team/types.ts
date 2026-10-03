@@ -68,6 +68,8 @@ export interface MemberView {
   color: string;
   isLeader: boolean;
   status: MemberStatus;
+  /** While it works: planning (a leader before any task) or reviewing hand-ins. */
+  phase?: "planning" | "reviewing" | null;
   /** The task it is on, if any. */
   task: string | null;
   waiting: { on: string; what: string; task: string | null } | null;
@@ -184,6 +186,8 @@ export interface FeedItem {
 
 export interface Snapshot {
   id: string;
+  /** The last event of the team's log in this picture; never smaller in a later picture of the same run. */
+  seq: number;
   /** Loaded from an earlier run: no agent stands behind it until it is picked up again. */
   detached: boolean;
   name: string;

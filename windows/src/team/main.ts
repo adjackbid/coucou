@@ -603,7 +603,8 @@ const CROWN = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true
  * the person, and its live screen.
  */
 function desk(snap: Snapshot, m: MemberView): HTMLElement {
-  const status = STATUS[m.status];
+  // Planning and reviewing are kinds of work, said as such.
+  const status = m.phase ? { ...STATUS[m.status], label: m.phase === "planning" ? "規劃中" : "審核中" } : STATUS[m.status];
   const task = m.task ? snap.tasks.find((t) => t.id === m.task) : undefined;
   const { avatar, bubble, screen, pulse } = live.parts(snap, m);
   const big = focused === m.id;
@@ -1123,7 +1124,7 @@ const office = new Office(
     openArtifact: (teamId, ref) => void act(() => Bridge.teamOpen(teamId, ref)),
     pause: (teamId) => Bridge.teamPause(teamId),
     resume: (teamId) => Bridge.teamResume(teamId),
-    instruct: (teamId, text) => Bridge.teamInstruct(teamId, "", text),
+    instruct: (teamId, text, request) => Bridge.teamInstruct(teamId, "", text, request),
   },
   { demo: !IS_TAURI && new URLSearchParams(location.search).get("office") === "mock" },
 );
@@ -1223,6 +1224,8 @@ let firstLoad = true;
 async function start() {
   live.setSaid(said);
   await onEvent<Snapshot>("team-changed", (snap) => {
+    const had = runs.get(snap.id);
+    if (had && had.startedAt === snap.startedAt && snap.seq < had.seq) return;
     runs.set(snap.id, snap);
     live.applySnapshot(snap);
     office.feed(files, runs);

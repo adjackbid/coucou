@@ -536,6 +536,16 @@ pub enum MemberStatus {
     Lost,
 }
 
+/// What a member at work is doing, read from the board: a leader with no
+/// tasks yet is planning; one whose hand-ins are waiting for its review,
+/// with no task of its own under way, is reviewing.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum Phase {
+    Planning,
+    Reviewing,
+}
+
 /// Who a member waits on, and for what.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -586,6 +596,8 @@ pub struct MemberView {
     pub color: String,
     pub is_leader: bool,
     pub status: MemberStatus,
+    /// Planning or reviewing, while it works; nothing otherwise.
+    pub phase: Option<Phase>,
     /// The task it is on, if any.
     pub task: Option<String>,
     pub waiting: Option<Waiting>,
@@ -605,6 +617,9 @@ pub struct MemberView {
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub id: String,
+    /// The last event of the log this picture includes: a later picture of
+    /// the same run never has a smaller one.
+    pub seq: u64,
     /// Loaded from an earlier run: no agent stands behind it until it is
     /// picked up again (or started afresh).
     pub detached: bool,
@@ -669,6 +684,18 @@ impl State {
         (MemberStatus::Idle, current, None)
     }
 
+    fn phase(&self, member: &str, status: MemberStatus) -> Option<Phase> {
+        if status != MemberStatus::Working {
+            return None;
+        }
+        if member == self.leader() && self.tasks.is_empty() {
+            return Some(Phase::Planning);
+        }
+        let doing = self.tasks.iter().any(|t| t.owner == member && t.status == TaskStatus::Doing);
+        let to_review = self.tasks.iter().any(|t| t.status == TaskStatus::Delivered && self.reviewer(t).as_deref() == Some(member));
+        (to_review && !doing).then_some(Phase::Reviewing)
+    }
+
     pub fn snapshot(&self, live: &BTreeMap<String, Live>) -> Option<Snapshot> {
         let config = self.config.as_ref()?;
         let members = config
@@ -689,6 +716,7 @@ impl State {
                     color: if m.color.trim().is_empty() { PALETTE[at % PALETTE.len()].to_string() } else { m.color.clone() },
                     is_leader: m.id == config.leader,
                     status,
+                    phase: self.phase(&m.id, status),
                     task,
                     waiting,
                     activity: l.map(|l| l.activity.clone()).unwrap_or_default(),
@@ -702,6 +730,7 @@ impl State {
             .collect();
         Some(Snapshot {
             id: config.id.clone(),
+            seq: 0,
             detached: false,
             name: config.name.clone(),
             goal: config.goal.clone(),

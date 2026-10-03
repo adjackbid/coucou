@@ -119,6 +119,9 @@ pub struct Team {
     /// Steps an agent's hook is holding until the person answers (agy):
     /// card id → where the answer goes (true: allowed).
     gates: Mutex<HashMap<String, tokio::sync::oneshot::Sender<bool>>>,
+    /// Instructions the person sent, by the window's request id → the
+    /// message they became: sending the same request again sends nothing.
+    requests: Mutex<HashMap<String, String>>,
     /// Members whose current agent session has been told its role. A new
     /// session — the first, after a restart, after a crash — is told again.
     briefed: Mutex<HashSet<String>>,
@@ -181,7 +184,12 @@ impl Team {
     /// it, they stream on their own (`with_screens`).
     pub fn snapshot(&self) -> Option<Snapshot> {
         let live = self.live.lock().unwrap().clone();
-        let mut snapshot = self.store.lock().unwrap().state().snapshot(&live)?;
+        let mut snapshot = {
+            let store = self.store.lock().unwrap();
+            let mut snapshot = store.state().snapshot(&live)?;
+            snapshot.seq = store.seq();
+            snapshot
+        };
         snapshot.detached = !self.has_seats();
         Some(snapshot)
     }
@@ -588,6 +596,7 @@ impl Teams {
             live: Mutex::new(BTreeMap::new()),
             screens: Mutex::new(BTreeMap::new()),
             briefed: Mutex::new(HashSet::new()),
+            requests: Mutex::new(HashMap::new()),
             gates: Mutex::new(HashMap::new()),
             seats: Mutex::new(seats),
             tokens: Mutex::new(tokens),
@@ -634,6 +643,7 @@ impl Teams {
             live: Mutex::new(BTreeMap::new()),
             screens: Mutex::new(BTreeMap::new()),
             briefed: Mutex::new(HashSet::new()),
+            requests: Mutex::new(HashMap::new()),
             gates: Mutex::new(HashMap::new()),
             seats: Mutex::new(seats),
             tokens: Mutex::new(tokens),
@@ -735,6 +745,7 @@ impl Teams {
             live: Mutex::new(BTreeMap::new()),
             screens: Mutex::new(BTreeMap::new()),
             briefed: Mutex::new(HashSet::new()),
+            requests: Mutex::new(HashMap::new()),
             gates: Mutex::new(HashMap::new()),
             seats: Mutex::new(BTreeMap::new()),
             tokens: Mutex::new(BTreeMap::new()),
@@ -758,11 +769,17 @@ impl Teams {
     }
 
     /// The person writes to a member — by default the leader.
-    pub fn instruct(&self, team: &str, to: &str, text: &str) -> Result<(), String> {
+    /// The person writes to the leader (`to` empty) or one member. Returns
+    /// the message's id. A `request` already sent is not sent twice: its
+    /// message's id comes back again.
+    pub fn instruct(&self, team: &str, to: &str, text: &str, request: Option<&str>) -> Result<String, String> {
         let team = self.team(team)?;
         let text = text.trim();
         if text.is_empty() {
-            return Ok(());
+            return Err("There is nothing to send.".into());
+        }
+        if let Some(sent) = request.and_then(|r| team.requests.lock().unwrap().get(r).cloned()) {
+            return Ok(sent);
         }
         let (to, id) = team.with_state(|s| {
             let config = s.config.as_ref();
@@ -771,8 +788,11 @@ impl Teams {
             (known.then_some(to), s.next_message_id())
         });
         let to = to.ok_or("That is not a member of the team.")?;
-        team.record(vec![Event::Message { id, from: YOU.into(), to, text: text.to_string(), task: None }]);
-        Ok(())
+        if let Some(r) = request {
+            team.requests.lock().unwrap().insert(r.to_string(), id.clone());
+        }
+        team.record(vec![Event::Message { id: id.clone(), from: YOU.into(), to, text: text.to_string(), task: None }]);
+        Ok(id)
     }
 
     /// The person answers a member's question.
@@ -1275,9 +1295,18 @@ mod tests {
             bench.drive.held.lock().unwrap().push("ai1".into());
             bench.start(shop(&work_dir()));
             bench.until("the leader is working", |s| s.members[0].status == MemberStatus::Working).await;
+            // Nothing on the board yet: the leader at work is planning; the picture says how far the log goes.
+            let snap = bench.snap();
+            if snap.tasks.is_empty() {
+                assert_eq!(snap.members[0].phase, Some(crate::team::state::Phase::Planning));
+            }
+            assert!(snap.seq > 0);
 
             // Sent while the leader is busy: it waits, it does not interrupt.
-            bench.teams.instruct("shop", "", "首版不要做優惠券").unwrap();
+            let sent = bench.teams.instruct("shop", "", "首版不要做優惠券", Some("req-1")).unwrap();
+            // The window sends it again (a retry): still one message.
+            assert_eq!(bench.teams.instruct("shop", "", "首版不要做優惠券", Some("req-1")).unwrap(), sent);
+            assert_eq!(bench.snap().messages.iter().filter(|m| m.text == "首版不要做優惠券").count(), 1);
             tokio::time::sleep(Duration::from_millis(30)).await;
             assert_eq!(bench.turns_of("ai1").len(), 1);
             assert!(!bench.snap().messages.last().unwrap().heard);
@@ -1285,7 +1314,7 @@ mod tests {
             bench.drive.held.lock().unwrap().clear();
             bench.drive.hold.notify_one();
             bench.until("the leader hears it", |_| bench.turns_of("ai1").iter().any(|t| t.contains("Message from the user:\n首版不要做優惠券"))).await;
-            assert!(bench.teams.instruct("shop", "nobody", "x").is_err());
+            assert!(bench.teams.instruct("shop", "nobody", "x", None).is_err());
         });
     }
 
