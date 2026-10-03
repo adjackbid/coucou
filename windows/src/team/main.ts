@@ -764,13 +764,19 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
   const actions = h("div", { class: "row" });
   if (snap?.status === "running") {
     actions.append(
-      button("暫停", "plain", () => void act(() => Bridge.teamPause(snap.id))),
+      h("button", { class: "btn plain", type: "button", title: "不再開始新的回合;正在做的這一輪會做完", onClick: () => void act(() => Bridge.teamPause(snap.id)) }, "暫停"),
       button("全部中斷", "danger", () => void act(() => Bridge.teamInterrupt(snap.id))),
     );
   } else if (snap?.status === "paused") {
     // A team from an earlier run gets its agents back, and its members
     // their work, where it stopped.
     actions.append(button(snap.detached ? "從中斷處繼續" : "繼續", "primary", () => void act(() => Bridge.teamResume(snap.id))));
+    // Pausing hands out no new turns; the ones under way run to their end.
+    // Whoever is still at it can be stopped now.
+    const busy = snap.members.filter((m) => m.status === "working").length;
+    if (busy && !snap.detached) {
+      actions.append(button(`立刻停下(${busy} 位還在做)`, "danger", () => void act(() => Bridge.teamInterrupt(snap.id))));
+    }
   }
   return h(
     "header",
@@ -781,7 +787,14 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
       h("h1", { "data-drag": "" }, name, snap ? h("span", { class: `state ${snap.status}`, text: TEAM_STATUS[snap.status] }) : null),
       h("p", { class: "dim", "data-drag": "", text: goal ? `${goal} · ${count} 位 AI 成員` : `${count} 位 AI 成員` }),
       snap?.status === "paused" && snap.pausedWhy
-        ? h("p", { class: "paused-why", text: snap.detached ? `${said(snap.pausedWhy)} · 按「從中斷處繼續」接著做,或到「團隊設定」重新開始` : said(snap.pausedWhy) })
+        ? h("p", {
+            class: "paused-why",
+            text: snap.detached
+              ? `${said(snap.pausedWhy)} · 按「從中斷處繼續」接著做,或到「團隊設定」重新開始`
+              : snap.members.some((m) => m.status === "working")
+                ? `${said(snap.pausedWhy)} · 不再開始新的回合;還在做的成員會把這一輪做完,要馬上停請按「立刻停下」`
+                : said(snap.pausedWhy),
+          })
         : null,
     ),
     actions,
