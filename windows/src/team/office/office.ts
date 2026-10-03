@@ -12,7 +12,7 @@ import type { CommandRecord, MemberSnapshot, Message, TeamRun, Capabilities } fr
 import { OfficeStore } from "./store";
 import { RealAdapter } from "./adapter-real";
 import { MockAdapter } from "./adapter-mock";
-import { loadArt, STATUS, TeamScene, wake } from "./scene";
+import { loadArt, MAX_DESKS, STATUS, TeamScene, wake } from "./scene";
 import type { Snapshot, TeamFile } from "../types";
 
 export interface OfficeHost {
@@ -296,7 +296,7 @@ export class Office {
       : caps.canResume
         ? h("button", { class: "btn primary", type: "button", onClick: () => void this.command(teamId, "resume") }, "繼續")
         : h("button", { class: "btn plain", type: "button", disabled: true, title: caps.unavailableReasons.pause ?? "" }, run?.status === "pausing" ? "暫停中…" : "暫停團隊");
-    const extra = members.length > 5 ? h("p", { class: "dim", text: `另外 ${members.length - 5} 位成員還沒有工位(房間最多 5 張桌子),在下方名單裡。` }) : null;
+    const extra = members.length > MAX_DESKS ? h("p", { class: "dim", text: `另外 ${members.length - MAX_DESKS} 位成員還沒有工位(房間最多 ${MAX_DESKS} 張桌子),在下方名單裡。` }) : null;
     const roster = h(
       "div",
       { class: "office-roster", role: "list", "aria-label": "團隊成員" },

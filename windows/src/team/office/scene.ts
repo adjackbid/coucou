@@ -52,14 +52,22 @@ function toScreen(x: number, y: number, z = 0) {
   return { x: H(w.x0 + (y - x) * w.perMetreX), y: H(w.y0 + (x + y) * w.perMetreY - z * w.perMetreZ) };
 }
 
-/** Where members sit, in metres on the floor; members beyond these wait their turn for a bigger room (P1). */
-export const DESKS: { x: number; y: number; facing: "SE" | "SW" }[] = [
-  { x: 1.6, y: 1.1, facing: "SE" },
-  { x: 4.2, y: 1.1, facing: "SE" },
-  { x: 1.1, y: 3.8, facing: "SW" },
-  { x: 3.4, y: 2.9, facing: "SE" },
-  { x: 5.2, y: 2.9, facing: "SE" },
-];
+/**
+ * Where members sit, in metres on the floor: rows of desks, all facing the
+ * same way, like an office: desks side by side form a bench per row. Up
+ * to four take two benches of two; five or six two benches of three. Members beyond six wait for a bigger room (P1).
+ */
+type Desk = { x: number; y: number; facing: "SE" | "SW" };
+const ROWS = [1.1, 3.1];
+export const MAX_DESKS = 6;
+export function desksFor(count: number): Desk[] {
+  // Desks side by side make one long bench per row: 1.4 m apart, as long as a desk.
+  const cols = count <= 4 ? [2.3, 3.7] : [1.6, 3.0, 4.4];
+  const all = ROWS.flatMap((y) => cols.map((x) => ({ x, y, facing: "SE" as const })));
+  // Fill a whole row before the next; two in a row of three sit at its ends.
+  if (count === 5) return [all[0], all[1], all[2], all[3], all[4]];
+  return all.slice(0, Math.max(0, Math.min(count, MAX_DESKS)));
+}
 
 // ── What a status looks like ──────────────────────────────────────────────────
 
@@ -187,8 +195,8 @@ export class TeamScene {
   }
 
   /** The member's place: its desk, or — planning — the whiteboard. */
-  private place(m: MemberSnapshot, i: number) {
-    const desk = DESKS[i];
+  private place(m: MemberSnapshot, i: number, count: number) {
+    const desk = desksFor(count)[i];
     return { desk, standing: m.workStatus === "planning" && art ? art.room.spots.whiteboard : null };
   }
 
@@ -202,9 +210,10 @@ export class TeamScene {
     // Everything per member is drawn afresh; only the Mochis carry over.
     this.stage.querySelectorAll(".office-ws, .office-screen, .office-shadow").forEach((n) => n.remove());
     this.overlay.querySelectorAll(".office-label").forEach((n) => n.remove());
-    members.slice(0, DESKS.length).forEach((m, i) => {
+    const seated = members.slice(0, MAX_DESKS);
+    seated.forEach((m, i) => {
       keep.add(m.memberId);
-      this.drawMember(m, i, m.memberId === team.leaderMemberId);
+      this.drawMember(m, i, seated.length, m.memberId === team.leaderMemberId);
     });
     for (const [id, actor] of this.actors) {
       if (!keep.has(id)) {
@@ -217,9 +226,9 @@ export class TeamScene {
     wake();
   }
 
-  private drawMember(m: MemberSnapshot, i: number, leader: boolean) {
+  private drawMember(m: MemberSnapshot, i: number, count: number, leader: boolean) {
     const a = art!;
-    const { desk, standing } = this.place(m, i);
+    const { desk, standing } = this.place(m, i, count);
     const ws = a.workstations[desk.facing];
     const at = toScreen(desk.x, desk.y);
     const ox = at.x - H(ws.groundPivot[0]);
