@@ -299,15 +299,18 @@ fn copilot_file() -> Value {
 }
 
 /// Coucou's named hook in Antigravity's hooks.json. The command runs through
-/// `cmd /c`, so it is the quoted path and plain arguments, nothing a shell
-/// could read as syntax. Tool events are grouped under a matcher; the others
-/// are flat lists.
+/// `cmd /c`, and Antigravity escapes any quote in it as `\"` on the way —
+/// which cmd does not undo: a quoted path becomes a program called `\"C:\…\"`,
+/// cmd says so in the console's code page, and that text, not being UTF-8,
+/// takes the whole agent turn down. So the path goes unquoted, in its short
+/// (8.3) form when it has a space. Tool events are grouped under a matcher;
+/// the others are flat lists.
 fn antigravity_entry() -> Value {
-    let exe = settings::hook_exe_path().to_string_lossy().to_string();
+    let exe = cmd_safe_path(&settings::hook_exe_path());
     let handler = |event: &str| {
         json!({
             "type": "command",
-            "command": format!("\"{exe}\" --agent antigravity {event}"),
+            "command": format!("{exe} --agent antigravity {event}"),
             "timeout": 10,
         })
     };
@@ -321,6 +324,33 @@ fn antigravity_entry() -> Value {
         entry.insert((*event).to_string(), value);
     }
     Value::Object(entry)
+}
+
+/// A path `cmd /c` reads as one word without quotes: as it is, or its short
+/// (8.3) name when it has a space. Short names can be turned off on a
+/// volume; the path then stays as it is and the entry says why in the log.
+fn cmd_safe_path(path: &std::path::Path) -> String {
+    let long = path.to_string_lossy().to_string();
+    if !long.contains(' ') {
+        return long;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::Storage::FileSystem::GetShortPathNameW;
+        let wide: Vec<u16> = path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let mut buf = vec![0u16; 1024];
+        let n = unsafe { GetShortPathNameW(PCWSTR(wide.as_ptr()), Some(&mut buf)) } as usize;
+        if n > 0 && n < buf.len() {
+            let short = String::from_utf16_lossy(&buf[..n]);
+            if !short.contains(' ') {
+                return short;
+            }
+        }
+    }
+    crate::log::line(format!("hooks: {long} has a space and no short name; Antigravity may not run it"));
+    long
 }
 
 /// Antigravity's hooks.json with Coucou's entry set or removed; every other
@@ -391,10 +421,13 @@ pub fn status(agent: Agent) -> HookStatus {
             })
             .unwrap_or(false),
         Agent::Copilot => read_hook_file(agent).map(|t| t.contains(MARKER)).unwrap_or(false),
+        // An entry from an older Coucou (a quoted path cmd cannot run, and
+        // whose error breaks every Antigravity turn) counts as not installed,
+        // so Settings offers to write the right one — with the diff first.
         Agent::Antigravity => read_hook_file(agent)
             .ok()
             .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            .map(|v| v.get(ANTIGRAVITY_KEY).is_some())
+            .map(|v| v.get(ANTIGRAVITY_KEY) == Some(&antigravity_entry()))
             .unwrap_or(false),
     };
     let hook_path = settings::hook_exe_path();
@@ -787,6 +820,8 @@ mod tests {
         assert!(written["coucou"]["PreToolUse"].is_null(), "PreToolUse decides permissions and must not be hooked");
         assert_eq!(written["coucou"]["PostToolUse"][0]["matcher"], "*");
         assert!(written["coucou"]["Stop"][0]["command"].as_str().unwrap().ends_with("--agent antigravity Stop"));
+        // cmd /c gets it with Antigravity's escaping: a quote would break it.
+        assert!(!written["coucou"]["Stop"][0]["command"].as_str().unwrap().contains('"'));
         assert!(status(Agent::Antigravity).installed);
         let plan = preview(Agent::Antigravity, false).unwrap();
         write(Agent::Antigravity, false, &plan.fingerprint).expect("antigravity uninstall should succeed");
