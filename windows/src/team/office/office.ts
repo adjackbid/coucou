@@ -95,6 +95,13 @@ export class Office {
         this.notice = "這位成員已移出團隊。";
       }
     });
+    // Escape closes the member drawer wherever focus is, unless a field is being typed in.
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || !this.sel) return;
+      const t = e.target as HTMLElement;
+      if (t.closest("input, textarea, select") && !t.closest(".office-drawer")) return;
+      this.close(this.sel.teamId);
+    });
     void loadArt().then(() => {
       for (const s of [...this.scenes.values(), ...this.minis.values()]) s.el.remove();
       this.scenes.clear();

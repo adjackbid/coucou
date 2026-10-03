@@ -25,7 +25,11 @@ interface StationArt {
 export interface SceneArt {
   room: { file: string; artifactSlots: [number, number][][]; whiteboardQuad: [number, number][]; spots: Record<string, [number, number]> };
   workstations: Record<"SE" | "SW", StationArt>;
-  props: { meetingTable: { file: string; canvas: [number, number]; groundPivot: [number, number]; at: [number, number] } };
+  props: {
+    meetingTable: { file: string; canvas: [number, number]; groundPivot: [number, number]; at: [number, number] };
+    /** The lounge: a sofa whose seats take members with nothing to do. */
+    sofa?: { file: string; canvas: [number, number]; groundPivot: [number, number]; seats: [number, number][]; at: [number, number] };
+  };
   worldToScreen: { x0: number; y0: number; perMetreX: number; perMetreY: number; perMetreZ: number };
 }
 
@@ -198,6 +202,16 @@ export class TeamScene {
         style: `left:${at.x - H(mt.groundPivot[0])}px;top:${at.y - H(mt.groundPivot[1])}px;width:${H(mt.canvas[0])}px;z-index:${this.depth(...mt.at)}`,
       }),
     );
+    const sofa = a.props.sofa;
+    if (sofa) {
+      const s = toScreen(...sofa.at);
+      this.stage.append(
+        h("img", {
+          class: "office-layer", src: `/office/${sofa.file}`, alt: "", draggable: "false",
+          style: `left:${s.x - H(sofa.groundPivot[0])}px;top:${s.y - H(sofa.groundPivot[1])}px;width:${H(sofa.canvas[0])}px;z-index:${this.depth(...sofa.at)}`,
+        }),
+      );
+    }
   }
 
   /** Puts a reading-size element at a point of the room. */
@@ -257,10 +271,26 @@ export class TeamScene {
     }
   }
 
-  /** The member's place: its desk, or — planning — the whiteboard. */
+  /**
+   * The member's place: its desk — kept, so it never moves desks — or,
+   * planning, the whiteboard; with nothing to do, a seat in the lounge.
+   */
   private place(m: MemberSnapshot, i: number, count: number) {
     const desk = desksFor(count)[i];
-    return { desk, standing: m.workStatus === "planning" && art ? art.room.spots.whiteboard : null };
+    const standing = m.workStatus === "planning" && art ? art.room.spots.whiteboard : null;
+    const lounge = m.workStatus === "idle" ? this.lounge.get(m.memberId) ?? null : null;
+    return { desk, standing, lounge };
+  }
+
+  /** Who sits where on the sofa this time round: idle members in order, as many as it seats. */
+  private lounge = new Map<string, { x: number; y: number }>();
+  private seatLounge(members: MemberSnapshot[]) {
+    this.lounge.clear();
+    const sofa = art?.props.sofa;
+    if (!sofa) return;
+    const at = toScreen(...sofa.at);
+    const idle = members.filter((m) => m.workStatus === "idle").slice(0, sofa.seats.length);
+    idle.forEach((m, i) => this.lounge.set(m.memberId, { x: at.x - H(sofa.groundPivot[0]) + H(sofa.seats[i][0]), y: at.y - H(sofa.groundPivot[1]) + H(sofa.seats[i][1]) }));
   }
 
   /** Read the store again and bring the scene up to it. */
@@ -275,6 +305,7 @@ export class TeamScene {
     this.overlay.querySelectorAll(".office-label").forEach((n) => n.remove());
     this.drawWalls();
     const seated = members.slice(0, MAX_DESKS);
+    this.seatLounge(seated);
     seated.forEach((m, i) => {
       keep.add(m.memberId);
       this.drawMember(m, i, seated.length, m.memberId === team.leaderMemberId);
@@ -292,7 +323,7 @@ export class TeamScene {
 
   private drawMember(m: MemberSnapshot, i: number, count: number, leader: boolean) {
     const a = art!;
-    const { desk, standing } = this.place(m, i, count);
+    const { desk, standing, lounge } = this.place(m, i, count);
     const ws = a.workstations[desk.facing];
     const at = toScreen(desk.x, desk.y);
     const ox = at.x - H(ws.groundPivot[0]);
@@ -326,8 +357,9 @@ export class TeamScene {
     this.stage.append(h("img", { class: "office-layer office-ws", src: `/office/${ws.layers[1]}`, alt: "", draggable: "false", style: `left:${ox}px;top:${oy}px;width:${W}px;height:${Ht}px;z-index:${z + 3}` }));
 
     // The Mochi: on its chair, or standing at the whiteboard.
-    const seat = standing ? toScreen(standing[0], standing[1]) : local(ws.actorBottom);
-    const seatZ = standing ? this.depth(standing[0], standing[1]) + 4 : z + 4;
+    const sofaAt = art!.props.sofa?.at;
+    const seat = standing ? toScreen(standing[0], standing[1]) : lounge ?? local(ws.actorBottom);
+    const seatZ = standing ? this.depth(standing[0], standing[1]) + 4 : lounge && sofaAt ? this.depth(...sofaAt) + 4 : z + 4;
     const actor = this.actor(m, color);
     const size = actor.size;
     const bottom = seat.y + (standing ? 0 : BODY * 0.06);
@@ -335,7 +367,7 @@ export class TeamScene {
     actor.canvas.classList.toggle("selected", sel);
     if (!actor.canvas.isConnected) this.stage.append(actor.canvas);
     const screenMid = (quad[0].x + quad[1].x) / 2;
-    actor.yaw = standing ? 0.5 : screenMid < seat.x ? -0.42 : 0.42;
+    actor.yaw = standing ? 0.5 : lounge ? 0 : screenMid < seat.x ? -0.42 : 0.42;
     this.pose(actor, m.workStatus);
     if (standing) this.stage.append(h("div", { class: "office-shadow small", style: `left:${seat.x}px;top:${seat.y}px;z-index:${seatZ - 1}` }));
 
