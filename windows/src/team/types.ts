@@ -6,6 +6,8 @@ export interface MemberConfig {
   role: string;
   duty: string;
   agent: string;
+  /** Instead of the agent's own; empty for its default. */
+  model?: string;
   color: string;
 }
 
@@ -62,6 +64,7 @@ export interface MemberView {
   role: string;
   duty: string;
   agent: string;
+  model: string;
   color: string;
   isLeader: boolean;
   status: MemberStatus;

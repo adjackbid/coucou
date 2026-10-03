@@ -343,7 +343,12 @@ pub async fn test(provider: &Provider) -> Result<String, String> {
 /// The models the endpoint offers, for the settings window's drop-down. Both
 /// shapes answer `GET /v1/models` with `{"data":[{"id":…}]}`.
 pub async fn models(provider: &Provider) -> Result<Vec<String>, String> {
-    let key = provider.secret();
+    models_with_key(provider, provider.secret()).await
+}
+
+/// The same, with the key handed in: an agent's endpoint keeps its key under
+/// the agent, not under a provider.
+pub async fn models_with_key(provider: &Provider, key: Option<String>) -> Result<Vec<String>, String> {
     if key.is_none() && provider.needs_key() {
         return Err("Save the API key first.".into());
     }

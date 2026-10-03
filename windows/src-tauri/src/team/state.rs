@@ -563,6 +563,8 @@ pub struct MemberView {
     pub role: String,
     pub duty: String,
     pub agent: String,
+    /// The model it was told to run; empty for the agent's own.
+    pub model: String,
     pub color: String,
     pub is_leader: bool,
     pub status: MemberStatus,
@@ -655,6 +657,7 @@ impl State {
                     role: m.role.clone(),
                     duty: m.duty.clone(),
                     agent: m.agent.clone(),
+                    model: m.model.clone(),
                     color: m.color.clone(),
                     is_leader: m.id == config.leader,
                     status,

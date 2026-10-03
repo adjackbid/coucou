@@ -414,6 +414,7 @@ impl Teams {
                     ]),
                 }],
                 auto: config.auto_approve.then(|| Scope::new(&config.work_dir)),
+                model: Some(member.model.trim().to_string()).filter(|m| !m.is_empty()),
             };
             seats.insert(member.id.clone(), Seat { key: seat_key(&config.id, &member.id), profile, launch });
             tokens.insert(member.id.clone(), secret);

@@ -84,7 +84,14 @@ pub fn mcp_args(servers: &[McpServer]) -> Vec<String> {
 /// `initialize`, `initialized`, `thread/start`. The thread asks before
 /// anything that is not plainly safe ("untrusted"), so every step that
 /// matters reaches the rules or the card, and writes stay in the folder.
-pub async fn setup(running: &mut Running, key: &str, cwd: &std::path::Path, launch: &Launch, timeout: Duration) -> Result<(), String> {
+pub async fn setup(
+    running: &mut Running,
+    key: &str,
+    cwd: &std::path::Path,
+    launch: &Launch,
+    model: Option<String>,
+    timeout: Duration,
+) -> Result<(), String> {
     acp::request(
         running,
         "initialize",
@@ -96,12 +103,11 @@ pub async fn setup(running: &mut Running, key: &str, cwd: &std::path::Path, laun
     )
     .await?;
     acp::notify(&running.writer, "initialized", json!({})).await?;
-    let started = acp::request(
-        running,
-        "thread/start",
-        json!({ "cwd": cwd.to_string_lossy(), "approvalPolicy": "untrusted", "sandbox": "workspace-write" }),
-        timeout,
-    )
+    let mut params = json!({ "cwd": cwd.to_string_lossy(), "approvalPolicy": "untrusted", "sandbox": "workspace-write" });
+    if let Some(m) = model {
+        params["model"] = json!(m);
+    }
+    let started = acp::request(running, "thread/start", params, timeout)
     .await
     .map_err(|e| {
         if e.to_lowercase().contains("auth") || e.to_lowercase().contains("login") {
@@ -384,6 +390,7 @@ mod tests {
             env: BTreeMap::new(),
             cwd: String::new(),
             protocol: Protocol::Codex,
+            model: String::new(),
         }
     }
 
@@ -475,6 +482,15 @@ mod tests {
 
     /// The real `codex app-server`: handshake and a thread, no turn (so no
     /// model is called). `cargo test -p coucou codex -- --ignored`.
+    /// The real Codex's model list. `cargo test -p coucou codex -- --ignored`.
+    #[test]
+    #[ignore]
+    fn the_real_codex_lists_its_models() {
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let models = runtime.block_on(Agents::default().models(&codex_profile())).expect("model/list");
+        assert!(!models.is_empty());
+    }
+
     #[test]
     #[ignore]
     fn the_real_codex_shakes_hands_and_opens_a_thread() {

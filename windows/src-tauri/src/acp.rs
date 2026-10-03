@@ -27,6 +27,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 use tokio::process::{Child, Command};
 use tokio::sync::{oneshot, Mutex as AsyncMutex};
 
+use crate::claude::{ClaudeState, ModelChoice};
 use crate::codex::CodexState;
 use crate::island::WINDOW_LABEL;
 use crate::log;
@@ -54,6 +55,8 @@ pub enum Protocol {
     Acp,
     /// Codex's app server (`codex app-server`), see codex.rs.
     Codex,
+    /// Claude Code's stream-json protocol, the one the Agent SDK speaks; see claude.rs.
+    Claude,
 }
 
 /// A coding agent the island can start and talk to.
@@ -76,6 +79,10 @@ pub struct AgentProfile {
     pub cwd: String,
     #[serde(default)]
     pub protocol: Protocol,
+    /// The model it runs, unless a team member names another. Empty: the
+    /// agent's own default.
+    #[serde(default)]
+    pub model: String,
 }
 
 impl AgentProfile {
@@ -89,6 +96,7 @@ impl AgentProfile {
             env: BTreeMap::new(),
             cwd: String::new(),
             protocol: Protocol::Acp,
+            model: String::new(),
         }
     }
 
@@ -135,6 +143,19 @@ pub struct Launch {
     /// Rules that answer permission requests on their own inside this folder;
     /// what they do not allow still reaches a person. `None`: always a person.
     pub auto: Option<Scope>,
+    /// The model, instead of the profile's.
+    pub model: Option<String>,
+}
+
+/// The model a session runs: the launch's, else the profile's, else the agent's own default.
+fn model_of(profile: &AgentProfile, launch: &Launch) -> Option<String> {
+    launch
+        .model
+        .as_deref()
+        .map(str::trim)
+        .filter(|m| !m.is_empty())
+        .or_else(|| Some(profile.model.trim()).filter(|m| !m.is_empty()))
+        .map(str::to_string)
 }
 
 // ── What a session says ───────────────────────────────────────────────────────
@@ -224,6 +245,7 @@ pub(crate) struct Running {
     /// Cleared by the reader when the agent closes its output.
     alive: Arc<AtomicBool>,
     pub(crate) codex: Arc<CodexState>,
+    pub(crate) claude: Arc<ClaudeState>,
 }
 
 /// One session's place: the lock that keeps its turns in order, and the agent
@@ -273,9 +295,22 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
 
     let mut cmd = Command::new(&exe);
     cmd.args(&profile.args);
-    // Codex takes its MCP servers as configuration, not from the thread.
-    if profile.protocol == Protocol::Codex {
-        cmd.args(crate::codex::mcp_args(&launch.mcp_servers));
+    let model = model_of(profile, launch);
+    match profile.protocol {
+        // Codex takes its MCP servers as configuration, not from the thread.
+        Protocol::Codex => {
+            cmd.args(crate::codex::mcp_args(&launch.mcp_servers));
+        }
+        Protocol::Claude => {
+            cmd.args(crate::claude::args(model.as_deref(), &launch.mcp_servers));
+        }
+        // Copilot CLI reads its model from the environment, whichever
+        // provider it talks to.
+        Protocol::Acp => {
+            if let Some(m) = &model {
+                cmd.env("COPILOT_MODEL", m);
+            }
+        }
     }
     cmd
         .current_dir(&cwd)
@@ -299,6 +334,25 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
     let stdin = child.stdin.take().ok_or("no stdin")?;
     let stdout = child.stdout.take().ok_or("no stdout")?;
     Ok(Transport { reader: Box::new(stdout), writer: Box::new(stdin), child: Some(child) })
+}
+
+/// Copilot CLI on its own endpoint (the `cg` way): the endpoint's list. On a
+/// GitHub login it lists nothing here, and the model is typed.
+async fn copilot_models(profile: &AgentProfile) -> Result<Vec<ModelChoice>, String> {
+    let base = profile.env.get("COPILOT_PROVIDER_BASE_URL").map(|s| s.trim()).filter(|s| !s.is_empty() && !s.contains('…'));
+    let Some(base) = base else {
+        return Err("This agent does not list its models here; type the model's name.".into());
+    };
+    let secret = secrets::get(&profile.secret_key()).unwrap_or_default();
+    let key = profile.env.get("COPILOT_PROVIDER_API_KEY").map(|v| v.replace("{secret}", &secret)).filter(|k| !k.trim().is_empty());
+    let mut provider = crate::llm::Provider::anthropic("");
+    provider.id = format!("agent-{}", profile.id);
+    provider.name = profile.name.clone();
+    provider.kind = "openai".into();
+    provider.base_url = base.to_string();
+    provider.auth = if key.is_some() { "bearer".into() } else { "none".into() };
+    let ids = crate::llm::models_with_key(&provider, key).await?;
+    Ok(ids.into_iter().map(|id| ModelChoice { label: id.clone(), id }).collect())
 }
 
 /// Stops the agent and everything under it. An npm shim is a tree —
@@ -328,6 +382,8 @@ pub(crate) struct Route {
     pub(crate) auto: Option<Scope>,
     /// Set for a Codex session: its lines are read by codex.rs.
     codex: Option<Arc<CodexState>>,
+    /// Set for a Claude Code session: its lines are read by claude.rs.
+    claude: Option<Arc<ClaudeState>>,
 }
 
 /// Brings the agent up, runs `initialize` and `session/new`, and keeps it.
@@ -337,6 +393,7 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
     let pending: PendingMap = Default::default();
     let alive = Arc::new(AtomicBool::new(true));
     let codex = Arc::new(CodexState::default());
+    let claude = Arc::new(ClaudeState::default());
 
     // The reader: responses settle the pending requests, notifications go to
     // the sink, and the agent's own requests to us are answered here.
@@ -348,6 +405,7 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
             writer: writer.clone(),
             auto: launch.auto.clone(),
             codex: (profile.protocol == Protocol::Codex).then(|| codex.clone()),
+            claude: (profile.protocol == Protocol::Claude).then(|| claude.clone()),
         };
         let alive = alive.clone();
         tokio::spawn(async move {
@@ -374,6 +432,7 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
         next_id: AtomicU64::new(1),
         alive,
         codex,
+        claude,
     };
 
     let setup = setup(&mut running, key, profile, launch).await;
@@ -385,9 +444,13 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
 }
 
 async fn setup(running: &mut Running, key: &str, profile: &AgentProfile, launch: &Launch) -> Result<(), String> {
-    if profile.protocol == Protocol::Codex {
-        let cwd = working_dir(profile, launch);
-        return crate::codex::setup(running, key, &cwd, launch, SETUP_TIMEOUT).await;
+    match profile.protocol {
+        Protocol::Codex => {
+            let cwd = working_dir(profile, launch);
+            return crate::codex::setup(running, key, &cwd, launch, model_of(profile, launch), SETUP_TIMEOUT).await;
+        }
+        Protocol::Claude => return crate::claude::setup(running, key, launch, SETUP_TIMEOUT).await,
+        Protocol::Acp => {}
     }
     let init = request(
         running,
@@ -501,6 +564,11 @@ fn permission_reply(request_id: &Value, option_id: Option<&str>) -> String {
 
 /// One line from the agent.
 async fn dispatch(route: &Route, msg: Value) {
+    // Claude Code's lines are not JSON-RPC at all.
+    if let Some(state) = route.claude.clone() {
+        crate::claude::dispatch(route, &state, msg).await;
+        return;
+    }
     let method = msg.get("method").and_then(Value::as_str);
     let id = msg.get("id").cloned();
     let key = &route.key;
@@ -658,8 +726,10 @@ impl Agents {
             }
         };
 
-        if running.profile.protocol == Protocol::Codex {
-            return crate::codex::prompt(&running, text, TURN_TIMEOUT).await;
+        match running.profile.protocol {
+            Protocol::Codex => return crate::codex::prompt(&running, text, TURN_TIMEOUT).await,
+            Protocol::Claude => return crate::claude::prompt(&running, text, TURN_TIMEOUT).await,
+            Protocol::Acp => {}
         }
         let result = request(
             &running,
@@ -685,6 +755,7 @@ impl Agents {
         let running = self.running(key).ok_or("that agent is not running")?;
         let reply = match running.profile.protocol {
             Protocol::Codex => crate::codex::permission_reply(&request_id, option_id.as_deref()),
+            Protocol::Claude => crate::claude::permission_reply(&running.claude, &request_id, option_id.as_deref()),
             Protocol::Acp => permission_reply(&request_id, option_id.as_deref()),
         };
         write_line(&running.writer, &reply).await
@@ -693,8 +764,10 @@ impl Agents {
     /// Interrupts the current turn.
     pub async fn cancel(&self, key: &str) -> Result<(), String> {
         let running = self.running(key).ok_or("that agent is not running")?;
-        if running.profile.protocol == Protocol::Codex {
-            return crate::codex::cancel(&running).await;
+        match running.profile.protocol {
+            Protocol::Codex => return crate::codex::cancel(&running).await,
+            Protocol::Claude => return crate::claude::cancel(&running).await,
+            Protocol::Acp => {}
         }
         notify(&running.writer, "session/cancel", json!({ "sessionId": running.session_id })).await
     }
@@ -713,6 +786,37 @@ impl Agents {
             stop(&old).await;
             log::line(format!("acp {key}: reset"));
         }
+    }
+
+    /// The models an agent offers, for the drop-down beside a team member.
+    /// Codex and Claude Code are asked (a handshake, no prompt: nothing is
+    /// spent); Copilot CLI on its own endpoint lists what the endpoint has.
+    pub async fn models(&self, profile: &AgentProfile) -> Result<Vec<ModelChoice>, String> {
+        if profile.protocol == Protocol::Acp {
+            return copilot_models(profile).await;
+        }
+        let nowhere: Sink = Arc::new(|_| {});
+        let running = start(&self.opener, &nowhere, &format!("models:{}", profile.id), profile, &Launch::default()).await?;
+        let listed = match profile.protocol {
+            Protocol::Claude => Ok(running.claude.models.lock().unwrap().clone()),
+            _ => request(&running, "model/list", json!({}), SETUP_TIMEOUT).await.map(|v| {
+                v.get("data")
+                    .and_then(Value::as_array)
+                    .map(|list| {
+                        list.iter()
+                            .filter(|m| !m.get("hidden").and_then(Value::as_bool).unwrap_or(false))
+                            .filter_map(|m| {
+                                let id = m.get("id").and_then(Value::as_str)?.to_string();
+                                let label = m.get("displayName").and_then(Value::as_str).unwrap_or(&id).to_string();
+                                Some(ModelChoice { id, label })
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            }),
+        };
+        stop(&running).await;
+        listed
     }
 
     /// The settings window's "Test": start, handshake, report, stop.

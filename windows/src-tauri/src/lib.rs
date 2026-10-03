@@ -1,6 +1,7 @@
 // Coucou for Windows — app wiring and the commands the island calls.
 
 mod acp;
+mod claude;
 mod codex;
 mod files;
 mod folder;
@@ -663,6 +664,12 @@ fn team_open_configs() {
     let _ = Command::new("explorer").arg(dir).spawn();
 }
 
+/// The models an agent offers, for the drop-downs in Settings and Teamwork.
+#[tauri::command]
+async fn agent_models(agents: State<'_, Arc<Agents>>, profile: AgentProfile) -> Result<Vec<claude::ModelChoice>, String> {
+    agents.models(&profile).await
+}
+
 #[tauri::command]
 fn chat_reset(chat: State<Chat>) {
     chat.reset();
@@ -977,6 +984,7 @@ pub fn run() {
             acp_cancel,
             acp_reset,
             acp_test,
+            agent_models,
             team_files,
             team_snapshots,
             team_start,

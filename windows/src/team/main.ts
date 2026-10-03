@@ -9,7 +9,7 @@
 
 import "./team.css";
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
-import type { AgentProfile } from "../core/state";
+import type { AgentProfile, ModelChoice } from "../core/state";
 import { h, clear } from "../views/dom";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
@@ -33,6 +33,8 @@ let trouble = "";
 let recipient = "";
 /** What is typed in each field, so drawing again does not lose it. */
 const drafts = new Map<string, string>();
+/** The models each agent offers, asked once per window: agent id → list (or why not). */
+const modelLists = new Map<string, ModelChoice[] | string>();
 
 const YOU = "you";
 /** Coucou's own accents, for members that were given no colour. */
@@ -321,6 +323,28 @@ function setup(file: TeamFile): HTMLElement {
       render();
     });
     const isLeader = config.leader === m.id;
+    const profile = agents.find((a) => a.id === m.agent);
+    const listId = `models-${at}`;
+    const list = h("datalist", { id: listId }) as HTMLDataListElement;
+    const known = modelLists.get(m.agent);
+    if (Array.isArray(known)) for (const c of known) list.append(h("option", { value: c.id, text: c.label }));
+    const model = bound("input", `m${at}.model`, m.model ?? "", (v) => (m.model = v.trim()), {
+      placeholder: profile?.model ? `模型:${profile.model}(代理預設)` : "模型:代理預設",
+      list: listId,
+      title: typeof known === "string" ? known : "留空就用代理自己的預設模型",
+    });
+    // The list is asked for the first time the field is used: a handshake
+    // with the agent, nothing spent.
+    model.addEventListener("focus", () => {
+      if (!profile || modelLists.has(profile.id)) return;
+      modelLists.set(profile.id, "載入中…");
+      Bridge.agentModels(profile)
+        .then((found) => {
+          modelLists.set(profile.id, found);
+          for (const c of found) list.append(h("option", { value: c.id, text: c.label }));
+        })
+        .catch((err) => modelLists.set(profile.id, String(err).replace(/^Error:\s*/, "")));
+    });
     members.append(
       h(
         "div",
@@ -336,6 +360,7 @@ function setup(file: TeamFile): HTMLElement {
             bound("input", `m${at}.role`, m.role, (v) => (m.role = v), { placeholder: "角色,例如:網站開發" }),
             agent,
           ),
+          h("div", { class: "row nowrap" }, model, list),
           bound("input", `m${at}.duty`, m.duty, (v) => (m.duty = v), { placeholder: "職責:這位成員負責什麼" }),
         ),
         h(
@@ -500,7 +525,7 @@ function memberCard(snap: Snapshot, m: MemberView): HTMLElement {
   }
 
   card.append(
-    h("footer", {}, h("span", { class: "dim", text: m.duty }), h("span", { class: "chip agent", title: "使用的代理 · 已進行的回合數", text: `${m.agent} · ${m.turns} 回合` })),
+    h("footer", {}, h("span", { class: "dim", text: m.duty }), h("span", { class: "chip agent", title: "使用的代理與模型 · 已進行的回合數", text: `${m.agent}${m.model ? ` · ${m.model}` : ""} · ${m.turns} 回合` })),
   );
   return card;
 }

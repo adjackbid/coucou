@@ -76,6 +76,9 @@ pub struct MemberConfig {
     pub duty: String,
     /// The agent profile (Settings → Agents) this member runs as.
     pub agent: String,
+    /// The model, instead of the agent's own. Empty: the agent's.
+    #[serde(default)]
+    pub model: String,
     #[serde(default)]
     pub color: String,
 }
@@ -202,6 +205,7 @@ pub(crate) mod fixtures {
             role: role.into(),
             duty: String::new(),
             agent: "copilot".into(),
+            model: String::new(),
             color: String::new(),
         };
         let link = |from: &str, to: &str, kind, what: &str| Link { from: from.into(), to: to.into(), kind, what: what.into() };

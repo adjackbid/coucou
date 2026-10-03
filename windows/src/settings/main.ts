@@ -560,6 +560,10 @@ const AGENT_PRESETS: { label: string; make: () => AgentProfile }[] = [
     make: () => ({ id: "", name: "Codex", command: "codex", args: ["app-server"], env: {}, cwd: "", protocol: "codex" }),
   },
   {
+    label: "Claude Code (your Claude login)",
+    make: () => ({ id: "", name: "Claude Code", command: "claude", args: [], env: {}, cwd: "", protocol: "claude" }),
+  },
+  {
     label: "Copilot CLI with your own endpoint (BYOK)",
     make: () => ({
       ...DEFAULT_AGENT, id: "", name: "Copilot (BYOK)",
@@ -590,7 +594,7 @@ function agentsSection(present: Record<string, boolean>): HTMLElement {
     h("h2", {}, h("span", { text: "Agents" })),
     h("div", {
       class: "hint",
-      text: "Coding agents the island can start and drive itself — over the Agent Client Protocol (Copilot CLI, with GitHub or your own endpoint) or Codex's app server. Pick one in the chat bar and your question goes to it; in Teamwork, members run as one of these. Its tool calls show up as it works, and anything it needs permission for asks on the island. Keys go in the Windows Credential Manager; write {secret} where a key belongs in the environment.",
+      text: "Coding agents the island can start and drive itself — over the Agent Client Protocol (Copilot CLI, with GitHub or your own endpoint), Codex's app server, or Claude Code's stream-json. Pick one in the chat bar and your question goes to it; in Teamwork, members run as one of these. Its tool calls show up as it works, and anything it needs permission for asks on the island. Keys go in the Windows Credential Manager; write {secret} where a key belongs in the environment.",
     }),
     list,
   );
@@ -629,9 +633,34 @@ function agentsSection(present: Record<string, boolean>): HTMLElement {
     });
 
     const protocol = h("select", { title: "How Coucou talks to it" }) as HTMLSelectElement;
-    protocol.append(h("option", { value: "acp", text: "ACP" }), h("option", { value: "codex", text: "Codex app-server" }));
+    protocol.append(
+      h("option", { value: "acp", text: "ACP" }),
+      h("option", { value: "codex", text: "Codex app-server" }),
+      h("option", { value: "claude", text: "Claude Code (stream-json)" }),
+    );
     protocol.value = a.protocol ?? "acp";
     protocol.addEventListener("change", () => { live().protocol = protocol.value as AgentProfile["protocol"]; void save(); });
+    // The model it runs unless a team member names another. The list is the
+    // agent's own: asked with a handshake, so nothing is spent.
+    const modelList = h("datalist", { id: `models-${a.id}` }) as HTMLDataListElement;
+    const model = h("input", { type: "text", value: a.model ?? "", placeholder: "its own default", list: `models-${a.id}`, style: "width:240px", spellcheck: "false" }) as HTMLInputElement;
+    model.addEventListener("change", () => { live().model = model.value.trim(); void save(); });
+    const listModels = h("button", { text: "List models" });
+    listModels.addEventListener("click", async () => {
+      listModels.disabled = true;
+      clear(feedback);
+      try {
+        const found = await Bridge.agentModels(live());
+        clear(modelList);
+        for (const m of found) modelList.append(h("option", { value: m.id, text: m.label }));
+        feedback.append(h("div", { class: "notice ok", text: `${found.length} models — pick one in the Model field.` }));
+      } catch (err) {
+        feedback.append(h("div", { class: "notice err", text: String(err).replace(/^Error:\s*/, "") }));
+      } finally {
+        listModels.disabled = false;
+      }
+    });
+    card.append(modelList);
     const command = h("input", { type: "text", value: a.command, placeholder: "copilot", style: "width:220px", spellcheck: "false" }) as HTMLInputElement;
     command.addEventListener("change", () => { live().command = command.value.trim(); void save(); });
     const args = h("input", { type: "text", value: a.args.join(" "), placeholder: "--acp --stdio", style: "flex:1 1 auto;min-width:0", spellcheck: "false" }) as HTMLInputElement;
@@ -695,6 +724,7 @@ function agentsSection(present: Record<string, boolean>): HTMLElement {
     card.append(
       h("div", { class: "row" }, name, h("span", { class: "spacer" }), remove),
       h("div", { class: "row" }, h("label", { text: "Speaks" }), protocol),
+      h("div", { class: "row" }, h("label", { text: "Model" }), model, listModels),
       h("div", { class: "row" }, h("label", { text: "Command" }), command, args),
       h("div", { class: "row" }, h("label", { text: "Folder" }), cwd),
       h("div", { class: "row", style: "align-items:flex-start" }, h("label", { text: "Environment" }), env),

@@ -5,7 +5,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import type { AgentProfile, Provider, Settings } from "./state";
+import type { AgentProfile, ModelChoice, Provider, Settings } from "./state";
 import type { Snapshot, TeamConfig, TeamFile } from "../team/types";
 
 export const IS_TAURI =
@@ -133,6 +133,8 @@ export const Bridge = {
   acpReset: (agentId: string) => call<void>("acp_reset", { agentId }),
   /** Starts the agent as the form describes it, shakes hands, stops it. */
   acpTest: (profile: AgentProfile) => callOrThrow<string>("acp_test", { profile }),
+  /** The models an agent offers (a handshake, no prompt: nothing is spent). */
+  agentModels: (profile: AgentProfile) => callOrThrow<ModelChoice[]>("agent_models", { profile }),
 
   // ── Teams ─────────────────────────────────────────────────────────────────
   openTeamWindow: () => call<void>("open_team_window"),
