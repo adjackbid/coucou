@@ -144,6 +144,8 @@ export const Bridge = {
   /** Starts the team a file describes — only ever from an explicit click. */
   teamStart: (file: string) => callOrThrow<Snapshot>("team_start", { file }),
   /** The person writes to the leader (`to` empty) or to one member. */
+  /** A deliverable that is a picture in the team's work folder, as bytes. */
+  teamPreview: (team: string, locator: string) => callOrThrow<ArrayBuffer>("team_preview", { team, locator }),
   /** Returns the message's id; the same `request` sent again is not sent twice. */
   teamInstruct: (team: string, to: string, text: string, request?: string) => callOrThrow<string>("team_instruct", { team, to, text, request }),
   /**

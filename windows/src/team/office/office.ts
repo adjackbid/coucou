@@ -8,7 +8,7 @@
 
 import "./office.css";
 import { h } from "../../views/dom";
-import type { CommandRecord, MemberSnapshot, Message, TeamRun, Capabilities } from "./contracts";
+import type { Artifact, CommandRecord, MemberSnapshot, Message, TeamRun, Capabilities } from "./contracts";
 import { OfficeStore } from "./store";
 import { RealAdapter } from "./adapter-real";
 import { MockAdapter } from "./adapter-mock";
@@ -23,6 +23,8 @@ export interface OfficeHost {
   openTeam(teamId: string): void;
   /** Open a deliverable the way the board does. */
   openArtifact(teamId: string, ref: string): void;
+  /** A deliverable that is a picture, as bytes; rejects when it is not one or cannot be read. */
+  preview?(teamId: string, ref: string): Promise<ArrayBuffer>;
   pause(teamId: string): Promise<unknown>;
   resume(teamId: string): Promise<unknown>;
   /** Resolves to the message's id; the same request id is sent once. */
@@ -47,6 +49,8 @@ export class Office {
   /** Where we came from when following a dependency. */
   private back: { teamId: string; memberId: string } | null = null;
   companyPick: string | null = null;
+  /** The company map's view: 60–160 %, and how far it was dragged. */
+  view = { zoom: 1, x: 0, y: 0 };
   tab: "work" | "talk" = "work";
   bubbles = true;
   calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -54,6 +58,8 @@ export class Office {
   private drafts = new Map<string, string>();
   private sending = new Map<string, { clientRequestId: string; commandId?: string; error?: string }>();
   private files: TeamFile[] = [];
+  /** Pictures of deliverables: an object URL, null when there is none to show, or pending. */
+  private previews = new Map<string, string | null | "pending">();
   private runs = new Map<string, Snapshot>();
 
   constructor(private host: OfficeHost, opts: { demo?: boolean } = {}) {
@@ -125,6 +131,8 @@ export class Office {
         onSelect: (memberId) => {
           this.select(teamId, memberId);
         },
+        preview: (a) => this.preview(a),
+        onArtifact: (a) => this.openArtifact(teamId, a),
         onBlank: () => {
           if (this.sel?.teamId === teamId) this.close(teamId, false);
         },
@@ -136,6 +144,31 @@ export class Office {
     s.reduceMotion = this.calm || (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
     s.update();
     return s;
+  }
+
+  /** A deliverable's picture, fetched once; the scenes are drawn again when it arrives. */
+  private preview(a: Artifact): string | null {
+    if (a.kind !== "image" || this.demo || !this.host.preview) return null;
+    const key = `${a.artifactId}@${a.artifactVersion}`;
+    const got = this.previews.get(key);
+    if (got !== undefined) return got === "pending" ? null : got;
+    this.previews.set(key, "pending");
+    this.host.preview(a.teamId, a.resourceRef).then(
+      (bytes) => {
+        this.previews.set(key, URL.createObjectURL(new Blob([bytes])));
+        for (const s of [...this.scenes.values(), ...this.minis.values()]) s.update();
+        this.host.render();
+      },
+      () => this.previews.set(key, null),
+    );
+    return null;
+  }
+
+  private openArtifact(teamId: string, a: Artifact) {
+    if (this.demo) {
+      this.notice = `示範資料:「${a.name}」沒有實際檔案可以開啟。`;
+      this.host.render();
+    } else this.host.openArtifact(teamId, a.resourceRef);
   }
 
   select(teamId: string, memberId: string | null) {
@@ -203,7 +236,9 @@ export class Office {
     const count = this.store.headcount();
     if (!teams.length) return h("div", { class: "office-empty" }, h("p", { text: "還沒有團隊。按左下角的「新增團隊」開始。" }));
     const pick = teams.find((t) => t.teamId === this.companyPick) ?? teams[0];
-    const grid = h("div", { class: "office-map", role: "list" });
+    // Rooms laid out as a floor: as many columns as rows.
+    const cols = Math.max(1, Math.ceil(Math.sqrt(teams.length)));
+    const grid = h("div", { class: "office-map", role: "list", style: `${this.mapTransform()}--cols:${cols};` });
     for (const t of teams) {
       const run = this.store.run(t.currentRunId);
       const alerts = this.alerts(t.teamId).length;
@@ -217,9 +252,11 @@ export class Office {
             class: "office-room-pick", type: "button",
             "aria-label": `${t.name},${run ? "" : ""}${p.percent === null ? "尚未派工" : `${p.percent}%`}${alerts ? `,${alerts} 項需要你` : ""}`,
             onClick: () => {
+              if (this.dragged) return;
               this.companyPick = t.teamId;
               this.host.render();
             },
+            onKeydown: ((e: KeyboardEvent) => { if (e.key === "Enter" && e.shiftKey) this.host.openTeam(t.teamId); }) as EventListener,
             onDblclick: () => this.host.openTeam(t.teamId),
           },
           this.scene(t.teamId, true).el,
@@ -275,8 +312,63 @@ export class Office {
         this.demoTag(),
         this.demo ? h("button", { class: "btn plain", type: "button", title: "播放規格附帶的下一個事件", onClick: () => { if (!this.step()) { this.notice = "示範事件已全部播放。"; this.host.render(); } } }, "下一個示範事件") : null),
       this.connection(),
-      h("div", { class: "office-body" }, grid, side),
+      h("div", { class: "office-body" }, this.mapViewport(grid), side),
     );
+  }
+
+  // ── The company map: drag to move, zoom 60–160 %, back to the whole floor ──
+
+  private dragged = false;
+
+  private mapTransform() {
+    const v = this.view;
+    return `transform:translate(${v.x}px, ${v.y}px) scale(${v.zoom});`;
+  }
+
+  private zoomTo(z: number) {
+    this.view.zoom = Math.min(1.6, Math.max(0.6, Math.round(z * 10) / 10));
+    this.host.render();
+  }
+
+  private mapViewport(grid: HTMLElement): HTMLElement {
+    const vp = h("div", { class: "office-map-viewport", "aria-label": "辦公室地圖,拖曳可移動" }, grid);
+    let start: { x: number; y: number; vx: number; vy: number; id: number } | null = null;
+    vp.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      start = { x: e.clientX, y: e.clientY, vx: this.view.x, vy: this.view.y, id: e.pointerId };
+      this.dragged = false;
+    });
+    vp.addEventListener("pointermove", (e) => {
+      if (!start || e.pointerId !== start.id) return;
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      if (!this.dragged && Math.hypot(dx, dy) < 5) return;
+      if (!this.dragged) vp.setPointerCapture(e.pointerId);
+      this.dragged = true;
+      this.view.x = start.vx + dx;
+      this.view.y = start.vy + dy;
+      grid.style.transform = `translate(${this.view.x}px, ${this.view.y}px) scale(${this.view.zoom})`;
+    });
+    const end = () => {
+      start = null;
+      // A drag is not a click on the room it ended over.
+      window.setTimeout(() => (this.dragged = false), 0);
+    };
+    vp.addEventListener("pointerup", end);
+    vp.addEventListener("pointercancel", end);
+    vp.addEventListener("wheel", (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      this.zoomTo(this.view.zoom + (e.deltaY < 0 ? 0.1 : -0.1));
+    }, { passive: false });
+    const controls = h(
+      "div",
+      { class: "office-map-controls", role: "group", "aria-label": "地圖縮放" },
+      h("button", { class: "icon-btn", type: "button", title: "縮小", "aria-label": "縮小", disabled: this.view.zoom <= 0.6, onClick: () => this.zoomTo(this.view.zoom - 0.1) }, "−"),
+      h("span", { class: "dim", "aria-live": "polite", text: `${Math.round(this.view.zoom * 100)}%` }),
+      h("button", { class: "icon-btn", type: "button", title: "放大", "aria-label": "放大", disabled: this.view.zoom >= 1.6, onClick: () => this.zoomTo(this.view.zoom + 0.1) }, "+"),
+      h("button", { class: "btn plain", type: "button", title: "回到全景", onClick: () => { this.view = { zoom: 1, x: 0, y: 0 }; this.host.render(); } }, "全景"),
+    );
+    return h("div", { class: "office-map-wrap" }, vp, controls, h("p", { class: "dim office-hint", text: "點房間看摘要,雙擊或按「進入辦公室」進去 · 拖曳移動,Ctrl + 滾輪縮放" }));
   }
 
   // ── A team's office ──────────────────────────────────────────────────────────
@@ -439,12 +531,16 @@ export class Office {
 
   private filesList(teamId: string, files: ReturnType<OfficeStore["artifacts"]>) {
     if (!files.length) return h("p", { class: "dim", text: "還沒有交付成果。" });
-    return h("ul", { class: "office-files" }, ...files.map((a) =>
-      h("li", {}, h("button", {
+    return h("ul", { class: "office-files" }, ...files.map((a) => {
+      const pic = this.preview(a);
+      return h("li", {}, h("button", {
         class: "office-file", type: "button",
         title: this.demo ? "示範資料:沒有實際檔案" : a.resourceRef,
-        onClick: () => { if (this.demo) { this.notice = `示範資料:「${a.name}」沒有實際檔案可以開啟。`; this.host.render(); } else this.host.openArtifact(teamId, a.resourceRef); },
-      }, h("i", { "aria-hidden": "true", text: { image: "🖼", document: "📄", code: "⌨", website: "🌐", bundle: "📦" }[a.kind] }), h("span", { class: "grow", text: a.name }), h("small", { class: "dim", text: `v${a.artifactVersion}` })))));
+        onClick: () => this.openArtifact(teamId, a),
+      },
+      pic ? h("img", { class: "office-thumb", src: pic, alt: "" }) : h("i", { "aria-hidden": "true", text: { image: "🖼", document: "📄", code: "⌨", website: "🌐", bundle: "📦" }[a.kind] }),
+      h("span", { class: "grow", text: a.name }), h("small", { class: "dim", text: `v${a.artifactVersion}` })));
+    }));
   }
 
   /** 補充指示 to the team's leader: sending, accepted, applied or failed — the text survives a failure. */

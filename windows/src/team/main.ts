@@ -1122,6 +1122,7 @@ const office = new Office(
       render();
     },
     openArtifact: (teamId, ref) => void act(() => Bridge.teamOpen(teamId, ref)),
+    preview: IS_TAURI ? (teamId, ref) => Bridge.teamPreview(teamId, ref) : undefined,
     pause: (teamId) => Bridge.teamPause(teamId),
     resume: (teamId) => Bridge.teamResume(teamId),
     instruct: (teamId, text, request) => Bridge.teamInstruct(teamId, "", text, request),

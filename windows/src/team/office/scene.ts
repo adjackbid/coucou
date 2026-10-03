@@ -10,7 +10,7 @@
 import { BotEngine, hexToRGB } from "../../mochi/engine";
 import type { BotStateName } from "../../core/layout";
 import { h } from "../../views/dom";
-import type { MemberSnapshot, Message, WorkStatus } from "./contracts";
+import type { Artifact, MemberSnapshot, Message, WorkStatus } from "./contracts";
 import type { OfficeStore } from "./store";
 
 // ── The room as rendered (windows/public/office/scene.json) ───────────────────
@@ -119,7 +119,22 @@ export interface SceneOptions {
   onSelect?: (memberId: string) => void;
   /** A click on the room where there is no one: the selection is let go. */
   onBlank?: () => void;
+  /** A deliverable's picture, when there is one to show (an object URL), else null. */
+  preview?: (a: Artifact) => string | null;
+  /** A deliverable on the wall was clicked. */
+  onArtifact?: (a: Artifact) => void;
 }
+
+/** Lays an element of w × h px onto a parallelogram of the room (TL, TR, BR, BL in 2× pixels). */
+function onQuad(el: HTMLElement, quad: [number, number][], w: number, h: number) {
+  const [tl, tr, , bl] = quad.map(([x, y]) => [H(x), H(y)]);
+  const m = [(tr[0] - tl[0]) / w, (tr[1] - tl[1]) / w, (bl[0] - tl[0]) / h, (bl[1] - tl[1]) / h, tl[0], tl[1]];
+  el.style.width = `${w}px`;
+  el.style.height = `${h}px`;
+  el.style.transform = `matrix(${m.join(",")})`;
+}
+
+const KIND_ICON: Record<Artifact["kind"], string> = { image: "🖼", document: "📄", code: "⌨", website: "🌐", bundle: "📦" };
 
 export class TeamScene {
   readonly el: HTMLElement;
@@ -154,7 +169,7 @@ export class TeamScene {
     // A Mochi picks its member; anywhere else in the room lets the selection go.
     this.el.addEventListener("click", (e) => {
       const t = e.target as HTMLElement;
-      if (t.closest(".office-label, .office-bubble")) return;
+      if (t.closest(".office-label, .office-bubble, .office-frame-item")) return;
       const mochi = t.closest<HTMLElement>(".office-mochi");
       if (mochi?.dataset.member) this.opts.onSelect?.(mochi.dataset.member);
       else this.opts.onBlank?.();
@@ -204,6 +219,44 @@ export class TeamScene {
     return Math.round((x + y) * 100) * 10;
   }
 
+  /**
+   * The walls carry the team's own record: its latest deliverables in the
+   * frames, its plan on the whiteboard. Nothing here is decoration made up.
+   */
+  private drawWalls() {
+    if (!art) return;
+    this.stage.querySelectorAll(".office-wall").forEach((n) => n.remove());
+    const latest = [...this.store.artifacts(this.teamId)].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, art.room.artifactSlots.length);
+    latest.forEach((a, i) => {
+      const url = this.opts.preview?.(a) ?? null;
+      const item = h(
+        "button",
+        {
+          class: `office-wall office-frame-item ${a.kind}`, type: "button", tabindex: this.opts.mini ? "-1" : "0",
+          title: `${a.name}(v${a.artifactVersion})`, "aria-label": `成果:${a.name}`,
+          onClick: (e: Event) => { e.stopPropagation(); this.opts.onArtifact?.(a); },
+        },
+        url ? h("img", { src: url, alt: "", draggable: "false" }) : h("span", { class: "kind", text: KIND_ICON[a.kind] }),
+        url ? null : h("span", { class: "name", text: a.name }),
+      );
+      onQuad(item, art!.room.artifactSlots[i], 100, 96);
+      this.stage.append(item);
+    });
+    // The plan: the run's tasks, done ones ticked; the first few that fit.
+    const tasks = this.store.tasks(this.teamId);
+    if (tasks.length) {
+      const done = tasks.filter((t) => t.status === "completed").length;
+      const board = h(
+        "div",
+        { class: "office-wall office-plan", "aria-hidden": "true" },
+        h("b", { text: `計畫 ${done}/${tasks.length}` }),
+        ...tasks.slice(0, 6).map((t) => h("span", { class: t.status === "completed" ? "ok" : t.status === "running" || t.status === "reviewing" ? "now" : "" }, t.status === "completed" ? "✓ " : t.status === "running" || t.status === "reviewing" ? "▸ " : "○ ", t.title)),
+      );
+      onQuad(board, art.room.whiteboardQuad, 280, 200);
+      this.stage.append(board);
+    }
+  }
+
   /** The member's place: its desk, or — planning — the whiteboard. */
   private place(m: MemberSnapshot, i: number, count: number) {
     const desk = desksFor(count)[i];
@@ -220,6 +273,7 @@ export class TeamScene {
     // Everything per member is drawn afresh; only the Mochis carry over.
     this.stage.querySelectorAll(".office-ws, .office-screen, .office-shadow").forEach((n) => n.remove());
     this.overlay.querySelectorAll(".office-label").forEach((n) => n.remove());
+    this.drawWalls();
     const seated = members.slice(0, MAX_DESKS);
     seated.forEach((m, i) => {
       keep.add(m.memberId);

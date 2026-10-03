@@ -126,6 +126,31 @@ pub fn is_plain_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= 40 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
+/// The largest picture the Office will show of a deliverable.
+pub const PREVIEW_MAX_BYTES: u64 = 8 * 1024 * 1024;
+
+/// A deliverable's picture, if it is one: an image file inside the team's
+/// work folder, small enough to show. Nothing outside the folder is read,
+/// whatever the locator says (`..`, another drive, a link out).
+pub fn preview_path(work_dir: &str, locator: &str) -> Result<std::path::PathBuf, String> {
+    let lower = locator.to_ascii_lowercase();
+    if !["png", "jpg", "jpeg", "gif", "webp", "bmp"].iter().any(|ext| lower.ends_with(&format!(".{ext}"))) {
+        return Err("Not a picture.".into());
+    }
+    let root = std::fs::canonicalize(work_dir).map_err(|_| "The work folder is not there.".to_string())?;
+    let path = std::path::Path::new(locator);
+    let full = if path.is_absolute() { path.to_path_buf() } else { root.join(path) };
+    let full = std::fs::canonicalize(&full).map_err(|_| format!("{locator} is not there."))?;
+    if !full.starts_with(&root) {
+        return Err("Only pictures in the team's work folder are shown.".into());
+    }
+    let size = std::fs::metadata(&full).map_err(|e| e.to_string())?.len();
+    if size > PREVIEW_MAX_BYTES {
+        return Err("The picture is too large to preview.".into());
+    }
+    Ok(full)
+}
+
 impl TeamConfig {
     pub fn member(&self, id: &str) -> Option<&MemberConfig> {
         self.members.iter().find(|m| m.id == id)
@@ -241,6 +266,24 @@ pub(crate) mod fixtures {
 mod tests {
     use super::fixtures::shop;
     use super::*;
+
+    #[test]
+    fn only_pictures_inside_the_work_folder_are_previewed() {
+        let base = std::env::temp_dir().join(format!("coucou-preview-{}", std::process::id()));
+        let work = base.join("work");
+        std::fs::create_dir_all(work.join("public")).unwrap();
+        std::fs::write(work.join("public").join("shoe.png"), b"png").unwrap();
+        std::fs::write(work.join("notes.md"), b"md").unwrap();
+        std::fs::write(base.join("secret.png"), b"png").unwrap();
+        let w = work.to_string_lossy().to_string();
+        assert!(preview_path(&w, "public/shoe.png").is_ok());
+        assert!(preview_path(&w, &work.join("public").join("shoe.png").to_string_lossy()).is_ok());
+        assert!(preview_path(&w, "notes.md").is_err());
+        assert!(preview_path(&w, "../secret.png").is_err());
+        assert!(preview_path(&w, &base.join("secret.png").to_string_lossy()).is_err());
+        assert!(preview_path(&w, "public/gone.png").is_err());
+        let _ = std::fs::remove_dir_all(&base);
+    }
 
     #[test]
     fn a_team_that_cannot_start_says_why() {

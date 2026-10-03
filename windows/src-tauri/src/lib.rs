@@ -669,6 +669,15 @@ fn team_open(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<
     cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// The bytes of a deliverable that is a picture in the team's work folder,
+/// for the Office's wall and drawer. See team::preview_path for what is refused.
+#[tauri::command]
+fn team_preview(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<tauri::ipc::Response, String> {
+    let work_dir = teams.get(&team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or("There is no such team.")?;
+    let path = team::preview_path(&work_dir, &locator)?;
+    std::fs::read(path).map(tauri::ipc::Response::new).map_err(|e| e.to_string())
+}
+
 /// Writes a team file from the Teamwork window's form. The file is named
 /// after the team's id, and only ever inside the teams folder.
 #[tauri::command]
@@ -1118,6 +1127,7 @@ pub fn run() {
             team_interrupt_member,
             team_join,
             team_open,
+            team_preview,
             team_open_configs,
             team_save,
             team_new,

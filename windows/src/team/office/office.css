@@ -122,6 +122,90 @@
     radial-gradient(closest-side, rgba(60, 35, 15, 0.32), rgba(60, 35, 15, 0));
 }
 
+/* The walls: deliverables in the frames, the plan on the whiteboard. */
+.office-wall {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+
+.office-frame-item {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  padding: 6px;
+  border: 0;
+  border-radius: 2px;
+  overflow: hidden;
+  background: #fbf7ef;
+  color: #3b3226;
+  font: 600 11px/1.2 var(--font);
+  text-align: center;
+  cursor: pointer;
+}
+
+.office-frame-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.office-frame-item:has(img) {
+  padding: 0;
+}
+
+.office-frame-item .kind {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.office-frame-item .name {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.office-frame-item.website { background: #e8f1fb; }
+.office-frame-item.document { background: #fbf3e4; }
+.office-frame-item.code { background: #ece9f7; }
+
+.office-frame-item:hover,
+.office-frame-item:focus-visible {
+  outline: 4px solid var(--blue);
+}
+
+.office-plan {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 12px 16px;
+  color: #2c3e66;
+  font: 600 17px/1.25 "Segoe Print", "Comic Sans MS", var(--font);
+  pointer-events: none;
+}
+
+.office-plan b {
+  font-size: 19px;
+  color: #1f5fbf;
+}
+
+.office-plan span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.office-plan .ok {
+  color: #2f8a57;
+}
+
+.office-plan .now {
+  color: #c2410c;
+}
+
 /* A Mochi can be clicked to pick its member. */
 .office-stage > canvas.office-mochi {
   pointer-events: auto;
@@ -269,10 +353,50 @@
   display: none;
 }
 
+.office-map-wrap {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.office-map-viewport {
+  position: relative;
+  height: calc(100vh - 230px);
+  min-height: 360px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: rgba(var(--card), 0.25);
+  box-shadow: var(--edge);
+  cursor: grab;
+  touch-action: none;
+}
+
+.office-map-viewport:active {
+  cursor: grabbing;
+}
+
+.office-map-viewport .office-map {
+  padding: 14px;
+  transform-origin: 0 0;
+}
+
+.office-map-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.office-map-controls span {
+  min-width: 44px;
+  text-align: center;
+}
+
 .office-map {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(var(--cols, 2), 330px);
   gap: 14px;
+  width: max-content;
 }
 
 .office-room-tile {
@@ -683,6 +807,14 @@
   color: #ff9a9f;
 }
 
+.office-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex: none;
+}
+
 .office-empty {
   display: grid;
   place-items: center;
@@ -723,6 +855,19 @@
 @media (max-width: 1279px) {
   .office-body {
     grid-template-columns: 1fr;
+  }
+  .office-drawer {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: min(420px, calc(100vw - 24px));
+    z-index: 50;
+    padding: 14px;
+    overflow: auto;
+    border-radius: 18px;
+    background: rgba(18, 19, 22, 0.97);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), var(--edge);
   }
 }
 
