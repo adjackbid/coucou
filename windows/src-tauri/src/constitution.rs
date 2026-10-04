@@ -232,6 +232,30 @@ pub fn save(c: Constitution) -> Result<(), String> {
     Ok(())
 }
 
+/// A hook's tool call (Claude Code's or Copilot CLI's own sessions), as a request.
+pub fn request_from_hook(payload: &serde_json::Value) -> Request {
+    let tool = payload.get("tool_name").and_then(|v| v.as_str()).unwrap_or("");
+    let input = payload.get("tool_input").cloned().unwrap_or(serde_json::Value::Null);
+    let (mut request, _, _) = crate::claude::request_of(tool, &input);
+    if request.kind == Kind::Other {
+        // Copilot's tools by their own names: a command, or a file.
+        let text = |k: &str| input.get(k).and_then(|v| v.as_str()).map(str::to_string);
+        if let Some(command) = text("command").or_else(|| text("cmd")) {
+            request = Request { kind: Kind::Execute, command: Some(command), paths: vec![] };
+        } else if let Some(path) = text("path").or_else(|| text("file_path")) {
+            let delete = tool.to_lowercase().contains("delete") || tool.to_lowercase().contains("remove");
+            request = Request { kind: if delete { Kind::Delete } else { Kind::Edit }, command: None, paths: vec![path] };
+        }
+    }
+    request
+}
+
+/// What the constitution says about a hook's tool call, read against the session's folder.
+pub fn rule_for_hook(payload: &serde_json::Value) -> Option<(Level, Rule)> {
+    let cwd = payload.get("cwd").and_then(|v| v.as_str()).map(PathBuf::from).or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from)).unwrap_or_default();
+    rule_for(&request_from_hook(payload), &cwd)
+}
+
 /// The rules in force, for a member's brief (none in tests: the person's file is not theirs).
 pub fn brief_text() -> String {
     if cfg!(test) {
@@ -320,6 +344,18 @@ mod tests {
         // Turned off: the general rules alone decide.
         c.rules.iter_mut().for_each(|r| r.level = Level::Off);
         assert_eq!(run(&c, "Remove-Item -Recurse .git"), None);
+    }
+
+    #[test]
+    fn a_hook_s_tool_call_is_read_whichever_cli_sent_it() {
+        let claude = serde_json::json!({ "tool_name": "Bash", "tool_input": { "command": "rm -rf .git" }, "cwd": r"D:\Work\shop" });
+        let c = Constitution::starting();
+        let judge = |p: &serde_json::Value| c.judge(&request_from_hook(p), Path::new(r"D:\Work\shop")).map(|(l, _)| l);
+        assert_eq!(judge(&claude), Some(Level::Never));
+        let copilot = serde_json::json!({ "tool_name": "powershell", "tool_input": { "command": "winget install Git.Git" } });
+        assert_eq!(judge(&copilot), Some(Level::Ask));
+        let edit = serde_json::json!({ "tool_name": "Write", "tool_input": { "file_path": r"D:\Work\shop\a.txt", "content": "x" } });
+        assert_eq!(judge(&edit), None);
     }
 
     #[test]

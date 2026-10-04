@@ -28,6 +28,8 @@ const CONNECT_TIMEOUT: Duration = Duration::from_millis(300);
 const FIRE_AND_FORGET_BUDGET: Duration = Duration::from_secs(2);
 /// How long a permission prompt may stay on screen before the terminal takes over.
 const DECISION_BUDGET: Duration = Duration::from_secs(110);
+/// PreToolUse: Coucou answers at once (the person's constitution) or not at all.
+const RULES_BUDGET: Duration = Duration::from_secs(3);
 
 /// `ERROR_PIPE_BUSY` — every instance is serving someone else right now. This is
 /// the one error worth retrying: the server exists and a slot will free up.
@@ -142,8 +144,15 @@ fn main() {
     }
     let Some((payload, event)) = read_event(&agent, &arg_event) else { finish(&agent) };
 
-    let waits_for_answer = event == "PermissionRequest";
-    let budget = if waits_for_answer { DECISION_BUDGET } else { FIRE_AND_FORGET_BUDGET };
+    // PreToolUse waits a moment too: Coucou may refuse the tool by the
+    // person's constitution, or have it asked about. It answers at once or
+    // closes the pipe, so the CLI is held for no longer than that.
+    let waits_for_answer = event == "PermissionRequest" || event == "PreToolUse";
+    let budget = match event.as_str() {
+        "PermissionRequest" => DECISION_BUDGET,
+        "PreToolUse" => RULES_BUDGET,
+        _ => FIRE_AND_FORGET_BUDGET,
+    };
 
     // The worker owns every blocking call. If it overruns the budget we simply
     // stop listening and exit: the process dying takes the pipe handle with it.
@@ -155,7 +164,8 @@ fn main() {
     });
 
     if let Ok(Some(decision)) = rx.recv_timeout(budget) {
-        if let Some(json) = decision_json(&decision, &agent) {
+        let json = if event == "PreToolUse" { pre_tool_json(&decision, &agent) } else { decision_json(&decision, &agent) };
+        if let Some(json) = json {
             let mut out = std::io::stdout();
             let _ = writeln!(out, "{json}");
             let _ = out.flush();
@@ -282,11 +292,14 @@ fn last_tool_call(path: &std::path::Path) -> Option<(String, serde_json::Value)>
 /// inside `hookSpecificOutput`. Copilot CLI: the hooks reference wants the
 /// bare `{"behavior": …}` object.
 fn decision_json(decision: &str, agent: &str) -> Option<String> {
-    let behavior = match decision.trim() {
+    // `deny<TAB>reason`: refused with a reason (the person's constitution).
+    let (word, reason) = decision.trim().split_once('\t').unwrap_or((decision.trim(), ""));
+    let behavior = match word {
         // "always" still answers a plain allow; remembering it is the island's
         // business, not the CLI's.
         "allow" | "always" => r#"{"behavior":"allow"}"#.to_string(),
-        "deny" => r#"{"behavior":"deny","message":"Denied from Coucou"}"#.to_string(),
+        "deny" if reason.is_empty() => r#"{"behavior":"deny","message":"Denied from Coucou"}"#.to_string(),
+        "deny" => serde_json::json!({ "behavior": "deny", "message": reason }).to_string(),
         _ => return None,
     };
     if agent == "copilot" {
@@ -295,6 +308,21 @@ fn decision_json(decision: &str, agent: &str) -> Option<String> {
     Some(format!(
         r#"{{"hookSpecificOutput":{{"hookEventName":"PermissionRequest","decision":{behavior}}}}}"#
     ))
+}
+
+/// PreToolUse: `refuse<TAB>reason` stops the tool, `ask<TAB>reason` has the
+/// CLI ask the person first. Anything else, nothing — the CLI decides as usual.
+fn pre_tool_json(answer: &str, agent: &str) -> Option<String> {
+    let (word, reason) = answer.trim().split_once('\t')?;
+    let decision = match word {
+        "refuse" => "deny",
+        "ask" => "ask",
+        _ => return None,
+    };
+    if agent == "copilot" {
+        return Some(serde_json::json!({ "permissionDecision": decision, "permissionDecisionReason": reason }).to_string());
+    }
+    Some(serde_json::json!({ "hookSpecificOutput": { "hookEventName": "PreToolUse", "permissionDecision": decision, "permissionDecisionReason": reason } }).to_string())
 }
 
 /// Reads stdin and returns the payload to forward plus the event name.
@@ -624,6 +652,22 @@ fn talk(payload: &str, waits_for_answer: bool) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_tool_the_constitution_forbids_is_refused_with_its_reason() {
+        let claude: serde_json::Value = serde_json::from_str(&pre_tool_json("refuse\t不能刪除 .git", "claude").unwrap()).unwrap();
+        assert_eq!(claude["hookSpecificOutput"]["hookEventName"], "PreToolUse");
+        assert_eq!(claude["hookSpecificOutput"]["permissionDecision"], "deny");
+        assert_eq!(claude["hookSpecificOutput"]["permissionDecisionReason"], "不能刪除 .git");
+        let ask: serde_json::Value = serde_json::from_str(&pre_tool_json("ask\t安裝前要問我", "copilot").unwrap()).unwrap();
+        assert_eq!((ask["permissionDecision"].as_str(), ask["permissionDecisionReason"].as_str()), (Some("ask"), Some("安裝前要問我")));
+        // Coucou closed the pipe without a word, or an older Coucou: nothing printed.
+        assert!(pre_tool_json("", "claude").is_none());
+        assert!(pre_tool_json("allow", "claude").is_none());
+        // A permission refused with its reason.
+        let deny: serde_json::Value = serde_json::from_str(&decision_json("deny\tRefused: 不能刪除 .git", "claude").unwrap()).unwrap();
+        assert_eq!(deny["hookSpecificOutput"]["decision"]["message"], "Refused: 不能刪除 .git");
+    }
 
     #[test]
     fn decision_json_matches_the_documented_shape() {

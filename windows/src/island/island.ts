@@ -498,6 +498,7 @@ export class Island {
       .filter(([, v]) => v != null)
       .map(([label, v]) => ({ label, value: typeof v === "string" ? v : JSON.stringify(v, null, 2) }));
     if (p.danger) sections.unshift({ label: "why", value: DANGER_WORDS[p.danger] });
+    if (p.rule) sections.unshift({ label: "憲法", value: p.rule });
     if (m.morePermissions.length) {
       const queued = m.morePermissions.map((x) => {
         const raw = (x.rawInput && typeof x.rawInput === "object" ? x.rawInput : {}) as Record<string, unknown>;
@@ -555,6 +556,7 @@ export class Island {
     const sections = Object.entries(input)
       .filter(([, v]) => v != null)
       .map(([label, v]) => ({ label, value: typeof v === "string" ? v : JSON.stringify(v, null, 2) }));
+    if (p.rule) sections.unshift({ label: "憲法", value: p.rule });
     const command = `${agent?.name ?? p.agentId} · ${p.title}`;
     State.pendingApproval = {
       requestId: `acp:${p.agentId}`,

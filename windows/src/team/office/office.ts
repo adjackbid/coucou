@@ -14,6 +14,7 @@ import { floorColumns } from "./floor";
 import { RealAdapter, fileFromSnapshot } from "./adapter-real";
 import { MockAdapter } from "./adapter-mock";
 import { loadArt, STATUS, TeamScene, themeName, THEME_LABELS, wake } from "./scene";
+import { editableText } from "../ui";
 import type { PastRun, Snapshot, TeamFile, Usage } from "../types";
 import { fmtMoney, fmtTokens, usageSummary } from "../cost";
 
@@ -43,6 +44,23 @@ export interface OfficeHost {
 }
 
 const MAX_INSTRUCTION = 2000;
+
+/** What the person calls their company; "我的公司" until they name it. */
+function companyName(): string {
+  try {
+    return localStorage.getItem("coucou.company.name")?.trim() || "我的公司";
+  } catch {
+    return "我的公司";
+  }
+}
+
+function setCompanyName(name: string) {
+  try {
+    localStorage.setItem("coucou.company.name", name);
+  } catch {
+    /* kept until the window closes */
+  }
+}
 const clock = (iso: string) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) || d.getTime() === 0 ? "" : `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -374,7 +392,13 @@ export class Office {
       "div",
       { class: "office office-company" },
       h("div", { class: "office-head" },
-        h("div", {}, h("h1", { text: "我的公司" }), h("p", { class: "dim", text: `${teams.length} 間辦公室 · ${count.seats} 位員工${away ? ` · 另有 ${away} 個團隊已封存` : ""}` })),
+        h("div", {}, editableText("company", companyName(), {
+          tag: "h1",
+          label: "公司名稱",
+          fallback: "我的公司",
+          onSave: (v) => setCompanyName(v),
+          render: () => this.host.render(),
+        }), h("p", { class: "dim", text: `${teams.length} 間辦公室 · ${count.seats} 位員工${away ? ` · 另有 ${away} 個團隊已封存` : ""}` })),
         this.demoTag(),
         this.demo ? h("button", { class: "btn plain", type: "button", title: "播放規格附帶的下一個事件", onClick: () => { if (!this.step()) { this.notice = "示範事件已全部播放。"; this.host.render(); } } }, "下一個示範事件") : null),
       this.connection(),

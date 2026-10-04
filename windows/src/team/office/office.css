@@ -15,7 +15,8 @@
   flex-wrap: wrap;
 }
 
-.office-head h1 {
+.office-head h1,
+.office-head .inline-edit {
   font-size: 22px;
   font-weight: 650;
 }

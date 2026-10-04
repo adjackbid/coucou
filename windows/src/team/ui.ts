@@ -266,3 +266,63 @@ function skinList(input: HTMLInputElement) {
   const list = document.getElementById(id);
   if (list) new MutationObserver(() => refreshSuggestions(input)).observe(list, { childList: true });
 }
+
+// ── A name changed where it stands ────────────────────────────────────────────
+
+/** What is being typed into each name, by its key, while it is being changed. */
+const naming = new Map<string, string>();
+
+/**
+ * A name that is changed by clicking it: no button, the words themselves are
+ * the way in. Enter (or clicking elsewhere) keeps the change, Esc leaves it;
+ * an empty name goes back to `fallback`. The page may be drawn again while
+ * someone types: what is typed is kept here, under `key`.
+ */
+export function editableText(
+  key: string,
+  value: string,
+  opts: { tag?: "h1" | "b" | "span"; className?: string; label: string; fallback: string; maxLength?: number; onSave: (value: string) => void; render: () => void },
+): HTMLElement {
+  const draft = naming.get(key);
+  if (draft !== undefined) {
+    const input = h("input", {
+      class: `inline-edit ${opts.className ?? ""}`,
+      type: "text",
+      value: draft,
+      maxlength: String(opts.maxLength ?? 30),
+      "data-key": `name:${key}`,
+      "aria-label": opts.label,
+      spellcheck: "false",
+    }) as HTMLInputElement;
+    const done = (keep: boolean) => {
+      if (!naming.has(key)) return;
+      naming.delete(key);
+      if (keep) opts.onSave(input.value.trim() || opts.fallback);
+      opts.render();
+    };
+    input.addEventListener("input", () => naming.set(key, input.value));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing) done(true);
+      else if (e.key === "Escape") done(false);
+    });
+    // Taken away by the page being drawn again is not leaving it.
+    input.addEventListener("blur", () => input.isConnected && done(true));
+    setTimeout(() => {
+      if (input.isConnected && document.activeElement !== input) {
+        input.focus();
+        input.select();
+      }
+    }, 0);
+    return input;
+  }
+  const el: HTMLElement = h(opts.tag ?? "span", { class: `editable ${opts.className ?? ""}`, tabindex: "0", title: `點一下修改${opts.label}`, text: value });
+  const start = () => {
+    naming.set(key, value);
+    opts.render();
+  };
+  el.addEventListener("click", start);
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") start();
+  });
+  return el;
+}

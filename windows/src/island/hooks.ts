@@ -54,6 +54,8 @@ interface HookPayload {
   tool_input?: Record<string, unknown>;
   /** Set by coucou-hook when it had to cut a field: the input is not whole. */
   coucou_truncated?: boolean;
+  /** The person's constitution asks about this one: the rule, shown on the card. */
+  constitution?: { level: string; rule: string };
 }
 
 const PROJECT_ALIASES: Record<string, string> = {
@@ -516,6 +518,7 @@ function handleHook(island: Island, payload: HookPayload) {
       const input = payload.tool_input ?? {};
       const command = approvalTarget(tool, input);
       const sections = approvalSections(input);
+      if (payload.constitution?.rule) sections.unshift({ label: "憲法", value: payload.constitution.rule });
       State.pendingApproval = {
         requestId,
         sessionId: payload.session_id ?? "",

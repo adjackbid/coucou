@@ -245,6 +245,8 @@ export interface AcpPermission {
   kind: string;
   rawInput: unknown;
   options: { optionId: string; name: string; kind: string }[];
+  /** The constitution's rule that asks about it, when one does. */
+  rule?: string;
 }
 
 export interface IntegrationUpdate {

@@ -10,7 +10,7 @@
 import "./secretary.css";
 import { Bridge, IS_TAURI } from "../core/bridge";
 import { h } from "../views/dom";
-import { dropdown } from "./ui";
+import { dropdown, editableText } from "./ui";
 import type { SecretaryProposal, SecretaryReply, SecretaryStep } from "./types";
 
 export interface SecretaryHost {
@@ -42,8 +42,6 @@ let providers: [string, string, string][] | null = null;
 let provider = stored("coucou.secretary.provider") ?? "";
 /** What the person calls the secretary; "秘書" until they name it. */
 let name = stored("coucou.secretary.name")?.trim() || "秘書";
-/** The name being typed, while it is being changed. */
-let naming: string | null = null;
 
 export function secretaryName(): string {
   return name;
@@ -216,39 +214,20 @@ function card(host: SecretaryHost, p: SecretaryProposal): HTMLElement {
 /** `?view=secretary&ask=…` in a browser asks once, to look at a conversation. */
 let asked = false;
 
-/** The page's title: the secretary's name, and the way to change it. */
+/** The page's title: the secretary's name, changed by clicking it. */
 export function secretaryTitle(host: SecretaryHost): HTMLElement {
-  if (naming !== null) {
-    const field = h("input", { class: "field sec-name-field", type: "text", maxlength: "20", "data-key": "secretary-name", value: naming, "aria-label": "秘書的名字", spellcheck: "false" }) as HTMLInputElement;
-    const save = () => {
-      name = field.value.trim().slice(0, 20) || "秘書";
+  return editableText("secretary", name, {
+    tag: "b",
+    className: "sec-title",
+    label: "秘書的名字",
+    fallback: "秘書",
+    maxLength: 20,
+    onSave: (v) => {
+      name = v;
       store("coucou.secretary.name", name);
-      naming = null;
-      host.render();
-    };
-    field.addEventListener("input", () => (naming = field.value));
-    field.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.isComposing) save();
-      if (e.key === "Escape") {
-        naming = null;
-        host.render();
-      }
-    });
-    setTimeout(() => field.isConnected && document.activeElement !== field && (field.focus(), field.select()), 0);
-    return h(
-      "div",
-      { class: "sec-name" },
-      field,
-      h("button", { class: "btn primary", type: "button", onClick: save }, "儲存"),
-      h("button", { class: "link", type: "button", onClick: () => ((naming = null), host.render()) }, "取消"),
-    );
-  }
-  return h(
-    "div",
-    { class: "sec-name" },
-    h("b", { text: name }),
-    h("button", { class: "link", type: "button", title: "幫秘書取個名字:側欄和這裡都會用它,秘書也會這樣自稱", onClick: () => ((naming = name), host.render()) }, "改名"),
-  );
+    },
+    render: () => host.render(),
+  });
 }
 
 export function secretaryPage(host: SecretaryHost): HTMLElement {

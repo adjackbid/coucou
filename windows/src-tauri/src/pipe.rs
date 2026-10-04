@@ -131,6 +131,20 @@ async fn handle(app: AppHandle, mut pipe: NamedPipeServer) {
         .unwrap_or("claude")
         .to_string();
 
+    // The constitution, before the tool runs: what it forbids is refused
+    // with its rule, what it asks about is put to the person even where the
+    // CLI would not ask. coucou-hook turns the word into the CLI's answer.
+    if event == "PreToolUse" {
+        if let Some((level, rule)) = crate::constitution::rule_for_hook(&payload) {
+            let word = if level == crate::constitution::Level::Never { "refuse" } else { "ask" };
+            log::line(format!("hook {agent} PreToolUse: {word} by the constitution — {}", rule.text));
+            let reason = format!("{} (the user's constitution in Coucou)", rule.text);
+            let _ = pipe.write_all(format!("{word}\t{}\n", reason.replace(['\n', '\r', '\t'], " ")).as_bytes()).await;
+            let _ = pipe.flush().await;
+            payload["constitution"] = json!({ "level": word, "rule": rule.text });
+        }
+    }
+
     if event != "PermissionRequest" {
         // The tool and whether a session id came along: enough to see a CLI
         // change its payload shape without dumping the payload itself.
@@ -141,6 +155,21 @@ async fn handle(app: AppHandle, mut pipe: NamedPipeServer) {
         let _ = app.emit_to(WINDOW_LABEL, "hook", payload);
         let _ = pipe.disconnect();
         return;
+    }
+
+    // What the constitution forbids is refused here, with no card to click by mistake.
+    let ruled = crate::constitution::rule_for_hook(&payload);
+    if let Some((crate::constitution::Level::Never, rule)) = &ruled {
+        log::line(format!("hook {agent} PermissionRequest refused by the constitution — {}", rule.text));
+        let reason = format!("Refused by the user's constitution in Coucou: {}", rule.text);
+        let _ = pipe.write_all(format!("deny\t{}\n", reason.replace(['\n', '\r', '\t'], " ")).as_bytes()).await;
+        let _ = pipe.flush().await;
+        let _ = pipe.disconnect();
+        return;
+    }
+    // What it asks about says so on the card.
+    if let Some((_, rule)) = ruled {
+        payload["constitution"] = json!({ "level": "ask", "rule": rule.text });
     }
 
     let id = format!("{}-{}", std::process::id(), COUNTER.fetch_add(1, Ordering::Relaxed));
