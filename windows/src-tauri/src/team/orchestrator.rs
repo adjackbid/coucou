@@ -165,6 +165,11 @@ fn token_short() -> String {
     token()[..12].to_string()
 }
 
+/// A token nobody can guess, for addresses that must not be found (the meter's).
+pub fn fresh_token() -> String {
+    token()
+}
+
 /// 128 bits nobody can guess, without a dependency: std seeds each
 /// `RandomState` from the system's random source.
 fn token() -> String {
@@ -531,6 +536,14 @@ impl Teams {
         self
     }
 
+    /// Tokens the meter read for a seat (`team:<team>:<member>`), in that team's record.
+    pub fn metered(&self, key: &str, usage: crate::usage::Usage) {
+        let Some((team, member)) = key.strip_prefix("team:").and_then(|k| k.split_once(':')) else { return };
+        if let Some(team) = self.get(team) {
+            (team.sink(member))(acp::Event::Usage(usage));
+        }
+    }
+
     pub fn get(&self, id: &str) -> Option<Arc<Team>> {
         self.teams.lock().unwrap().get(id).cloned()
     }
@@ -584,6 +597,15 @@ impl Teams {
                 auto: config.auto_approve.then(|| Scope::new(&config.work_dir)),
                 model: Some(member.model.trim().to_string()).filter(|m| !m.is_empty()),
             };
+            let mut launch = launch;
+            // Copilot on an endpoint of its own reports no tokens: its calls
+            // go through Coucou's meter, which reads them on the way (meter.rs).
+            if let Some(meter) = crate::meter::global() {
+                let base = profile.env.get("COPILOT_PROVIDER_BASE_URL").map(|b| b.trim()).filter(|b| b.starts_with("http") && !b.contains('…'));
+                if let (crate::acp::Protocol::Acp, Some(base)) = (&profile.protocol, base) {
+                    launch.env.insert("COPILOT_PROVIDER_BASE_URL".into(), meter.route(base, &seat_key(&config.id, &member.id)));
+                }
+            }
             seats.insert(member.id.clone(), Seat { key: seat_key(&config.id, &member.id), profile, launch });
             tokens.insert(member.id.clone(), secret);
         }

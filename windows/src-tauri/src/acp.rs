@@ -428,9 +428,9 @@ async fn copilot_models(profile: &AgentProfile) -> Result<Vec<ModelChoice>, Stri
 /// spawned leaves the real agent running, so the whole tree goes.
 async fn stop(running: &Running) {
     let Some(mut child) = running.child.lock().await.take() else { return };
-    // Asked to go, an agent closes its session properly: Copilot then writes
-    // what the session used (its `session.shutdown` event), which a kill
-    // would lose. Its input closed, it has a moment to do so.
+    // Asked to go, an agent gets to close its session properly (its own
+    // records finished, its last report sent): its input closed, it has a
+    // moment to do so before it is killed.
     let _ = running.writer.lock().await.shutdown().await;
     if tokio::time::timeout(Duration::from_secs(4), child.wait()).await.is_ok() {
         return;

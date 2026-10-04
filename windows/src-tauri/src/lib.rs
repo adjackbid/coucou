@@ -12,8 +12,11 @@ mod integrations;
 mod island;
 mod llm;
 mod log;
+mod meter;
 mod pipe;
 mod policy;
+mod cost;
+mod pricing;
 mod secrets;
 mod settings;
 mod team;
@@ -830,6 +833,46 @@ fn team_open_configs() {
     let _ = Command::new("explorer").arg(dir).spawn();
 }
 
+/// Usage and its estimated cost between two moments (ms), across every team log.
+#[tauri::command]
+fn usage_report(from: u64, to: u64) -> cost::Report {
+    cost::report(&settings::team_logs_dir(), from, to)
+}
+
+/// The person's prices, billing modes and currency.
+#[tauri::command]
+fn pricing_save(choices: pricing::Choices) -> Result<(), String> {
+    pricing::save_choices(&choices)
+}
+
+/// Fetches LiteLLM's public price list (only on the person's click). Returns how many models it prices.
+#[tauri::command]
+async fn pricing_fetch_list() -> Result<usize, String> {
+    let table = cost::fetch_list().await?;
+    pricing::save_table(&table)?;
+    log::line(format!("prices: {} models from the public list", table.models.len()));
+    Ok(table.models.len())
+}
+
+/// Reads the prices an agent's own endpoint (a LiteLLM proxy) gives, with
+/// the agent's own key. Returns how many models it priced.
+#[tauri::command]
+async fn pricing_from_agent(shared: State<'_, Shared>, agent: String) -> Result<usize, String> {
+    let profile = shared.settings.lock().unwrap().agents.iter().find(|a| a.id == agent).cloned().ok_or("There is no such agent.")?;
+    let base = profile.env.get("COPILOT_PROVIDER_BASE_URL").map(|s| s.trim().to_string()).filter(|s| !s.is_empty() && !s.contains('…'));
+    let base = base.ok_or("This agent has no endpoint of its own to ask for prices.")?;
+    let secret = secrets::get(&profile.secret_key()).unwrap_or_default();
+    let key = profile.env.get("COPILOT_PROVIDER_API_KEY").map(|v| v.replace("{secret}", &secret)).filter(|k| !k.trim().is_empty());
+    let label = base.trim_start_matches("https://").trim_start_matches("http://").split('/').next().unwrap_or(&base).to_string();
+    let found = cost::proxy_prices(&base, key, &label).await?;
+    let mut choices = pricing::load_choices();
+    let n = found.len();
+    choices.proxy.extend(found);
+    pricing::save_choices(&choices)?;
+    log::line(format!("prices: {n} models from {label}"));
+    Ok(n)
+}
+
 /// The models an agent offers, for the drop-downs in Settings and Teamwork.
 #[tauri::command]
 async fn agent_models(agents: State<'_, Arc<Agents>>, profile: AgentProfile) -> Result<Vec<claude::ModelChoice>, String> {
@@ -1171,6 +1214,10 @@ pub fn run() {
             team_archive,
             team_preview,
             team_history,
+            usage_report,
+            pricing_save,
+            pricing_fetch_list,
+            pricing_from_agent,
             team_past,
             team_open_configs,
             team_save,
@@ -1206,6 +1253,15 @@ pub fn run() {
                     .with_screens(show),
             );
             app.manage(teams.clone());
+            // Copilot members on their own endpoint are metered (meter.rs).
+            match tauri::async_runtime::block_on(meter::Meter::start()) {
+                Ok(m) => {
+                    let teams = teams.clone();
+                    m.set_report(Arc::new(move |key, usage| teams.metered(key, usage)));
+                    meter::install(m);
+                }
+                Err(e) => log::line(format!("meter: could not listen: {e}")),
+            }
             team::mcp::start(teams);
 
             if let Some(win) = island::window(&handle) {

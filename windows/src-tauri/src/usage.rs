@@ -47,10 +47,6 @@ impl Usage {
         };
     }
 
-    pub fn total_tokens(&self) -> u64 {
-        self.input + self.output + self.cache_read + self.cache_write
-    }
-
     /// What grew from `before` to `self` (both running totals of one model).
     pub fn since(&self, before: &Usage) -> Usage {
         Usage {
