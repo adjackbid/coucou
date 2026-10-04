@@ -18,7 +18,7 @@ import { dropdown, editableText } from "../ui";
 import type { PastRun, Snapshot, TeamFile, Usage } from "../types";
 import { fmtMoney, fmtTokens, usageSummary } from "../cost";
 import { Battle, companyLive, HERO_LABELS, heroOf, savedMode, saveCompanyLive, saveMode, setHero, setSkill, skillOf } from "./battle/session";
-import { savedWorld, saveWorld, WORLD_IDS, WORLDS, type WorldId } from "./battle/worlds";
+import { savedWorld, WORLDS } from "./battle/worlds";
 import type { BossBlockCause } from "./battle/bossMoves";
 import { BattleLayer } from "./battle/layer";
 import { HIT_SKILLS, SKILLS, type Contribution, type HitPlan, type SkillId } from "./battle/skills";
@@ -492,6 +492,15 @@ export class Office {
       opt("battle", "中二模式", "同一份工作,看成團隊討伐需求魔王:只改變畫面,不影響工作"));
   }
 
+  /** 團隊設定 picked another battlefield: the old one's moves stop where they are. */
+  worldChanged(teamId: string) {
+    for (const sc of [this.scenes.get(teamId), this.minis.get(teamId)]) {
+      const layer = sc?.currentLayer;
+      if (layer instanceof BattleLayer) layer.stop();
+    }
+    this.host.render();
+  }
+
   setMode(mode: PresentationMode) {
     if (this.mode === mode) return;
     this.mode = mode;
@@ -949,21 +958,6 @@ export class Office {
         h("div", { class: "office-head-main" }, this.runLabel(run), this.progressBar(teamId), past ? null : this.figures(teamId, "office-figures inline"), this.demoTag()),
         toggles,
         pauseBtn,
-        battle
-          ? dropdown({
-              value: savedWorld(teamId),
-              title: "這個團隊的戰場:只改變畫面與魔王的樣子,不影響工作、任務或 HP",
-              className: "bt-world-pick",
-              choices: WORLD_IDS.map((id) => ({ value: id, label: WORLDS[id].label })),
-              onChange: (v) => {
-                saveWorld(teamId, v as WorldId);
-                // The old battlefield's moves stop where they are; the new one starts from now.
-                const layer = this.scenes.get(teamId)?.currentLayer;
-                if (layer instanceof BattleLayer) layer.stop();
-                this.host.render();
-              },
-            })
-          : null,
         this.modeSwitch()),
       past
         ? h("div", { class: "office-history-bar", role: "status" },

@@ -18,6 +18,7 @@ import { dropdown, menuOpen, onMenuClosed, refreshSuggestions, suggest } from ".
 import { linksScreen, logScreen, openThread, type Page } from "./screens";
 import { Office } from "./office/office";
 import { LARGE_FROM, THEME_LABELS } from "./office/scene";
+import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
 import { onStep as secretaryStep, secretaryName, secretaryPage, secretaryTitle, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
@@ -676,6 +677,15 @@ function setup(file: TeamFile): HTMLElement {
       ),
     ),
     h("p", { class: "hint", text: `Office 檢視裡這個團隊的辦公室長什麼樣子。自動:${LARGE_FROM} 位成員以上用高級辦公室(在公司總覽佔較大的格子),其他依團隊固定挑一種。` }),
+    h("label", { text: "中二模式戰場" }),
+    h(
+      "div",
+      { class: "segmented wrap" },
+      ...WORLD_IDS.map((id) =>
+        h("button", { type: "button", class: savedWorld(config.id) === id ? "on" : "", title: WORLDS[id].label, onClick: () => { saveWorld(config.id, id); office.worldChanged(config.id); } }, WORLDS[id].label),
+      ),
+    ),
+    h("p", { class: "hint", text: "中二模式下這個團隊在哪個場地討伐哪隻魔王。只改變畫面,不影響工作、任務或 HP;改了馬上生效,不用儲存。" }),
     h("label", { text: "回合上限" }),
     h("div", { class: "row nowrap" }, bound("input", "maxTurns", String(config.maxTurns), (v) => (config.maxTurns = Math.max(1, Math.min(500, Number(v) || 60))), { type: "number", min: "1", max: "500", class: "field narrow" }), h("span", { class: "hint", text: "整個團隊用完這麼多回合後會暫停,等你決定要不要繼續。" })),
   );
