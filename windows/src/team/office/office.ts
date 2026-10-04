@@ -10,6 +10,7 @@ import "./office.css";
 import { h } from "../../views/dom";
 import type { Artifact, CommandRecord, MemberSnapshot, Message, Team, TeamRun, Capabilities } from "./contracts";
 import { OfficeStore } from "./store";
+import { floorColumns } from "./floor";
 import { RealAdapter, fileFromSnapshot } from "./adapter-real";
 import { MockAdapter } from "./adapter-mock";
 import { loadArt, STATUS, TeamScene, themeName, THEME_LABELS, wake } from "./scene";
@@ -65,6 +66,8 @@ export class Office {
   view = { zoom: 1, x: 0, y: 0 };
   /** Until the person zooms or drags, the map fits the whole floor in view. */
   private viewTouched = false;
+  /** The map's frame as last laid out: the floor is shaped to it. */
+  private mapFrame = { w: 784, h: 670 };
   tab: "work" | "talk" = "work";
   bubbles = true;
   calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -274,8 +277,7 @@ export class Office {
     const pick = teams.find((t) => t.teamId === this.companyPick) ?? null;
     // Rooms laid out as a floor: as many columns as rows. A large office takes 2 × 2 cells.
     const large = (t: (typeof teams)[number]) => themeName(t.teamId, t.officeLayoutId, t.memberIds.length) === "premium";
-    const cells = teams.reduce((n, t) => n + (large(t) ? 4 : 1), 0);
-    const cols = Math.max(teams.some(large) ? 2 : 1, Math.ceil(Math.sqrt(cells)));
+    const cols = floorColumns(teams.map((t) => (large(t) ? 2 : 1)), this.mapFrame.w / this.mapFrame.h);
     const grid = h("div", { class: "office-map", role: "list", style: `${this.mapTransform()}--cols:${cols};` });
     for (const t of teams) {
       const run = this.store.run(t.currentRunId);
@@ -378,7 +380,7 @@ export class Office {
     );
   }
 
-  // ── The company map: drag to move, zoom 60–160 %, back to the whole floor ──
+  // ── The company map: drag to move, zoom 40–160 %, back to the whole floor ──
 
   private dragged = false;
 
@@ -394,10 +396,16 @@ export class Office {
    */
   private fitZoom(vp: HTMLElement, grid: HTMLElement) {
     const fit = Math.min(1, (vp.clientWidth - 8) / grid.offsetWidth, (vp.clientHeight - 8) / grid.offsetHeight);
-    return Math.min(1.6, Math.max(0.6, Math.floor(fit * 10) / 10));
+    return Math.min(1.6, Math.max(0.4, Math.floor(fit * 10) / 10));
   }
 
   private placeMap(vp: HTMLElement, grid: HTMLElement) {
+    if (vp.clientWidth && vp.clientHeight) {
+      const before = this.mapFrame.w / this.mapFrame.h;
+      this.mapFrame = { w: vp.clientWidth, h: vp.clientHeight };
+      // A frame of another shape may want another number of columns.
+      if (Math.abs(Math.log(before / (vp.clientWidth / vp.clientHeight))) > 0.25) queueMicrotask(() => this.host.render());
+    }
     if (!this.viewTouched && grid.offsetWidth) {
       this.view.zoom = this.fitZoom(vp, grid);
       const label = vp.parentElement?.querySelector(".office-map-controls span");
@@ -411,7 +419,7 @@ export class Office {
 
   private zoomTo(z: number) {
     this.viewTouched = true;
-    this.view.zoom = Math.min(1.6, Math.max(0.6, Math.round(z * 10) / 10));
+    this.view.zoom = Math.min(1.6, Math.max(0.4, Math.round(z * 10) / 10));
     this.host.render();
   }
 
@@ -462,7 +470,7 @@ export class Office {
     const controls = h(
       "div",
       { class: "office-map-controls", role: "group", "aria-label": "地圖縮放" },
-      h("button", { class: "icon-btn", type: "button", title: "縮小", "aria-label": "縮小", disabled: this.view.zoom <= 0.6, onClick: () => this.zoomTo(this.view.zoom - 0.1) }, "−"),
+      h("button", { class: "icon-btn", type: "button", title: "縮小", "aria-label": "縮小", disabled: this.view.zoom <= 0.4, onClick: () => this.zoomTo(this.view.zoom - 0.1) }, "−"),
       h("span", { class: "dim", "aria-live": "polite", text: `${Math.round(this.view.zoom * 100)}%` }),
       h("button", { class: "icon-btn", type: "button", title: "放大", "aria-label": "放大", disabled: this.view.zoom >= 1.6, onClick: () => this.zoomTo(this.view.zoom + 0.1) }, "+"),
       h("button", {
