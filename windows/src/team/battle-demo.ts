@@ -88,6 +88,12 @@ export function playBattle(snap: Snapshot, apply: (next: Snapshot) => void) {
       m.waiting = null;
       snap.questions = snap.questions.map((q) => (q.id === "Q-battle" ? { ...q, answer: "要" } : q));
     }],
+    // Four turns in a blink: the boss answers the burn with its ultimate; ai2 overspends and falls.
+    [24300, () => {
+      snap.totalTurns += 4;
+      const m = member("ai2");
+      if (m.usage?.length) m.usage[0].input += 120_000;
+    }],
     // Three members' work accepted together: 三曜協奏, and every task is done — sealed, not won.
     [26500, () => {
       task("TASK-07").owner = "ai1";

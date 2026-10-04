@@ -67,6 +67,19 @@ export function shownHp(vm: BattleViewModel): number | null {
   return vm.hp;
 }
 
+export function teamBar(team: { used: number; max: number } | null | undefined): HTMLElement | null {
+  if (!team || !team.max) return null;
+  const left = Math.max(0, team.max - team.used);
+  const share = left / team.max;
+  return h(
+    "div",
+    { class: "bt-team-hp", title: "我方生命=剩下的回合數。每用一回合扣一點;短時間用掉太多,魔王會放絕招。" },
+    h("span", { class: "bt-team-word", text: "我方" }),
+    h("div", { class: `bt-bar team${share <= 0.2 ? " low" : ""}` }, h("i", { style: `width:${share ? Math.max(1.5, share * 100).toFixed(1) : 0}%` })),
+    h("span", { class: "bt-team-n" }, h("b", { text: String(left) }), h("small", { text: ` / ${team.max} 回合` })),
+  );
+}
+
 export function bossHud(vm: BattleViewModel, world: World = WORLDS.office): HTMLElement {
   const won = vm.bossState === "defeated";
   const hp = shownHp(vm);

@@ -274,6 +274,8 @@ export interface SceneLayer {
   frame(dt: number): boolean;
   /** Draws over a Mochi, the body drawn in size × size at the origin. */
   decorate?(memberId: string, ctx: CanvasRenderingContext2D, size: number, engine: BotEngine, facing: number): void;
+  /** 陣亡: a member past its own limits, grey where it stands. */
+  fallen?(memberId: string): boolean;
   /** Members drawn bigger than at their desks (1 = as they are). */
   readonly heroScale?: number;
   /** The battlefield this room becomes, if any: the office's furniture and walls make way for it. */
@@ -688,6 +690,7 @@ export class TeamScene {
     Object.assign(actor.canvas.style, { left: `${actor.at!.x}px`, top: `${actor.at!.y}px`, zIndex: String(drawnZ) });
     if (walking) actor.dirty = true;
     actor.canvas.classList.toggle("selected", sel);
+    actor.canvas.classList.toggle("bt-down", !!this.layer?.fallen?.(m.memberId));
     if (!actor.canvas.isConnected) this.stage.append(actor.canvas);
     const screenMid = (quad[0].x + quad[1].x) / 2;
     void W;

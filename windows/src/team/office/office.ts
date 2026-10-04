@@ -22,7 +22,7 @@ import { savedWorld, WORLDS } from "./battle/worlds";
 import type { BossBlockCause } from "./battle/bossMoves";
 import { BattleLayer } from "./battle/layer";
 import { HIT_SKILLS, SKILLS, type Contribution, type HitPlan, type SkillId } from "./battle/skills";
-import { battleLog, bossCard, bossHud, companyState, roomBadge } from "./battle/hud";
+import { battleLog, bossCard, bossHud, companyState, roomBadge , teamBar} from "./battle/hud";
 import { inputFrom, project } from "./battle/projector";
 import type { BattleSignal, BattleViewModel, HeroClass, PresentationMode } from "./battle/contracts";
 
@@ -36,6 +36,8 @@ export interface OfficeHost {
   openTeam(teamId: string): void;
   /** Open a deliverable the way the board does. */
   openArtifact(teamId: string, ref: string): void;
+  /** Jump to 團隊設定 (to raise a fallen member's limits). */
+  openSetup?(teamId: string): void;
   /** A deliverable that is a picture, as bytes; rejects when it is not one or cannot be read. */
   preview?(teamId: string, ref: string): Promise<ArrayBuffer>;
   /** A team's earlier runs, newest first, and one of them as it ended. */
@@ -122,6 +124,8 @@ export class Office {
   /** In 中二模式, whether the company map plays every room's fight (it costs more to draw). */
   companyLive = companyLive();
   companyFps = companyFps();
+  /** Who already fell, per team: a down and a revival are each told once. */
+  private fallenSeen = new Map<string, Set<string>>();
   /** In 中二模式, what the column beside the room shows. */
   private sideView: "battle" | "raw" = "battle";
   /** Each team's raid as the window has watched it. */
@@ -279,6 +283,11 @@ export class Office {
       members: () => store.members(teamId).map((m) => m.memberId),
       live: () => this.companyLive,
       world: () => savedWorld(teamId),
+      turns: () => {
+        const run = this.runs.get(teamId);
+        return run && run.maxTurns ? { used: run.totalTurns, max: run.maxTurns } : null;
+      },
+      fallen: (memberId: string) => !!this.vitals(teamId, memberId)?.dead,
       // What a counter is really about, from the record: a question to the person, or a dependency.
       causeOf: (sig: BattleSignal): BossBlockCause => {
         if (sig.source.questionIds.length) return "human_input";
@@ -403,6 +412,62 @@ export class Office {
 
   private alerts(teamId: string) {
     return this.store.members(teamId).filter((m) => STATUS[m.workStatus].tone === "alert");
+  }
+
+  /** 中二模式的個人血量: what is left of a member's own limits; null when none are set. */
+  private vitals(teamId: string, memberId: string): { frac: number; dead: boolean; why: string } | null {
+    const cfg = this.files.find((f) => f.config?.id === teamId)?.config;
+    const mc = cfg?.members.find((x) => x.id === memberId);
+    if (!mc || (!mc.maxTokens && !mc.maxCostUsd)) return null;
+    const mv = this.runs.get(teamId)?.members.find((x) => x.id === memberId);
+    if (!mv) return null;
+    const u = usageSummary(mv.usage ?? [], () => this.host.render());
+    let worst = 0;
+    let why = "";
+    if (mc.maxTokens && u.tokens / mc.maxTokens > worst) {
+      worst = u.tokens / mc.maxTokens;
+      why = "Token 已達上限";
+    }
+    if (mc.maxCostUsd && u.usd != null && u.usd / mc.maxCostUsd > worst) {
+      worst = u.usd / mc.maxCostUsd;
+      why = "成本已達上限";
+    }
+    return { frac: Math.max(0, 1 - worst), dead: worst >= 1, why };
+  }
+
+  /** 陣亡與復活: floats on the field, and one word to the Leader each way. */
+  private fallenWatch(teamId: string) {
+    const run = this.runs.get(teamId);
+    if (!run) return;
+    const teamView = this.store.team(teamId);
+    const storeRun = teamView ? this.store.run(teamView.currentRunId) : undefined;
+    const canTell = !!this.real && run.status === "running" && !!storeRun && this.capabilities(storeRun).canSendInstruction;
+    let seen = this.fallenSeen.get(teamId);
+    if (!seen) this.fallenSeen.set(teamId, (seen = new Set()));
+    const layer = this.scenes.get(teamId)?.currentLayer;
+    const bl = layer instanceof BattleLayer ? layer : null;
+    for (const m of this.store.members(teamId)) {
+      const v = this.vitals(teamId, m.memberId);
+      const dead = !!v?.dead;
+      if (dead && !seen.has(m.memberId)) {
+        seen.add(m.memberId);
+        bl?.memberDown(m.memberId, v!.why);
+        // The Leader is told once per run; the request id keeps it to once.
+        if (canTell) {
+          void this.host
+            .instruct(teamId, `【系統】${m.displayName} 已達自己的${v!.why.replace("已達上限", "上限")},在中二模式中陣亡。請不要再指派新任務給 ${m.displayName};等人類在「團隊設定」提高上限讓它復活。`, `bt-fallen:${run.id}:${this.battle.vm(teamId)?.runId ?? ""}:${m.memberId}`)
+            .catch(() => {});
+        }
+      } else if (!dead && seen.has(m.memberId)) {
+        seen.delete(m.memberId);
+        bl?.memberUp(m.memberId);
+        if (canTell) {
+          void this.host
+            .instruct(teamId, `【系統】${m.displayName} 的上限已提高,已復活,可以繼續指派任務。`, `bt-revived:${run.id}:${this.battle.vm(teamId)?.runId ?? ""}:${m.memberId}`)
+            .catch(() => {});
+        }
+      }
+    }
   }
 
   /** What a team (or one member) has used this run: tokens and their cost at today's prices. */
@@ -949,9 +1014,18 @@ export class Office {
             (() => {
               const s = past ? null : this.spend(teamId, m.memberId);
               return s ? h("span", { class: "office-roster-spend", text: `${fmtTokens(s.tokens)} tokens${s.cost ? ` · ${s.cost}` : ""}` }) : null;
+            })(),
+            (() => {
+              if (!battle || past) return null;
+              const v = this.vitals(teamId, m.memberId);
+              if (!v) return null;
+              return h("span", { class: `bt-member-hp${v.dead ? " dead" : v.frac <= 0.2 ? " low" : ""}`, title: v.dead ? `已達上限而陣亡:${v.why}。到團隊設定提高上限才會復活。` : "這位成員自己的上限當生命:用越多越少" },
+                h("i", {}, h("b", { style: `width:${v.dead ? 0 : Math.max(2, v.frac * 100).toFixed(0)}%` })),
+                v.dead ? h("em", { text: "陣亡" }) : null);
             })()),
           this.status(m.workStatus))),
     );
+    if (battle && !past) this.fallenWatch(teamId);
     const side = this.sel ? this.drawer(teamId) : battle ? this.battleSide(teamId, vm) : this.activity(teamId);
     return h(
       "div",
@@ -971,7 +1045,7 @@ export class Office {
       this.trouble(),
       this.notice ? h("div", { class: "office-notice", role: "status", text: this.notice }) : null,
       h("div", { class: "office-body" },
-        h("div", { class: "office-main" }, h("div", { class: `office-frame${battle ? " battle" : ""}` }, scene.el, battle && vm ? bossHud(vm, WORLDS[savedWorld(teamId)]) : null), extra, roster),
+        h("div", { class: "office-main" }, h("div", { class: `office-frame${battle ? " battle" : ""}` }, scene.el, battle && vm ? bossHud(vm, WORLDS[savedWorld(teamId)]) : null, battle && vm ? teamBar(this.runs.get(teamId) && this.runs.get(teamId)!.maxTurns ? { used: this.runs.get(teamId)!.totalTurns, max: this.runs.get(teamId)!.maxTurns } : null) : null), extra, roster),
         side),
     );
   }
@@ -1102,6 +1176,17 @@ export class Office {
       this.back
         ? h("button", { class: "link", type: "button", onClick: () => { const b = this.back!; this.back = null; this.select(b.teamId, b.memberId); } }, `← 回到 ${name(this.back.memberId)}`)
         : null,
+      (() => {
+        if (this.mode !== "battle" || this.viewing) return null;
+        const v = this.vitals(teamId, m.memberId);
+        if (!v?.dead) return null;
+        return h("section", { class: "office-card bt-fallen-card" },
+          h("h3", { text: "☠ 陣亡" }),
+          h("p", { class: "dim", text: `${m.displayName} ${v.why},倒在戰場上。Leader 已被告知先不要派工作給它。` }),
+          this.host.openSetup
+            ? h("button", { class: "btn primary", type: "button", onClick: () => this.host.openSetup!(teamId) }, "去團隊設定提高上限(復活)")
+            : h("p", { class: "hint", text: "到「團隊設定」提高它的上限並儲存,就會復活。" }));
+      })(),
       (() => {
         const asks = this.asksOf(teamId, m.memberId);
         return asks.length ? h("section", { class: "office-card office-asks" }, h("h3", { text: "需要你處理" }), ...asks) : null;

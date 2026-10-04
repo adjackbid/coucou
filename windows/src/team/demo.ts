@@ -18,7 +18,7 @@ const config: TeamConfig = {
   autoApprove: true,
   members: [
     { id: "ai1", name: "AI 1", role: "規劃", duty: "分解需求、指派任務、審查成果", agent: "claude", model: "sonnet", color: "#5b8def" },
-    { id: "ai2", name: "AI 2", role: "執行整合", duty: "整合交付物、測試與驗收", agent: "copilot", color: "#34c7a0" },
+    { id: "ai2", name: "AI 2", role: "執行整合", duty: "整合交付物、測試與驗收", agent: "copilot", color: "#34c7a0", maxTokens: 300_000 },
     { id: "ai3", name: "AI 3", role: "網站開發", duty: "網站前後端開發與功能實作", agent: "cg", color: "#a06cf0" },
     { id: "ai4", name: "AI 4", role: "圖片生成", duty: "生成商品圖與行銷素材", agent: "agy", color: "#f5b63d" },
   ],
@@ -180,6 +180,7 @@ export function demoSnapshot(): Snapshot {
         turns: 1,
         permission: null,
         lostWhy: "",
+        usage: [used("gpt-6-mini", 150_000, 28_000, 42_000)],
       },
       { ...seat(2), isLeader: false, status: "working", task: "TASK-04", waiting: null, activity: "Editing src/cart/CartPage.tsx", turns: 3, permission: null, lostWhy: "", usage: [used("glm-5.3-flash", 182_000, 21_400, 96_000)] },
       { ...seat(3), isLeader: false, status: "done", task: null, waiting: null, activity: "", turns: 2, permission: null, lostWhy: "", usage: [used("gemini-3.8-flash", 23_000, 4_100)] },

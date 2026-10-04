@@ -930,3 +930,94 @@
   opacity: 0.36;
   filter: saturate(0.7) sepia(0.3) brightness(1.06);
 }
+
+/* ── 我方 HP(回合)與成員生命 ─────────────────────────────────────────────── */
+
+.bt-team-hp {
+  position: absolute;
+  left: 24px;
+  top: 150px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(10, 11, 16, 0.72);
+  font-size: 12px;
+}
+
+.bt-team-hp .bt-team-word {
+  color: #9fb4d8;
+  font-weight: 700;
+}
+
+.bt-team-hp .bt-bar.team {
+  width: 150px;
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.bt-team-hp .bt-bar.team i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #39d98a, #7ee7b2);
+  transition: width 0.6s ease;
+}
+
+.bt-team-hp .bt-bar.team.low i {
+  background: linear-gradient(90deg, #ff5d5d, #ffa24d);
+}
+
+.bt-team-hp .bt-team-n b {
+  font-size: 14px;
+}
+
+.bt-team-hp .bt-team-n small {
+  color: var(--dim);
+}
+
+.office-roster-item .bt-member-hp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.office-roster-item .bt-member-hp i {
+  flex: 0 0 96px;
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.office-roster-item .bt-member-hp b {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #39d98a, #7ee7b2);
+}
+
+.office-roster-item .bt-member-hp.low b {
+  background: linear-gradient(90deg, #ff5d5d, #ffa24d);
+}
+
+.office-roster-item .bt-member-hp em {
+  font-style: normal;
+  font-weight: 800;
+  font-size: 11px;
+  color: #ff7a7a;
+}
+
+/* 陣亡: grey where it stands, until the person raises the limit. */
+.office-mochi.bt-down {
+  filter: grayscale(1) brightness(0.6);
+}
+
+.bt-fallen-card h3 {
+  color: #ff8585;
+}

@@ -60,6 +60,10 @@ export interface LayerHost {
   world(): WorldId;
   /** What a boss_counter is really about: the cause the record states, else unknown. */
   causeOf?(s: BattleSignal): BossBlockCause;
+  /** The team's turns this run: 我方 HP is what is left of them. */
+  turns?(): { used: number; max: number } | null;
+  /** A member past its own limits: down until the person raises them. */
+  fallen?(memberId: string): boolean;
 }
 
 /** One boss move playing or about to: its clock, its sources, what it has set off. */
@@ -217,6 +221,10 @@ export class BattleLayer implements SceneLayer {
   private ambient: HTMLElement | null = null;
   /** When the boss next lashes out on its own — a show of temper, no damage. */
   private idleAt = 0;
+  /** Turns seen last update, recent burns, and when the last pressure ultimate played. */
+  private turnSeen = -1;
+  private turnBurn: { at: number; n: number }[] = [];
+  private turnUltAt = 0;
   private fx: HTMLCanvasElement | null = null;
   private card: HTMLElement | null = null;
   private cardTimer = 0;
@@ -349,6 +357,21 @@ export class BattleLayer implements SceneLayer {
     // The few desks the fight leaves in the room (the scene draws them afresh with every update).
     for (const [x, y] of this.scene.roomTheme?.battle?.desks ?? []) this.scene.drawDesk({ x, y, facing: "SE" }, "#2E3A52");
     const state = vm?.bossState ?? "planning";
+    // 回合就是我方的血: burned fast, the boss smells it and raises its ultimate.
+    const t = this.host.turns?.() ?? null;
+    // A snapshot without the counters (the demo stream has some) keeps the last seen value.
+    if (t) {
+      if (this.turnSeen >= 0 && t.used > this.turnSeen && !this.scene.mini) this.turnBurn.push({ at: Date.now(), n: t.used - this.turnSeen });
+      if (this.turnSeen < 0 || t.used >= this.turnSeen || t.used < this.turnSeen - 1) this.turnSeen = t.used;
+    }
+    const cut = Date.now() - 75000;
+    this.turnBurn = this.turnBurn.filter((x) => x.at >= cut);
+    const burned = this.turnBurn.reduce((n, x) => n + x.n, 0);
+    if (burned >= 4 && Date.now() - this.turnUltAt > 90000 && state === "engaged" && !this.bossCue && !this.scene.mini && !this.still && !this.host.calm() && !document.hidden && this.scene.el.isConnected) {
+      this.turnUltAt = Date.now();
+      this.turnBurn = [];
+      this.turnPressure(burned);
+    }
     // No task counted yet: the boss has not shown itself.
     const shown = !!vm && state !== "planning";
     this.boss.style.display = this.shadow!.style.display = shown ? "" : "none";
@@ -543,6 +566,51 @@ export class BattleLayer implements SceneLayer {
     // Straight onto the stage: no card, no speech, no record — the fight just breathes.
     this.bossCue = { cue, move, signal, startedAt: now, fired: new Set(), sparks: 0 };
     wake();
+  }
+
+  /** Turns burned in a hurry: the boss raises its ultimate over it — loud, but still 0 damage. */
+  private turnPressure(burned: number) {
+    const world = WORLDS[this.worldId];
+    const kit = world.bossId === "requirements-golem" ? null : BOSS_KIT[world.bossId as WorldBossId];
+    const vm = this.vm;
+    if (!kit || !vm || !this.boss) return;
+    const move = BOSS_MOVES[kit.ultimate];
+    const members = this.host.members();
+    const signal: BattleSignal = {
+      teamId: vm.teamId, runId: vm.runId, signalId: `turns|${Date.now()}`, kind: "boss_counter",
+      source: { teamId: vm.teamId, runId: vm.runId, kind: "manual_replay", streamId: null, domainSeq: null, taskIds: [], memberIds: members.slice(0, 3), questionIds: [] },
+      reasonLabel: "回合快速消耗", hpBefore: null, hpAfter: null, maxHpBefore: null, maxHpAfter: null, displayDelta: null,
+      actorMemberId: null, observedAt: new Date().toISOString(), evidence: "observed_transition", replay: true,
+    };
+    const cue: BossCue = { moveId: move.moveId, kind: move.kind, consumedSourceSignalIds: [], sourceTaskIds: [], heroHpDelta: 0, extraBossDamage: 0, scopeGrowthLabelHp: 0, durationMs: move.phases[2], animated: true };
+    this.bossCue = { cue, move, signal, startedAt: this.now(), fired: new Set(), sparks: 0 };
+    this.showBossCard(move, `絕招・${move.name}`, `${world.bossName} · 短時間消耗 ${burned} 回合 · 0 傷害 · 工作照常`, null);
+    this.float({ text: `-${burned} 回合`, sub: "我方 HP", tone: "hit" }, { ...this.scene.screen(3.6, 3.2) });
+    this.say("boss_counter");
+    wake();
+  }
+
+  /** A member past its limits goes down where it stands. */
+  memberDown(memberId: string, why: string) {
+    const m = this.scene.mochi(memberId);
+    if (!m || this.still) return;
+    this.float({ text: "陣亡", sub: `${this.host.name(memberId)} · ${why}`, tone: "hit" }, { x: m.x, y: m.y - m.size * 0.9 });
+    this.spark(null, m.x, m.y + m.size * 0.2, 8, "#8A93A8", { speed: 60, up: 90, size: 2.6 });
+    wake();
+  }
+
+  /** The person raised the limit: back on its feet. */
+  memberUp(memberId: string) {
+    const m = this.scene.mochi(memberId);
+    if (!m || this.still) return;
+    this.float({ text: "復活!", sub: this.host.name(memberId), tone: "heal" }, { x: m.x, y: m.y - m.size * 0.9 });
+    this.spark(null, m.x, m.y + m.size * 0.2, 10, "#8DE9C5", { speed: 50, up: 130, kind: "plus", size: 3 });
+    wake();
+  }
+
+  /** 陣亡 for the scene: the fallen stay grey until revived. */
+  fallen(memberId: string): boolean {
+    return this.host.fallen?.(memberId) ?? false;
   }
 
   /** A boss move's card: the world's own colours. */
