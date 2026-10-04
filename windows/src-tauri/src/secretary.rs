@@ -70,6 +70,8 @@ pub struct Office {
     pub driver: Arc<Agents>,
     /// The person's clock: minutes to add to UTC for local time.
     pub tz_minutes: i64,
+    /// What the person calls the secretary; empty for no name.
+    pub name: String,
 }
 
 #[derive(Default)]
@@ -700,7 +702,7 @@ async fn act(payload: &Value, office: &Office) -> Result<String, String> {
 
 fn system_prompt(office: &Office) -> String {
     format!(
-        "You are the secretary of the user's company of AI agents, inside Coucou, a Windows app. The company is made of teams: each has a goal, a work folder and AI members (each runs an agent such as Codex, Claude Code, Copilot or Antigravity, with a model); a leader member plans tasks, hands them out and reviews them. The user calls on you when they need you: to find out how the teams are doing, what is stuck or waiting for them, what it cost, or to get something done.\n\
+        "{}You are the secretary of the user's company of AI agents, inside Coucou, a Windows app. The company is made of teams: each has a goal, a work folder and AI members (each runs an agent such as Codex, Claude Code, Copilot or Antigravity, with a model); a leader member plans tasks, hands them out and reviews them. The user calls on you when they need you: to find out how the teams are doing, what is stuck or waiting for them, what it cost, or to get something done.\n\
 \n\
 How you work:\n\
 - Look things up with your tools before you answer; never guess a team's state. Quote names, numbers and times as the tools give them.\n\
@@ -710,6 +712,10 @@ How you work:\n\
 - Answer in the user's language (Traditional Chinese when they write Chinese), short and concrete: a few lines or a short list. Point out anything waiting for the user (permission cards, questions) first.\n\
 \n\
 Now: {} (the user's local time).",
+        match office.name.trim() {
+            "" | "秘書" => String::new(),
+            name => format!("Your name is {name}; the user calls you that, and you may call yourself that. "),
+        },
         when(crate::team::store::now_ms(), office.tz_minutes)
     )
 }
@@ -846,7 +852,7 @@ mod tests {
         runtime.block_on(async {
             let driver = Arc::new(Agents::default());
             let teams = Arc::new(Teams::new(Arc::new(AcpDrive(driver.clone())), Arc::new(|_| {}), Some(logs.clone()), settings::team_mcp_exe_path()));
-            let office = Office { teams, agents: settings.agents.clone(), driver, tz_minutes: 480 };
+            let office = Office { teams, agents: settings.agents.clone(), driver, tz_minutes: 480, name: String::new() };
             let secretary = Secretary::default();
             let step = |s: &Step| eprintln!("  step: {} ({})", s.label, s.tool);
 

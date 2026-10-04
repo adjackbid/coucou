@@ -40,6 +40,14 @@ let stick = false;
 /** (id, name, model) of each chat provider; null until asked. */
 let providers: [string, string, string][] | null = null;
 let provider = stored("coucou.secretary.provider") ?? "";
+/** What the person calls the secretary; "秘書" until they name it. */
+let name = stored("coucou.secretary.name")?.trim() || "秘書";
+/** The name being typed, while it is being changed. */
+let naming: string | null = null;
+
+export function secretaryName(): string {
+  return name;
+}
 /** Proposals being carried out right now. */
 const doing = new Set<string>();
 
@@ -84,7 +92,7 @@ async function ask(host: SecretaryHost, text: string) {
   stick = true;
   host.render();
   try {
-    const reply: SecretaryReply = IS_TAURI ? await Bridge.secretaryAsk(words, provider || null, tz()) : await (await import("./demo")).demoSecretary(words);
+    const reply: SecretaryReply = IS_TAURI ? await Bridge.secretaryAsk(words, provider || null, tz(), name) : await (await import("./demo")).demoSecretary(words);
     entries.push({ who: "secretary", text: reply.text, steps: reply.steps, proposals: reply.proposals });
   } catch (err) {
     entries.push({ who: "error", text: String(err instanceof Error ? err.message : err) });
@@ -190,6 +198,41 @@ function card(host: SecretaryHost, p: SecretaryProposal): HTMLElement {
 /** `?view=secretary&ask=…` in a browser asks once, to look at a conversation. */
 let asked = false;
 
+/** The page's title: the secretary's name, and the way to change it. */
+export function secretaryTitle(host: SecretaryHost): HTMLElement {
+  if (naming !== null) {
+    const field = h("input", { class: "field sec-name-field", type: "text", maxlength: "20", "data-key": "secretary-name", value: naming, "aria-label": "秘書的名字", spellcheck: "false" }) as HTMLInputElement;
+    const save = () => {
+      name = field.value.trim().slice(0, 20) || "秘書";
+      store("coucou.secretary.name", name);
+      naming = null;
+      host.render();
+    };
+    field.addEventListener("input", () => (naming = field.value));
+    field.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing) save();
+      if (e.key === "Escape") {
+        naming = null;
+        host.render();
+      }
+    });
+    setTimeout(() => field.isConnected && document.activeElement !== field && (field.focus(), field.select()), 0);
+    return h(
+      "div",
+      { class: "sec-name" },
+      field,
+      h("button", { class: "btn primary", type: "button", onClick: save }, "儲存"),
+      h("button", { class: "link", type: "button", onClick: () => ((naming = null), host.render()) }, "取消"),
+    );
+  }
+  return h(
+    "div",
+    { class: "sec-name" },
+    h("b", { text: name }),
+    h("button", { class: "link", type: "button", title: "幫秘書取個名字:側欄和這裡都會用它,秘書也會這樣自稱", onClick: () => ((naming = name), host.render()) }, "改名"),
+  );
+}
+
 export function secretaryPage(host: SecretaryHost): HTMLElement {
   void ensureProviders(host);
   if (import.meta.env.DEV && !IS_TAURI && !asked && typeof location !== "undefined") {
@@ -202,7 +245,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
       h(
         "div",
         { class: "sec-hello" },
-        h("h2", { text: "需要什麼,跟我說" }),
+        h("h2", { text: `我是${name},需要什麼跟我說` }),
         h("p", { class: "dim", text: "我會查 Coucou 的紀錄回答你:各團隊進度、誰卡住、誰在等你、花了多少錢。也可以請我開新團隊、給團隊下指令、暫停或封存團隊——我先擬好,你按確認才會執行。" }),
         h("div", { class: "sec-suggest" }, ...SUGGESTIONS.map((s) => h("button", { class: "chip pick", type: "button", onClick: () => (s.endsWith("…") ? ((draft = s.replace("…", ":")), host.render()) : void ask(host, s)) }, s))),
       ),

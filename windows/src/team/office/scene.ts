@@ -169,6 +169,9 @@ export const STATUS: Record<WorkStatus, { label: string; icon: string; tone: "wo
   unknown: { label: "狀態未知", icon: "…", tone: "quiet" },
 };
 
+/** Nothing to do for now: these members go and sit in the lounge. */
+const RESTING = new Set<WorkStatus>(["idle", "completed", "waiting_dependency"]);
+
 const POSE: Record<WorkStatus, BotStateName> = {
   planning: "thinking",
   working: "working",
@@ -195,7 +198,13 @@ interface Actor {
   status: WorkStatus | null;
   /** Drawn once more even when nothing moves (reduced motion, a mini scene). */
   dirty: boolean;
+  /** Where its canvas is (top-left, stage pixels), and where it is going: between desk and sofa it walks. */
+  at?: { x: number; y: number };
+  to?: { x: number; y: number; z: number };
 }
+
+/** How fast a Mochi walks across the room, in stage pixels a second. */
+const WALK = 240;
 
 export interface SceneOptions {
   /** Small and still: the company map's thumbnails. */
@@ -388,19 +397,42 @@ export class TeamScene {
   private place(m: MemberSnapshot, i: number, count: number) {
     const desk = this.theme!.desks(count)[i];
     const standing = m.workStatus === "planning" ? this.theme!.room.spots.whiteboard ?? null : null;
-    const lounge = m.workStatus === "idle" ? this.lounge.get(m.memberId) ?? null : null;
+    const lounge = this.lounge.get(m.memberId) ?? null;
     return { desk, standing, lounge };
   }
 
-  /** Who sits where on the sofa this time round: idle members in order, as many as it seats. */
+  /**
+   * Who sits where on the sofa this time round: members with nothing to do —
+   * done, never given work, or waiting for someone else's hand-in — those
+   * with no work at all first, as many as it seats. A member that keeps
+   * resting keeps its seat.
+   */
   private lounge = new Map<string, { x: number; y: number }>();
+  private loungeSeat = new Map<string, number>();
   private seatLounge(members: MemberSnapshot[]) {
     this.lounge.clear();
     const sofa = this.theme?.props.sofa;
     if (!sofa) return;
     const at = this.toScreen(...sofa.at);
-    const idle = members.filter((m) => m.workStatus === "idle").slice(0, sofa.seats.length);
-    idle.forEach((m, i) => this.lounge.set(m.memberId, { x: at.x - H(sofa.groundPivot[0]) + H(sofa.seats[i][0]), y: at.y - H(sofa.groundPivot[1]) + H(sofa.seats[i][1]) }));
+    const rank = (s: WorkStatus) => (s === "completed" || s === "idle" ? 0 : 1);
+    const resting = members.filter((m) => RESTING.has(m.workStatus)).sort((a, b) => rank(a.workStatus) - rank(b.workStatus)).slice(0, sofa.seats.length);
+    const kept = new Map<string, number>();
+    const taken = new Set<number>();
+    for (const m of resting) {
+      const was = this.loungeSeat.get(m.memberId);
+      if (was !== undefined && was < sofa.seats.length && !taken.has(was)) {
+        kept.set(m.memberId, was);
+        taken.add(was);
+      }
+    }
+    for (const m of resting) {
+      if (kept.has(m.memberId)) continue;
+      const free = sofa.seats.findIndex((_, i) => !taken.has(i));
+      kept.set(m.memberId, free);
+      taken.add(free);
+    }
+    this.loungeSeat = kept;
+    for (const [id, i] of kept) this.lounge.set(id, { x: at.x - H(sofa.groundPivot[0]) + H(sofa.seats[i][0]), y: at.y - H(sofa.groundPivot[1]) + H(sofa.seats[i][1]) });
   }
 
   /** Read the store again and bring the scene up to it. */
@@ -413,6 +445,9 @@ export class TeamScene {
     if (this.theme?.name !== name) {
       this.theme = theme(name);
       this.build();
+      // Another room: everyone is put in place, nobody walks over from the old one.
+      for (const a of this.actors.values()) a.at = undefined;
+      this.loungeSeat.clear();
     }
     const keep = new Set<string>();
     // Everything per member is drawn afresh; only the Mochis carry over.
@@ -478,7 +513,17 @@ export class TeamScene {
     const actor = this.actor(m, color);
     const size = actor.size;
     const bottom = seat.y + (standing ? 0 : BODY * 0.06);
-    Object.assign(actor.canvas.style, { left: `${seat.x - size / 2}px`, top: `${bottom - size / 2 - BODY / 2}px`, zIndex: String(seatZ) });
+    // Between desk and sofa the Mochi walks there (frame() moves it); the
+    // first picture and 減少動態 just put it in its place.
+    const left = seat.x - size / 2;
+    const top = bottom - size / 2 - BODY / 2;
+    actor.to = { x: left, y: top, z: seatZ };
+    const walking = !!actor.at && !this.first && !this.reduceMotion && (actor.at.x !== left || actor.at.y !== top);
+    if (!walking) actor.at = { x: left, y: top };
+    // On the way it is drawn over whatever it passes.
+    const drawnZ = walking ? Math.max(Number(actor.canvas.style.zIndex) || 0, seatZ) : seatZ;
+    Object.assign(actor.canvas.style, { left: `${actor.at!.x}px`, top: `${actor.at!.y}px`, zIndex: String(drawnZ) });
+    if (walking) actor.dirty = true;
     actor.canvas.classList.toggle("selected", sel);
     if (!actor.canvas.isConnected) this.stage.append(actor.canvas);
     const screenMid = (quad[0].x + quad[1].x) / 2;
@@ -615,6 +660,25 @@ export class TeamScene {
     const res = dpr * Math.min(1, Math.max(0.25, this.k));
     for (const a of this.actors.values()) {
       if (!a.canvas.isConnected) continue;
+      // Walking to its new place: a step nearer each frame, facing the way it goes.
+      let facing = a.yaw;
+      if (a.at && a.to && (a.at.x !== a.to.x || a.at.y !== a.to.y)) {
+        const dx = a.to.x - a.at.x;
+        const dy = a.to.y - a.at.y;
+        const d = Math.hypot(dx, dy);
+        const reach = WALK * Math.min(0.1, step);
+        if (still || d <= reach) {
+          a.at = { x: a.to.x, y: a.to.y };
+          a.canvas.style.zIndex = String(a.to.z);
+        } else {
+          a.at = { x: a.at.x + (dx / d) * reach, y: a.at.y + (dy / d) * reach };
+          facing = dx < 0 ? -0.7 : 0.7;
+        }
+        a.canvas.style.left = `${a.at.x}px`;
+        a.canvas.style.top = `${a.at.y}px`;
+        a.dirty = true;
+        moving = true;
+      }
       if (still && !a.dirty) continue;
       const px = Math.round(a.size * res);
       if (a.canvas.width !== px) {
@@ -625,7 +689,7 @@ export class TeamScene {
       if (!ctx) continue;
       // A still Mochi is drawn as it settles, then left.
       a.engine.update(still ? 1 : Math.min(0.1, step));
-      a.engine.yaw = a.yaw;
+      a.engine.yaw = facing;
       ctx.setTransform(res, 0, 0, res, 0, 0);
       ctx.clearRect(0, 0, a.size, a.size);
       a.engine.draw(ctx, a.size, a.size);

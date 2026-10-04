@@ -924,6 +924,7 @@ async fn secretary_ask(
     text: String,
     provider: Option<String>,
     tz_minutes: i64,
+    name: Option<String>,
 ) -> Result<secretary::Reply, String> {
     let (provider, profiles) = {
         let settings = shared.settings.lock().unwrap();
@@ -938,7 +939,7 @@ async fn secretary_ask(
         (found, settings.agents.clone())
     };
     let provider = provider.ok_or("The secretary needs a chat model: add one in Settings → Chat providers.")?;
-    let office = secretary::Office { teams: teams.inner().clone(), agents: profiles, driver: agents.inner().clone(), tz_minutes };
+    let office = secretary::Office { teams: teams.inner().clone(), agents: profiles, driver: agents.inner().clone(), tz_minutes, name: name.unwrap_or_default() };
     let window = app.clone();
     secretary
         .ask(&provider, &office, &text, &move |step| {
@@ -958,7 +959,7 @@ async fn secretary_confirm(
     tz_minutes: i64,
 ) -> Result<secretary::Proposal, String> {
     let profiles = shared.settings.lock().unwrap().agents.clone();
-    let office = secretary::Office { teams: teams.inner().clone(), agents: profiles, driver: agents.inner().clone(), tz_minutes };
+    let office = secretary::Office { teams: teams.inner().clone(), agents: profiles, driver: agents.inner().clone(), tz_minutes, name: String::new() };
     secretary.confirm(&id, &office).await
 }
 

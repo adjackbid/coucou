@@ -14,7 +14,8 @@ import { floorColumns } from "./floor";
 import { RealAdapter, fileFromSnapshot } from "./adapter-real";
 import { MockAdapter } from "./adapter-mock";
 import { loadArt, STATUS, TeamScene, themeName, THEME_LABELS, wake } from "./scene";
-import type { PastRun, Snapshot, TeamFile } from "../types";
+import type { PastRun, Snapshot, TeamFile, Usage } from "../types";
+import { fmtMoney, fmtTokens, usageSummary } from "../cost";
 
 export interface OfficeHost {
   render(): void;
@@ -35,6 +36,10 @@ export interface OfficeHost {
   resume(teamId: string): Promise<unknown>;
   /** Resolves to the message's id; the same request id is sent once. */
   instruct(teamId: string, text: string, request: string): Promise<string>;
+  /** What a member waits on the person for (a permission card, a question), answerable where it is shown. */
+  asks?(teamId: string, memberId: string): HTMLElement[];
+  /** What last went wrong when the person answered, if anything. */
+  trouble?(): string;
 }
 
 const MAX_INSTRUCTION = 2000;
@@ -257,6 +262,40 @@ export class Office {
     return this.store.members(teamId).filter((m) => STATUS[m.workStatus].tone === "alert");
   }
 
+  /** What a team (or one member) has used this run: tokens and their cost at today's prices. */
+  private spend(teamId: string, memberId?: string): { tokens: number; cost: string } | null {
+    const snap = this.runs.get(teamId);
+    if (!snap) return null;
+    const usage: Usage[] = snap.members.filter((m) => !memberId || m.id === memberId).flatMap((m) => m.usage ?? []);
+    const s = usageSummary(usage, () => this.host.render());
+    if (!s.tokens) return null;
+    return { tokens: s.tokens, cost: s.usd == null ? "" : `${s.priced ? "" : "≥ "}${fmtMoney(s.usd)}` };
+  }
+
+  /** "任務 2/4 · 1.2M tokens · NT$3.4" — the team's numbers, live. */
+  private figures(teamId: string, cls = "office-figures"): HTMLElement | null {
+    const snap = this.runs.get(teamId);
+    if (!snap) return null;
+    const s = this.spend(teamId);
+    return h(
+      "div",
+      { class: cls, title: "本輪的任務、用掉的 token 與預估成本(依「成本與用量」的價格表),隨團隊工作即時更新" },
+      h("span", {}, h("small", { text: "任務" }), h("b", { text: `${snap.done}/${snap.total}` })),
+      h("span", {}, h("small", { text: "Token" }), h("b", { text: s ? fmtTokens(s.tokens) : "0" })),
+      h("span", {}, h("small", { text: "成本" }), h("b", { text: s?.cost || "—" })),
+    );
+  }
+
+  /** What waits on the person for this member, answerable here. */
+  private asksOf(teamId: string, memberId: string): HTMLElement[] {
+    return this.viewing || this.demo ? [] : this.host.asks?.(teamId, memberId) ?? [];
+  }
+
+  private trouble(): HTMLElement | null {
+    const t = this.host.trouble?.() ?? "";
+    return t ? h("div", { class: "problem", role: "alert", text: t }) : null;
+  }
+
   private connection() {
     const c = this.store.connection;
     if (this.store.syncing) return h("div", { class: "office-stale", role: "status", text: "資料同步中…" });
@@ -311,6 +350,7 @@ export class Office {
           h("span", { class: "dim", text: p.percent === null ? "尚未派工" : `${p.percent}%` }),
           alerts ? h("span", { class: "office-count", title: `${alerts} 項需要你`, text: String(alerts) }) : null,
         ),
+        this.figures(t.teamId, "office-figures room"),
       );
       grid.append(room);
     }
@@ -322,10 +362,12 @@ export class Office {
       attention.length
         ? h("div", { class: "office-card alert" }, h("h3", { text: "需要你的注意" }),
             ...attention.map(({ t, m }) =>
-              h("button", { class: "office-member-row", type: "button", onClick: () => { this.sel = { teamId: t.teamId, memberId: m.memberId }; this.host.openTeam(t.teamId); } },
-                h("i", { class: "office-blob", style: `background:${m.color}` }),
-                h("span", { class: "grow" }, h("b", { text: `${t.name} · ${m.displayName}` }), h("small", { class: "dim", text: ` ${m.waitingFor?.reason ?? STATUS[m.workStatus].label}` })),
-                h("span", { class: "office-pill alert", text: "查看" }))))
+              h("div", { class: "office-attn" },
+                h("button", { class: "office-member-row", type: "button", title: "進入這間辦公室看這位成員", onClick: () => { this.sel = { teamId: t.teamId, memberId: m.memberId }; this.host.openTeam(t.teamId); } },
+                  h("i", { class: "office-blob", style: `background:${m.color}` }),
+                  h("span", { class: "grow" }, h("b", { text: `${t.name} · ${m.displayName}` }), h("small", { class: "dim", text: ` ${m.waitingFor?.reason ?? STATUS[m.workStatus].label}` })),
+                  h("span", { class: "office-pill alert", text: "查看" })),
+                ...this.asksOf(t.teamId, m.memberId))))
         : null,
     );
     return h(
@@ -336,6 +378,7 @@ export class Office {
         this.demoTag(),
         this.demo ? h("button", { class: "btn plain", type: "button", title: "播放規格附帶的下一個事件", onClick: () => { if (!this.step()) { this.notice = "示範事件已全部播放。"; this.host.render(); } } }, "下一個示範事件") : null),
       this.connection(),
+      this.trouble(),
       h("div", { class: "office-body" }, this.mapViewport(grid), side),
     );
   }
@@ -350,6 +393,7 @@ export class Office {
         h("p", { class: "dim", text: pick.goal.split("\n")[0] }),
         this.runLabel(pickRun),
         this.progressBar(pick.teamId),
+        this.figures(pick.teamId),
         leader ? h("p", { class: "dim", text: `Leader · ${leader.displayName ?? leader.memberId}(${STATUS[leader.workStatus].label})` }) : h("p", { class: "dim", text: "還沒有指定 Leader,請到團隊設定。" }),
         h("button", { class: "btn primary", type: "button", onClick: () => this.host.openTeam(pick.teamId) }, "進入辦公室 →"),
       ),
@@ -373,11 +417,40 @@ export class Office {
     const done = teams.filter((t) => runOf(t) === "completed").length;
     const rest = Math.max(0, teams.length - busy - need - done);
     const stat = (n: number, label: string, tone: string) => h("div", { class: `office-stat ${tone}` }, h("b", { text: String(n) }), h("span", { text: label }));
+    // Every team's run: tasks, tokens and their cost, most expensive first.
+    const rows = teams
+      .map((t) => ({ t, snap: this.runs.get(t.teamId), s: this.spend(t.teamId) }))
+      .filter((r) => r.snap);
+    const tasks = rows.reduce((a, r) => [a[0] + r.snap!.done, a[1] + r.snap!.total], [0, 0]);
+    const tokens = rows.reduce((a, r) => a + (r.s?.tokens ?? 0), 0);
+    const all = usageSummary(rows.flatMap((r) => r.snap!.members.flatMap((m) => m.usage ?? [])), () => this.host.render());
+    rows.sort((a, b) => (b.s?.tokens ?? 0) - (a.s?.tokens ?? 0));
     return h("div", { class: "office-card" },
       h("div", { class: "row" }, h("h2", { text: "公司總覽" }), this.demoTag()),
       h("div", { class: "office-stats" }, stat(busy, "執行中", "work"), stat(need, "需介入", "alert"), stat(done, "已完成", "done"), stat(rest, "待命", "quiet")),
-      h("p", { class: "dim", text: "點一間辦公室看它的摘要;雙擊直接進去。" }),
+      rows.length
+        ? h("div", { class: "office-figures", title: "各團隊本輪的合計,隨團隊工作即時更新" },
+            h("span", {}, h("small", { text: "任務" }), h("b", { text: `${tasks[0]}/${tasks[1]}` })),
+            h("span", {}, h("small", { text: "Token" }), h("b", { text: fmtTokens(tokens) })),
+            h("span", {}, h("small", { text: "預估成本" }), h("b", { text: all.usd == null ? "—" : `${all.priced ? "" : "≥ "}${fmtMoney(all.usd)}` })))
+        : null,
+      rows.length
+        ? h("table", { class: "office-teams" },
+            h("thead", {}, h("tr", {}, h("th", { text: "團隊" }), h("th", { text: "任務" }), h("th", { text: "Token" }), h("th", { text: "成本" }))),
+            h("tbody", {}, ...rows.map(({ t, snap, s }) =>
+              h("tr", { onClick: () => { this.companyPick = t.teamId; this.host.render(); }, title: "看這間辦公室的摘要" },
+                h("td", {}, h("i", { class: `office-dot ${this.runTone(t)}` }), t.name),
+                h("td", { text: `${snap!.done}/${snap!.total}` }),
+                h("td", { text: s ? fmtTokens(s.tokens) : "0" }),
+                h("td", { text: s?.cost || "—" })))))
+        : null,
+      h("p", { class: "dim", text: "點一間辦公室看它的摘要;雙擊直接進去。成本依「成本與用量」的價格表估算。" }),
     );
+  }
+
+  private runTone(t: Team): string {
+    const s = this.store.run(t.currentRunId)?.status;
+    return this.alerts(t.teamId).length || s === "needs_attention" ? "alert" : s === "running" || s === "pausing" ? "work" : s === "completed" ? "done" : "quiet";
   }
 
   // ── The company map: drag to move, zoom 40–160 %, back to the whole floor ──
@@ -530,7 +603,11 @@ export class Office {
           h("span", { class: "grow" },
             h("b", {}, m.memberId === team.leaderMemberId ? "♛ " : "", m.displayName ?? m.memberId),
             h("small", { class: "dim", text: ` ${m.memberId === team.leaderMemberId ? "Leader · " : ""}${m.roleLabel}` }),
-            h("span", { class: "office-roster-task", text: m.summary || (m.primaryTaskId ? this.store.task(m.primaryTaskId)?.title ?? "" : "") })),
+            h("span", { class: "office-roster-task", text: m.summary || (m.primaryTaskId ? this.store.task(m.primaryTaskId)?.title ?? "" : "") }),
+            (() => {
+              const s = past ? null : this.spend(teamId, m.memberId);
+              return s ? h("span", { class: "office-roster-spend", text: `${fmtTokens(s.tokens)} tokens${s.cost ? ` · ${s.cost}` : ""}` }) : null;
+            })()),
           this.status(m.workStatus))),
     );
     const side = this.sel ? this.drawer(teamId) : this.activity(teamId);
@@ -538,7 +615,7 @@ export class Office {
       "div",
       { class: "office office-team" },
       h("div", { class: "office-head" },
-        h("div", { class: "office-head-main" }, this.runLabel(run), this.progressBar(teamId), this.demoTag()),
+        h("div", { class: "office-head-main" }, this.runLabel(run), this.progressBar(teamId), past ? null : this.figures(teamId, "office-figures inline"), this.demoTag()),
         toggles,
         pauseBtn),
       past
@@ -548,6 +625,7 @@ export class Office {
         : null,
       pick?.error ? h("div", { class: "office-notice", role: "alert", text: pick.error }) : null,
       this.connection(),
+      this.trouble(),
       this.notice ? h("div", { class: "office-notice", role: "status", text: this.notice }) : null,
       h("div", { class: "office-body" },
         h("div", { class: "office-main" }, h("div", { class: "office-frame" }, scene.el), extra, roster),
@@ -671,11 +749,18 @@ export class Office {
           h("h2", { tabindex: "-1", text: `${m.displayName} · ${m.roleLabel}` }),
           h("div", { class: "row" }, leader ? h("span", { class: "office-pill quiet", text: "♛ Leader" }) : null, this.status(m.workStatus),
             m.engineStatus === "offline" ? h("span", { class: "office-pill quiet", title: "沒有代理在執行;顯示的是紀錄裡最後的狀態", text: "⌁ 未連線" }) : null, this.demoTag()),
-          h("small", { class: "dim", text: `最後更新 ${clock(m.lastActivityAt) || "—"}` })),
+          h("small", { class: "dim", text: (() => {
+            const s = this.viewing ? null : this.spend(teamId, m.memberId);
+            return `最後更新 ${clock(m.lastActivityAt) || "—"}${s ? ` · 本輪 ${fmtTokens(s.tokens)} tokens${s.cost ? ` · ${s.cost}` : ""}` : ""}`;
+          })() })),
         h("button", { class: "icon-btn", type: "button", title: "關閉(Esc)", "aria-label": "關閉", onClick: () => this.close(teamId) }, "✕")),
       this.back
         ? h("button", { class: "link", type: "button", onClick: () => { const b = this.back!; this.back = null; this.select(b.teamId, b.memberId); } }, `← 回到 ${name(this.back.memberId)}`)
         : null,
+      (() => {
+        const asks = this.asksOf(teamId, m.memberId);
+        return asks.length ? h("section", { class: "office-card office-asks" }, h("h3", { text: "需要你處理" }), ...asks) : null;
+      })(),
       h("section", { class: "office-card" },
         h("h3", { text: "目前工作" }),
         task ? h("p", {}, h("b", { text: task.title }), others ? h("small", { class: "dim", text: ` 另外 ${others} 項` }) : null) : h("p", { class: "dim", text: m.workStatus === "idle" ? "待命,沒有指派的任務。" : "沒有進行中的任務。" }),

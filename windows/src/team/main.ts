@@ -19,7 +19,7 @@ import { linksScreen, logScreen, openThread, type Page } from "./screens";
 import { Office } from "./office/office";
 import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
-import { onStep as secretaryStep, secretaryPage, type SecretaryHost } from "./secretary";
+import { onStep as secretaryStep, secretaryName, secretaryPage, secretaryTitle, type SecretaryHost } from "./secretary";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
@@ -358,7 +358,7 @@ function sidebar(): HTMLElement {
           render();
         },
       },
-      h("span", { class: "team-item-name", text: "秘書" }),
+      h("span", { class: "team-item-name", text: secretaryName() }),
       h("span", { class: "team-item-state", text: "需要時叫我:查現況、開團隊" }),
     ),
     h(
@@ -756,62 +756,8 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
     bubble,
   );
 
-  // The three things that wait for the person, answered right on the card.
-  if (m.permission) {
-    const p = m.permission;
-    const input = p.rawInput && typeof p.rawInput === "object" ? (p.rawInput as Record<string, unknown>) : {};
-    const command = typeof input.command === "string" ? input.command : "";
-    const allow = p.options.find((o) => o.kind === "allow_once") ?? p.options.find((o) => o.kind === "allow_always");
-    const reject = p.options.find((o) => o.kind === "reject_once") ?? p.options.find((o) => o.kind === "reject_always");
-    // Several at once (Codex runs steps side by side): every one is listed,
-    // and they can be answered together.
-    const more = m.morePermissions;
-    const commandOf = (x: typeof p) => {
-      const raw = x.rawInput && typeof x.rawInput === "object" ? (x.rawInput as Record<string, unknown>) : {};
-      return typeof raw.command === "string" ? raw.command : x.title;
-    };
-    el.append(
-      h(
-        "div",
-        { class: "ask" },
-        h("div", { class: "ask-why", text: p.danger ? `要你批准:${DANGER[p.danger]}` : "要你批准" }),
-        h("div", { class: "ask-what mono", text: command || p.title }),
-        more.length
-          ? h(
-              "details",
-              { class: "ask-more" },
-              h("summary", { text: `還有 ${more.length} 個請求在排隊` }),
-              ...more.map((x) => h("div", { class: "ask-what mono", text: commandOf(x) })),
-            )
-          : null,
-        h(
-          "div",
-          { class: "row" },
-          button("允許這一次", "primary", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null)), !allow),
-          button("拒絕", "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null))),
-          more.length ? button(`全部允許(${more.length + 1})`, "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null, true)), !allow) : null,
-          more.length ? button("全部拒絕", "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null, true))) : null,
-        ),
-      ),
-    );
-  }
-  const question = snap.questions.find((q) => q.by === m.id && q.answer === null);
-  if (question) {
-    el.append(
-      h(
-        "div",
-        { class: "ask" },
-        h("div", { class: "ask-why", text: "問你" }),
-        h("div", { class: "ask-what", text: question.question }),
-        field(`answer:${snap.id}:${question.id}`, "輸入回覆後按 Enter", (text) =>
-          void act(
-            () => Bridge.teamAnswer(snap.id, question.id, text),
-            () => drafts.delete(`answer:${snap.id}:${question.id}`),
-          ),
-        ),
-      ),
-    );
-  }
+  // The things that wait for the person, answered right on the card.
+  el.append(...asks(snap, m));
   if (m.status === "lost" && snap.detached) {
     el.append(h("div", { class: "hint", text: "按上方「從中斷處繼續」,它會和其他成員一起重新啟動。" }));
   } else if (m.status === "lost") {
@@ -842,6 +788,70 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
     ),
   );
   return el;
+}
+
+/**
+ * What a member waits on the person for — a permission card, a question —
+ * answered right there: on its desk, in the Office's drawer, on the company map.
+ */
+function asks(snap: Snapshot, m: MemberView): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  if (m.permission) {
+    const p = m.permission;
+    const input = p.rawInput && typeof p.rawInput === "object" ? (p.rawInput as Record<string, unknown>) : {};
+    const command = typeof input.command === "string" ? input.command : "";
+    const allow = p.options.find((o) => o.kind === "allow_once") ?? p.options.find((o) => o.kind === "allow_always");
+    const reject = p.options.find((o) => o.kind === "reject_once") ?? p.options.find((o) => o.kind === "reject_always");
+    // Several at once (Codex runs steps side by side): every one is listed,
+    // and they can be answered together.
+    const more = m.morePermissions;
+    const commandOf = (x: typeof p) => {
+      const raw = x.rawInput && typeof x.rawInput === "object" ? (x.rawInput as Record<string, unknown>) : {};
+      return typeof raw.command === "string" ? raw.command : x.title;
+    };
+    out.push(
+      h(
+        "div",
+        { class: "ask" },
+        h("div", { class: "ask-why", text: p.danger ? `要你批准:${DANGER[p.danger]}` : "要你批准" }),
+        h("div", { class: "ask-what mono", text: command || p.title }),
+        more.length
+          ? h(
+              "details",
+              { class: "ask-more" },
+              h("summary", { text: `還有 ${more.length} 個請求在排隊` }),
+              ...more.map((x) => h("div", { class: "ask-what mono", text: commandOf(x) })),
+            )
+          : null,
+        h(
+          "div",
+          { class: "row" },
+          button("允許這一次", "primary", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null)), !allow),
+          button("拒絕", "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null))),
+          more.length ? button(`全部允許(${more.length + 1})`, "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null, true)), !allow) : null,
+          more.length ? button("全部拒絕", "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null, true))) : null,
+        ),
+      ),
+    );
+  }
+  const question = snap.questions.find((q) => q.by === m.id && q.answer === null);
+  if (question) {
+    out.push(
+      h(
+        "div",
+        { class: "ask" },
+        h("div", { class: "ask-why", text: "問你" }),
+        h("div", { class: "ask-what", text: question.question }),
+        field(`answer:${snap.id}:${question.id}`, "輸入回覆後按 Enter", (text) =>
+          void act(
+            () => Bridge.teamAnswer(snap.id, question.id, text),
+            () => drafts.delete(`answer:${snap.id}:${question.id}`),
+          ),
+        ),
+      ),
+    );
+  }
+  return out;
 }
 
 /** Everyone at their desks: the leader first, then as the team lists them. */
@@ -1183,7 +1193,7 @@ function main(): HTMLElement {
     return h(
       "main",
       { class: "main pane" },
-      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": "位置" }, h("b", { text: "秘書" })), windowButtons()),
+      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": "位置" }, secretaryTitle(secretaryHost)), windowButtons()),
       secretaryPage(secretaryHost),
     );
   }
@@ -1313,6 +1323,12 @@ const office = new Office(
     pause: (teamId) => Bridge.teamPause(teamId),
     resume: (teamId) => Bridge.teamResume(teamId),
     instruct: (teamId, text, request) => Bridge.teamInstruct(teamId, "", text, request),
+    asks: (teamId, memberId) => {
+      const snap = runs.get(teamId);
+      const m = snap?.members.find((x) => x.id === memberId);
+      return snap && m ? asks(snap, m) : [];
+    },
+    trouble: () => trouble,
   },
   { demo: !IS_TAURI && new URLSearchParams(location.search).get("office") === "mock" },
 );

@@ -919,6 +919,10 @@
   gap: 4px;
   position: sticky;
   bottom: 0;
+  /* Pinned to the drawer's foot: what scrolls under it does not show through. */
+  margin: 0 -4px;
+  padding: 14px 4px 2px;
+  background: linear-gradient(to bottom, transparent, rgba(var(--card), 0.97) 14px);
 }
 
 .office-composer .row {
@@ -1065,4 +1069,168 @@
 
 .team-item.company {
   margin: 4px 0 6px;
+}
+
+/* ── Live numbers: tasks, tokens, cost ── */
+
+.office-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.office-figures > span {
+  display: grid;
+  gap: 1px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  background: var(--lift);
+  min-width: 0;
+}
+
+.office-figures small {
+  font-size: 10.5px;
+  color: var(--dim);
+}
+
+.office-figures b {
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Under a room on the company map: one quiet line. */
+.office-figures.room {
+  display: flex;
+  gap: 10px;
+  padding: 0 4px 2px;
+}
+
+.office-figures.room > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0;
+  background: none;
+}
+
+.office-figures.room b {
+  font-size: 12px;
+}
+
+/* Beside the progress bar in a team's office. */
+.office-figures.inline {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+.office-figures.inline > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.office-figures.inline b {
+  font-size: 12.5px;
+}
+
+.office-teams {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.office-teams th {
+  padding: 4px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dim);
+  text-align: right;
+}
+
+.office-teams th:first-child,
+.office-teams td:first-child {
+  text-align: left;
+}
+
+.office-teams td {
+  padding: 6px;
+  text-align: right;
+  border-top: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+
+.office-teams td:first-child {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.office-teams tbody tr {
+  cursor: pointer;
+}
+
+.office-teams tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.office-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--dim-3);
+  vertical-align: 1px;
+}
+
+.office-dot.work {
+  background: var(--blue);
+}
+
+.office-dot.alert {
+  background: var(--red);
+}
+
+.office-dot.done {
+  background: var(--green-2);
+}
+
+.office-roster-spend {
+  display: block;
+  font-size: 11px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Answering where it is asked: the drawer and the attention list ── */
+
+.office-asks {
+  box-shadow: inset 0 0 0 1px rgba(244, 80, 94, 0.45);
+}
+
+.office-asks .ask,
+.office-attn .ask {
+  margin-top: 8px;
+}
+
+.office-attn + .office-attn {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+}
+
+.office-attn .ask-what {
+  max-height: 120px;
+  overflow: auto;
 }

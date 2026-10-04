@@ -159,7 +159,7 @@ export const Bridge = {
   /** The chat providers the secretary can think with: (id, name, model). */
   secretaryProviders: () => call<[string, string, string][]>("secretary_providers"),
   /** The person asks the secretary; its steps arrive as `secretary-step` while it works. */
-  secretaryAsk: (text: string, provider: string | null, tzMinutes: number) => callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes }),
+  secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string) => callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name }),
   /** Carries out one of its proposals — only ever from the click on its card. */
   secretaryConfirm: (id: string, tzMinutes: number) => callOrThrow<SecretaryProposal>("secretary_confirm", { id, tzMinutes }),
   secretaryDecline: (id: string) => call<SecretaryProposal | null>("secretary_decline", { id }),
