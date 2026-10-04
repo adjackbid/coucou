@@ -21,6 +21,8 @@ interface StationArt {
   groundPivot: [number, number];
   actorBottom: [number, number];
   screenQuad: [number, number][];
+  /** Where the chair meets the floor, for its pool of shade. */
+  chairFeet?: [number, number][];
 }
 type WorldToScreen = { x0: number; y0: number; perMetreX: number; perMetreY: number; perMetreZ: number };
 interface Props {
@@ -454,6 +456,7 @@ export class TeamScene {
     if (mt) {
       const at = this.toScreen(...mt.at);
       this.stage.append(
+        h("div", { class: "office-shadow prop", "data-prop": "meetingTable", style: `left:${at.x}px;top:${at.y - 4}px;width:${H(mt.canvas[0]) * 0.82}px;height:${H(mt.canvas[0]) * 0.36}px;z-index:${this.depth(...mt.at) - 1}` }),
         h("img", {
           class: "office-layer", src: `/office/${mt.file}`, alt: "", draggable: "false", "data-prop": "meetingTable",
           style: `left:${at.x - H(mt.groundPivot[0])}px;top:${at.y - H(mt.groundPivot[1])}px;width:${H(mt.canvas[0])}px;z-index:${this.depth(...mt.at)}`,
@@ -464,6 +467,7 @@ export class TeamScene {
     if (sofa) {
       const s = this.toScreen(...sofa.at);
       this.stage.append(
+        h("div", { class: "office-shadow prop", "data-prop": "sofa", style: `left:${s.x}px;top:${s.y - 6}px;width:${H(sofa.canvas[0]) * 0.92}px;height:${H(sofa.canvas[0]) * 0.34}px;z-index:${this.depth(...sofa.at) - 1}` }),
         h("img", {
           class: "office-layer", src: `/office/${sofa.file}`, alt: "", draggable: "false", "data-prop": "sofa",
           style: `left:${s.x - H(sofa.groundPivot[0])}px;top:${s.y - H(sofa.groundPivot[1])}px;width:${H(sofa.canvas[0])}px;z-index:${this.depth(...sofa.at)}`,
@@ -743,8 +747,12 @@ export class TeamScene {
     const local = ([px, py]: [number, number]) => ({ x: ox + H(px), y: oy + H(py) });
     const z = this.depth(desk.x, desk.y);
     const [W, Ht] = ws.canvas.map(H);
+    const chairAt = ws.chairFeet?.length
+      ? local([ws.chairFeet.reduce((n, p) => n + p[0], 0) / ws.chairFeet.length, ws.chairFeet.reduce((n, p) => n + p[1], 0) / ws.chairFeet.length])
+      : null;
     this.stage.append(
       h("div", { class: `office-shadow${sel ? " on" : ""}`, style: `left:${at.x}px;top:${at.y + 8}px;z-index:${z};--c:${color}` }),
+      chairAt ? h("div", { class: "office-shadow seat", style: `left:${chairAt.x}px;top:${chairAt.y - 2}px;z-index:${z}` }) : h("i", { style: "display:none" }),
       h("img", { class: "office-layer office-ws", src: `/office/${ws.layers[0]}`, alt: "", draggable: "false", style: `left:${ox}px;top:${oy}px;width:${W}px;height:${Ht}px;z-index:${z + 1}` }),
     );
     // The screen: the member's colour, lit while it works.

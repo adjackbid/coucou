@@ -104,16 +104,26 @@
 }
 
 .office-shadow {
-  width: 230px;
-  height: 110px;
+  width: 244px;
+  height: 116px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  background: radial-gradient(closest-side, rgba(60, 35, 15, 0.32), rgba(60, 35, 15, 0));
+  background: radial-gradient(closest-side, rgba(52, 30, 12, 0.42), rgba(52, 30, 12, 0.22) 58%, rgba(52, 30, 12, 0));
 }
 
 .office-shadow.small {
   width: 96px;
   height: 36px;
+}
+
+/* The chair's own patch, and a prop's pool sized where it stands. */
+.office-shadow.seat {
+  width: 118px;
+  height: 46px;
+}
+
+.office-shadow.prop {
+  background: radial-gradient(closest-side, rgba(52, 30, 12, 0.46), rgba(52, 30, 12, 0.24) 58%, rgba(52, 30, 12, 0));
 }
 
 /* The selected member: a ring of its colour on the floor. */
