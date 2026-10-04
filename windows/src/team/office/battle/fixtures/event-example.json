@@ -1,0 +1,907 @@
+{
+  "schemaVersion": 1,
+  "kind": "illustrative-normalized-state-fixture",
+  "createdAt": "2026-10-04",
+  "isRealWorkRecord": false,
+  "scope": {
+    "teamId": "demo-team",
+    "runId": "demo-team@run-1"
+  },
+  "streamId": "demo-stream",
+  "unitHp": 100,
+  "note": "每步是既有 OfficeStore 套用之後的觀察。原始後端事件名稱僅解釋範例，不宣告新增 API。expected 是設計驗收值。",
+  "baseline": {
+    "asOfSeq": 100,
+    "runStatus": "running",
+    "tasks": [
+      {
+        "teamId": "demo-team",
+        "runId": "demo-team@run-1",
+        "taskId": "demo-team:TASK-01",
+        "revision": 1,
+        "title": "示意任務 1",
+        "status": "completed",
+        "assigneeMemberId": "ai1",
+        "includeInProgress": true,
+        "parentTaskId": null
+      },
+      {
+        "teamId": "demo-team",
+        "runId": "demo-team@run-1",
+        "taskId": "demo-team:TASK-02",
+        "revision": 1,
+        "title": "示意任務 2",
+        "status": "completed",
+        "assigneeMemberId": "ai2",
+        "includeInProgress": true,
+        "parentTaskId": null
+      },
+      {
+        "teamId": "demo-team",
+        "runId": "demo-team@run-1",
+        "taskId": "demo-team:TASK-03",
+        "revision": 1,
+        "title": "示意任務 3",
+        "status": "completed",
+        "assigneeMemberId": "ai3",
+        "includeInProgress": true,
+        "parentTaskId": null
+      },
+      {
+        "teamId": "demo-team",
+        "runId": "demo-team@run-1",
+        "taskId": "demo-team:TASK-04",
+        "revision": 1,
+        "title": "示意任務 4",
+        "status": "completed",
+        "assigneeMemberId": "ai4",
+        "includeInProgress": true,
+        "parentTaskId": null
+      },
+      {
+        "teamId": "demo-team",
+        "runId": "demo-team@run-1",
+        "taskId": "demo-team:TASK-05",
+        "revision": 1,
+        "title": "示意任務 5",
+        "status": "completed",
+        "assigneeMemberId": "ai5",
+        "includeInProgress": true,
+        "parentTaskId": null
+      },
+      {
+        "teamId": "demo-team",
+        "runId": "demo-team@run-1",
+        "taskId": "demo-team:TASK-06",
+        "revision": 1,
+        "title": "示意任務 6",
+        "status": "reviewing",
+        "assigneeMemberId": "ai1",
+        "includeInProgress": true,
+        "parentTaskId": null
+      },
+      {
+        "teamId": "demo-team",
+        "runId": "demo-team@run-1",
+        "taskId": "demo-team:TASK-07",
+        "revision": 1,
+        "title": "示意任務 7",
+        "status": "ready",
+        "assigneeMemberId": "ai2",
+        "includeInProgress": true,
+        "parentTaskId": null
+      },
+      {
+        "teamId": "demo-team",
+        "runId": "demo-team@run-1",
+        "taskId": "demo-team:TASK-08",
+        "revision": 1,
+        "title": "示意任務 8",
+        "status": "ready",
+        "assigneeMemberId": "ai3",
+        "includeInProgress": true,
+        "parentTaskId": null
+      },
+      {
+        "teamId": "demo-team",
+        "runId": "demo-team@run-1",
+        "taskId": "demo-team:TASK-09",
+        "revision": 1,
+        "title": "示意任務 9",
+        "status": "ready",
+        "assigneeMemberId": "ai4",
+        "includeInProgress": true,
+        "parentTaskId": null
+      },
+      {
+        "teamId": "demo-team",
+        "runId": "demo-team@run-1",
+        "taskId": "demo-team:TASK-10",
+        "revision": 1,
+        "title": "示意任務 10",
+        "status": "ready",
+        "assigneeMemberId": "ai5",
+        "includeInProgress": true,
+        "parentTaskId": null
+      }
+    ],
+    "needsHuman": false,
+    "expected": {
+      "completed": 5,
+      "total": 10,
+      "percent": 50,
+      "hp": 500,
+      "maxHp": 1000,
+      "bossState": "engaged",
+      "autoVictory": false
+    }
+  },
+  "steps": [
+    {
+      "seq": 101,
+      "why": "TASK-06 被正式驗收",
+      "backendFact": "reviewed(accepted=true)",
+      "patchTasks": [
+        {
+          "taskId": "demo-team:TASK-06",
+          "status": "completed"
+        }
+      ],
+      "expected": {
+        "completed": 6,
+        "total": 10,
+        "percent": 60,
+        "hp": 400,
+        "maxHp": 1000,
+        "bossState": "engaged",
+        "autoVictory": false
+      },
+      "signals": [
+        "acceptance_hit"
+      ]
+    },
+    {
+      "seq": 102,
+      "why": "TASK-07 交付待驗收",
+      "backendFact": "delivered",
+      "patchTasks": [
+        {
+          "taskId": "demo-team:TASK-07",
+          "status": "reviewing"
+        }
+      ],
+      "expected": {
+        "completed": 6,
+        "total": 10,
+        "percent": 60,
+        "hp": 400,
+        "maxHp": 1000,
+        "bossState": "engaged",
+        "autoVictory": false
+      },
+      "signals": [
+        "delivery_waiting"
+      ],
+      "image": "01_office_raid.png",
+      "frameNote": "TASK-06 的驗收特效仍在收束，TASK-07 已進入 reviewing；因此畫面同時是 HP 400/1000 與待驗收 1 項。"
+    },
+    {
+      "seq": 103,
+      "why": "TASK-07 被退回修改，先前並未扣血",
+      "backendFact": "reviewed(accepted=false)",
+      "patchTasks": [
+        {
+          "taskId": "demo-team:TASK-07",
+          "status": "running"
+        }
+      ],
+      "expected": {
+        "completed": 6,
+        "total": 10,
+        "percent": 60,
+        "hp": 400,
+        "maxHp": 1000,
+        "bossState": "engaged",
+        "autoVictory": false
+      },
+      "signals": [
+        "review_returned"
+      ],
+      "evidence": "explicit rejection; 若只有狀態差異則文案是返回執行"
+    },
+    {
+      "seq": 104,
+      "why": "TASK-07 再次交付",
+      "backendFact": "delivered",
+      "patchTasks": [
+        {
+          "taskId": "demo-team:TASK-07",
+          "status": "reviewing"
+        }
+      ],
+      "expected": {
+        "completed": 6,
+        "total": 10,
+        "percent": 60,
+        "hp": 400,
+        "maxHp": 1000,
+        "bossState": "engaged",
+        "autoVictory": false
+      },
+      "signals": [
+        "delivery_waiting"
+      ]
+    },
+    {
+      "seq": 105,
+      "why": "新增兩個任務，另詢問使用者新功能細節",
+      "backendFact": "taskCreated ×2; asked",
+      "addTasks": [
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-11",
+          "revision": 1,
+          "title": "示意任務 11",
+          "status": "ready",
+          "assigneeMemberId": "ai1",
+          "includeInProgress": true,
+          "parentTaskId": null
+        },
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-12",
+          "revision": 1,
+          "title": "示意任務 12",
+          "status": "ready",
+          "assigneeMemberId": "ai2",
+          "includeInProgress": true,
+          "parentTaskId": null
+        }
+      ],
+      "runStatus": "needs_attention",
+      "needsHuman": true,
+      "questionId": "demo-question-1",
+      "expected": {
+        "completed": 6,
+        "total": 12,
+        "percent": 50,
+        "hp": 600,
+        "maxHp": 1200,
+        "bossState": "engaged",
+        "autoVictory": false
+      },
+      "signals": [
+        "scope_added",
+        "boss_counter"
+      ],
+      "image": "02_boss_regeneration.png"
+    },
+    {
+      "seq": 106,
+      "why": "使用者回答細節，不改任務血量",
+      "backendFact": "answered",
+      "runStatus": "running",
+      "needsHuman": false,
+      "expected": {
+        "completed": 6,
+        "total": 12,
+        "percent": 50,
+        "hp": 600,
+        "maxHp": 1200,
+        "bossState": "engaged",
+        "autoVictory": false
+      },
+      "signals": [
+        "unblock_support"
+      ],
+      "image": "03_company_campaign.png",
+      "companyTotals": {
+        "completed": 24,
+        "total": 30,
+        "engagedTeams": 1,
+        "needsAttentionTeams": 0,
+        "defeatedTeams": 3,
+        "idleTeams": 0,
+        "otherTeams": [
+          {
+            "completed": 3,
+            "total": 3
+          },
+          {
+            "completed": 10,
+            "total": 10
+          },
+          {
+            "completed": 5,
+            "total": 5
+          }
+        ]
+      }
+    },
+    {
+      "seq": 107,
+      "why": "TASK-07 終於驗收通過",
+      "backendFact": "reviewed(accepted=true)",
+      "patchTasks": [
+        {
+          "taskId": "demo-team:TASK-07",
+          "status": "completed"
+        }
+      ],
+      "expected": {
+        "completed": 7,
+        "total": 12,
+        "percent": 58,
+        "hp": 500,
+        "maxHp": 1200,
+        "bossState": "engaged",
+        "autoVictory": false
+      },
+      "signals": [
+        "acceptance_hit"
+      ]
+    },
+    {
+      "seq": 108,
+      "why": "剩下五項同一批觀察全部驗收，等待最終報告",
+      "backendFact": "reviewed(accepted=true) ×5",
+      "patchTasks": [
+        {
+          "taskId": "demo-team:TASK-08",
+          "status": "completed"
+        },
+        {
+          "taskId": "demo-team:TASK-09",
+          "status": "completed"
+        },
+        {
+          "taskId": "demo-team:TASK-10",
+          "status": "completed"
+        },
+        {
+          "taskId": "demo-team:TASK-11",
+          "status": "completed"
+        },
+        {
+          "taskId": "demo-team:TASK-12",
+          "status": "completed"
+        }
+      ],
+      "expected": {
+        "completed": 12,
+        "total": 12,
+        "percent": 100,
+        "hp": 0,
+        "maxHp": 1200,
+        "bossState": "sealing",
+        "autoVictory": false
+      },
+      "signals": [
+        "acceptance_hit",
+        "seal_wait"
+      ],
+      "batchDisplay": "驗收 5 項，-500；不排 5 個長動畫"
+    },
+    {
+      "seq": 109,
+      "why": "Leader 報告後，團隊正式 completed",
+      "backendFact": "finished",
+      "runStatus": "completed",
+      "expected": {
+        "completed": 12,
+        "total": 12,
+        "percent": 100,
+        "hp": 0,
+        "maxHp": 1200,
+        "bossState": "defeated",
+        "autoVictory": true
+      },
+      "signals": [
+        "victory"
+      ],
+      "completionOrdinal": 1,
+      "image": "04_victory.png"
+    },
+    {
+      "seq": 109,
+      "why": "重複收到同一事件",
+      "duplicate": true,
+      "expected": {
+        "completed": 12,
+        "total": 12,
+        "percent": 100,
+        "hp": 0,
+        "maxHp": 1200,
+        "bossState": "defeated",
+        "autoVictory": false
+      },
+      "signals": [],
+      "completionOrdinal": 1
+    },
+    {
+      "seq": 110,
+      "why": "同一 run 使用者再留言，尚未新增任務",
+      "backendFact": "reopened",
+      "runStatus": "running",
+      "expected": {
+        "completed": 12,
+        "total": 12,
+        "percent": 100,
+        "hp": 0,
+        "maxHp": 1200,
+        "bossState": "sealing",
+        "autoVictory": false
+      },
+      "signals": [
+        "reopen"
+      ]
+    },
+    {
+      "seq": 111,
+      "why": "Leader 真正建立新工作，魔王再現",
+      "backendFact": "taskCreated",
+      "addTasks": [
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-13",
+          "revision": 1,
+          "title": "示意任務 13",
+          "status": "ready",
+          "assigneeMemberId": "ai3",
+          "includeInProgress": true,
+          "parentTaskId": null
+        }
+      ],
+      "expected": {
+        "completed": 12,
+        "total": 13,
+        "percent": 92,
+        "hp": 100,
+        "maxHp": 1300,
+        "bossState": "engaged",
+        "autoVictory": false
+      },
+      "signals": [
+        "scope_added"
+      ]
+    },
+    {
+      "seq": 112,
+      "why": "新任務也驗收完成，仍等待正式結案",
+      "backendFact": "reviewed(accepted=true)",
+      "patchTasks": [
+        {
+          "taskId": "demo-team:TASK-13",
+          "status": "completed"
+        }
+      ],
+      "expected": {
+        "completed": 13,
+        "total": 13,
+        "percent": 100,
+        "hp": 0,
+        "maxHp": 1300,
+        "bossState": "sealing",
+        "autoVictory": false
+      },
+      "signals": [
+        "acceptance_hit",
+        "seal_wait"
+      ]
+    },
+    {
+      "seq": 113,
+      "why": "同一 run 的第二次正式完成",
+      "backendFact": "finished",
+      "runStatus": "completed",
+      "expected": {
+        "completed": 13,
+        "total": 13,
+        "percent": 100,
+        "hp": 0,
+        "maxHp": 1300,
+        "bossState": "defeated",
+        "autoVictory": true
+      },
+      "signals": [
+        "victory"
+      ],
+      "completionOrdinal": 2
+    }
+  ],
+  "edgeCases": [
+    {
+      "name": "no_tasks",
+      "tasks": [],
+      "runStatus": "running",
+      "expected": {
+        "completed": 0,
+        "total": 0,
+        "percent": null,
+        "hp": null,
+        "maxHp": null,
+        "bossState": "planning",
+        "autoVictory": false
+      }
+    },
+    {
+      "name": "all_cancelled",
+      "tasks": [
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-01",
+          "revision": 1,
+          "title": "示意任務 1",
+          "status": "cancelled",
+          "assigneeMemberId": "ai1",
+          "includeInProgress": true,
+          "parentTaskId": null
+        }
+      ],
+      "runStatus": "running",
+      "expected": {
+        "completed": 0,
+        "total": 0,
+        "percent": null,
+        "hp": null,
+        "maxHp": null,
+        "bossState": "planning",
+        "autoVictory": false
+      }
+    },
+    {
+      "name": "finished_with_open_task",
+      "tasks": [
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-01",
+          "revision": 1,
+          "title": "示意任務 1",
+          "status": "running",
+          "assigneeMemberId": "ai1",
+          "includeInProgress": true,
+          "parentTaskId": null
+        }
+      ],
+      "runStatus": "completed",
+      "expected": {
+        "completed": 0,
+        "total": 1,
+        "percent": 0,
+        "hp": 100,
+        "maxHp": 100,
+        "bossState": "inconsistent",
+        "autoVictory": false
+      }
+    },
+    {
+      "name": "paused",
+      "tasks": [
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-01",
+          "revision": 1,
+          "title": "示意任務 1",
+          "status": "running",
+          "assigneeMemberId": "ai1",
+          "includeInProgress": true,
+          "parentTaskId": null
+        }
+      ],
+      "runStatus": "paused",
+      "expected": {
+        "completed": 0,
+        "total": 1,
+        "percent": 0,
+        "hp": 100,
+        "maxHp": 100,
+        "bossState": "paused",
+        "autoVictory": false
+      }
+    },
+    {
+      "name": "failed_is_not_victory",
+      "tasks": [
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-01",
+          "revision": 1,
+          "title": "示意任務 1",
+          "status": "completed",
+          "assigneeMemberId": "ai1",
+          "includeInProgress": true,
+          "parentTaskId": null
+        }
+      ],
+      "runStatus": "failed",
+      "expected": {
+        "completed": 1,
+        "total": 1,
+        "percent": 100,
+        "hp": 0,
+        "maxHp": 100,
+        "bossState": "stopped",
+        "autoVictory": false
+      }
+    },
+    {
+      "name": "criteria_claimed_not_accepted",
+      "tasks": [
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-01",
+          "revision": 1,
+          "title": "示意任務 1",
+          "status": "reviewing",
+          "assigneeMemberId": "ai1",
+          "includeInProgress": true,
+          "parentTaskId": null,
+          "acceptanceCriteria": [
+            {
+              "id": "0",
+              "text": "完成範例",
+              "passed": true
+            }
+          ]
+        }
+      ],
+      "runStatus": "running",
+      "expected": {
+        "completed": 0,
+        "total": 1,
+        "percent": 0,
+        "hp": 100,
+        "maxHp": 100,
+        "bossState": "engaged",
+        "autoVictory": false
+      }
+    },
+    {
+      "name": "exclude_parent_cancelled_optout_other_run",
+      "tasks": [
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-01",
+          "revision": 1,
+          "title": "示意任務 1",
+          "status": "ready",
+          "assigneeMemberId": "ai1",
+          "includeInProgress": true,
+          "parentTaskId": null
+        },
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-02",
+          "revision": 1,
+          "title": "示意任務 2",
+          "status": "completed",
+          "assigneeMemberId": "ai2",
+          "includeInProgress": true,
+          "parentTaskId": "demo-team:TASK-01"
+        },
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-03",
+          "revision": 1,
+          "title": "示意任務 3",
+          "status": "cancelled",
+          "assigneeMemberId": "ai3",
+          "includeInProgress": true,
+          "parentTaskId": null
+        },
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-04",
+          "revision": 1,
+          "title": "示意任務 4",
+          "status": "completed",
+          "assigneeMemberId": "ai4",
+          "includeInProgress": false,
+          "parentTaskId": null
+        },
+        {
+          "teamId": "demo-team",
+          "runId": "other-run",
+          "taskId": "demo-team:TASK-05",
+          "revision": 1,
+          "title": "示意任務 5",
+          "status": "ready",
+          "assigneeMemberId": "ai5",
+          "includeInProgress": true,
+          "parentTaskId": null
+        }
+      ],
+      "runStatus": "running",
+      "expected": {
+        "completed": 1,
+        "total": 1,
+        "percent": 100,
+        "hp": 0,
+        "maxHp": 100,
+        "bossState": "sealing",
+        "autoVictory": false
+      }
+    },
+    {
+      "name": "load_completed_as_baseline",
+      "tasks": [
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-01",
+          "revision": 1,
+          "title": "示意任務 1",
+          "status": "completed",
+          "assigneeMemberId": "ai1",
+          "includeInProgress": true,
+          "parentTaskId": null
+        }
+      ],
+      "runStatus": "completed",
+      "isBaseline": true,
+      "expected": {
+        "completed": 1,
+        "total": 1,
+        "percent": 100,
+        "hp": 0,
+        "maxHp": 100,
+        "bossState": "defeated",
+        "autoVictory": false
+      }
+    },
+    {
+      "name": "history_never_autoplays",
+      "tasks": [
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-01",
+          "revision": 1,
+          "title": "示意任務 1",
+          "status": "completed",
+          "assigneeMemberId": "ai1",
+          "includeInProgress": true,
+          "parentTaskId": null
+        }
+      ],
+      "runStatus": "completed",
+      "isHistory": true,
+      "expected": {
+        "completed": 1,
+        "total": 1,
+        "percent": 100,
+        "hp": 0,
+        "maxHp": 100,
+        "bossState": "defeated",
+        "autoVictory": false
+      }
+    },
+    {
+      "name": "same_batch_add_and_accept_net_zero",
+      "before": {
+        "tasks": [
+          {
+            "teamId": "demo-team",
+            "runId": "demo-team@run-1",
+            "taskId": "demo-team:TASK-01",
+            "revision": 1,
+            "title": "示意任務 1",
+            "status": "running",
+            "assigneeMemberId": "ai1",
+            "includeInProgress": true,
+            "parentTaskId": null
+          }
+        ],
+        "runStatus": "running",
+        "hp": 100,
+        "maxHp": 100
+      },
+      "tasks": [
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-01",
+          "revision": 1,
+          "title": "示意任務 1",
+          "status": "completed",
+          "assigneeMemberId": "ai1",
+          "includeInProgress": true,
+          "parentTaskId": null
+        },
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-02",
+          "revision": 1,
+          "title": "示意任務 2",
+          "status": "ready",
+          "assigneeMemberId": "ai2",
+          "includeInProgress": true,
+          "parentTaskId": null
+        }
+      ],
+      "runStatus": "running",
+      "expected": {
+        "completed": 1,
+        "total": 2,
+        "percent": 50,
+        "hp": 100,
+        "maxHp": 200,
+        "bossState": "engaged",
+        "autoVictory": false
+      },
+      "expectedSignals": [
+        "scope_added",
+        "acceptance_hit"
+      ]
+    },
+    {
+      "name": "future_adapter_reopens_accepted_task",
+      "before": {
+        "tasks": [
+          {
+            "teamId": "demo-team",
+            "runId": "demo-team@run-1",
+            "taskId": "demo-team:TASK-01",
+            "revision": 1,
+            "title": "示意任務 1",
+            "status": "completed",
+            "assigneeMemberId": "ai1",
+            "includeInProgress": true,
+            "parentTaskId": null
+          }
+        ],
+        "runStatus": "running",
+        "hp": 0,
+        "maxHp": 100
+      },
+      "tasks": [
+        {
+          "teamId": "demo-team",
+          "runId": "demo-team@run-1",
+          "taskId": "demo-team:TASK-01",
+          "revision": 1,
+          "title": "示意任務 1",
+          "status": "running",
+          "assigneeMemberId": "ai1",
+          "includeInProgress": true,
+          "parentTaskId": null
+        }
+      ],
+      "runStatus": "running",
+      "expected": {
+        "completed": 0,
+        "total": 1,
+        "percent": 0,
+        "hp": 100,
+        "maxHp": 100,
+        "bossState": "engaged",
+        "autoVictory": false
+      },
+      "supportedByCurrentTaskTools": false
+    }
+  ],
+  "acceptanceChecks": [
+    "不從 claimed criteria 猜傷害",
+    "runId/streamId 換掉就做 baseline",
+    "同 event/revision 重複沒有第二次命中",
+    "先更新 HP 再安排動畫",
+    "等待人類只出提示與原始問題入口",
+    "隱藏/切頁/關模式取消特效，不追播",
+    "scope 刪除不記驗收攻擊",
+    "公司與團隊使用同一投影",
+    "設計範例不是正式後端事件 API"
+  ]
+}
