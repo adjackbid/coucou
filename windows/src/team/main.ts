@@ -18,6 +18,7 @@ import { dropdown, menuOpen, onMenuClosed, refreshSuggestions, suggest } from ".
 import { linksScreen, logScreen, openThread, type Page } from "./screens";
 import { Office } from "./office/office";
 import { LARGE_FROM, THEME_LABELS } from "./office/scene";
+import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
@@ -34,7 +35,7 @@ let tab: "setup" | "links" | "monitor" | "log" = "setup";
 /** The monitor as a board, or as the team's office. */
 let monitorMode: "board" | "office" = "board";
 /** The company map instead of one team; or the office of a team that has no file here (示範資料). */
-let place: "team" | "company" | "office" = "team";
+let place: "team" | "company" | "office" | "cost" = "team";
 let officeTeam: string | null = null;
 /** The form's working copy of the selected team; saved on request. */
 let editing: TeamConfig | null = null;
@@ -358,6 +359,19 @@ function sidebar(): HTMLElement {
       },
       h("span", { class: "team-item-name", text: "公司總覽" }),
       h("span", { class: "team-item-state", text: office.demo ? "示範資料" : "所有團隊的辦公室" }),
+    ),
+    h(
+      "button",
+      {
+        class: `team-item company${place === "cost" ? " on" : ""}`,
+        type: "button",
+        onClick: () => {
+          place = "cost";
+          render();
+        },
+      },
+      h("span", { class: "team-item-name", text: "成本與用量" }),
+      h("span", { class: "team-item-state", text: "Token 用量與預估費用" }),
     ),
     h("div", { class: "side-title", text: "團隊" }),
     list,
@@ -797,6 +811,7 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
       "div",
       { class: "pulse-row" },
       pulse,
+      spend(m.usage, `${m.name} 這一輪用掉的 token`),
       m.status === "working"
         ? h("button", { class: "btn plain stall", type: "button", title: "停掉它這一輪;它下一輪會被提醒手上的工作", onClick: () => void act(() => Bridge.teamInterruptMember(snap.id, m.id)) }, "打斷這一輪")
         : null,
@@ -1051,6 +1066,7 @@ function monitor(snap: Snapshot): HTMLElement {
       h("span", { class: "dim", text: `已驗收 ${snap.done} / ${snap.total} 項任務` }),
       h("span", { class: "dim", text: `${snap.totalTurns} / ${snap.maxTurns} 回合` }),
       h("span", { class: "dim", text: `已執行 ${minutes} 分鐘` }),
+      spend(snap.members.flatMap((m) => m.usage ?? []), "全隊這一輪用掉的 token"),
     ),
     stage(snap),
     h("div", { class: "split" }, board(snap), feed(snap)),
@@ -1148,6 +1164,14 @@ function tabs(snap: Snapshot | undefined): HTMLElement {
 }
 
 function main(): HTMLElement {
+  if (place === "cost") {
+    return h(
+      "main",
+      { class: "main pane" },
+      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": "位置" }, h("b", { text: "成本與用量" })), windowButtons()),
+      h("div", { class: "scroll" }, costPage(costHost)),
+    );
+  }
   if (place === "company" || (place === "office" && officeTeam)) {
     const team = place === "office" ? office.store.team(officeTeam!) : undefined;
     return h(
@@ -1194,6 +1218,17 @@ function main(): HTMLElement {
     trouble ? h("div", { class: "problem", role: "alert", text: trouble.split("\n").map(said).join("\n") }) : null,
     h("div", { class: "scroll" }, view),
   );
+}
+
+/** The 成本與用量 page draws inside this window, with its agents' names. */
+const costHost: CostHost = { render: () => render(), agents: () => agents };
+
+/** Tokens and cost beside a member or a team at work: "182K tokens · $0.04". */
+function spend(usage: MemberView["usage"], title: string): HTMLElement | null {
+  const s = usageSummary(usage, () => render());
+  if (!s.tokens) return null;
+  const text = `${fmtTokens(s.tokens)} tokens${s.usd != null ? ` · ${s.priced ? "" : "≥ "}${fmtMoney(s.usd)}` : ""}`;
+  return h("span", { class: "chip spend", title: `${title}。預估成本依「成本與用量」的價格表計算。`, text });
 }
 
 /** The Office: the same record as the board, as rooms. `?office=mock` in a browser shows the spec's demo company. */
@@ -1323,6 +1358,7 @@ async function load() {
   }
   // A browser opened at `?view=company` starts on the company map.
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "company") place = "company";
+  if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "cost") place = "cost";
   firstLoad = false;
   render();
 }
@@ -1336,6 +1372,8 @@ async function start() {
     runs.set(snap.id, snap);
     live.applySnapshot(snap);
     office.feed(files, runs);
+    // New tokens may have come in: the cost page asks again, a little later.
+    if (place === "cost") refreshSoon(costHost);
     // Typing in the form is not interrupted by a team at work behind it.
     if (tab === "monitor" || !unsaved) render();
   });

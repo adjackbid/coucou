@@ -170,6 +170,50 @@ pub async fn proxy_prices(base: &str, key: Option<String>, label: &str) -> Resul
     Err(format!("This endpoint does not give its prices (it is not a LiteLLM proxy, or the key may not read them): {last}"))
 }
 
+/// What an agent's endpoint (a LiteLLM proxy) has billed its key: the
+/// spend since the key's budget last reset, by model, and the budget.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeySpend {
+    pub spend: f64,
+    pub max_budget: Option<f64>,
+    /// How often the budget starts again ("7d", "30d"), when it does.
+    pub budget_duration: Option<String>,
+    pub budget_reset_at: Option<String>,
+    pub model_spend: BTreeMap<String, f64>,
+    /// When it was asked (ms).
+    pub asked_at: u64,
+}
+
+/// Asks the endpoint what it billed the agent's key (LiteLLM's `/key/info`).
+pub async fn key_spend(base: &str, key: Option<String>) -> Result<KeySpend, String> {
+    let root = base.trim_end_matches('/').trim_end_matches("/v1");
+    let key = key.ok_or("This agent has no key to ask with.")?;
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
+    let resp = client.get(format!("{root}/key/info")).bearer_auth(&key).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("The endpoint does not tell what its key has spent (it answered {}; it may not be a LiteLLM proxy).", resp.status()));
+    }
+    let body: Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(spend_of(&body["info"]))
+}
+
+fn spend_of(info: &Value) -> KeySpend {
+    let text = |k: &str| info.get(k).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
+    KeySpend {
+        spend: info.get("spend").and_then(Value::as_f64).unwrap_or(0.0),
+        max_budget: info.get("max_budget").and_then(Value::as_f64),
+        budget_duration: text("budget_duration"),
+        budget_reset_at: text("budget_reset_at"),
+        model_spend: info
+            .get("model_spend")
+            .and_then(Value::as_object)
+            .map(|m| m.iter().filter_map(|(k, v)| Some((k.clone(), v.as_f64()?))).collect())
+            .unwrap_or_default(),
+        asked_at: crate::team::store::now_ms(),
+    }
+}
+
 /// LiteLLM's public price list, fetched now.
 pub async fn fetch_list() -> Result<Table, String> {
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
@@ -227,5 +271,37 @@ mod tests {
         // Outside the period: nothing.
         assert!(collect(&root, u64::MAX - 1, u64::MAX).is_empty());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_key_s_spend_is_read_from_litellm_s_key_info() {
+        let info = serde_json::json!({ "key_alias": "x", "spend": 15.5, "max_budget": 150.0, "budget_duration": "7d", "budget_reset_at": "2026-10-06T00:00:00Z", "model_spend": { "deepseek-v4-flash": 12.25, "glm-5.3-flash": 3.25 } });
+        let s = spend_of(&info);
+        assert_eq!((s.spend, s.max_budget, s.budget_duration.as_deref()), (15.5, Some(150.0), Some("7d")));
+        assert_eq!(s.model_spend["deepseek-v4-flash"], 12.25);
+        let none = spend_of(&serde_json::json!({ "spend": 0.0, "max_budget": null, "budget_duration": null, "model_spend": {} }));
+        assert_eq!((none.max_budget, none.budget_duration), (None, None));
+    }
+
+    /// The public list and an agent's own endpoint answer (network; nothing is saved).
+    #[test]
+    #[ignore]
+    fn prices_can_be_fetched_from_the_list_and_from_an_agent_s_endpoint() {
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let table = runtime.block_on(fetch_list()).expect("the public list");
+        eprintln!("public list: {} models", table.models.len());
+        assert!(table.models.len() > 500);
+        let Some(profile) = crate::settings::load().agents.into_iter().find(|a| a.env.get("COPILOT_PROVIDER_BASE_URL").is_some_and(|b| b.starts_with("http"))) else { return };
+        let secret = crate::secrets::get(&profile.secret_key()).unwrap_or_default();
+        let key = profile.env.get("COPILOT_PROVIDER_API_KEY").map(|v| v.replace("{secret}", &secret)).filter(|k| !k.trim().is_empty());
+        match runtime.block_on(proxy_prices(&profile.env["COPILOT_PROVIDER_BASE_URL"], key, "endpoint")) {
+            Ok(found) => {
+                eprintln!("endpoint: {} models priced", found.len());
+                for (k, l) in found.iter().take(8) {
+                    eprintln!("  {k}: in {} out {} cache {} ({})", l.price.input, l.price.output, l.price.cache_read, l.listed_as);
+                }
+            }
+            Err(e) => eprintln!("endpoint: {e}"),
+        }
     }
 }

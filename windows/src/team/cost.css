@@ -1,0 +1,687 @@
+/* 成本與用量 — the same glass as the rest of the window: panels, chips,
+   the island's accents. Numbers line up in columns (tabular figures). */
+
+.cost {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cost .grow {
+  flex: 1 1 auto;
+}
+
+/* ── The bar on top: period, currency ── */
+
+.cost-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cost-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.cost-seg button {
+  font: 500 12.5px var(--font);
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--dim-glass);
+  background: transparent;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.cost-seg button:hover:not(.on) {
+  color: var(--ink);
+  background: var(--lift);
+}
+
+.cost-seg button.on {
+  color: var(--ink);
+  font-weight: 600;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.cost-seg button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.cost-dates {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cost-dates .field.date {
+  width: 148px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.cost-range {
+  color: var(--dim-glass);
+  font-size: 12.5px;
+}
+
+.cost-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  border-radius: 14px;
+  background: rgba(59, 158, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(59, 158, 255, 0.25);
+  user-select: text;
+}
+
+.cost-empty {
+  padding: 22px;
+}
+
+.cost-empty .member-help {
+  margin-bottom: 0;
+}
+
+/* ── The four numbers ── */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--sheet);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  min-width: 0;
+}
+
+.kpi-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dim-glass);
+}
+
+.kpi-big {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kpi-big small {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dim);
+}
+
+.kpi-sub {
+  font-size: 12px;
+  color: var(--dim);
+  line-height: 1.45;
+}
+
+.kpi.has-warn {
+  box-shadow: inset 0 0 0 1px rgba(245, 165, 36, 0.35);
+}
+
+.link.warn-link {
+  color: var(--amber);
+  font-size: 12px;
+}
+
+/* ── The chart ── */
+
+.cost-chart .panel-head,
+.cost-actual .panel-head,
+.cost-tree .panel-head,
+.cost-prices .panel-head {
+  margin-bottom: 10px;
+}
+
+.cost-chart .panel-head h2,
+.cost-tree .panel-head h2,
+.cost-prices .panel-head h2 {
+  margin-bottom: 0;
+}
+
+.bars {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  gap: clamp(2px, calc(240px / var(--n)), 10px);
+  height: 190px;
+  padding: 18px 0 22px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.bars-max {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 11px;
+}
+
+.bar-col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-width: 0;
+  height: 100%;
+}
+
+.bar-stack {
+  display: flex;
+  flex-direction: column-reverse;
+  min-height: 2px;
+  border-radius: 5px 5px 2px 2px;
+  overflow: hidden;
+  transition: filter 0.12s ease-out;
+}
+
+.bar-col.empty .bar-stack {
+  min-height: 0;
+}
+
+.bar-stack i {
+  display: block;
+  min-height: 1px;
+}
+
+.bar-col:hover .bar-stack {
+  filter: brightness(1.25);
+}
+
+.bar-label {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10.5px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.bar-tip {
+  position: absolute;
+  left: 50%;
+  z-index: 5;
+  display: none;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 180px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: rgba(var(--card), 0.96);
+  box-shadow: var(--edge), 0 10px 28px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.bar-col:first-child .bar-tip,
+.bar-col:nth-child(2) .bar-tip,
+.bar-col:nth-child(3) .bar-tip {
+  left: 0;
+  transform: none;
+}
+
+.bar-col:nth-last-child(-n + 3) .bar-tip {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.bar-col:hover .bar-tip {
+  display: flex;
+}
+
+.bar-tip b {
+  font-weight: 650;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.bar-tip span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim-glass);
+  white-space: nowrap;
+}
+
+.bar-tip span i,
+.cost-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.bar-tip em {
+  margin-left: auto;
+  padding-left: 14px;
+  font-style: normal;
+  color: var(--ink);
+}
+
+.cost-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--dim-glass);
+}
+
+.cost-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Tables ── */
+
+.table-wrap {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.cost table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+}
+
+.cost th {
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--dim);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.cost td {
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.cost th.num,
+.cost td.num {
+  text-align: right;
+}
+
+.cost td.strong {
+  font-weight: 650;
+}
+
+.cost td.name {
+  max-width: 360px;
+}
+
+.cost .name-in {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cost .name-in .label,
+.cost td.name > .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.cost .caret {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  color: var(--dim);
+  transition: transform 0.12s ease-out;
+}
+
+.cost-tree tr.open .caret {
+  transform: rotate(90deg);
+  color: var(--ink-2);
+}
+
+.cost-tree tbody tr.can-open {
+  cursor: pointer;
+}
+
+.cost-tree tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.cost-tree tbody tr:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+
+.cost-tree tr.depth-0 td {
+  font-weight: 600;
+}
+
+.cost-tree tr.depth-0 td.num:not(.strong) {
+  font-weight: 500;
+}
+
+.cost-tree tr.depth-1 td,
+.cost-tree tr.depth-2 td {
+  color: var(--ink-2);
+}
+
+.cost-tree tr.depth-2 td {
+  font-size: 12px;
+}
+
+.cost-tree tr.depth-1 td:first-child,
+.cost-tree tr.depth-2 td:first-child {
+  font-weight: 500;
+}
+
+.cost-tree tfoot td {
+  padding-top: 9px;
+  font-weight: 650;
+  border-bottom: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.cost td.share,
+.cost th.share {
+  width: 150px;
+}
+
+.share-bar {
+  display: inline-block;
+  width: 96px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.share-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--blue), var(--violet));
+}
+
+.cost td.share em {
+  display: inline-block;
+  width: 40px;
+  margin-left: 8px;
+  font-style: normal;
+  text-align: right;
+  color: var(--dim);
+  font-size: 11.5px;
+}
+
+.chip.plan,
+.chip.src-override {
+  color: var(--violet);
+  background: rgba(167, 139, 250, 0.14);
+}
+
+.chip.src-proxy {
+  color: var(--green-2);
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.chip.src-list {
+  color: #8cc8ff;
+  background: rgba(59, 158, 255, 0.14);
+}
+
+/* ── Prices ── */
+
+.cost-prices td.matched {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cost-prices td.actions {
+  text-align: right;
+}
+
+.cost-prices td.actions .link + .link,
+.cost-prices td.actions .btn + .link {
+  margin-left: 10px;
+}
+
+.cost-prices tr.editing td {
+  background: rgba(59, 158, 255, 0.06);
+}
+
+.cost-prices tr.editing .field.narrow {
+  width: 86px;
+  text-align: right;
+}
+
+.price-sources {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.price-sources .source {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--solid);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.price-sources .source > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12.5px;
+}
+
+.price-sources .source .field.narrow {
+  width: 76px;
+}
+
+.billing {
+  margin-top: 14px;
+}
+
+.billing-head {
+  font-size: 12.5px;
+  margin-bottom: 8px;
+}
+
+.billing-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 8px;
+}
+
+.billing-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 8px 7px 12px;
+  border-radius: 14px;
+  background: var(--solid);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  font-size: 12.5px;
+}
+
+.billing-item .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.billing-item .cost-seg button {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.cost .help-row {
+  margin-top: 14px;
+}
+
+.cost-help .help-item {
+  grid-template-columns: 150px 1fr;
+}
+
+/* Beside members at work: the board's desks and progress line. */
+.chip.spend {
+  font-variant-numeric: tabular-nums;
+  color: var(--dim-glass);
+}
+
+.pulse-row .chip.spend {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pulse-row .chip.spend + .stall {
+  margin-left: 0;
+}
+
+@media (max-width: 1100px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .kpis {
+    grid-template-columns: 1fr;
+  }
+  .cost-help .help-item {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── What the endpoints billed ── */
+
+.cost-actual .actual + .actual {
+  margin-top: 10px;
+}
+
+.actual {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--solid);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.actual-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 12.5px;
+}
+
+.actual-head > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.actual .hint,
+.actual .problem {
+  margin-top: 8px;
+}
+
+.actual-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 10px;
+}
+
+.actual-total,
+.actual-models {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.budget {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.share-bar.wide {
+  width: 100%;
+  height: 8px;
+}
+
+.share-bar i.hot {
+  background: linear-gradient(90deg, var(--amber), var(--red));
+}
+
+.actual-model {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px 72px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.actual-model .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actual-model em {
+  font-style: normal;
+  text-align: right;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .actual-body {
+    grid-template-columns: 1fr;
+  }
+}

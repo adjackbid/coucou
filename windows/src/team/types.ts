@@ -87,6 +87,8 @@ export interface MemberView {
   lostWhy: string;
   /** The last lines of its live screen. */
   screen: Line[];
+  /** Tokens it has used this run, by model. */
+  usage?: Usage[];
 }
 
 /** One line of a member's live screen — mirror of team::screen::Line. */
@@ -222,4 +224,84 @@ export interface Snapshot {
   messages: Message[];
   questions: Question[];
   feed: FeedItem[];
+}
+
+// ── Usage and cost — mirrors of usage::Usage, pricing.rs and cost.rs ──────────
+
+/** What a member's model used: tokens by kind (input without the cached part). */
+export interface Usage {
+  model: string;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  reasoning: number;
+  requests: number;
+  /** The agent's own figure, in US dollars, when it gives one. */
+  costUsd?: number;
+}
+
+/** US dollars per million tokens. */
+export interface Price {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+export type PriceSource = "override" | "proxy" | "list";
+
+export interface Found {
+  price: Price;
+  source: PriceSource;
+  listedAs: string;
+}
+
+export interface Listed {
+  price: Price;
+  listedAs: string;
+  provider: string;
+}
+
+export type Billing = "metered" | "subscription";
+
+export interface PricingChoices {
+  overrides: Record<string, Price>;
+  proxy: Record<string, Listed>;
+  billing: Record<string, Billing>;
+  currency: string;
+  rate: number;
+}
+
+export interface UsageRow {
+  at: number;
+  team: string;
+  teamName: string;
+  run: number;
+  member: string;
+  memberName: string;
+  agent: string;
+  usage: Usage;
+  estimatedUsd: number | null;
+  /** "override", "proxy", "list", "reported" — or "" when nothing priced it. */
+  pricedBy: string;
+}
+
+export interface UsageReport {
+  rows: UsageRow[];
+  models: { model: string; found: Found | null }[];
+  choices: PricingChoices;
+  tableSource: string;
+  tableFetchedAt: number;
+  tableSize: number;
+}
+
+/** What an agent's endpoint (a LiteLLM proxy) billed its key — mirror of cost::KeySpend. */
+export interface KeySpend {
+  spend: number;
+  maxBudget: number | null;
+  budgetDuration: string | null;
+  budgetResetAt: string | null;
+  modelSpend: Record<string, number>;
+  askedAt: number;
 }

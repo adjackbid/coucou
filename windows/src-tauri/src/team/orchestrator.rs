@@ -1710,6 +1710,31 @@ mod tests {
     }
 
     #[test]
+    fn a_copilot_member_on_its_own_endpoint_is_metered_and_its_tokens_go_in_the_record() {
+        run(async {
+            if crate::meter::global().is_none() {
+                crate::meter::install(crate::meter::Meter::start().await.unwrap());
+            }
+            let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));
+            let mut cg = AgentProfile::copilot();
+            cg.env.insert("COPILOT_PROVIDER_BASE_URL".into(), "https://llm.example/v1".into());
+            bench.teams.start(shop(&work_dir()), &[cg]).expect("start");
+            let seat = bench.teams.get("shop").unwrap().seat("ai3").unwrap();
+            let base = &seat.launch.env["COPILOT_PROVIDER_BASE_URL"];
+            assert!(base.starts_with("http://127.0.0.1:") && base.contains("/m/"), "{base}");
+
+            let used = crate::usage::Usage { model: "deepseek-v4.1-flash".into(), input: 100, output: 5, requests: 1, ..Default::default() };
+            bench.teams.metered("team:shop:ai3", used.clone());
+            bench.teams.metered("team:elsewhere:ai3", used.clone());
+            bench.teams.metered("not a seat", used);
+            let ai3 = bench.member("ai3");
+            assert_eq!(ai3.usage.len(), 1);
+            assert_eq!((ai3.usage[0].model.as_str(), ai3.usage[0].input, ai3.usage[0].output), ("deepseek-v4.1-flash", 100, 5));
+            assert!(bench.member("ai4").usage.is_empty());
+        });
+    }
+
+    #[test]
     fn a_member_s_seat_carries_the_folder_the_bridge_and_the_rules() {
         run(async {
             let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));

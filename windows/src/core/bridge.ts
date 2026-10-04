@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentProfile, ModelChoice, Provider, Settings } from "./state";
-import type { PastRun, Snapshot, TeamConfig, TeamFile } from "../team/types";
+import type { Found, KeySpend, PastRun, PricingChoices, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -147,6 +147,17 @@ export const Bridge = {
   /** A team's earlier runs, newest first; one of them as it ended. */
   teamHistory: (team: string) => callOrThrow<PastRun[]>("team_history", { team }),
   teamPast: (team: string, archivedAt: number) => callOrThrow<Snapshot>("team_past", { team, archivedAt }),
+  /** Every team's usage in [from, to) (ms), priced, with who spent it. */
+  usageReport: (from: number, to: number) => callOrThrow<UsageReport>("usage_report", { from, to }),
+  /** The price each model is charged at now, and the person's currency. */
+  pricingQuote: (models: string[]) => call<[Record<string, Found | null>, PricingChoices]>("pricing_quote", { models }),
+  pricingSave: (choices: PricingChoices) => callOrThrow<void>("pricing_save", { choices }),
+  /** Fetches the public price list (LiteLLM's); how many models it prices. */
+  pricingFetchList: () => callOrThrow<number>("pricing_fetch_list"),
+  /** Reads the prices an agent's own endpoint gives (a LiteLLM proxy); how many. */
+  pricingFromAgent: (agent: string) => callOrThrow<number>("pricing_from_agent", { agent }),
+  /** What an agent's own endpoint has billed its key (asked only on a click). */
+  endpointSpend: (agent: string) => callOrThrow<KeySpend>("endpoint_spend", { agent }),
   /** A deliverable that is a picture in the team's work folder, as bytes. */
   teamPreview: (team: string, locator: string) => callOrThrow<ArrayBuffer>("team_preview", { team, locator }),
   /** Returns the message's id; the same `request` sent again is not sent twice. */

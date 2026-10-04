@@ -835,8 +835,22 @@ fn team_open_configs() {
 
 /// Usage and its estimated cost between two moments (ms), across every team log.
 #[tauri::command]
-fn usage_report(from: u64, to: u64) -> cost::Report {
-    cost::report(&settings::team_logs_dir(), from, to)
+async fn usage_report(from: u64, to: u64) -> Result<cost::Report, String> {
+    // Every team log is read: off the window's thread.
+    tauri::async_runtime::spawn_blocking(move || cost::report(&settings::team_logs_dir(), from, to)).await.map_err(|e| e.to_string())
+}
+
+/// The price each model would be charged at now (for the cost shown beside
+/// members at work), with the person's currency.
+#[tauri::command]
+fn pricing_quote(models: Vec<String>) -> (std::collections::BTreeMap<String, Option<pricing::Found>>, pricing::Choices) {
+    let choices = pricing::load_choices();
+    let table = pricing::load_table();
+    let found = models.into_iter().map(|m| {
+        let f = pricing::lookup(&m, &choices, &table);
+        (m, f)
+    }).collect();
+    (found, choices)
 }
 
 /// The person's prices, billing modes and currency.
@@ -871,6 +885,17 @@ async fn pricing_from_agent(shared: State<'_, Shared>, agent: String) -> Result<
     pricing::save_choices(&choices)?;
     log::line(format!("prices: {n} models from {label}"));
     Ok(n)
+}
+
+/// What an agent's own endpoint (a LiteLLM proxy) has billed the agent's key.
+#[tauri::command]
+async fn endpoint_spend(shared: State<'_, Shared>, agent: String) -> Result<cost::KeySpend, String> {
+    let profile = shared.settings.lock().unwrap().agents.iter().find(|a| a.id == agent).cloned().ok_or("There is no such agent.")?;
+    let base = profile.env.get("COPILOT_PROVIDER_BASE_URL").map(|s| s.trim().to_string()).filter(|s| !s.is_empty() && !s.contains('…'));
+    let base = base.ok_or("This agent has no endpoint of its own.")?;
+    let secret = secrets::get(&profile.secret_key()).unwrap_or_default();
+    let key = profile.env.get("COPILOT_PROVIDER_API_KEY").map(|v| v.replace("{secret}", &secret)).filter(|k| !k.trim().is_empty());
+    cost::key_spend(&base, key).await
 }
 
 /// The models an agent offers, for the drop-downs in Settings and Teamwork.
@@ -1215,9 +1240,11 @@ pub fn run() {
             team_preview,
             team_history,
             usage_report,
+            pricing_quote,
             pricing_save,
             pricing_fetch_list,
             pricing_from_agent,
+            endpoint_spend,
             team_past,
             team_open_configs,
             team_save,

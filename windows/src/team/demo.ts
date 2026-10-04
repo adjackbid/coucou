@@ -3,7 +3,7 @@
 // `?state=waiting` to see a member holding a permission card and another
 // waiting for an answer.
 
-import type { Line, PastRun, ScreenPatch, Snapshot, TeamFile, TeamConfig } from "./types";
+import type { Line, PastRun, PricingChoices, ScreenPatch, Snapshot, TeamFile, TeamConfig, Usage, UsageReport, UsageRow } from "./types";
 
 const NOW = Date.now();
 const ago = (minutes: number) => NOW - minutes * 60_000;
@@ -41,12 +41,17 @@ for (let i = config.members.length; i < wanted; i++) {
   config.members.push({ id: `ai${i + 1}`, name: `AI ${i + 1}`, role: EXTRA_ROLES[i - 4] ?? "支援", duty: "", agent: "copilot", color: ["#F472B6", "#22D3EE", "#F59E0B", "#84CC16"][i - 4] ?? "#94A3B8" });
 }
 
-export const demoAgents = [
+export const demoAgents: import("../core/state").AgentProfile[] = [
   { id: "copilot", name: "Copilot CLI", command: "copilot", args: ["--acp", "--stdio"], env: {}, cwd: "" },
-  { id: "cg", name: "cg · glm-5.3-flash", command: "copilot", args: ["--acp", "--stdio"], env: {}, cwd: "" },
-  { id: "claude", name: "Claude Code", command: "claude", args: [], env: {}, cwd: "", protocol: "claude" as const },
-  { id: "codex", name: "Codex", command: "codex", args: ["app-server"], env: {}, cwd: "", protocol: "codex" as const },
+  { id: "cg", name: "cg · glm-5.3-flash", command: "copilot", args: ["--acp", "--stdio"], env: { COPILOT_PROVIDER_BASE_URL: "https://llm-share.example.com/v1" }, cwd: "" },
+  { id: "claude", name: "Claude Code", command: "claude", args: [], env: {}, cwd: "", protocol: "claude" },
+  { id: "codex", name: "Codex", command: "codex", args: ["app-server"], env: {}, cwd: "", protocol: "codex" },
+  { id: "agy", name: "Antigravity", command: "agy", args: [], env: {}, cwd: "", protocol: "agy" },
 ];
+
+function used(model: string, input: number, output: number, cacheRead = 0, cacheWrite = 0): Usage {
+  return { model, input, output, cacheRead, cacheWrite, reasoning: 0, requests: 0 };
+}
 
 export const demoFiles: { dir: string; files: TeamFile[] } = {
   dir: "C:\\Users\\you\\AppData\\Roaming\\Coucou\\teams",
@@ -162,7 +167,7 @@ export function demoSnapshot(): Snapshot {
     startedAt: ago(18),
     finishedAt: 0,
     members: [
-      { ...seat(0), isLeader: true, status: "working", task: "TASK-05", waiting: null, activity: "Reading docs/spec.md", turns: 4, permission: null, lostWhy: "" },
+      { ...seat(0), isLeader: true, status: "working", task: "TASK-05", waiting: null, activity: "Reading docs/spec.md", turns: 4, permission: null, lostWhy: "", usage: [used("claude-sonnet-5-5", 41_200, 9_800, 612_000, 38_000)] },
       {
         ...seat(1),
         isLeader: false,
@@ -174,8 +179,8 @@ export function demoSnapshot(): Snapshot {
         permission: null,
         lostWhy: "",
       },
-      { ...seat(2), isLeader: false, status: "working", task: "TASK-04", waiting: null, activity: "Editing src/cart/CartPage.tsx", turns: 3, permission: null, lostWhy: "" },
-      { ...seat(3), isLeader: false, status: "done", task: null, waiting: null, activity: "", turns: 2, permission: null, lostWhy: "" },
+      { ...seat(2), isLeader: false, status: "working", task: "TASK-04", waiting: null, activity: "Editing src/cart/CartPage.tsx", turns: 3, permission: null, lostWhy: "", usage: [used("glm-5.3-flash", 182_000, 21_400, 96_000)] },
+      { ...seat(3), isLeader: false, status: "done", task: null, waiting: null, activity: "", turns: 2, permission: null, lostWhy: "", usage: [used("gemini-3.8-flash", 23_000, 4_100)] },
       ...config.members.slice(4).map((_, k) => ({ ...seat(4 + k), isLeader: false, status: (k % 2 ? "idle" : "working") as Snapshot["members"][number]["status"], task: null, waiting: null, activity: k % 2 ? "" : "Writing copy", turns: 1, permission: null, lostWhy: "" })),
     ],
     tasks: [
@@ -327,4 +332,92 @@ export function demoPast(): Snapshot {
   snap.messages = snap.messages.slice(0, 2);
   snap.deliverables = [];
   return snap;
+}
+
+// ── Usage over the last weeks, for the 成本與用量 page in a browser ──────────
+
+const DEMO_PRICES: Record<string, [number, number, number, number, string]> = {
+  "claude-sonnet-5-5": [3, 15, 0.3, 3.75, "anthropic"],
+  "claude-opus-5-5": [4, 20, 0.2, 5, "anthropic"],
+  "claude-haiku-4-5": [1, 5, 0.1, 1.25, "anthropic"],
+  "gpt-5.6-sol": [4, 20, 0.4, 0, "openai"],
+  "glm-5.3-flash": [0.15, 0.5, 0.03, 0, "zai"],
+  "deepseek-v4.1-flash": [0.3, 1.2, 0.03, 0, "deepseek"],
+  "gemini-3.8-flash": [0.75, 3.75, 0.075, 0, "gemini"],
+};
+
+/** A deterministic month and a half of three teams at work. */
+export function demoReport(from: number, to: number): UsageReport {
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const teams = [
+    { id: "shop", name: "購物網站團隊", members: [["ai1", "AI 1", "claude", "claude-sonnet-5-5"], ["ai2", "AI 2", "copilot", "gpt-5.6-sol"], ["ai3", "AI 3", "cg", "glm-5.3-flash"], ["ai4", "AI 4", "agy", "gemini-3.8-flash"]] },
+    { id: "docs", name: "文件翻譯團隊", members: [["ai1", "AI 1", "codex", "gpt-5.6-sol"], ["ai2", "AI 2", "cg", "deepseek-v4.1-flash"], ["ai3", "AI 3", "cg", "deepseek-v4.1-flash"]] },
+    { id: "brand", name: "品牌設計團隊", members: [["lead", "總監", "claude", "claude-opus-5-5"], ["d1", "設計 1", "agy", "gemini-3.8-flash"], ["w1", "文案", "claude", "claude-haiku-4-5"]] },
+  ];
+  const rows: UsageRow[] = [];
+  const day = 86_400_000;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (let d = 44; d >= 0; d--) {
+    for (const t of teams) {
+      // Teams work some days, not all.
+      if (rand() < (t.id === "shop" ? 0.35 : 0.6)) continue;
+      const run = today.getTime() - d * day + 9 * 3_600_000;
+      for (const [id, name, agent, model] of t.members) {
+        const turns = 1 + Math.floor(rand() * 5);
+        for (let k = 0; k < turns; k++) {
+          const at = run + Math.floor(rand() * 8 * 3_600_000);
+          const big = model.includes("opus") || model.includes("sonnet") ? 1.6 : 1;
+          const input = Math.floor((8_000 + rand() * 60_000) * big);
+          const usage: Usage = { model, input, output: Math.floor(input * (0.08 + rand() * 0.2)), cacheRead: Math.floor(input * (1 + rand() * 9)), cacheWrite: model.startsWith("claude") ? Math.floor(input * 0.3) : 0, reasoning: 0, requests: 1 + Math.floor(rand() * 6) };
+          // One model nobody prices yet, to see how that looks.
+          if (t.id === "brand" && id === "d1" && k === 0 && d % 9 === 0) usage.model = "nano-banana-3";
+          rows.push({ at, team: t.id, teamName: t.name, run, member: id, memberName: name, agent, usage, estimatedUsd: null, pricedBy: "" });
+        }
+      }
+    }
+  }
+  const inRange = rows.filter((r) => r.at >= from && r.at < to && r.at <= Date.now()).sort((a, b) => a.at - b.at);
+  const seen = new Map<string, UsageReport["models"][number]["found"]>();
+  for (const r of inRange) {
+    const p = DEMO_PRICES[r.usage.model];
+    const own = demoChoices.overrides[r.usage.model];
+    const found = own
+      ? { price: own, source: "override" as const, listedAs: r.usage.model }
+      : p
+        ? { price: { input: p[0], output: p[1], cacheRead: p[2], cacheWrite: p[3] }, source: "list" as const, listedAs: `${r.usage.model} (${p[4]})` }
+        : null;
+    seen.set(r.usage.model, found);
+    if (found) {
+      const u = r.usage;
+      r.estimatedUsd = (u.input * found.price.input + u.output * found.price.output + u.cacheRead * found.price.cacheRead + u.cacheWrite * found.price.cacheWrite) / 1e6;
+      r.pricedBy = found.source;
+    }
+  }
+  return {
+    rows: inRange,
+    models: [...seen].map(([model, found]) => ({ model, found })).sort((a, b) => a.model.localeCompare(b.model)),
+    choices: structuredClone(demoChoices),
+    tableSource: "Coucou 內建的價目表 (LiteLLM)",
+    tableFetchedAt: NOW - 3 * day,
+    tableSize: 1329,
+  };
+}
+
+export const demoChoices: PricingChoices = { overrides: {}, proxy: {}, billing: { claude: "subscription", codex: "subscription" }, currency: "TWD", rate: 32 };
+
+/** Today's price of each model, as the app would quote it. */
+export function demoQuote(models: string[]): Record<string, import("./types").Found | null> {
+  const out: Record<string, import("./types").Found | null> = {};
+  for (const m of models) {
+    const p = DEMO_PRICES[m];
+    out[m] = p ? { price: { input: p[0], output: p[1], cacheRead: p[2], cacheWrite: p[3] }, source: "list", listedAs: `${m} (${p[4]})` } : null;
+  }
+  return out;
+}
+
+/** What an endpoint might say its key spent. */
+export function demoKeySpend(): import("./types").KeySpend {
+  return { spend: 15.55, maxBudget: 150, budgetDuration: "7d", budgetResetAt: new Date(NOW + 2 * 86_400_000).toISOString(), modelSpend: { "deepseek-v4-flash": 11.92, "glm-5.3-flash": 2.41, "gemini-3.8-flash": 1.22 }, askedAt: Date.now() };
 }
