@@ -40,6 +40,25 @@ describe("teamEntities", () => {
     expect(e.members[1].workStatus).toBe("reviewing");
   });
 
+  it("the leader is the run's: a file edited mid-run moves the crown only when the run says so", () => {
+    const snap = demoSnapshot();
+    const edited = structuredClone(shopFile);
+    edited.config!.leader = "ai2";
+    // The run still has AI 1 as its leader: the crown and the instructions stay with AI 1.
+    expect(teamEntities(edited, snap, 1).team.leaderMemberId).toBe("ai1");
+    // A run whose leader is AI 2 (started again after the edit) crowns AI 2.
+    const again = { ...snap, members: snap.members.map((m) => ({ ...m, isLeader: m.id === "ai2" })) };
+    expect(teamEntities(edited, again, 1).team.leaderMemberId).toBe("ai2");
+    // Before any run, the file decides.
+    expect(teamEntities(edited, undefined, 1).team.leaderMemberId).toBe("ai2");
+  });
+
+  it("a member who joined the running team has a seat", () => {
+    const snap = demoSnapshot();
+    snap.members = [...snap.members, { ...snap.members[3], id: "ai5", name: "AI 5", isLeader: false }];
+    expect(teamEntities(shopFile, snap, 1).members.map((m) => m.memberId)).toContain("ai5");
+  });
+
   it("a team that never ran has a room, idle, with no progress yet", () => {
     const e = teamEntities(docsFile, undefined, 1);
     expect(e.run.status).toBe("idle");
@@ -95,10 +114,17 @@ describe("RealAdapter", () => {
     const { files, runs } = company();
     const store = new OfficeStore();
     store.loadSnapshot(a.snapshot(files, runs));
-    const fewer = structuredClone(shopFile);
+    // A team that has not run follows its file: a member taken out of it leaves the room.
+    const fewer = structuredClone(docsFile);
     fewer.config!.members = fewer.config!.members.filter((m) => m.id !== "ai4");
-    store.receive(a.diff([fewer, docsFile], runs)!);
-    expect(store.member("shop", "ai4")).toBeUndefined();
+    store.receive(a.diff([shopFile, fewer], runs)!);
+    expect(store.member("docs", "ai4")).toBeUndefined();
+    expect(store.members("docs").map((m) => m.memberId)).toEqual(["ai1", "ai2", "ai3"]);
+    // A run that ends with fewer members (started again without one) does the same.
+    const next = structuredClone(runs.get("shop")!);
+    next.members = next.members.filter((m) => m.id !== "ai4");
+    runs.set("shop", next);
+    store.receive(a.diff([shopFile, fewer], runs)!);
     expect(store.members("shop").map((m) => m.memberId)).toEqual(["ai1", "ai2", "ai3"]);
   });
 

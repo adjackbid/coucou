@@ -59,17 +59,17 @@ function toScreen(x: number, y: number, z = 0) {
 /**
  * Where members sit, in metres on the floor: rows of desks, all facing the
  * same way, like an office: desks side by side form a bench per row. Up
- * to four take two benches of two; five or six two benches of three. Members beyond six wait for a bigger room (P1).
+ * to four take two benches of two; five or six two benches of three; seven
+ * or eight two benches of four. Members beyond eight wait for a bigger room.
  */
 type Desk = { x: number; y: number; facing: "SE" | "SW" };
 const ROWS = [1.1, 3.1];
-export const MAX_DESKS = 6;
+export const MAX_DESKS = 8;
 export function desksFor(count: number): Desk[] {
   // Desks side by side make one long bench per row: 1.4 m apart, as long as a desk.
-  const cols = count <= 4 ? [2.3, 3.7] : [1.6, 3.0, 4.4];
+  const cols = count <= 4 ? [2.3, 3.7] : count <= 6 ? [1.6, 3.0, 4.4] : [0.95, 2.35, 3.75, 5.15];
   const all = ROWS.flatMap((y) => cols.map((x) => ({ x, y, facing: "SE" as const })));
   // Fill a whole row before the next; two in a row of three sit at its ends.
-  if (count === 5) return [all[0], all[1], all[2], all[3], all[4]];
   return all.slice(0, Math.max(0, Math.min(count, MAX_DESKS)));
 }
 
@@ -381,7 +381,7 @@ export class TeamScene {
     const label = h(
       "button",
       {
-        class: `office-label ${st.tone}${sel ? " on" : ""}${m.engineStatus === "offline" ? " offline" : ""}`, type: "button",
+        class: `office-label ${st.tone}${sel ? " on" : ""}${m.engineStatus === "offline" ? " offline" : ""}${lounge ? " compact" : ""}`, type: "button",
         style: `--c:${color}`,
         "aria-pressed": sel ? "true" : "false",
         "aria-label": `${m.displayName ?? m.memberId}${leader ? ",Leader" : ""},${m.roleLabel},${st.label}${task ? `,${task}` : ""}${m.engineStatus === "offline" ? ",未連線" : ""}`,

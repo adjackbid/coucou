@@ -399,6 +399,13 @@ const chosenThread = new Map<string, string>();
 let filter: "all" | "blocked" | "delivered" = "all";
 let query = "";
 
+/** Opens the log on a task's thread, with nothing filtering it out. */
+export function openThread(team: string, task: string) {
+  chosenThread.set(team, task);
+  filter = "all";
+  query = "";
+}
+
 /** Every exchange of the team, gathered by the task it is about. */
 function threads(snap: Snapshot): Thread[] {
   const byKey = new Map<string, Thread>();

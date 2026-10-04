@@ -19,6 +19,8 @@ export interface OfficeHost {
   render(): void;
   /** Leave the Office for the board of the same team. */
   showBoard(teamId: string): void;
+  /** The task's thread in 溝通紀錄 (the task id is Coucou's own). */
+  openTask?(teamId: string, taskId: string): void;
   /** Go to a team's office (selecting the team in the sidebar). */
   openTeam(teamId: string): void;
   /** Open a deliverable the way the board does. */
@@ -585,6 +587,9 @@ export class Office {
       h("section", { class: "office-card" },
         h("h3", { text: "目前工作" }),
         task ? h("p", {}, h("b", { text: task.title }), others ? h("small", { class: "dim", text: ` 另外 ${others} 項` }) : null) : h("p", { class: "dim", text: m.workStatus === "idle" ? "待命,沒有指派的任務。" : "沒有進行中的任務。" }),
+        task && this.host.openTask && !this.viewing && !this.demo
+          ? h("button", { class: "btn plain", type: "button", title: "在溝通紀錄裡看這個任務的對話與交付", onClick: () => this.host.openTask!(teamId, task.taskId.slice(teamId.length + 1)) }, "開啟任務")
+          : null,
         m.summary && m.summary !== task?.title ? h("p", { class: "dim", text: m.summary }) : null,
         task?.acceptanceCriteria.length ? h("ul", { class: "office-criteria" }, ...task.acceptanceCriteria.map((c) => h("li", { class: c.passed ? "ok" : "" }, h("i", { "aria-hidden": "true", text: c.passed ? "✓" : "○" }), c.text))) : null),
       m.waitingFor

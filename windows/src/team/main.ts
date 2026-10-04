@@ -15,7 +15,7 @@ import type { AgentProfile, ModelChoice } from "../core/state";
 import { h, clear } from "../views/dom";
 import * as live from "./live";
 import { dropdown, menuOpen, onMenuClosed, refreshSuggestions, suggest } from "./ui";
-import { linksScreen, logScreen, type Page } from "./screens";
+import { linksScreen, logScreen, openThread, type Page } from "./screens";
 import { Office } from "./office/office";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
@@ -1119,6 +1119,14 @@ const office = new Office(
         place = "office";
         officeTeam = teamId;
       }
+      render();
+    },
+    openTask: (teamId, taskId) => {
+      const file = files.find((f) => f.config?.id === teamId);
+      if (!file) return;
+      if (selected !== file.file) select(file.file);
+      openThread(teamId, taskId);
+      tab = "log";
       render();
     },
     openArtifact: (teamId, ref) => void act(() => Bridge.teamOpen(teamId, ref)),

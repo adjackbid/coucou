@@ -87,7 +87,11 @@ export function fileFromSnapshot(snap: Snapshot): TeamFile {
 
 /** One team, as contract entities. */
 export function teamEntities(file: TeamFile, snap: Snapshot | undefined, revision: number) {
-  const cfg = file.config!;
+  // A team that has run is shown as its run has it: its members (with any
+  // who joined) and its leader as Coucou recorded them. Editing the team file
+  // changes the next run, not this one — and an instruction goes to the
+  // leader the run has, so the crown must be on that member too.
+  const cfg = snap && snap.members.length ? { ...fileFromSnapshot(snap).config!, name: file.config!.name || snap.name } : file.config!;
   const teamId = cfg.id;
   const runId = runIdOf(teamId, snap);
   const at = iso(snap?.finishedAt || snap?.startedAt || 0);

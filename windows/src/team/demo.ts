@@ -32,6 +32,13 @@ const config: TeamConfig = {
   maxTurns: 60,
 };
 
+// `?members=8` adds members to the demo team, to look at a full room.
+const wanted = typeof location === "undefined" ? 4 : Math.min(8, Number(new URLSearchParams(location.search).get("members")) || 4);
+const EXTRA_ROLES = ["文案撰寫", "測試驗收", "資料整理", "營運支援"];
+for (let i = config.members.length; i < wanted; i++) {
+  config.members.push({ id: `ai${i + 1}`, name: `AI ${i + 1}`, role: EXTRA_ROLES[i - 4] ?? "支援", duty: "", agent: "copilot", color: ["#F472B6", "#22D3EE", "#F59E0B", "#84CC16"][i - 4] ?? "#94A3B8" });
+}
+
 export const demoAgents = [
   { id: "copilot", name: "Copilot CLI", command: "copilot", args: ["--acp", "--stdio"], env: {}, cwd: "" },
   { id: "cg", name: "cg · glm-5.3-flash", command: "copilot", args: ["--acp", "--stdio"], env: {}, cwd: "" },
@@ -165,6 +172,7 @@ export function demoSnapshot(): Snapshot {
       },
       { ...seat(2), isLeader: false, status: "working", task: "TASK-04", waiting: null, activity: "Editing src/cart/CartPage.tsx", turns: 3, permission: null, lostWhy: "" },
       { ...seat(3), isLeader: false, status: "done", task: null, waiting: null, activity: "", turns: 2, permission: null, lostWhy: "" },
+      ...config.members.slice(4).map((_, k) => ({ ...seat(4 + k), isLeader: false, status: (k % 2 ? "idle" : "working") as Snapshot["members"][number]["status"], task: null, waiting: null, activity: k % 2 ? "" : "Writing copy", turns: 1, permission: null, lostWhy: "" })),
     ],
     tasks: [
       task(1, "需求拆解", "ai1", "done", { note: "完成需求分析與任務分配" }),

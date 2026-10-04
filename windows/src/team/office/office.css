@@ -269,6 +269,20 @@
   gap: 6px;
   align-items: baseline;
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.office-label .who b {
+  flex: none;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.office-label .role {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .office-label .who b {
@@ -305,6 +319,24 @@
 .office-label.alert .st { color: #ff9a9f; }
 .office-label.done .st { color: #6ee7b7; }
 .office-label.quiet .st { color: var(--dim); }
+
+/* On the sofa, seats are close: the name only, the status as its icon. */
+.office-label.compact {
+  grid-template-columns: auto auto;
+  padding: 3px 8px;
+}
+
+.office-label.compact .role {
+  display: none;
+}
+
+.office-label.compact .st {
+  font-size: 0;
+}
+
+.office-label.compact .st i {
+  font-size: 11.5px;
+}
 
 /* No agent behind it: the last recorded state, a little faded. */
 .office-label.offline {
@@ -730,6 +762,7 @@
 .office-drawer h2 {
   font-size: 17px;
   outline: none;
+  overflow-wrap: anywhere;
 }
 
 .office-tabs {
@@ -903,6 +936,20 @@
 @media (max-width: 767px) {
   .office-team .office-frame {
     display: none;
+  }
+  .office-head-main,
+  .office-progress {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .office-toggles {
+    flex-wrap: wrap;
+  }
+  .office-map-viewport {
+    height: 52vh;
+  }
+  .office-roster {
+    grid-template-columns: 1fr;
   }
   .office-map {
     grid-template-columns: 1fr;
