@@ -8,7 +8,7 @@
 
 import "./office.css";
 import { h } from "../../views/dom";
-import type { Artifact, CommandRecord, MemberSnapshot, Message, TeamRun, Capabilities } from "./contracts";
+import type { Artifact, CommandRecord, MemberSnapshot, Message, Team, TeamRun, Capabilities } from "./contracts";
 import { OfficeStore } from "./store";
 import { RealAdapter, fileFromSnapshot } from "./adapter-real";
 import { MockAdapter } from "./adapter-mock";
@@ -61,8 +61,10 @@ export class Office {
   /** Where we came from when following a dependency. */
   private back: { teamId: string; memberId: string } | null = null;
   companyPick: string | null = null;
-  /** The company map's view: 60–160 %, and how far it was dragged. */
+  /** The company map's view: 60–160 %, and how far it was dragged from the centre. */
   view = { zoom: 1, x: 0, y: 0 };
+  /** Until the person zooms or drags, the map fits the whole floor in view. */
+  private viewTouched = false;
   tab: "work" | "talk" = "work";
   bubbles = true;
   calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -268,7 +270,8 @@ export class Office {
     const away = this.store.teams().length - teams.length;
     const count = this.store.headcount();
     if (!teams.length) return h("div", { class: "office-empty" }, h("p", { text: away ? `${away} 個團隊都已封存。到側欄下方的「已封存」可以取出。` : "還沒有團隊。按左下角的「新增團隊」開始。" }));
-    const pick = teams.find((t) => t.teamId === this.companyPick) ?? teams[0];
+    // The room picked, if any: a click on the floor where there is no room lets it go.
+    const pick = teams.find((t) => t.teamId === this.companyPick) ?? null;
     // Rooms laid out as a floor: as many columns as rows. A large office takes 2 × 2 cells.
     const large = (t: (typeof teams)[number]) => themeName(t.teamId, t.officeLayoutId, t.memberIds.length) === "premium";
     const cells = teams.reduce((n, t) => n + (large(t) ? 4 : 1), 0);
@@ -280,7 +283,7 @@ export class Office {
       const p = this.store.progress(t.teamId);
       const room = h(
         "div",
-        { class: `office-room-tile${t.teamId === pick.teamId ? " on" : ""}${large(t) ? " big" : ""}`, role: "listitem" },
+        { class: `office-room-tile${t.teamId === pick?.teamId ? " on" : ""}${large(t) ? " big" : ""}`, role: "listitem" },
         h(
           "button",
           {
@@ -309,29 +312,11 @@ export class Office {
       );
       grid.append(room);
     }
-    const pickRun = this.store.run(pick.currentRunId);
-    const leader = this.store.member(pick.teamId, pick.leaderMemberId);
     const attention = teams.flatMap((t) => this.alerts(t.teamId).map((m) => ({ t, m })));
     const side = h(
       "aside",
       { class: "office-side" },
-      h("div", { class: "office-card" },
-        h("div", { class: "row" }, h("h2", { title: pick.name, text: pick.name }), this.demoTag()),
-        h("p", { class: "dim", text: pick.goal.split("\n")[0] }),
-        this.runLabel(pickRun),
-        this.progressBar(pick.teamId),
-        leader ? h("p", { class: "dim", text: `Leader · ${leader.displayName ?? leader.memberId}(${STATUS[leader.workStatus].label})` }) : h("p", { class: "dim", text: "還沒有指定 Leader,請到團隊設定。" }),
-        h("button", { class: "btn primary", type: "button", onClick: () => this.host.openTeam(pick.teamId) }, "進入辦公室 →"),
-      ),
-      h("div", { class: "office-card" },
-        h("h3", { text: "團隊成員" }),
-        ...this.store.members(pick.teamId).map((m) =>
-          h("button", { class: "office-member-row", type: "button", onClick: () => { this.sel = { teamId: pick.teamId, memberId: m.memberId }; this.host.openTeam(pick.teamId); } },
-            h("i", { class: "office-blob", style: `background:${m.color}` }),
-            h("span", { class: "grow" }, h("b", { text: m.displayName ?? m.memberId }), h("small", { class: "dim", text: ` ${m.roleLabel}` })),
-            this.status(m.workStatus)),
-        ),
-      ),
+      ...(pick ? this.roomSummary(pick) : [this.companySummary(teams)]),
       attention.length
         ? h("div", { class: "office-card alert" }, h("h3", { text: "需要你的注意" }),
             ...attention.map(({ t, m }) =>
@@ -353,6 +338,46 @@ export class Office {
     );
   }
 
+  /** The room picked on the map: its team at a glance, and the way in. */
+  private roomSummary(pick: Team): HTMLElement[] {
+    const pickRun = this.store.run(pick.currentRunId);
+    const leader = this.store.member(pick.teamId, pick.leaderMemberId);
+    return [
+      h("div", { class: "office-card" },
+        h("div", { class: "row" }, h("h2", { title: pick.name, text: pick.name }), this.demoTag()),
+        h("p", { class: "dim", text: pick.goal.split("\n")[0] }),
+        this.runLabel(pickRun),
+        this.progressBar(pick.teamId),
+        leader ? h("p", { class: "dim", text: `Leader · ${leader.displayName ?? leader.memberId}(${STATUS[leader.workStatus].label})` }) : h("p", { class: "dim", text: "還沒有指定 Leader,請到團隊設定。" }),
+        h("button", { class: "btn primary", type: "button", onClick: () => this.host.openTeam(pick.teamId) }, "進入辦公室 →"),
+      ),
+      h("div", { class: "office-card" },
+        h("h3", { text: "團隊成員" }),
+        ...this.store.members(pick.teamId).map((m) =>
+          h("button", { class: "office-member-row", type: "button", onClick: () => { this.sel = { teamId: pick.teamId, memberId: m.memberId }; this.host.openTeam(pick.teamId); } },
+            h("i", { class: "office-blob", style: `background:${m.color}` }),
+            h("span", { class: "grow" }, h("b", { text: m.displayName ?? m.memberId }), h("small", { class: "dim", text: ` ${m.roleLabel}` })),
+            this.status(m.workStatus)),
+        ),
+      ),
+    ];
+  }
+
+  /** No room picked: how the company stands, and how to look closer. */
+  private companySummary(teams: Team[]): HTMLElement {
+    const runOf = (t: Team) => this.store.run(t.currentRunId)?.status;
+    const need = teams.filter((t) => runOf(t) === "needs_attention" || this.alerts(t.teamId).length).length;
+    const busy = teams.filter((t) => (runOf(t) === "running" || runOf(t) === "pausing") && !this.alerts(t.teamId).length).length;
+    const done = teams.filter((t) => runOf(t) === "completed").length;
+    const rest = Math.max(0, teams.length - busy - need - done);
+    const stat = (n: number, label: string, tone: string) => h("div", { class: `office-stat ${tone}` }, h("b", { text: String(n) }), h("span", { text: label }));
+    return h("div", { class: "office-card" },
+      h("div", { class: "row" }, h("h2", { text: "公司總覽" }), this.demoTag()),
+      h("div", { class: "office-stats" }, stat(busy, "執行中", "work"), stat(need, "需介入", "alert"), stat(done, "已完成", "done"), stat(rest, "待命", "quiet")),
+      h("p", { class: "dim", text: "點一間辦公室看它的摘要;雙擊直接進去。" }),
+    );
+  }
+
   // ── The company map: drag to move, zoom 60–160 %, back to the whole floor ──
 
   private dragged = false;
@@ -362,7 +387,30 @@ export class Office {
     return `transform:translate(${v.x}px, ${v.y}px) scale(${v.zoom});`;
   }
 
+  /**
+   * Places the floor in its viewport: centred both ways at the zoom chosen,
+   * then moved by however far it was dragged. Called whenever the viewport
+   * or the floor changes size.
+   */
+  private fitZoom(vp: HTMLElement, grid: HTMLElement) {
+    const fit = Math.min(1, (vp.clientWidth - 8) / grid.offsetWidth, (vp.clientHeight - 8) / grid.offsetHeight);
+    return Math.min(1.6, Math.max(0.6, Math.floor(fit * 10) / 10));
+  }
+
+  private placeMap(vp: HTMLElement, grid: HTMLElement) {
+    if (!this.viewTouched && grid.offsetWidth) {
+      this.view.zoom = this.fitZoom(vp, grid);
+      const label = vp.parentElement?.querySelector(".office-map-controls span");
+      if (label) label.textContent = `${Math.round(this.view.zoom * 100)}%`;
+    }
+    const v = this.view;
+    const cx = (vp.clientWidth - grid.offsetWidth * v.zoom) / 2;
+    const cy = (vp.clientHeight - grid.offsetHeight * v.zoom) / 2;
+    grid.style.transform = `translate(${cx + v.x}px, ${cy + v.y}px) scale(${v.zoom})`;
+  }
+
   private zoomTo(z: number) {
+    this.viewTouched = true;
     this.view.zoom = Math.min(1.6, Math.max(0.6, Math.round(z * 10) / 10));
     this.host.render();
   }
@@ -381,10 +429,18 @@ export class Office {
       if (!this.dragged && Math.hypot(dx, dy) < 5) return;
       if (!this.dragged) vp.setPointerCapture(e.pointerId);
       this.dragged = true;
+      this.viewTouched = true;
       this.view.x = start.vx + dx;
       this.view.y = start.vy + dy;
-      grid.style.transform = `translate(${this.view.x}px, ${this.view.y}px) scale(${this.view.zoom})`;
+      this.placeMap(vp, grid);
     });
+    // Centred from the first frame, and again when the window or the floor changes size.
+    const ro = new ResizeObserver(() => {
+      if (!vp.isConnected) return ro.disconnect();
+      this.placeMap(vp, grid);
+    });
+    ro.observe(vp);
+    ro.observe(grid);
     const end = () => {
       start = null;
       // A drag is not a click on the room it ended over.
@@ -392,6 +448,12 @@ export class Office {
     };
     vp.addEventListener("pointerup", end);
     vp.addEventListener("pointercancel", end);
+    // A click on the floor where there is no room lets the picked room go.
+    vp.addEventListener("click", (e) => {
+      if (this.dragged || (e.target as HTMLElement).closest(".office-room-tile") || this.companyPick === null) return;
+      this.companyPick = null;
+      this.host.render();
+    });
     vp.addEventListener("wheel", (e) => {
       if (!e.ctrlKey) return;
       e.preventDefault();
@@ -406,10 +468,9 @@ export class Office {
       h("button", {
         class: "btn plain", type: "button", title: "縮放到看得見所有辦公室",
         onClick: () => {
-          // The whole floor in view: as large as fits, never past the 60–160 % range.
-          const w = grid.offsetWidth, hgt = grid.offsetHeight;
-          const fit = Math.min(1, (vp.clientWidth - 8) / w, (vp.clientHeight - 8) / hgt);
-          this.view = { zoom: Math.min(1.6, Math.max(0.6, Math.floor(fit * 10) / 10)), x: 0, y: 0 };
+          // The whole floor in view, centred both ways — and kept so as the window changes.
+          this.viewTouched = false;
+          this.view = { zoom: this.fitZoom(vp, grid), x: 0, y: 0 };
           this.host.render();
         },
       }, "全景"),

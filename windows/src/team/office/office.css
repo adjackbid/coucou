@@ -450,6 +450,9 @@
 }
 
 .office-map-viewport .office-map {
+  position: absolute;
+  left: 0;
+  top: 0;
   padding: 14px;
   transform-origin: 0 0;
 }
@@ -560,6 +563,36 @@
 .office-pill.alert { color: #ff9a9f; background: rgba(244, 80, 94, 0.18); }
 .office-pill.done { color: #6ee7b7; background: rgba(52, 211, 153, 0.16); }
 .office-pill.quiet { color: var(--dim); }
+
+/* The company at a glance, when no room is picked. */
+.office-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.office-stat {
+  display: grid;
+  gap: 2px;
+  padding: 10px 6px;
+  border-radius: 12px;
+  background: var(--lift);
+  text-align: center;
+}
+
+.office-stat b {
+  font-size: 22px;
+}
+
+.office-stat span {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.office-stat.work b { color: #8cc4ff; }
+.office-stat.alert b { color: #ff9a9f; }
+.office-stat.done b { color: #6ee7b7; }
+.office-stat.quiet b { color: var(--dim-glass); }
 
 .office-demo {
   padding: 2px 8px;
