@@ -46,10 +46,33 @@ interface ThemeJson {
   props: Props;
   /** "standard" uses the shared desks. */
   workstations: "standard" | Record<"SE" | "SW", StationArt>;
+  /** 中二模式: where the boss stands (metres), how big, and what makes way for it. */
+  battle?: { boss: [number, number]; scale: number; hide: string[] };
+}
+/** A picture rendered in the office camera: its canvas and where it touches the floor (2× px). */
+export interface Sprite {
+  file: string;
+  canvas: [number, number];
+  groundPivot: [number, number];
+  /** Where its effects start: a staff's gem, a sword's tip. */
+  effectOrigin?: [number, number];
+}
+export type BossState = "idle" | "rage" | "guard" | "hurt" | "regen" | "sealed" | "defeated";
+/** The boss: every state on one canvas with one groundPivot (public/office/battle/manifest.json). */
+export interface BossArt {
+  canvas: [number, number];
+  groundPivot: [number, number];
+  top: [number, number];
+  states: Record<BossState, { file: string; coreCenter: [number, number]; hitTarget: [number, number] }>;
+}
+export interface BattleArt {
+  boss: BossArt;
+  accessories: Record<string, Sprite>;
 }
 export interface SceneArt {
   workstations: Record<"SE" | "SW", StationArt>;
   themes: Record<string, ThemeJson>;
+  battle?: BattleArt;
 }
 export interface Theme {
   name: string;
@@ -57,6 +80,7 @@ export interface Theme {
   large: boolean;
   room: RoomArt;
   props: Props;
+  battle: ThemeJson["battle"];
   workstations: Record<"SE" | "SW", StationArt>;
   desks: (count: number) => Desk[];
   maxDesks: number;
@@ -74,6 +98,9 @@ export function loadArt(): Promise<SceneArt | null> {
 }
 
 const H = (v: number) => v / 2;
+
+/** The art as loaded: the battle layer reads its boss and accessories here. */
+export const sceneArt = () => art;
 
 function toScreenIn(w: WorldToScreen, x: number, y: number, z = 0) {
   return { x: H(w.x0 + (y - x) * w.perMetreX), y: H(w.y0 + (x + y) * w.perMetreY - z * w.perMetreZ) };
@@ -121,6 +148,7 @@ export function theme(name: string): Theme | null {
     large,
     room: t.room,
     props: t.props,
+    battle: t.battle,
     workstations: t.workstations === "standard" ? art.workstations : t.workstations,
     desks: large ? largeDesks : desksFor,
     maxDesks: large ? 12 : MAX_DESKS,
@@ -198,6 +226,8 @@ interface Actor {
   status: WorkStatus | null;
   /** Drawn once more even when nothing moves (reduced motion, a mini scene). */
   dirty: boolean;
+  /** Room around the body for what it holds (中二模式); the canvas is size + 2 × pad. */
+  pad: number;
   /** Where its canvas is (top-left, stage pixels), and where it is going: between desk and sofa it walks. */
   at?: { x: number; y: number };
   to?: { x: number; y: number; z: number };
@@ -218,6 +248,22 @@ export interface SceneOptions {
   preview?: (a: Artifact) => string | null;
   /** A deliverable on the wall was clicked. */
   onArtifact?: (a: Artifact) => void;
+}
+
+/** A layer drawn over an office — 中二模式's boss, effects and heroes' looks. */
+export interface SceneLayer {
+  /** Room around each Mochi's canvas for what it holds. */
+  readonly pad: number;
+  /** The room was built (again): put in it what belongs there. */
+  build(): void;
+  /** The store changed. */
+  update(): void;
+  /** A frame; true while anything of the layer still moves. */
+  frame(dt: number): boolean;
+  /** Draws over a Mochi, the body drawn in size × size at the origin. */
+  decorate?(memberId: string, ctx: CanvasRenderingContext2D, size: number, engine: BotEngine, facing: number): void;
+  /** Taken off: everything of it leaves the room, nothing keeps playing. */
+  detach(): void;
 }
 
 /** Lays an element of w × h px onto a parallelogram of the room (TL, TR, BR, BL in 2× pixels). */
@@ -252,6 +298,8 @@ export class TeamScene {
   selected: string | null = null;
   bubblesOn = true;
   reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  /** What is drawn over the office, if anything (中二模式). */
+  private layer: SceneLayer | null = null;
 
   constructor(readonly teamId: string, private store: OfficeStore, private opts: SceneOptions = {}) {
     this.stage = h("div", { class: "office-stage" });
@@ -282,6 +330,67 @@ export class TeamScene {
   }
 
   private fit: () => void = () => {};
+
+  // ── For a layer over the room ──
+
+  get stageEl(): HTMLElement {
+    return this.stage;
+  }
+  get overlayEl(): HTMLElement {
+    return this.overlay;
+  }
+  get roomTheme(): Theme | null {
+    return this.theme;
+  }
+  get mini(): boolean {
+    return !!this.opts.mini;
+  }
+  /** Room pixels to screen pixels. */
+  get scale(): number {
+    return this.k;
+  }
+  get cropBox() {
+    return this.crop;
+  }
+  /** A point of the floor (metres), in stage pixels. */
+  screen(x: number, y: number, z = 0) {
+    return this.toScreen(x, y, z);
+  }
+  depthOf(x: number, y: number) {
+    return this.depth(x, y);
+  }
+  /** A member's Mochi where it is now: the middle of its body's canvas (stage pixels), its size, the way it faces. */
+  mochi(memberId: string): { x: number; y: number; size: number; facing: number } | null {
+    const a = this.actors.get(memberId);
+    if (!a?.at || !a.canvas.isConnected) return null;
+    return { x: a.at.x + a.pad + a.size / 2, y: a.at.y + a.pad + a.size / 2, size: a.size, facing: a.yaw };
+  }
+  memberIds(): string[] {
+    return [...this.actors.keys()];
+  }
+  /** Puts a reading-size element at a point of the room, kept there as the room is resized. */
+  pinAt(el: HTMLElement, x: number, y: number) {
+    this.pin(el, x, y);
+  }
+
+  /** Every Mochi drawn once more (what it holds has finished loading). */
+  redrawMochis() {
+    for (const a of this.actors.values()) a.dirty = true;
+    wake();
+  }
+
+  /** A layer over the room, or none: the one before is taken off. */
+  setLayer(layer: SceneLayer | null) {
+    if (this.layer === layer) return;
+    this.layer?.detach();
+    this.layer = layer;
+    if (this.theme) layer?.build();
+    this.update();
+  }
+  get currentLayer(): SceneLayer | null {
+    return this.layer;
+  }
+
   private get crop() {
     return this.theme?.room.crop ?? { x: 0, y: 0, w: 1220, h: 990 };
   }
@@ -314,7 +423,7 @@ export class TeamScene {
       const at = this.toScreen(...mt.at);
       this.stage.append(
         h("img", {
-          class: "office-layer", src: `/office/${mt.file}`, alt: "", draggable: "false",
+          class: "office-layer", src: `/office/${mt.file}`, alt: "", draggable: "false", "data-prop": "meetingTable",
           style: `left:${at.x - H(mt.groundPivot[0])}px;top:${at.y - H(mt.groundPivot[1])}px;width:${H(mt.canvas[0])}px;z-index:${this.depth(...mt.at)}`,
         }),
       );
@@ -324,11 +433,12 @@ export class TeamScene {
       const s = this.toScreen(...sofa.at);
       this.stage.append(
         h("img", {
-          class: "office-layer", src: `/office/${sofa.file}`, alt: "", draggable: "false",
+          class: "office-layer", src: `/office/${sofa.file}`, alt: "", draggable: "false", "data-prop": "sofa",
           style: `left:${s.x - H(sofa.groundPivot[0])}px;top:${s.y - H(sofa.groundPivot[1])}px;width:${H(sofa.canvas[0])}px;z-index:${this.depth(...sofa.at)}`,
         }),
       );
     }
+    this.layer?.build();
     this.fit();
   }
 
@@ -467,6 +577,7 @@ export class TeamScene {
       }
     }
     this.drawBubbles(members);
+    this.layer?.update();
     this.first = false;
     wake();
   }
@@ -512,11 +623,19 @@ export class TeamScene {
     const seatZ = standing ? this.depth(standing[0], standing[1]) + 4 : lounge && sofaAt ? this.depth(...sofaAt) + 4 : z + 4;
     const actor = this.actor(m, color);
     const size = actor.size;
+    // What it holds needs room around it: a canvas that size bigger, put back by as much.
+    const pad = this.opts.mini ? 0 : this.layer?.pad ?? 0;
+    if (actor.pad !== pad) {
+      actor.pad = pad;
+      actor.canvas.style.width = actor.canvas.style.height = `${size + 2 * pad}px`;
+      actor.at = undefined;
+      actor.dirty = true;
+    }
     const bottom = seat.y + (standing ? 0 : BODY * 0.06);
     // Between desk and sofa the Mochi walks there (frame() moves it); the
     // first picture and 減少動態 just put it in its place.
-    const left = seat.x - size / 2;
-    const top = bottom - size / 2 - BODY / 2;
+    const left = seat.x - size / 2 - pad;
+    const top = bottom - size / 2 - BODY / 2 - pad;
     actor.to = { x: left, y: top, z: seatZ };
     const walking = !!actor.at && !this.first && !this.reduceMotion && (actor.at.x !== left || actor.at.y !== top);
     if (!walking) actor.at = { x: left, y: top };
@@ -571,7 +690,7 @@ export class TeamScene {
       engine.isMini = true;
       engine.bodyColor = hexToRGB(color);
       engine.setState("idle", true);
-      a = { memberId: m.memberId, canvas, engine, size, yaw: 0, status: null, dirty: true };
+      a = { memberId: m.memberId, canvas, engine, size, pad: 0, yaw: 0, status: null, dirty: true };
       this.actors.set(m.memberId, a);
     }
     return a;
@@ -614,7 +733,7 @@ export class TeamScene {
     const to = msg.toMemberIds.map(name).join("、");
     if (this.opts.mini) {
       const mark = h("span", { class: "office-bubble mini", title: `${name(from!)}${to ? ` → ${to}` : ""}:${msg.text}` }, "💬");
-      this.pin(mark, parseFloat(speaker.canvas.style.left) + speaker.size / 2 + 30, parseFloat(speaker.canvas.style.top) + speaker.size / 2 - BODY / 2 - 40);
+      this.pin(mark, parseFloat(speaker.canvas.style.left) + speaker.pad + speaker.size / 2 + 30, parseFloat(speaker.canvas.style.top) + speaker.pad + speaker.size / 2 - BODY / 2 - 40);
       this.bubbles.append(mark);
       window.setTimeout(() => mark.remove(), 6000);
       return;
@@ -630,7 +749,7 @@ export class TeamScene {
       h("span", { text: msg.text.length > 40 ? `${msg.text.slice(0, 40)}…` : msg.text }),
     );
     // Above the speaker's label.
-    this.pin(b, parseFloat(speaker.canvas.style.left) + speaker.size / 2, parseFloat(speaker.canvas.style.top) + speaker.size / 2 - BODY / 2 - 90);
+    this.pin(b, parseFloat(speaker.canvas.style.left) + speaker.pad + speaker.size / 2, parseFloat(speaker.canvas.style.top) + speaker.pad + speaker.size / 2 - BODY / 2 - 90);
     this.bubbles.append(b);
     while (this.bubbles.children.length > 3) this.bubbles.firstElementChild!.remove();
     // Bubbles are a passing picture of a recorded message; the message stays in the log.
@@ -680,7 +799,8 @@ export class TeamScene {
         moving = true;
       }
       if (still && !a.dirty) continue;
-      const px = Math.round(a.size * res);
+      const full = a.size + 2 * a.pad;
+      const px = Math.round(full * res);
       if (a.canvas.width !== px) {
         a.canvas.width = px;
         a.canvas.height = px;
@@ -691,11 +811,14 @@ export class TeamScene {
       a.engine.update(still ? 1 : Math.min(0.1, step));
       a.engine.yaw = facing;
       ctx.setTransform(res, 0, 0, res, 0, 0);
-      ctx.clearRect(0, 0, a.size, a.size);
+      ctx.clearRect(0, 0, full, full);
+      ctx.translate(a.pad, a.pad);
       a.engine.draw(ctx, a.size, a.size);
+      if (this.layer?.decorate && !this.opts.mini) this.layer.decorate(a.memberId, ctx, a.size, a.engine, facing);
       a.dirty = false;
       if (!still) moving = true;
     }
+    if (this.layer?.frame(dt)) moving = true;
     return moving;
   }
 }

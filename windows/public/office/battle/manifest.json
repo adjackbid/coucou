@@ -1,0 +1,372 @@
+{
+  "schemaVersion": 1,
+  "note": "中二模式 art, made for this project. Coordinates are 2x pixels of each file (divide by pixelRatio). The boss's states share one canvas and one groundPivot. Planned paths in feature2 kit v2 named .png; these are .webp like the rest of public/office.",
+  "assets": [
+    {
+      "assetKey": "battle/boss/requirements/idle_SE",
+      "file": "battle/boss/requirements/idle_SE.webp",
+      "width": 338,
+      "height": 286,
+      "pixelRatio": 2,
+      "facing": "SE",
+      "pivot": {
+        "groundPivot": [
+          169.0,
+          243.8
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          169.0,
+          176.7
+        ],
+        "hitTarget": [
+          169.0,
+          181.7
+        ],
+        "top": [
+          169.0,
+          54.9
+        ]
+      },
+      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/rage_SE",
+      "file": "battle/boss/requirements/rage_SE.webp",
+      "width": 338,
+      "height": 286,
+      "pixelRatio": 2,
+      "facing": "SE",
+      "pivot": {
+        "groundPivot": [
+          169.0,
+          243.8
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          169.0,
+          176.7
+        ],
+        "hitTarget": [
+          169.0,
+          181.7
+        ],
+        "top": [
+          169.0,
+          54.9
+        ]
+      },
+      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/guard_SE",
+      "file": "battle/boss/requirements/guard_SE.webp",
+      "width": 338,
+      "height": 286,
+      "pixelRatio": 2,
+      "facing": "SE",
+      "pivot": {
+        "groundPivot": [
+          169.0,
+          243.8
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          169.0,
+          176.7
+        ],
+        "hitTarget": [
+          169.0,
+          181.7
+        ],
+        "top": [
+          169.0,
+          54.9
+        ]
+      },
+      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/hurt_SE",
+      "file": "battle/boss/requirements/hurt_SE.webp",
+      "width": 338,
+      "height": 286,
+      "pixelRatio": 2,
+      "facing": "SE",
+      "pivot": {
+        "groundPivot": [
+          169.0,
+          243.8
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          169.0,
+          163.3
+        ],
+        "hitTarget": [
+          169.0,
+          168.4
+        ],
+        "top": [
+          169.0,
+          54.9
+        ]
+      },
+      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/regen_SE",
+      "file": "battle/boss/requirements/regen_SE.webp",
+      "width": 338,
+      "height": 286,
+      "pixelRatio": 2,
+      "facing": "SE",
+      "pivot": {
+        "groundPivot": [
+          169.0,
+          243.8
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          169.0,
+          176.7
+        ],
+        "hitTarget": [
+          169.0,
+          181.7
+        ],
+        "top": [
+          169.0,
+          54.9
+        ]
+      },
+      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/sealed_SE",
+      "file": "battle/boss/requirements/sealed_SE.webp",
+      "width": 338,
+      "height": 286,
+      "pixelRatio": 2,
+      "facing": "SE",
+      "pivot": {
+        "groundPivot": [
+          169.0,
+          243.8
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          169.0,
+          176.7
+        ],
+        "hitTarget": [
+          169.0,
+          181.7
+        ],
+        "top": [
+          169.0,
+          54.9
+        ]
+      },
+      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/defeated_SE",
+      "file": "battle/boss/requirements/defeated_SE.webp",
+      "width": 338,
+      "height": 286,
+      "pixelRatio": 2,
+      "facing": "SE",
+      "pivot": {
+        "groundPivot": [
+          169.0,
+          243.8
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          169.0,
+          193.4
+        ],
+        "hitTarget": [
+          169.0,
+          198.5
+        ],
+        "top": [
+          169.0,
+          54.9
+        ]
+      },
+      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/hero/hat_SE",
+      "file": "battle/hero/hat_SE.webp",
+      "width": 176,
+      "height": 172,
+      "pixelRatio": 2,
+      "facing": "SE",
+      "mirror": "SW = x -> width - x for every point",
+      "pivot": {
+        "attachmentPivot": [
+          88.0,
+          117.4
+        ]
+      },
+      "anchors": {
+        "effectOrigin": [
+          88.0,
+          30.2
+        ]
+      },
+      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_BtHat), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/hero/staff_SE",
+      "file": "battle/hero/staff_SE.webp",
+      "width": 74,
+      "height": 216,
+      "pixelRatio": 2,
+      "facing": "SE",
+      "mirror": "SW = x -> width - x for every point",
+      "pivot": {
+        "attachmentPivot": [
+          37.0,
+          192.8
+        ]
+      },
+      "anchors": {
+        "effectOrigin": [
+          37.0,
+          37.6
+        ]
+      },
+      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_BtStaff), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/hero/sword_SE",
+      "file": "battle/hero/sword_SE.webp",
+      "width": 108,
+      "height": 196,
+      "pixelRatio": 2,
+      "facing": "SE",
+      "mirror": "SW = x -> width - x for every point",
+      "pivot": {
+        "attachmentPivot": [
+          54.0,
+          158.8
+        ]
+      },
+      "anchors": {
+        "effectOrigin": [
+          54.0,
+          23.0
+        ]
+      },
+      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_BtSword), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/hero/shield_SE",
+      "file": "battle/hero/shield_SE.webp",
+      "width": 150,
+      "height": 128,
+      "pixelRatio": 2,
+      "facing": "SE",
+      "mirror": "SW = x -> width - x for every point",
+      "pivot": {
+        "attachmentPivot": [
+          75.0,
+          117.0
+        ]
+      },
+      "anchors": {
+        "effectOrigin": [
+          75.0,
+          68.6
+        ]
+      },
+      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_BtShield), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/hero/flag_SE",
+      "file": "battle/hero/flag_SE.webp",
+      "width": 138,
+      "height": 226,
+      "pixelRatio": 2,
+      "facing": "SE",
+      "mirror": "SW = x -> width - x for every point",
+      "pivot": {
+        "attachmentPivot": [
+          28.4,
+          203.2
+        ]
+      },
+      "anchors": {
+        "effectOrigin": [
+          28.4,
+          28.6
+        ]
+      },
+      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_BtFlag), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/hero/orb_SE",
+      "file": "battle/hero/orb_SE.webp",
+      "width": 86,
+      "height": 108,
+      "pixelRatio": 2,
+      "facing": "SE",
+      "mirror": "SW = x -> width - x for every point",
+      "pivot": {
+        "attachmentPivot": [
+          43.0,
+          78.3
+        ]
+      },
+      "anchors": {
+        "effectOrigin": [
+          43.0,
+          54.0
+        ]
+      },
+      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_BtOrb), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    }
+  ],
+  "notProduced": [
+    "boss core and scope crystal as separate files: drawn in code (the core is part of each boss state; crystals are Canvas geometry)",
+    "optional textures fire_soft / ice_facet / wind_ribbon / lightning_glow: not needed, the effects are Canvas geometry",
+    "sound: none (off by default in the design)"
+  ]
+}

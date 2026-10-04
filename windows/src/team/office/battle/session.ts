@@ -9,6 +9,7 @@ import type { OfficeStore } from "../store";
 import type { BattleSignal, BattleViewModel, HeroClass, Observation, PresentationMode } from "./contracts";
 import { inputFrom, project } from "./projector";
 import { byId, diff } from "./signals";
+import { defaultSkill, HIT_SKILLS, type SkillId } from "./skills";
 
 const LOG_LIMIT = 60;
 
@@ -130,4 +131,15 @@ export function heroOf(teamId: Id, memberId: Id, role: string, leader: boolean, 
 
 export function setHero(teamId: Id, memberId: Id, hero: HeroClass | null) {
   write(`coucou.battle.hero.${teamId}.${memberId}`, hero);
+}
+
+/** A member's move when its work is accepted: the person's choice, else one from its look. A look only — every task is still 100 HP. */
+export function skillOf(teamId: Id, memberId: Id, hero: HeroClass, index: number): SkillId {
+  const chosen = read(`coucou.battle.skill.${teamId}.${memberId}`) as SkillId | null;
+  if (chosen && HIT_SKILLS.includes(chosen)) return chosen;
+  return defaultSkill(hero, index);
+}
+
+export function setSkill(teamId: Id, memberId: Id, skill: SkillId | null) {
+  write(`coucou.battle.skill.${teamId}.${memberId}`, skill);
 }

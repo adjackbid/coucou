@@ -245,13 +245,19 @@
 }
 
 .bt-log {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
   max-height: 460px;
   overflow-y: auto;
+}
+
+/* A long list scrolls; a line never shrinks under its words. */
+.bt-log > li {
+  flex: none;
 }
 
 .bt-log-row {
@@ -301,14 +307,14 @@
   overflow-wrap: anywhere;
 }
 
-.bt-icon.hit { color: var(--bt-hp); }
-.bt-icon.regen { color: var(--bt-heal); }
-.bt-icon.shield { color: var(--bt-shield); }
-.bt-icon.counter { color: var(--bt-counter); }
-.bt-icon.heal { color: var(--bt-heal); }
-.bt-icon.seal { color: var(--bt-boss); }
-.bt-icon.win { color: var(--bt-gold); }
-.bt-icon.quiet { color: var(--dim-glass); }
+.bt-icon.t-hit { color: var(--bt-hp); }
+.bt-icon.t-regen { color: var(--bt-heal); }
+.bt-icon.t-shield { color: var(--bt-shield); }
+.bt-icon.t-counter { color: var(--bt-counter); }
+.bt-icon.t-heal { color: var(--bt-heal); }
+.bt-icon.t-seal { color: var(--bt-boss); }
+.bt-icon.t-win { color: var(--bt-gold); }
+.bt-icon.t-quiet { color: var(--dim-glass); }
 
 .bt-empty {
   font-size: 13px;
@@ -404,13 +410,18 @@
 .bt-hero.support { color: #ffaed2; background: rgba(244, 114, 182, 0.2); }
 
 .bt-hero-pick {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr;
   align-items: center;
-  gap: 10px;
+  gap: 8px 12px;
 }
 
 .bt-hero-pick .dropdown {
-  min-width: 120px;
+  width: 100%;
+}
+
+.bt-hero-note {
+  grid-column: 1 / -1;
 }
 
 /* ── The company map: each room's boss, still ────────────────────────────── */
@@ -507,4 +518,91 @@
 .bt-boss-figures b {
   font-size: 16px;
   font-variant-numeric: tabular-nums;
+}
+
+/* ── In the room: the boss, the moves' marks ─────────────────────────────── */
+
+.bt-golem {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Paused, stopped, or the records not adding up: the boss stands still and pale. */
+.bt-golem.paused {
+  filter: saturate(0.45) brightness(1.08) hue-rotate(-12deg);
+}
+
+.bt-golem.stopped,
+.bt-golem.inconsistent {
+  filter: grayscale(0.7);
+  opacity: 0.8;
+}
+
+.bt-boss-shadow {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(20, 12, 40, 0.42), rgba(20, 12, 40, 0));
+  pointer-events: none;
+}
+
+.bt-fx {
+  position: absolute;
+  z-index: 100000;
+  pointer-events: none;
+}
+
+.bt-float {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+  animation: bt-rise 1.5s ease-out forwards;
+  z-index: 3;
+}
+
+.bt-float b {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.bt-float small {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.bt-float.t-hit { color: #ffd1c2; }
+.bt-float.t-hit b { color: #ff7a6b; }
+.bt-float.t-regen { color: var(--bt-heal); }
+.bt-float.t-shield { color: #d6c8ff; }
+.bt-float.t-counter { color: #ffc2a6; }
+.bt-float.t-heal { color: var(--bt-heal); }
+.bt-float.t-seal { color: #d9c6ff; }
+.bt-float.t-quiet { color: #d6d3e0; }
+.bt-float.t-win { color: var(--bt-gold); }
+.bt-float.t-win.t-big b { font-size: 30px; }
+
+/* 減少動態: still marks that simply go. */
+.bt-float.still {
+  animation: none;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(14, 12, 26, 0.7);
+}
+
+@keyframes bt-rise {
+  0% { opacity: 0; transform: translate(-50%, -80%) scale(0.9); }
+  15% { opacity: 1; transform: translate(-50%, -100%) scale(1.05); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -150%) scale(1); }
+}
+
+.bt-move {
+  color: #d9c6ff !important;
 }

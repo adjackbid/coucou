@@ -692,7 +692,17 @@
           ]
         }
       },
-      "workstations": "standard"
+      "workstations": "standard",
+      "battle": {
+        "boss": [
+          5.0,
+          5.0
+        ],
+        "scale": 1.0,
+        "hide": [
+          "meetingTable"
+        ]
+      }
     },
     "japandi": {
       "label": "日式靜謐",
@@ -1094,6 +1104,16 @@
             "workstation/chair_SW_japandi.webp"
           ]
         }
+      },
+      "battle": {
+        "boss": [
+          5.0,
+          5.0
+        ],
+        "scale": 1.0,
+        "hide": [
+          "meetingTable"
+        ]
       }
     },
     "industrial": {
@@ -1496,6 +1516,16 @@
             "workstation/chair_SW_industrial.webp"
           ]
         }
+      },
+      "battle": {
+        "boss": [
+          5.0,
+          5.0
+        ],
+        "scale": 1.0,
+        "hide": [
+          "meetingTable"
+        ]
       }
     },
     "biophilic": {
@@ -1898,6 +1928,16 @@
             "workstation/chair_SW_biophilic.webp"
           ]
         }
+      },
+      "battle": {
+        "boss": [
+          5.0,
+          5.0
+        ],
+        "scale": 1.0,
+        "hide": [
+          "meetingTable"
+        ]
       }
     },
     "futurelab": {
@@ -2300,6 +2340,16 @@
             "workstation/chair_SW_futurelab.webp"
           ]
         }
+      },
+      "battle": {
+        "boss": [
+          5.0,
+          5.0
+        ],
+        "scale": 1.0,
+        "hide": [
+          "meetingTable"
+        ]
       }
     },
     "library": {
@@ -2702,6 +2752,16 @@
             "workstation/chair_SW_library.webp"
           ]
         }
+      },
+      "battle": {
+        "boss": [
+          5.0,
+          5.0
+        ],
+        "scale": 1.0,
+        "hide": [
+          "meetingTable"
+        ]
       }
     },
     "premium": {
@@ -3049,6 +3109,202 @@
             "workstation/chair_SW_premium.webp"
           ]
         }
+      },
+      "battle": {
+        "boss": [
+          9.2,
+          6.4
+        ],
+        "scale": 1.1,
+        "hide": []
+      }
+    }
+  },
+  "battle": {
+    "note": "中二模式 (src/team/office/battle): the boss's states (one canvas, one groundPivot) and the heroes' accessories, rendered in the office camera at 2x; battle/manifest.json has their source and licence. Effects are drawn in code.",
+    "boss": {
+      "canvas": [
+        338,
+        286
+      ],
+      "groundPivot": [
+        169.0,
+        243.8
+      ],
+      "top": [
+        169.0,
+        54.9
+      ],
+      "states": {
+        "idle": {
+          "file": "battle/boss/requirements/idle_SE.webp",
+          "coreCenter": [
+            169.0,
+            176.7
+          ],
+          "hitTarget": [
+            169.0,
+            181.7
+          ]
+        },
+        "rage": {
+          "file": "battle/boss/requirements/rage_SE.webp",
+          "coreCenter": [
+            169.0,
+            176.7
+          ],
+          "hitTarget": [
+            169.0,
+            181.7
+          ]
+        },
+        "guard": {
+          "file": "battle/boss/requirements/guard_SE.webp",
+          "coreCenter": [
+            169.0,
+            176.7
+          ],
+          "hitTarget": [
+            169.0,
+            181.7
+          ]
+        },
+        "hurt": {
+          "file": "battle/boss/requirements/hurt_SE.webp",
+          "coreCenter": [
+            169.0,
+            163.3
+          ],
+          "hitTarget": [
+            169.0,
+            168.4
+          ]
+        },
+        "regen": {
+          "file": "battle/boss/requirements/regen_SE.webp",
+          "coreCenter": [
+            169.0,
+            176.7
+          ],
+          "hitTarget": [
+            169.0,
+            181.7
+          ]
+        },
+        "sealed": {
+          "file": "battle/boss/requirements/sealed_SE.webp",
+          "coreCenter": [
+            169.0,
+            176.7
+          ],
+          "hitTarget": [
+            169.0,
+            181.7
+          ]
+        },
+        "defeated": {
+          "file": "battle/boss/requirements/defeated_SE.webp",
+          "coreCenter": [
+            169.0,
+            193.4
+          ],
+          "hitTarget": [
+            169.0,
+            198.5
+          ]
+        }
+      }
+    },
+    "accessories": {
+      "hat": {
+        "file": "battle/hero/hat_SE.webp",
+        "canvas": [
+          176,
+          172
+        ],
+        "groundPivot": [
+          88.0,
+          117.4
+        ],
+        "effectOrigin": [
+          88.0,
+          30.2
+        ]
+      },
+      "staff": {
+        "file": "battle/hero/staff_SE.webp",
+        "canvas": [
+          74,
+          216
+        ],
+        "groundPivot": [
+          37.0,
+          192.8
+        ],
+        "effectOrigin": [
+          37.0,
+          37.6
+        ]
+      },
+      "sword": {
+        "file": "battle/hero/sword_SE.webp",
+        "canvas": [
+          108,
+          196
+        ],
+        "groundPivot": [
+          54.0,
+          158.8
+        ],
+        "effectOrigin": [
+          54.0,
+          23.0
+        ]
+      },
+      "shield": {
+        "file": "battle/hero/shield_SE.webp",
+        "canvas": [
+          150,
+          128
+        ],
+        "groundPivot": [
+          75.0,
+          117.0
+        ],
+        "effectOrigin": [
+          75.0,
+          68.6
+        ]
+      },
+      "flag": {
+        "file": "battle/hero/flag_SE.webp",
+        "canvas": [
+          138,
+          226
+        ],
+        "groundPivot": [
+          28.4,
+          203.2
+        ],
+        "effectOrigin": [
+          28.4,
+          28.6
+        ]
+      },
+      "orb": {
+        "file": "battle/hero/orb_SE.webp",
+        "canvas": [
+          86,
+          108
+        ],
+        "groundPivot": [
+          43.0,
+          78.3
+        ],
+        "effectOrigin": [
+          43.0,
+          54.0
+        ]
       }
     }
   }

@@ -1561,6 +1561,19 @@ async function load() {
         live.applySnapshot(next);
         if (tab === "monitor") render();
       }, snap);
+      // `&battle=play` plays a whole raid on the demo team, to look at 中二模式.
+      if (new URLSearchParams(location.search).get("battle") === "play") {
+        (await import("./battle-demo")).playBattle(snap, (next) => {
+          runs.set(next.id, next);
+          live.applySnapshot(next);
+          office.feed(files, runs);
+          render();
+        });
+      }
+      // `&pose=combo_trinity:700` holds one move still, to look at it; `&calm=1` is 減少動態.
+      const pose = new URLSearchParams(location.search).get("pose");
+      if (pose) window.setTimeout(async () => (await import("./battle-demo")).poseBattle(office, "shop", pose), 800);
+      if (new URLSearchParams(location.search).get("calm") === "1") office.calm = true;
     }
   }
   office.feed(files, runs);

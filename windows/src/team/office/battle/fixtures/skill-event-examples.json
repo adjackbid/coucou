@@ -1,0 +1,1831 @@
+{
+  "schemaVersion": 1,
+  "version": "1.2",
+  "status": "specification_fixtures_not_runtime_results",
+  "note": "inputContributions 是精簡投影示例，不是後端事件 API；正式來源填入 skill-contracts.ts 的 AcceptedContribution.source。驗收語義先由 BattleProjector 提供。displayDamage 是本次演出標記總量，不是回寫 HP 的命令。每一 case 是獨立 session，除非已列 consumed keys。",
+  "cases": [
+    {
+      "caseId": "fire_wind",
+      "description": "兩人、兩個不同任務：合體合計一次 -200",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 200,
+        "plans": [
+          {
+            "skillId": "combo_fire_wind",
+            "acceptanceKeys": [
+              "A",
+              "B"
+            ],
+            "displayDamage": 200,
+            "kind": "combo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true
+      }
+    },
+    {
+      "caseId": "ice_lightning",
+      "description": "冰雷兩人成果",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-C",
+          "acceptanceKey": "C",
+          "taskId": "TASK-C",
+          "memberId": "M3",
+          "element": "ice",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-D",
+          "acceptanceKey": "D",
+          "taskId": "TASK-D",
+          "memberId": "M4",
+          "element": "lightning",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1050,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 200,
+        "plans": [
+          {
+            "skillId": "combo_ice_lightning",
+            "acceptanceKeys": [
+              "C",
+              "D"
+            ],
+            "displayDamage": 200,
+            "kind": "combo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true
+      }
+    },
+    {
+      "caseId": "guardian_warrior",
+      "description": "守護者與戰士都有有效驗收",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-E",
+          "acceptanceKey": "E",
+          "taskId": "TASK-E",
+          "memberId": "M5",
+          "element": "physical",
+          "heroClass": "guardian",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-F",
+          "acceptanceKey": "F",
+          "taskId": "TASK-F",
+          "memberId": "M6",
+          "element": "physical",
+          "heroClass": "warrior",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1050,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 200,
+        "plans": [
+          {
+            "skillId": "combo_ward_blade",
+            "acceptanceKeys": [
+              "E",
+              "F"
+            ],
+            "displayDamage": 200,
+            "kind": "combo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true
+      }
+    },
+    {
+      "caseId": "three_members",
+      "description": "三個不同成員與任務",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-C",
+          "acceptanceKey": "C",
+          "taskId": "TASK-C",
+          "memberId": "M3",
+          "element": "ice",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 3,
+        "displayDamage": 300,
+        "plans": [
+          {
+            "skillId": "combo_trinity",
+            "acceptanceKeys": [
+              "A",
+              "B",
+              "C"
+            ],
+            "displayDamage": 300,
+            "kind": "combo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true
+      }
+    },
+    {
+      "caseId": "same_member",
+      "description": "同一人完成兩項：不是合體",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 200,
+        "plans": [
+          {
+            "skillId": "fire_ember",
+            "acceptanceKeys": [
+              "A"
+            ],
+            "displayDamage": 100,
+            "kind": "solo",
+            "damageLabelCount": 1
+          },
+          {
+            "skillId": "fire_ember",
+            "acceptanceKeys": [
+              "B"
+            ],
+            "displayDamage": 100,
+            "kind": "solo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true
+      }
+    },
+    {
+      "caseId": "duplicate_acceptance",
+      "description": "重複訊號不重复標傷",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "domain-copy-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 200,
+        "plans": [
+          {
+            "skillId": "combo_fire_wind",
+            "acceptanceKeys": [
+              "A",
+              "B"
+            ],
+            "displayDamage": 200,
+            "kind": "combo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true
+      }
+    },
+    {
+      "caseId": "already_solo_played",
+      "description": "先播過 A 的單人命中，不能另算一次合體",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [
+        "A"
+      ],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 100,
+        "plans": [
+          {
+            "skillId": "wind_crescent",
+            "acceptanceKeys": [
+              "B"
+            ],
+            "displayDamage": 100,
+            "kind": "solo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true
+      }
+    },
+    {
+      "caseId": "reviewing",
+      "description": "交付等待驗收不傷害",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "delivery_waiting",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 0,
+        "displayDamage": 0,
+        "plans": [],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "visualOnly": "projectile_contacts_ward"
+      }
+    },
+    {
+      "caseId": "support",
+      "description": "防守與解除阻塞都不傷害",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "boss_counter",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "unblock_support",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 0,
+        "displayDamage": 0,
+        "plans": [],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "visualOnly": "support_ward_and_support_cleanse"
+      }
+    },
+    {
+      "caseId": "scope_regen",
+      "description": "真正新增任務回血不是攻擊",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "scope_added",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 0,
+        "displayDamage": 0,
+        "plans": [],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "hpDelta": 100,
+        "maxHpDelta": 100
+      }
+    },
+    {
+      "caseId": "same_batch_unknown_time",
+      "description": "未知來源時刻但同一次原子 apply 可以兩人合體",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": null,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": null,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 200,
+        "plans": [
+          {
+            "skillId": "combo_fire_wind",
+            "acceptanceKeys": [
+              "A",
+              "B"
+            ],
+            "displayDamage": 200,
+            "kind": "combo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true
+      }
+    },
+    {
+      "caseId": "different_batch_unknown_time",
+      "description": "未知時刻跨 apply，不猜同時發生",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": null,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-2",
+          "verifiedSourceTimeMs": null,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 200,
+        "plans": [
+          {
+            "skillId": "fire_ember",
+            "acceptanceKeys": [
+              "A"
+            ],
+            "displayDamage": 100,
+            "kind": "solo",
+            "damageLabelCount": 1
+          },
+          {
+            "skillId": "wind_crescent",
+            "acceptanceKeys": [
+              "B"
+            ],
+            "displayDamage": 100,
+            "kind": "solo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true
+      }
+    },
+    {
+      "caseId": "wide_source_span",
+      "description": "來源時刻跨度 2000 ms，不合體",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 3000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 200,
+        "plans": [
+          {
+            "skillId": "fire_ember",
+            "acceptanceKeys": [
+              "A"
+            ],
+            "displayDamage": 100,
+            "kind": "solo",
+            "damageLabelCount": 1
+          },
+          {
+            "skillId": "wind_crescent",
+            "acceptanceKeys": [
+              "B"
+            ],
+            "displayDamage": 100,
+            "kind": "solo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true
+      }
+    },
+    {
+      "caseId": "cooldown",
+      "description": "視覺冷卻內照樣扣血，只改單人演出",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": true
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 200,
+        "plans": [
+          {
+            "skillId": "fire_ember",
+            "acceptanceKeys": [
+              "A"
+            ],
+            "displayDamage": 100,
+            "kind": "solo",
+            "damageLabelCount": 1
+          },
+          {
+            "skillId": "wind_crescent",
+            "acceptanceKeys": [
+              "B"
+            ],
+            "displayDamage": 100,
+            "kind": "solo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true
+      }
+    },
+    {
+      "caseId": "unassigned",
+      "description": "未指派的驗收不可捏造成員與合體",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": null,
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 200,
+        "plans": [
+          {
+            "skillId": "fire_ember",
+            "acceptanceKeys": [
+              "A"
+            ],
+            "displayDamage": 100,
+            "kind": "text_only",
+            "damageLabelCount": 1
+          },
+          {
+            "skillId": "wind_crescent",
+            "acceptanceKeys": [
+              "B"
+            ],
+            "displayDamage": 100,
+            "kind": "solo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "neutralCoreHitForUnassigned": true
+      }
+    },
+    {
+      "caseId": "cross_scope",
+      "description": "別的 run 的事件不得加入本輪合體",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-2",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 1,
+        "displayDamage": 100,
+        "plans": [
+          {
+            "skillId": "fire_ember",
+            "acceptanceKeys": [
+              "A"
+            ],
+            "displayDamage": 100,
+            "kind": "solo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true
+      }
+    },
+    {
+      "caseId": "history",
+      "description": "只校準現況或取消演出，不補播攻擊與合體",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": true,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 0,
+        "plans": [],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "animate": false,
+        "noLaterReplay": true,
+        "projectedAcceptedCount": 2
+      }
+    },
+    {
+      "caseId": "hidden",
+      "description": "只校準現況或取消演出，不補播攻擊與合體",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": false,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 0,
+        "plans": [],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "animate": false,
+        "noLaterReplay": true,
+        "projectedAcceptedCount": 2
+      }
+    },
+    {
+      "caseId": "syncing",
+      "description": "只校準現況或取消演出，不補播攻擊與合體",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": true,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 0,
+        "plans": [],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "animate": false,
+        "noLaterReplay": true,
+        "projectedAcceptedCount": 2
+      }
+    },
+    {
+      "caseId": "paused",
+      "description": "只校準現況或取消演出，不補播攻擊與合體",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": true,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 0,
+        "plans": [],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "animate": false,
+        "noLaterReplay": true,
+        "projectedAcceptedCount": 2
+      }
+    },
+    {
+      "caseId": "mode_off",
+      "description": "只校準現況或取消演出，不補播攻擊與合體",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": false,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 0,
+        "plans": [],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "animate": false,
+        "noLaterReplay": true,
+        "projectedAcceptedCount": 2
+      }
+    },
+    {
+      "caseId": "replay",
+      "description": "只校準現況或取消演出，不補播攻擊與合體",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": true,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 0,
+        "plans": [],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "animate": false,
+        "noLaterReplay": true,
+        "projectedAcceptedCount": 2
+      }
+    },
+    {
+      "caseId": "inconsistent",
+      "description": "只校準現況或取消演出，不補播攻擊與合體",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": true,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 0,
+        "plans": [],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "animate": false,
+        "noLaterReplay": true,
+        "projectedAcceptedCount": 2
+      }
+    },
+    {
+      "caseId": "reduced_motion",
+      "description": "低動態保留驗收文字與來源，不播放粒子",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": true,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 200,
+        "plans": [
+          {
+            "skillId": "combo_fire_wind",
+            "acceptanceKeys": [
+              "A",
+              "B"
+            ],
+            "displayDamage": 200,
+            "kind": "text_only",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "animate": false
+      }
+    },
+    {
+      "caseId": "last_acceptance_sealing",
+      "description": "最後兩项驗收可合體但只封印，不是勝利",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 2,
+        "displayDamage": 200,
+        "plans": [
+          {
+            "skillId": "combo_fire_wind",
+            "acceptanceKeys": [
+              "A",
+              "B"
+            ],
+            "displayDamage": 200,
+            "kind": "combo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "progressAfter": {
+          "completed": 12,
+          "total": 12
+        },
+        "runStatus": "running",
+        "bossState": "sealing",
+        "victory": false,
+        "hpAfter": 0,
+        "maxHpAfter": 1200
+      }
+    },
+    {
+      "caseId": "formal_completion",
+      "description": "Leader 結案後正式勝利不是另一個有傷害技能",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 0,
+        "displayDamage": 0,
+        "plans": [],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "progressAfter": {
+          "completed": 12,
+          "total": 12
+        },
+        "runStatus": "completed",
+        "bossState": "defeated",
+        "victory": true,
+        "hpAfter": 0,
+        "maxHpAfter": 1200
+      }
+    },
+    {
+      "caseId": "scope_plus_acceptance",
+      "description": "同批新增兩項並驗收一項：回血 +200、命中 -100，淨 +100",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "acceptance_hit",
+          "live": true,
+          "countedByCurrentProgress": true
+        },
+        {
+          "signalId": "signal-B",
+          "acceptanceKey": "B",
+          "taskId": "TASK-B",
+          "memberId": "M2",
+          "element": "wind",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1100,
+          "runId": "RUN-1",
+          "kind": "scope_added",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 1,
+        "displayDamage": 100,
+        "plans": [
+          {
+            "skillId": "fire_ember",
+            "acceptanceKeys": [
+              "A"
+            ],
+            "displayDamage": 100,
+            "kind": "solo",
+            "damageLabelCount": 1
+          }
+        ],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "hpBefore": 400,
+        "maxHpBefore": 1000,
+        "hpAfter": 500,
+        "maxHpAfter": 1200,
+        "scopeAddedTasks": 2,
+        "hpDelta": 100,
+        "maxHpDelta": 200
+      }
+    },
+    {
+      "caseId": "scope_removal",
+      "description": "取消任務導致 HP 下降是範圍調整，不是任何技能",
+      "scope": {
+        "teamId": "TEAM-1",
+        "runId": "RUN-1"
+      },
+      "inputContributions": [
+        {
+          "signalId": "signal-A",
+          "acceptanceKey": "A",
+          "taskId": "TASK-A",
+          "memberId": "M1",
+          "element": "fire",
+          "heroClass": "mage",
+          "atomicApplyBatchId": "apply-1",
+          "verifiedSourceTimeMs": 1000,
+          "runId": "RUN-1",
+          "kind": "scope_adjusted",
+          "live": true,
+          "countedByCurrentProgress": true
+        }
+      ],
+      "alreadyConsumedKeys": [],
+      "session": {
+        "visible": true,
+        "history": false,
+        "replay": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "inconsistent": false,
+        "modeEnabled": true,
+        "comboCooldownActive": false
+      },
+      "expected": {
+        "newUniqueCountedAcceptances": 0,
+        "displayDamage": 0,
+        "plans": [],
+        "extraComboDamage": 0,
+        "hudUpdatesImmediately": true,
+        "hpDelta": -100,
+        "damageLabels": []
+      }
+    }
+  ]
+}

@@ -90,7 +90,7 @@ export function bossHud(vm: BattleViewModel): HTMLElement {
 }
 
 /** The 戰鬥紀錄: how the raid told it, and what really happened, newest first. */
-export function battleLog(signals: readonly BattleSignal[], opts: { name: (memberId: Id) => string; open: (s: BattleSignal) => void }): HTMLElement {
+export function battleLog(signals: readonly BattleSignal[], opts: { name: (memberId: Id) => string; open: (s: BattleSignal) => void; moves?: (signalId: Id) => string[] | undefined }): HTMLElement {
   if (!signals.length) {
     return h("p", { class: "dim bt-empty", text: "打開這個畫面之後,成員的交付、驗收、提問和結案,都會在這裡變成戰況。" });
   }
@@ -101,15 +101,17 @@ export function battleLog(signals: readonly BattleSignal[], opts: { name: (membe
       const t = TELL[s.kind];
       const at = new Date(s.observedAt);
       const who = s.actorMemberId ? ` · 來自 ${opts.name(s.actorMemberId)}` : "";
+      // The moves an acceptance was shown with: a combo names its two or three members.
+      const moves = opts.moves?.(s.signalId);
       return h(
         "li",
         {},
         h(
           "button",
-          { class: `bt-log-row ${t.tone}`, type: "button", title: "看真實的任務或成員", onClick: () => opts.open(s) },
+          { class: `bt-log-row t-${t.tone}`, type: "button", title: "看真實的任務或成員", onClick: () => opts.open(s) },
           h("time", { text: `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}` }),
-          icon(t.icon, t.tone),
-          h("span", { class: "bt-log-text" }, h("b", { text: t.title(s) }), h("small", { text: `${s.reasonLabel}${who}` })),
+          icon(t.icon, `t-${t.tone}`),
+          h("span", { class: "bt-log-text" }, h("b", { text: t.title(s) }), h("small", { text: `${s.reasonLabel}${who}` }), moves?.length ? h("small", { class: "bt-move", text: moves.join("、") }) : null),
         ),
       );
     }),
@@ -123,7 +125,7 @@ export function bossCard(vm: BattleViewModel, opts: { added: number; board: () =
   return h(
     "div",
     { class: "office-card bt-boss-card" },
-    h("div", { class: "row" }, icon("crystal", "seal"), h("h3", { class: "grow", text: "需求魔王" }), h("span", { class: `bt-room-state ${state.tone}`, style: "position:static" }, state.label)),
+    h("div", { class: "row" }, icon("crystal", "t-seal"), h("h3", { class: "grow", text: "需求魔王" }), h("span", { class: `bt-room-state ${state.tone}`, style: "position:static" }, state.label)),
     h("p", { class: "dim", text: line(vm) }),
     h(
       "div",
@@ -131,7 +133,7 @@ export function bossCard(vm: BattleViewModel, opts: { added: number; board: () =
       h("span", { title: "這次開窗之後新增進度的任務" }, h("small", { text: "新增需求" }), h("b", { text: opts.added ? `+${opts.added}` : "0" })),
       h("span", {}, h("small", { text: "目前 HP" }), h("b", { text: vm.hp === null ? "—" : `${vm.hp} / ${vm.maxHp}` }), h("i", { class: "bt-mini-bar" }, h("i", { style: `width:${Math.round(share * 100)}%` }))),
     ),
-    vm.reviewingCount ? h("p", { class: "dim" }, icon("shield", "shield"), ` 待驗收 ${vm.reviewingCount} 項`) : null,
+    vm.reviewingCount ? h("p", { class: "dim" }, icon("shield", "t-shield"), ` 待驗收 ${vm.reviewingCount} 項`) : null,
     h("div", { class: "bt-actions" }, h("button", { class: "btn plain", type: "button", onClick: opts.board }, "查看任務")),
   );
 }

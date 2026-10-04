@@ -17,7 +17,9 @@ import { loadArt, STATUS, TeamScene, themeName, THEME_LABELS, wake } from "./sce
 import { dropdown, editableText } from "../ui";
 import type { PastRun, Snapshot, TeamFile, Usage } from "../types";
 import { fmtMoney, fmtTokens, usageSummary } from "../cost";
-import { Battle, HERO_LABELS, heroOf, savedMode, saveMode, setHero } from "./battle/session";
+import { Battle, HERO_LABELS, heroOf, savedMode, saveMode, setHero, setSkill, skillOf } from "./battle/session";
+import { BattleLayer } from "./battle/layer";
+import { HIT_SKILLS, SKILLS, type Contribution, type HitPlan, type SkillId } from "./battle/skills";
 import { battleLog, bossCard, bossHud, companyState, roomBadge } from "./battle/hud";
 import { inputFrom, project } from "./battle/projector";
 import type { BattleSignal, BattleViewModel, HeroClass, PresentationMode } from "./battle/contracts";
@@ -48,6 +50,9 @@ export interface OfficeHost {
 }
 
 const MAX_INSTRUCTION = 2000;
+
+/** The element of a move, in a word. */
+const ELEMENT_WORD: Record<string, string> = { fire: "火", ice: "冰", wind: "風", lightning: "雷", physical: "刀光", support: "支援", any: "" };
 
 /** What the person calls their company; "我的公司" until they name it. */
 function companyName(): string {
@@ -121,6 +126,12 @@ export class Office {
     this.demo = !!opts.demo;
     this.main = new OfficeStore(() => this.resync());
     this.battle = new Battle(() => this.main, (teamId) => this.extras(teamId));
+    // A signal seen live is played in that team's office, if it is the one on screen.
+    this.battle.onSignal((sig) => {
+      if (this.mode !== "battle") return;
+      const layer = this.scenes.get(sig.teamId)?.currentLayer;
+      if (layer instanceof BattleLayer) layer.play(sig);
+    });
     if (this.demo) {
       this.mock = new MockAdapter(Number(new URLSearchParams(location.search).get("rooms")) || 4);
       this.main.loadSnapshot(this.mock.snapshot());
@@ -145,6 +156,14 @@ export class Office {
       if (this.sel && !this.viewing && !this.main.member(this.sel.teamId, this.sel.memberId)) {
         this.sel = null;
         this.notice = "這位成員已移出團隊。";
+      }
+    });
+    // Hidden: nothing of the raid goes on, and nothing is caught up on later.
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) return;
+      for (const sc of this.scenes.values()) {
+        const layer = sc.currentLayer;
+        if (layer instanceof BattleLayer) layer.stop();
       }
     });
     // Escape closes the member drawer wherever focus is, unless a field is being typed in.
@@ -220,8 +239,69 @@ export class Office {
     s.selected = !mini && this.sel?.teamId === teamId ? this.sel.memberId : null;
     s.bubblesOn = this.bubbles;
     s.reduceMotion = this.calm || (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
+    // 中二模式: the boss and the heroes' looks over the room; the Office as it was otherwise.
+    if (this.mode === "battle") {
+      let layer = this.layers.get(s);
+      if (!layer) this.layers.set(s, (layer = new BattleLayer(s, this.layerHost(teamId, this.store))));
+      s.setLayer(layer);
+    } else s.setLayer(null);
     s.update();
     return s;
+  }
+
+  private layers = new WeakMap<TeamScene, BattleLayer>();
+
+  /** What a team's battle layer asks of the Office. */
+  private layerHost(teamId: string, store: OfficeStore) {
+    const history = store !== this.main;
+    return {
+      vm: () => {
+        if (!history) return this.battle.vm(teamId);
+        const input = inputFrom(store, teamId, { isHistory: true });
+        return input ? project(input) : null;
+      },
+      hero: (memberId: string) => this.hero(teamId, memberId),
+      skill: (memberId: string) => this.skill(teamId, memberId),
+      calm: () => this.calm || (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false),
+      waiting: () => store.members(teamId).find((m) => m.workStatus === "waiting_input" || m.workStatus === "blocked")?.memberId ?? null,
+      contributions: (sig: BattleSignal) => this.contributions(teamId, sig),
+      planned: (plan: HitPlan) => {
+        for (const id of plan.sourceSignalIds) {
+          const names = this.moves.get(id) ?? [];
+          const who = plan.memberIds.map((m) => store.member(teamId, m)?.displayName ?? m).join(" + ");
+          names.push(`${plan.skillId ? SKILLS[plan.skillId].name : "驗收命中"}${who ? `(${who})` : ""}`);
+          this.moves.set(id, names);
+        }
+        this.host.render();
+      },
+    };
+  }
+
+  /** The moves chosen for each acceptance signal, for the 戰鬥紀錄. */
+  private moves = new Map<string, string[]>();
+
+  /** Each task an acceptance names, as the skills see it: who did it, how they look, when it really happened. */
+  private contributions(teamId: string, sig: BattleSignal): Contribution[] {
+    const acceptedAt = this.extras(teamId).acceptedAt;
+    return sig.source.taskIds.map((taskId) => {
+      const task = this.main.task(taskId);
+      const memberId = task?.assigneeMemberId && this.main.member(teamId, task.assigneeMemberId) ? task.assigneeMemberId : null;
+      return {
+        teamId,
+        runId: sig.runId,
+        signalId: sig.signalId,
+        kind: sig.kind,
+        live: !sig.replay,
+        countedByCurrentProgress: true,
+        acceptanceKey: `${teamId}/${sig.runId}/${taskId}/${task?.revision ?? 0}`,
+        taskId,
+        memberId,
+        skillId: memberId ? this.skill(teamId, memberId) : null,
+        heroClass: memberId ? this.hero(teamId, memberId) : null,
+        batchId: `${sig.source.streamId}@${sig.source.domainSeq}`,
+        sourceTimeMs: acceptedAt?.get(taskId) ?? null,
+      };
+    });
   }
 
   /** A deliverable's picture, fetched once; the scenes are drawn again when it arrives. */
@@ -350,6 +430,8 @@ export class Office {
     return {
       rejections: new Map(snap.tasks.map((t) => [`${teamId}:${t.id}`, t.rejections ?? 0] as [string, number])),
       questionIds: (snap.questions ?? []).filter((q) => q.answer === null).map((q) => q.id),
+      // When each task was accepted, as Coucou recorded it: the only time two members' work is "together".
+      acceptedAt: new Map((snap.feed ?? []).filter((f) => f.kind === "accepted" && f.task).map((f) => [`${teamId}:${f.task}`, f.at] as [string, number])),
     };
   }
 
@@ -365,6 +447,12 @@ export class Office {
     const members = this.store.members(teamId);
     const m = members.find((x) => x.memberId === memberId);
     return heroOf(teamId, memberId, m?.roleLabel ?? "", team?.leaderMemberId === memberId, Math.max(0, members.indexOf(m!)));
+  }
+
+  private skill(teamId: string, memberId: string): SkillId {
+    const members = this.store.members(teamId);
+    const i = members.findIndex((x) => x.memberId === memberId);
+    return skillOf(teamId, memberId, this.hero(teamId, memberId), Math.max(0, i));
   }
 
   private heroChip(teamId: string, memberId: string) {
@@ -385,6 +473,8 @@ export class Office {
     if (this.mode === mode) return;
     this.mode = mode;
     saveMode(mode);
+    // Off: the boss leaves every room and nothing of it goes on playing.
+    if (mode === "office") for (const s of [...this.scenes.values(), ...this.minis.values()]) s.setLayer(null);
     this.host.render();
   }
 
@@ -428,7 +518,7 @@ export class Office {
         h("h3", { text: this.viewing ? "戰鬥紀錄(這是之前的一輪,只看結果)" : "戰鬥紀錄" }),
         this.viewing
           ? h("p", { class: "dim", text: "之前的一輪不重演過程;它的對話與交付在「原始活動」。" })
-          : battleLog(this.battle.log(teamId), { name, open: (s) => this.openSignal(teamId, s) }),
+          : battleLog(this.battle.log(teamId), { name, open: (s) => this.openSignal(teamId, s), moves: (id) => this.moves.get(id) }),
         h("p", { class: "dim office-hint", text: "每一列都是真實發生的事:點一下看那位成員或任務。" })),
       this.earlierRuns(teamId));
   }
@@ -452,7 +542,11 @@ export class Office {
           onClick: () => (this.host.openTask && !this.demo && !this.viewing ? this.host.openTask(teamId, t.taskId.slice(teamId.length + 1)) : t.assigneeMemberId && this.select(teamId, t.assigneeMemberId)),
         }, h("i", { "aria-hidden": "true", text: "✓" }), t.title)))),
       h("div", { class: "bt-actions" },
-        h("button", { class: "btn plain", type: "button", onClick: () => this.host.showBoard(teamId) }, "看任務看板")),
+        h("button", { class: "btn plain", type: "button", onClick: () => this.host.showBoard(teamId) }, "看任務看板"),
+        this.viewing ? null : h("button", {
+          class: "btn plain", type: "button", title: "只重播動畫:不重算任何資料,也不算第二次完成",
+          onClick: () => { const l = this.scenes.get(teamId)?.currentLayer; if (l instanceof BattleLayer) l.replay(); },
+        }, "重播擊敗動畫")),
       h("p", { class: "dim office-hint", text: "獎章只是這台電腦上的完成紀念;Token 和費用照原本的統計。" }));
   }
 
@@ -965,13 +1059,21 @@ export class Office {
       })(),
       this.mode === "battle"
         ? h("section", { class: "office-card bt-hero-pick" },
-            h("span", { class: "grow" }, h("b", { text: "職業外觀" }), h("small", { class: "dim", text: " 只改變中二模式裡的樣子" })),
+            h("b", { text: "職業外觀" }),
             dropdown({
               value: this.hero(teamId, m.memberId),
               title: "只是外觀:不改變這位成員的工作、權限或驗收",
               choices: (Object.keys(HERO_LABELS) as HeroClass[]).map((c) => ({ value: c, label: HERO_LABELS[c] })),
               onChange: (v) => { setHero(teamId, m.memberId, v as HeroClass); this.host.render(); },
-            }))
+            }),
+            h("b", { text: "驗收招式" }),
+            dropdown({
+              value: this.skill(teamId, m.memberId),
+              title: "這位成員的任務驗收通過時的招式:只是外觀,每項任務都固定 100 HP",
+              choices: HIT_SKILLS.map((id) => ({ value: id, label: SKILLS[id].name, hint: ELEMENT_WORD[SKILLS[id].element] })),
+              onChange: (v) => { setSkill(teamId, m.memberId, v as SkillId); this.host.render(); },
+            }),
+            h("small", { class: "dim bt-hero-note", text: "只改變中二模式裡的樣子:每項任務都固定 100 HP,不影響工作、權限或驗收。" }))
         : null,
       h("section", { class: "office-card" },
         h("h3", { text: "目前工作" }),
@@ -1102,8 +1204,18 @@ export class Office {
     this.host.render();
   }
 
-  /** After the page is drawn: Mochis moving again. */
+  /** Development only: a team's battle layer, to hold one move still and look at it. */
+  debugLayer(teamId: string): BattleLayer | null {
+    const layer = this.scenes.get(teamId)?.currentLayer;
+    return layer instanceof BattleLayer ? layer : null;
+  }
+
+  /** After the page is drawn: Mochis moving again; a raid no longer on screen stops, and is not caught up on later. */
   afterRender() {
+    for (const sc of this.scenes.values()) {
+      const layer = sc.currentLayer;
+      if (!sc.el.isConnected && layer instanceof BattleLayer) layer.stop();
+    }
     wake();
   }
 }
