@@ -543,18 +543,24 @@
   color: var(--ink);
 }
 
-.office-stale.history {
+/* Looking at an earlier run: said plainly, with the way back right there. */
+.office-history-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 14px;
   background: rgba(167, 139, 250, 0.16);
-  color: #c4b5fd;
+  color: #d9ccff;
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.35);
 }
 
-.office-run-pick {
-  padding: 5px 10px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--lift);
-  color: var(--ink);
-  font: inherit;
+.office-history-bar b {
+  color: #ede7ff;
+}
+
+.office-member-row.here {
+  box-shadow: inset 0 0 0 2px #a78bfa;
 }
 
 .office-side {

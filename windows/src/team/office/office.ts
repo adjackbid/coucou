@@ -445,10 +445,13 @@ export class Office {
       { class: "office office-team" },
       h("div", { class: "office-head" },
         h("div", { class: "office-head-main" }, this.runLabel(run), this.progressBar(teamId), this.demoTag()),
-        this.runPicker(teamId),
         toggles,
         pauseBtn),
-      past ? h("div", { class: "office-stale history", role: "status", text: `歷史執行 · ${this.when(pick!.at)} 收起的紀錄 · 只能查看,不會影響正在進行的工作` }) : null,
+      past
+        ? h("div", { class: "office-history-bar", role: "status" },
+            h("span", { class: "grow" }, h("b", { text: "你正在看之前的一輪" }), ` · ${this.when(this.store.run(team.currentRunId) ? pick!.at : pick!.at)} 收起的紀錄,只能查看,不會影響現在的團隊`),
+            h("button", { class: "btn primary", type: "button", onClick: () => void this.pickRun(teamId, null) }, "回到本輪"))
+        : null,
       pick?.error ? h("div", { class: "office-notice", role: "alert", text: pick.error }) : null,
       this.connection(),
       this.notice ? h("div", { class: "office-notice", role: "status", text: this.notice }) : null,
@@ -463,8 +466,12 @@ export class Office {
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
 
-  /** 本輪 or one of the earlier runs, when Coucou keeps any. */
-  private runPicker(teamId: string): HTMLElement | null {
+  /**
+   * Earlier runs: when a team is started again, Coucou keeps the old log
+   * beside the new one. They are listed under the office's activity, to be
+   * looked at; the current run is what the office shows otherwise.
+   */
+  private earlierRuns(teamId: string): HTMLElement | null {
     if (!this.host.history) return null;
     const list = this.histories.get(teamId);
     if (list === undefined) {
@@ -473,12 +480,22 @@ export class Office {
       return null;
     }
     if (list === "pending" || !list.length) return null;
-    const sel = h("select", { class: "office-run-pick", "aria-label": "執行輪次" },
-      h("option", { value: "", text: "本輪" }),
-      ...list.map((r) => h("option", { value: String(r.archivedAt), text: `歷史 · ${this.when(r.startedAt || r.archivedAt)}${r.total ? ` · ${r.done}/${r.total}` : ""}` }))) as HTMLSelectElement;
-    sel.value = String(this.picked.get(teamId)?.at ?? "");
-    sel.addEventListener("change", () => void this.pickRun(teamId, sel.value ? Number(sel.value) : null));
-    return sel;
+    const word: Record<PastRun["status"], string> = { idle: "沒有開始", running: "中斷", paused: "暫停時收起", finished: "已完成" };
+    const on = this.picked.get(teamId)?.at;
+    return h("div", { class: "office-card" },
+      h("h3", { text: "之前的執行" }),
+      h("p", { class: "dim", text: "團隊重新開始時,上一輪的紀錄會保留下來,可以點開回顧。" }),
+      ...list.slice(0, 6).map((r) => {
+        const here = r.archivedAt === on;
+        return h("button", {
+          class: `office-member-row${here ? " here" : ""}`, type: "button", "aria-pressed": here ? "true" : "false",
+          onClick: () => void this.pickRun(teamId, here ? null : r.archivedAt),
+        },
+          h("span", { class: "grow" },
+            h("b", { text: `${this.when(r.startedAt || r.archivedAt)} 開始` }),
+            h("small", { class: "dim", text: ` · ${r.total ? `${r.done}/${r.total} 項` : "沒有任務"} · ${word[r.status]}` })),
+          h("span", { class: `office-pill ${here ? "work" : "quiet"}`, text: here ? "正在看" : "查看" }));
+      }));
   }
 
   private async pickRun(teamId: string, at: number | null) {
@@ -534,6 +551,7 @@ export class Office {
             ...waits.map((m) => h("button", { class: "office-member-row", type: "button", onClick: () => this.select(teamId, m.memberId) },
               h("span", { class: "grow" }, h("b", { text: `${m.displayName} 正在等待 ${m.waitingFor!.memberIds.map(name).join("、") || "交付"}` }), h("small", { class: "dim", text: ` ${m.waitingFor!.expectedArtifact ?? m.waitingFor!.reason}` })))))
         : null,
+      this.earlierRuns(teamId),
       h("p", { class: "dim office-hint", text: "點選 Agent 查看工作與對話" }),
     );
   }
