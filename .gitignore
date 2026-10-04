@@ -18,3 +18,8 @@ DerivedData/
 # Local only (never published)
 .claude/
 _prive/
+
+# Art-generation sources and concept packs (kept local; runtime assets live in windows/public/)
+feature/
+feature2/
+design/draft/
