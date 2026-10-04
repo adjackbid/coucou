@@ -25,11 +25,7 @@ export class MockAdapter {
   /** `rooms` > 4 copies the demo teams, for checking a busy company (`?office=mock&rooms=20`). */
   constructor(rooms = 4) {
     // Names and colours, Coucou's extension, from the agents of the fixture.
-    for (const m of this.snap.members) {
-      const agent = this.snap.agents.find((a) => a.agentId === m.agentId);
-      m.displayName = agent?.name ?? m.agentId;
-      m.color = PALETTE[agent?.avatarKey ?? ""] ?? "#3B9EFF";
-    }
+    for (const m of this.snap.members) this.dress(m);
     this.seq = Math.max(this.snap.asOfSeq, ...this.events.map((e) => e.seq));
     for (let n = 1; this.snap.teams.length < rooms; n++) {
       const s = this.snap;
@@ -47,6 +43,13 @@ export class MockAdapter {
     }
   }
 
+  /** A member's name and colour, from its agent: the recorded events carry neither. */
+  private dress(m: CompanySnapshot["members"][number]) {
+    const agent = this.snap.agents.find((a) => a.agentId === m.agentId);
+    m.displayName = agent?.name ?? m.agentId;
+    m.color = PALETTE[agent?.avatarKey ?? ""] ?? "#3B9EFF";
+  }
+
   snapshot(): CompanySnapshot {
     return structuredClone(this.snap);
   }
@@ -59,7 +62,9 @@ export class MockAdapter {
   step(): boolean {
     const e = this.events[this.next++];
     if (!e) return false;
-    this.emit(structuredClone(e));
+    const copy = structuredClone(e);
+    for (const c of copy.changes ?? []) if (c.entityKind === "member" && c.op === "upsert") this.dress(c.value);
+    this.emit(copy);
     return true;
   }
 

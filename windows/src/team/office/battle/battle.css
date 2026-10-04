@@ -1,0 +1,510 @@
+/* 中二模式: the same glass as the Office, with the raid's colours — the boss's
+   purple, the HP's ember red, the shield's violet, the win's gold. Every state
+   has an icon and words as well as a colour. */
+
+:root {
+  --bt-boss: #b58cff;
+  --bt-hp: #ff6b6b;
+  --bt-hp-2: #ffb36b;
+  --bt-shield: #a78bfa;
+  --bt-heal: #6ee7b7;
+  --bt-gold: #ffd36b;
+  --bt-counter: #ff9a5a;
+}
+
+/* ── Office / 中二模式 ─────────────────────────────────────────────────────── */
+
+.bt-mode {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(var(--card), 0.6);
+  box-shadow: var(--edge);
+}
+
+.bt-mode button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dim-glass);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bt-mode button:hover {
+  color: var(--ink);
+}
+
+.bt-mode button.on {
+  background: var(--blue);
+  color: white;
+}
+
+.bt-mode button.on.bt-battle {
+  background: linear-gradient(135deg, #7c4dff, #b04dff);
+}
+
+.bt-mode button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.bt-tagline {
+  color: #cdb8ff;
+  font-size: 12px;
+}
+
+/* ── Over the scene: the boss's HP and shield ────────────────────────────── */
+
+.office-frame.battle {
+  position: relative;
+}
+
+.bt-hud {
+  position: absolute;
+  inset: 12px 12px auto 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.bt-hud > * {
+  pointer-events: auto;
+}
+
+.bt-boss {
+  display: grid;
+  gap: 4px;
+  width: min(300px, 46%);
+  padding: 10px 14px 12px;
+  border-radius: 14px;
+  background: rgba(14, 12, 26, 0.72);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(181, 140, 255, 0.28);
+  color: #f2ecff;
+}
+
+.bt-name {
+  font-size: 18px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.bt-won {
+  color: var(--bt-gold);
+  font-size: 13px;
+}
+
+.bt-line {
+  color: #c9bde6;
+  font-size: 12px;
+}
+
+.bt-hp {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bt-hp-label {
+  color: var(--bt-hp);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bt-hp b {
+  font-size: 18px;
+}
+
+.bt-hp small {
+  color: #b5a9d1;
+  font-size: 13px;
+}
+
+.bt-bar,
+.bt-mini-bar {
+  position: relative;
+  display: block;
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.bt-bar > i,
+.bt-mini-bar > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--bt-hp), var(--bt-hp-2));
+  transition: width 0.25s ease;
+}
+
+.bt-bar.last_seal > i {
+  background: linear-gradient(90deg, #ff4d6d, #ff8f6b);
+}
+
+.bt-hud.sealing .bt-bar > i,
+.bt-hud.defeated .bt-bar > i {
+  width: 0 !important;
+}
+
+.bt-hud.paused .bt-boss {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(140, 200, 255, 0.4);
+}
+
+.bt-hud.defeated .bt-boss {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 211, 107, 0.5);
+}
+
+.bt-hud.stopped .bt-boss,
+.bt-hud.inconsistent .bt-boss,
+.bt-hud.syncing .bt-boss {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.bt-flags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.bt-shield,
+.bt-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(14, 12, 26, 0.72);
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.4);
+  color: #e3d9ff;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bt-shield .bt-icon {
+  color: var(--bt-shield);
+}
+
+.bt-shield b {
+  color: white;
+  font-size: 15px;
+}
+
+.bt-flag.alert {
+  color: #ffc2a6;
+  box-shadow: inset 0 0 0 1px rgba(255, 154, 90, 0.5);
+}
+
+.bt-icon {
+  display: inline-flex;
+  flex: none;
+}
+
+/* ── The 戰鬥紀錄 ─────────────────────────────────────────────────────────── */
+
+.bt-side-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 12px;
+  background: rgba(var(--card), 0.55);
+  box-shadow: var(--edge);
+}
+
+.bt-side-tabs button {
+  flex: 1;
+  min-height: 32px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--dim-glass);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bt-side-tabs button.on {
+  background: var(--lift-2);
+  color: var(--ink);
+}
+
+.bt-log {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 460px;
+  overflow-y: auto;
+}
+
+.bt-log-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: start;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bt-log-row:hover {
+  background: var(--lift);
+}
+
+.bt-log-row:focus-visible {
+  outline: 2px solid var(--blue);
+}
+
+.bt-log-row time {
+  color: var(--dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  padding-top: 1px;
+}
+
+.bt-log-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.bt-log-text b {
+  font-size: 13px;
+}
+
+.bt-log-text small {
+  color: var(--dim);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.bt-icon.hit { color: var(--bt-hp); }
+.bt-icon.regen { color: var(--bt-heal); }
+.bt-icon.shield { color: var(--bt-shield); }
+.bt-icon.counter { color: var(--bt-counter); }
+.bt-icon.heal { color: var(--bt-heal); }
+.bt-icon.seal { color: var(--bt-boss); }
+.bt-icon.win { color: var(--bt-gold); }
+.bt-icon.quiet { color: var(--dim-glass); }
+
+.bt-empty {
+  font-size: 13px;
+}
+
+/* ── 需要你決定, 討伐成果 ─────────────────────────────────────────────────── */
+
+.bt-decide {
+  box-shadow: var(--edge), inset 0 0 0 1px rgba(255, 154, 90, 0.45);
+}
+
+.bt-result {
+  box-shadow: var(--edge), inset 0 0 0 1px rgba(255, 211, 107, 0.45);
+  background: radial-gradient(120% 80% at 50% 0%, rgba(255, 211, 107, 0.12), transparent 70%), rgba(var(--card), 0.55);
+}
+
+.bt-result-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bt-medal {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff3c4, var(--bt-gold) 55%, #c8901f);
+  color: #6b4500;
+  box-shadow: 0 2px 10px rgba(255, 211, 107, 0.35);
+}
+
+.bt-result-tasks {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.bt-result-tasks button {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bt-result-tasks button:hover {
+  background: var(--lift);
+}
+
+.bt-result-tasks i {
+  color: var(--bt-heal);
+  font-style: normal;
+}
+
+.bt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── Heroes: a look, never a duty ────────────────────────────────────────── */
+
+.bt-hero {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+
+.bt-hero.captain { color: #9cc8ff; background: rgba(59, 158, 255, 0.18); }
+.bt-hero.mage { color: #7debb6; background: rgba(52, 211, 153, 0.18); }
+.bt-hero.guardian { color: #c9b2ff; background: rgba(167, 139, 250, 0.2); }
+.bt-hero.warrior { color: #ffc27a; background: rgba(245, 165, 36, 0.2); }
+.bt-hero.support { color: #ffaed2; background: rgba(244, 114, 182, 0.2); }
+
+.bt-hero-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bt-hero-pick .dropdown {
+  min-width: 120px;
+}
+
+/* ── The company map: each room's boss, still ────────────────────────────── */
+
+.office-room-pick.battle {
+  position: relative;
+}
+
+.bt-room {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.bt-room-state {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(14, 12, 26, 0.76);
+  color: #e3d9ff;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(181, 140, 255, 0.45);
+}
+
+.bt-room-state.won {
+  color: var(--bt-gold);
+  box-shadow: inset 0 0 0 1px rgba(255, 211, 107, 0.6);
+}
+
+.bt-room-state.alert {
+  color: #ffc2a6;
+  box-shadow: inset 0 0 0 1px rgba(255, 154, 90, 0.6);
+}
+
+.bt-room-state.idle {
+  color: #c9c3d8;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.bt-room-hp {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  display: grid;
+  gap: 3px;
+  min-width: 110px;
+  padding: 4px 8px 6px;
+  border-radius: 9px;
+  background: rgba(14, 12, 26, 0.72);
+  color: #f2ecff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.bt-mini-bar {
+  height: 5px;
+}
+
+.bt-boss-card {
+  box-shadow: var(--edge), inset 0 0 0 1px rgba(181, 140, 255, 0.35);
+}
+
+.bt-boss-card .bt-bar {
+  margin-top: 2px;
+}
+
+.bt-boss-figures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.bt-boss-figures > span {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--lift);
+}
+
+.bt-boss-figures small {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.bt-boss-figures b {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}

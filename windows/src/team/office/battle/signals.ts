@@ -12,7 +12,8 @@ import { DESIGN, type BattleSignal, type Observation, type SignalKind, type Task
 
 const WAITING = new Set<TaskStatus>(["blocked", "waiting_input"]);
 const WORKING = new Set<TaskStatus>(["running"]);
-const NOT_STARTED = new Set<TaskStatus>(["pending", "ready"]);
+// Waiting for another member's hand-in is the normal course of work, not a block: when it comes, the task starts.
+const NOT_STARTED = new Set<TaskStatus>(["pending", "ready", "waiting_dependency"]);
 
 export interface Diff {
   signals: BattleSignal[];

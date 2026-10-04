@@ -14,9 +14,13 @@ import { floorColumns } from "./floor";
 import { RealAdapter, fileFromSnapshot } from "./adapter-real";
 import { MockAdapter } from "./adapter-mock";
 import { loadArt, STATUS, TeamScene, themeName, THEME_LABELS, wake } from "./scene";
-import { editableText } from "../ui";
+import { dropdown, editableText } from "../ui";
 import type { PastRun, Snapshot, TeamFile, Usage } from "../types";
 import { fmtMoney, fmtTokens, usageSummary } from "../cost";
+import { Battle, HERO_LABELS, heroOf, savedMode, saveMode, setHero } from "./battle/session";
+import { battleLog, bossCard, bossHud, companyState, roomBadge } from "./battle/hud";
+import { inputFrom, project } from "./battle/projector";
+import type { BattleSignal, BattleViewModel, HeroClass, PresentationMode } from "./battle/contracts";
 
 export interface OfficeHost {
   render(): void;
@@ -106,21 +110,37 @@ export class Office {
   private histories = new Map<string, PastRun[] | "pending">();
   private picked = new Map<string, { at: number; store: OfficeStore | null; error?: string }>();
   private runs = new Map<string, Snapshot>();
+  /** 中二模式: the same work told as a raid; the person's own preference. */
+  mode: PresentationMode = savedMode();
+  /** In 中二模式, what the column beside the room shows. */
+  private sideView: "battle" | "raw" = "battle";
+  /** Each team's raid as the window has watched it. */
+  readonly battle: Battle;
 
   constructor(private host: OfficeHost, opts: { demo?: boolean } = {}) {
     this.demo = !!opts.demo;
     this.main = new OfficeStore(() => this.resync());
+    this.battle = new Battle(() => this.main, (teamId) => this.extras(teamId));
     if (this.demo) {
       this.mock = new MockAdapter(Number(new URLSearchParams(location.search).get("rooms")) || 4);
       this.main.loadSnapshot(this.mock.snapshot());
       this.mock.subscribe((e) => this.main.receive(e));
       this.main.setConnection({ status: "live", lastAppliedSeq: this.main.cursor, lastServerTime: this.main.serverTime });
+      // `&autostep=1` plays the recorded events one by one, to watch the Office react.
+      if (import.meta.env.DEV && new URLSearchParams(location.search).get("autostep")) {
+        const t = window.setInterval(() => {
+          if (!this.step()) window.clearInterval(t);
+          host.render();
+        }, 1200);
+      }
     } else {
       this.real = new RealAdapter({ pause: (t) => host.pause(t), resume: (t) => host.resume(t), instruct: (t, text, request) => host.instruct(t, text, request) });
     }
     this.main.onChange(() => {
       for (const s of this.scenes.values()) s.update();
       for (const s of this.minis.values()) s.update();
+      // What changed, told as the raid: only once the store has applied it.
+      this.battle.observeAll();
       // A member that went away closes its drawer.
       if (this.sel && !this.viewing && !this.main.member(this.sel.teamId, this.sel.memberId)) {
         this.sel = null;
@@ -321,6 +341,121 @@ export class Office {
     return null;
   }
 
+  // ── 中二模式 ───────────────────────────────────────────────────────────────
+
+  /** What the store does not keep and the raid needs: how often each task was sent back, the open questions. */
+  private extras(teamId: string) {
+    const snap = this.runs.get(teamId);
+    if (!snap) return {};
+    return {
+      rejections: new Map(snap.tasks.map((t) => [`${teamId}:${t.id}`, t.rejections ?? 0] as [string, number])),
+      questionIds: (snap.questions ?? []).filter((q) => q.answer === null).map((q) => q.id),
+    };
+  }
+
+  /** The boss of the run on screen: the current one live, an earlier one as history. */
+  private boss(teamId: string): BattleViewModel | null {
+    if (!this.viewing) return this.battle.vm(teamId);
+    const input = inputFrom(this.store, teamId, { isHistory: true });
+    return input ? project(input) : null;
+  }
+
+  private hero(teamId: string, memberId: string): HeroClass {
+    const team = this.store.team(teamId);
+    const members = this.store.members(teamId);
+    const m = members.find((x) => x.memberId === memberId);
+    return heroOf(teamId, memberId, m?.roleLabel ?? "", team?.leaderMemberId === memberId, Math.max(0, members.indexOf(m!)));
+  }
+
+  private heroChip(teamId: string, memberId: string) {
+    const c = this.hero(teamId, memberId);
+    return h("span", { class: `bt-hero ${c}`, title: "中二模式的職業外觀:只是外觀,不改變工作", text: HERO_LABELS[c] });
+  }
+
+  /** Office or 中二模式: the same work, told two ways. */
+  private modeSwitch(): HTMLElement {
+    const opt = (mode: PresentationMode, label: string, title: string) =>
+      h("button", { class: `bt-${mode}${this.mode === mode ? " on" : ""}`, type: "button", "aria-pressed": this.mode === mode ? "true" : "false", title, onClick: () => this.setMode(mode) }, label);
+    return h("div", { class: "bt-mode", role: "group", "aria-label": "畫面模式" },
+      opt("office", "Office", "一般辦公室畫面"),
+      opt("battle", "中二模式", "同一份工作,看成團隊討伐需求魔王:只改變畫面,不影響工作"));
+  }
+
+  setMode(mode: PresentationMode) {
+    if (this.mode === mode) return;
+    this.mode = mode;
+    saveMode(mode);
+    this.host.render();
+  }
+
+  /** A line of the 戰鬥紀錄 was clicked: what really happened — the member, else the task. */
+  private openSignal(teamId: string, s: BattleSignal) {
+    const tasks = s.source.taskIds;
+    const member = s.actorMemberId ?? s.source.memberIds[0]
+      ?? (s.kind === "boss_counter" ? this.store.members(teamId).find((m) => m.workStatus === "waiting_input" || m.workStatus === "blocked")?.memberId : undefined)
+      ?? (tasks.length === 1 ? this.store.task(tasks[0])?.assigneeMemberId ?? undefined : undefined);
+    if (member && this.store.member(teamId, member)) return this.select(teamId, member);
+    if (tasks.length === 1 && this.host.openTask && !this.demo) return this.host.openTask(teamId, tasks[0].slice(teamId.length + 1));
+    this.host.showBoard(teamId);
+  }
+
+  /** In 中二模式, the column beside the room: what waits on the person, the result, the 戰鬥紀錄. */
+  private battleSide(teamId: string, vm: BattleViewModel | null): HTMLElement {
+    const tabs = h("div", { class: "bt-side-tabs", role: "tablist" },
+      h("button", { class: this.sideView === "battle" ? "on" : "", type: "button", role: "tab", "aria-selected": String(this.sideView === "battle"), onClick: () => { this.sideView = "battle"; this.host.render(); } }, "戰鬥紀錄"),
+      h("button", { class: this.sideView === "raw" ? "on" : "", type: "button", role: "tab", "aria-selected": String(this.sideView === "raw"), onClick: () => { this.sideView = "raw"; this.host.render(); } }, "原始活動"));
+    if (this.sideView === "raw") return h("aside", { class: "office-side" }, tabs, ...this.activityCards(teamId));
+    const name = (id: string) => this.store.member(teamId, id)?.displayName ?? id;
+    // The boss's counter is a real question: answered here, the way it is everywhere else.
+    const waiting = this.viewing ? [] : this.alerts(teamId);
+    const decide = waiting.length
+      ? h("div", { class: "office-card bt-decide" },
+          h("h3", { text: "需要你決定" }),
+          h("p", { class: "dim", text: "魔王反擊:有成員在等你。回覆或批准之後,團隊才會繼續。" }),
+          ...waiting.flatMap((m) => [
+            h("button", { class: "office-member-row", type: "button", onClick: () => this.select(teamId, m.memberId) },
+              h("i", { class: "office-blob", style: `background:${m.color}` }),
+              h("span", { class: "grow" }, h("b", { text: m.displayName }), h("small", { class: "dim", text: ` ${m.waitingFor?.reason ?? STATUS[m.workStatus].label}` })),
+              h("span", { class: "office-pill alert", text: "查看" })),
+            ...this.asksOf(teamId, m.memberId),
+          ]))
+      : null;
+    return h("aside", { class: "office-side" },
+      tabs,
+      vm?.bossState === "defeated" ? this.result(teamId, vm) : null,
+      decide,
+      h("div", { class: "office-card" },
+        h("h3", { text: this.viewing ? "戰鬥紀錄(這是之前的一輪,只看結果)" : "戰鬥紀錄" }),
+        this.viewing
+          ? h("p", { class: "dim", text: "之前的一輪不重演過程;它的對話與交付在「原始活動」。" })
+          : battleLog(this.battle.log(teamId), { name, open: (s) => this.openSignal(teamId, s) }),
+        h("p", { class: "dim office-hint", text: "每一列都是真實發生的事:點一下看那位成員或任務。" })),
+      this.earlierRuns(teamId));
+  }
+
+  /** 討伐成果: the run reported done, every counted task accepted — and the way to the real record. */
+  private result(teamId: string, vm: BattleViewModel): HTMLElement {
+    const tasks = vm.countedTaskIds.map((id) => this.store.task(id)).filter((t): t is NonNullable<typeof t> => !!t);
+    const s = this.viewing ? null : this.spend(teamId);
+    const leader = this.store.member(teamId, this.store.team(teamId)?.leaderMemberId ?? "");
+    return h("div", { class: "office-card bt-result" },
+      h("div", { class: "bt-result-head" },
+        h("span", { class: "bt-medal", "aria-hidden": "true", html: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5Z"/></svg>' }),
+        h("div", { class: "grow" }, h("h3", { text: "討伐成果" }), h("small", { class: "dim", text: `需求魔王 已擊敗 · ${leader ? `${leader.displayName} ` : ""}已結案` }))),
+      h("div", { class: "office-figures" },
+        h("span", {}, h("small", { text: "驗收任務" }), h("b", { text: `${vm.progress.completed} 項` })),
+        s ? h("span", {}, h("small", { text: "Token" }), h("b", { text: fmtTokens(s.tokens) })) : null,
+        s ? h("span", {}, h("small", { text: "成本" }), h("b", { text: s.cost || "—" })) : null),
+      h("ul", { class: "bt-result-tasks" }, ...tasks.map((t) =>
+        h("li", {}, h("button", {
+          type: "button", title: "看這個任務的對話與交付",
+          onClick: () => (this.host.openTask && !this.demo && !this.viewing ? this.host.openTask(teamId, t.taskId.slice(teamId.length + 1)) : t.assigneeMemberId && this.select(teamId, t.assigneeMemberId)),
+        }, h("i", { "aria-hidden": "true", text: "✓" }), t.title)))),
+      h("div", { class: "bt-actions" },
+        h("button", { class: "btn plain", type: "button", onClick: () => this.host.showBoard(teamId) }, "看任務看板")),
+      h("p", { class: "dim office-hint", text: "獎章只是這台電腦上的完成紀念;Token 和費用照原本的統計。" }));
+  }
+
   // ── The company ──────────────────────────────────────────────────────────────
 
   company(): HTMLElement {
@@ -336,6 +471,7 @@ export class Office {
     const large = (t: (typeof teams)[number]) => themeName(t.teamId, t.officeLayoutId, t.memberIds.length) === "premium";
     const cols = floorColumns(teams.map((t) => (large(t) ? 2 : 1)), this.mapFrame.w / this.mapFrame.h);
     const grid = h("div", { class: "office-map", role: "list", style: `${this.mapTransform()}--cols:${cols};` });
+    const battle = this.mode === "battle";
     for (const t of teams) {
       const run = this.store.run(t.currentRunId);
       const alerts = this.alerts(t.teamId).length;
@@ -346,7 +482,7 @@ export class Office {
         h(
           "button",
           {
-            class: "office-room-pick", type: "button",
+            class: `office-room-pick${battle ? " battle" : ""}`, type: "button",
             "aria-label": `${t.name},${run ? "" : ""}${p.percent === null ? "尚未派工" : `${p.percent}%`}${alerts ? `,${alerts} 項需要你` : ""}`,
             onClick: () => {
               if (this.dragged) return;
@@ -357,6 +493,8 @@ export class Office {
             onDblclick: () => this.host.openTeam(t.teamId),
           },
           this.scene(t.teamId, true).el,
+          // The boss of each room, still: the animation is only in the team's own office.
+          battle ? roomBadge(this.battle.vm(t.teamId)) : null,
         ),
         h(
           "div",
@@ -400,15 +538,33 @@ export class Office {
           render: () => this.host.render(),
         }), h("p", { class: "dim", text: `${teams.length} 間辦公室 · ${count.seats} 位員工${away ? ` · 另有 ${away} 個團隊已封存` : ""}` })),
         this.demoTag(),
-        this.demo ? h("button", { class: "btn plain", type: "button", title: "播放規格附帶的下一個事件", onClick: () => { if (!this.step()) { this.notice = "示範事件已全部播放。"; this.host.render(); } } }, "下一個示範事件") : null),
+        this.demo ? h("button", { class: "btn plain", type: "button", title: "播放規格附帶的下一個事件", onClick: () => { if (!this.step()) this.notice = "示範事件已全部播放。"; this.host.render(); } }, "下一個示範事件") : null,
+        h("span", { style: "flex:1" }),
+        battle ? h("span", { class: "bt-tagline", text: "每個團隊的目標都是一隻需求魔王" }) : null,
+        this.modeSwitch()),
       this.connection(),
       this.trouble(),
       h("div", { class: "office-body" }, this.mapViewport(grid), side),
     );
   }
 
+  /** In 中二模式, the picked room's boss: the same numbers as its office. */
+  private bossCard(pick: Team): HTMLElement | null {
+    const vm = this.battle.vm(pick.teamId);
+    if (!vm) return null;
+    const added = this.battle.log(pick.teamId).filter((s) => s.kind === "scope_added" && s.runId === vm.runId).reduce((n, s) => n + s.source.taskIds.length, 0);
+    return bossCard(vm, {
+      added,
+      // The team's own board: into its office first, then its tasks.
+      board: () => {
+        this.host.openTeam(pick.teamId);
+        this.host.showBoard(pick.teamId);
+      },
+    });
+  }
+
   /** The room picked on the map: its team at a glance, and the way in. */
-  private roomSummary(pick: Team): HTMLElement[] {
+  private roomSummary(pick: Team): (HTMLElement | null)[] {
     const pickRun = this.store.run(pick.currentRunId);
     const leader = this.store.member(pick.teamId, pick.leaderMemberId);
     return [
@@ -421,6 +577,7 @@ export class Office {
         leader ? h("p", { class: "dim", text: `Leader · ${leader.displayName ?? leader.memberId}(${STATUS[leader.workStatus].label})` }) : h("p", { class: "dim", text: "還沒有指定 Leader,請到團隊設定。" }),
         h("button", { class: "btn primary", type: "button", onClick: () => this.host.openTeam(pick.teamId) }, "進入辦公室 →"),
       ),
+      this.mode === "battle" ? this.bossCard(pick) : null,
       h("div", { class: "office-card" },
         h("h3", { text: "團隊成員" }),
         ...this.store.members(pick.teamId).map((m) =>
@@ -460,7 +617,14 @@ export class Office {
       h("h3", { class: "office-stats-title", text: "員工" }),
       h("div", { class: "office-stats" }, stat(staff.length, "員工", "quiet"), stat(working, "工作中", "work"), stat(waitingYou, "等你處理", "alert"), stat(resting, "休息/待命", "done")),
       h("h3", { class: "office-stats-title", text: `團隊(${teams.length} 個)` }),
-      h("div", { class: "office-stats" }, stat(busy, "執行中", "work"), stat(need, "需介入", "alert"), stat(done, "已完成", "done"), stat(rest, "待命", "quiet")),
+      this.mode === "battle"
+        ? (() => {
+            // The same teams, by their boss: paused, stopped or failed is never counted as beaten.
+            const states = teams.map((t) => this.battle.vm(t.teamId)).map((vm) => (vm ? companyState(vm).tone : "idle"));
+            const n = (tone: string) => states.filter((s) => s === tone).length;
+            return h("div", { class: "office-stats" }, stat(n("fight"), "討伐中", "work"), stat(n("alert"), "需介入", "alert"), stat(n("won"), "已擊敗", "done"), stat(n("idle"), "待命", "quiet"));
+          })()
+        : h("div", { class: "office-stats" }, stat(busy, "執行中", "work"), stat(need, "需介入", "alert"), stat(done, "已完成", "done"), stat(rest, "待命", "quiet")),
       rows.length
         ? h("div", { class: "office-figures", title: "各團隊本輪的合計,隨團隊工作即時更新" },
             h("span", {}, h("small", { text: "任務" }), h("b", { text: `${tasks[0]}/${tasks[1]}` })),
@@ -605,6 +769,8 @@ export class Office {
     const members = this.store.members(teamId);
     const scene = this.scene(teamId);
     const past = !!this.viewing;
+    const battle = this.mode === "battle";
+    const vm = battle ? this.boss(teamId) : null;
     const caps: Capabilities = past
       ? { canPause: false, canResume: false, canSendInstruction: false, pauseMode: "cooperative", unavailableReasons: { pause: "這是歷史執行", resume: "這是歷史執行", instruction: "這是歷史執行,只能查看" } }
       : this.capabilities(run);
@@ -634,7 +800,7 @@ export class Office {
         },
           h("i", { class: "office-blob", style: `background:${m.color}` }),
           h("span", { class: "grow" },
-            h("b", {}, m.memberId === team.leaderMemberId ? "♛ " : "", m.displayName ?? m.memberId),
+            h("b", {}, m.memberId === team.leaderMemberId ? "♛ " : "", m.displayName ?? m.memberId, battle ? this.heroChip(teamId, m.memberId) : null),
             h("small", { class: "dim", text: ` ${m.memberId === team.leaderMemberId ? "Leader · " : ""}${m.roleLabel}` }),
             h("span", { class: "office-roster-task", text: m.summary || (m.primaryTaskId ? this.store.task(m.primaryTaskId)?.title ?? "" : "") }),
             (() => {
@@ -643,14 +809,15 @@ export class Office {
             })()),
           this.status(m.workStatus))),
     );
-    const side = this.sel ? this.drawer(teamId) : this.activity(teamId);
+    const side = this.sel ? this.drawer(teamId) : battle ? this.battleSide(teamId, vm) : this.activity(teamId);
     return h(
       "div",
-      { class: "office office-team" },
+      { class: `office office-team${battle ? " battle" : ""}` },
       h("div", { class: "office-head" },
         h("div", { class: "office-head-main" }, this.runLabel(run), this.progressBar(teamId), past ? null : this.figures(teamId, "office-figures inline"), this.demoTag()),
         toggles,
-        pauseBtn),
+        pauseBtn,
+        this.modeSwitch()),
       past
         ? h("div", { class: "office-history-bar", role: "status" },
             h("span", { class: "grow" }, h("b", { text: "你正在看之前的一輪" }), ` · ${this.when(this.store.run(team.currentRunId) ? pick!.at : pick!.at)} 收起的紀錄,只能查看,不會影響現在的團隊`),
@@ -661,7 +828,7 @@ export class Office {
       this.trouble(),
       this.notice ? h("div", { class: "office-notice", role: "status", text: this.notice }) : null,
       h("div", { class: "office-body" },
-        h("div", { class: "office-main" }, h("div", { class: "office-frame" }, scene.el), extra, roster),
+        h("div", { class: "office-main" }, h("div", { class: `office-frame${battle ? " battle" : ""}` }, scene.el, battle && vm ? bossHud(vm) : null), extra, roster),
         side),
     );
   }
@@ -726,6 +893,10 @@ export class Office {
 
   /** What happened in the office, newest first: hand-offs, questions, deliveries. */
   private activity(teamId: string): HTMLElement {
+    return h("aside", { class: "office-side" }, ...this.activityCards(teamId));
+  }
+
+  private activityCards(teamId: string): (HTMLElement | null)[] {
     const name = (id: string) => this.store.member(teamId, id)?.displayName ?? id;
     const items: { at: string; who: string | null; head: string; body: string; artifact?: string }[] = [];
     for (const m of this.store.messages(teamId)) {
@@ -738,9 +909,7 @@ export class Office {
     }
     items.sort((a, b) => b.at.localeCompare(a.at));
     const waits = this.store.members(teamId).filter((m) => m.workStatus === "waiting_dependency" && m.waitingFor);
-    return h(
-      "aside",
-      { class: "office-side" },
+    return [
       h("div", { class: "office-card" },
         h("h3", { text: "辦公室動態" }),
         items.length
@@ -758,7 +927,7 @@ export class Office {
         : null,
       this.earlierRuns(teamId),
       h("p", { class: "dim office-hint", text: "點選 Agent 查看工作與對話" }),
-    );
+    ];
   }
 
   // ── The member drawer ────────────────────────────────────────────────────────
@@ -794,6 +963,16 @@ export class Office {
         const asks = this.asksOf(teamId, m.memberId);
         return asks.length ? h("section", { class: "office-card office-asks" }, h("h3", { text: "需要你處理" }), ...asks) : null;
       })(),
+      this.mode === "battle"
+        ? h("section", { class: "office-card bt-hero-pick" },
+            h("span", { class: "grow" }, h("b", { text: "職業外觀" }), h("small", { class: "dim", text: " 只改變中二模式裡的樣子" })),
+            dropdown({
+              value: this.hero(teamId, m.memberId),
+              title: "只是外觀:不改變這位成員的工作、權限或驗收",
+              choices: (Object.keys(HERO_LABELS) as HeroClass[]).map((c) => ({ value: c, label: HERO_LABELS[c] })),
+              onChange: (v) => { setHero(teamId, m.memberId, v as HeroClass); this.host.render(); },
+            }))
+        : null,
       h("section", { class: "office-card" },
         h("h3", { text: "目前工作" }),
         task ? h("p", {}, h("b", { text: task.title }), others ? h("small", { class: "dim", text: ` 另外 ${others} 項` }) : null) : h("p", { class: "dim", text: m.workStatus === "idle" ? "待命,沒有指派的任務。" : "沒有進行中的任務。" }),
