@@ -58,6 +58,7 @@ fn read_log(file: &Path, team: &str, from: u64, to: u64, out: &mut Vec<Row>) {
     let mut run = 0u64;
     // member id → (name, agent)
     let mut who: HashMap<String, (String, String)> = HashMap::new();
+    let mut turns = crate::usage::TurnSums::default();
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
         let Ok(record) = serde_json::from_str::<Record>(line) else { continue };
         match &record.event {
@@ -71,7 +72,8 @@ fn read_log(file: &Path, team: &str, from: u64, to: u64, out: &mut Vec<Row>) {
             Event::Joined { member } => {
                 who.insert(member.id.clone(), (member.name.clone(), member.agent.clone()));
             }
-            Event::Usage { member, usage } if record.at >= from && record.at < to => {
+            Event::TurnStarted { member } => turns.turn_started(member),
+            Event::Usage { member, usage } if turns.counts(member, usage) && record.at >= from && record.at < to => {
                 let (name, agent) = who.get(member).cloned().unwrap_or_else(|| (member.clone(), String::new()));
                 out.push(Row {
                     at: record.at,
@@ -284,6 +286,24 @@ mod tests {
     }
 
     /// The public list and an agent's own endpoint answer (network; nothing is saved).
+
+    /// The person's own team logs, as the page would add them up (prints only).
+    #[test]
+    #[ignore]
+    fn the_real_logs_add_up() {
+        let rows = collect(&crate::settings::team_logs_dir(), 0, u64::MAX);
+        let mut by: BTreeMap<(String, String, String), (u64, u64, u64, usize)> = BTreeMap::new();
+        for r in &rows {
+            let e = by.entry((r.team_name.clone(), r.member.clone(), r.usage.model.clone())).or_default();
+            e.0 += r.usage.input;
+            e.1 += r.usage.output;
+            e.2 += r.usage.cache_read;
+            e.3 += 1;
+        }
+        for ((t, m, model), (i, o, c, n)) in by {
+            eprintln!("{t} {m} {model}: in {i} out {o} cache {c} ({n} records)");
+        }
+    }
     #[test]
     #[ignore]
     fn prices_can_be_fetched_from_the_list_and_from_an_agent_s_endpoint() {

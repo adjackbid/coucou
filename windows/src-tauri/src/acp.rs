@@ -149,6 +149,17 @@ pub struct Launch {
     pub model: Option<String>,
 }
 
+/// The model a session actually runs, to name usage the agent reported
+/// without one: for Copilot, a COPILOT_MODEL in the profile's environment
+/// comes before the profile's model field (it is set after it).
+pub fn running_model(profile: &AgentProfile, launch: &Launch) -> String {
+    let own = launch.model.as_deref().map(str::trim).filter(|m| !m.is_empty());
+    let env = (profile.protocol == Protocol::Acp)
+        .then(|| profile.env.get("COPILOT_MODEL").map(|m| m.trim()).filter(|m| !m.is_empty() && !m.contains('{')))
+        .flatten();
+    own.or(env).map(str::to_string).or_else(|| model_of(profile, launch)).unwrap_or_default()
+}
+
 /// The model a session runs: the launch's, else the profile's, else the agent's own default.
 fn model_of(profile: &AgentProfile, launch: &Launch) -> Option<String> {
     launch
@@ -253,6 +264,8 @@ pub(crate) struct Running {
     pub(crate) codex: Arc<CodexState>,
     pub(crate) claude: Arc<ClaudeState>,
     pub(crate) agy: Arc<crate::agy::AgyState>,
+    /// What the agent has reported in this session so far (ACP).
+    usage: crate::usage::Totals,
 }
 
 /// One session's place: the lock that keeps its turns in order, and the agent
@@ -398,6 +411,10 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
             cmd.env(k.trim(), v);
         }
     }
+    // A team member's own model wins over a COPILOT_MODEL in the profile's environment.
+    if let (Protocol::Acp, Some(m)) = (&profile.protocol, launch.model.as_deref().map(str::trim).filter(|m| !m.is_empty())) {
+        cmd.env("COPILOT_MODEL", m);
+    }
     let mut child = cmd.spawn().map_err(|e| format!("Could not start {}: {e}", exe.display()))?;
     let stdin = child.stdin.take().ok_or("no stdin")?;
     let stdout = child.stdout.take().ok_or("no stdout")?;
@@ -513,6 +530,7 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
         codex,
         claude,
         agy,
+        usage: crate::usage::Totals::default(),
     };
 
     let setup = setup(&mut running, key, profile, launch).await;
@@ -834,10 +852,12 @@ impl Agents {
             TURN_TIMEOUT,
         )
         .await?;
+        // Copilot reports the session's running total at the end of each
+        // turn, not the turn's own: what is new since the last report goes on.
         if let Some(u) = result.get("usage").filter(|u| u.is_object()) {
-            let usage = crate::usage::from_acp(&model_of(profile, launch).unwrap_or_default(), u);
-            if !usage.is_empty() {
-                sink(Event::Usage(usage));
+            let usage = crate::usage::from_acp(&running_model(profile, launch), u);
+            for new in running.usage.advance(vec![usage]) {
+                sink(Event::Usage(new));
             }
         }
         Ok(AcpOutcome {
@@ -955,6 +975,20 @@ mod tests {
     /// A real Copilot agent from Settings (Steven's cg): does a session get
     /// the team's MCP server started? Opens a session, sends no prompt.
     /// `cargo test -p coucou the_real_copilot_starts -- --ignored`.
+    #[test]
+    fn usage_without_a_model_is_named_after_the_model_really_running() {
+        let mut cg = AgentProfile::copilot();
+        cg.model = "deepseek-v4-flash".into();
+        cg.env.insert("COPILOT_MODEL".into(), "deepseek-v4.1-flash".into());
+        // The profile's environment is set after its model field: it is what runs.
+        assert_eq!(running_model(&cg, &Launch::default()), "deepseek-v4.1-flash");
+        // A member's own model is set last of all.
+        let member = Launch { model: Some("minimax-m2.7".into()), ..Launch::default() };
+        assert_eq!(running_model(&cg, &member), "minimax-m2.7");
+        cg.env.clear();
+        assert_eq!(running_model(&cg, &Launch::default()), "deepseek-v4-flash");
+    }
+
     #[test]
     #[ignore]
     fn the_real_copilot_starts_the_team_s_server() {

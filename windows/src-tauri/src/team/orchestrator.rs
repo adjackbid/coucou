@@ -52,6 +52,9 @@ pub struct Seat {
     pub key: String,
     pub profile: AgentProfile,
     pub launch: Launch,
+    /// Its calls go through Coucou's meter, which reports each one: what the
+    /// agent reports on its own (a turn's total) would count them twice.
+    pub metered: bool,
 }
 
 /// How members are driven. ACP today; a stream-json driver joins it later.
@@ -377,6 +380,19 @@ impl Team {
         out
     }
 
+    /// Tokens a member used, from its agent or from the meter. A metered
+    /// seat counts the meter's alone: the agent's own report repeats them.
+    fn used(&self, member: &str, mut usage: crate::usage::Usage, from_meter: bool) {
+        let seat = self.seat(member);
+        if !from_meter && seat.as_ref().is_some_and(|s| s.metered) {
+            return;
+        }
+        if usage.model.trim().is_empty() {
+            usage.model = seat.map(|s| crate::acp::running_model(&s.profile, &s.launch)).unwrap_or_default();
+        }
+        self.record(vec![Event::Usage { member: member.to_string(), usage }]);
+    }
+
     /// What reaches Coucou while a member's agent works: the tool it is in,
     /// the card it holds.
     fn sink(self: &Arc<Self>, member: &str) -> Sink {
@@ -388,12 +404,9 @@ impl Team {
                 team.on_screen(&member, |screen| screen.update(&u.update));
             }
             // Tokens go in the team's record, under the model the member runs
-            // when the agent did not name one.
-            if let acp::Event::Usage(mut usage) = event {
-                if usage.model.trim().is_empty() {
-                    usage.model = team.seat(&member).map(|s| s.launch.model.clone().filter(|m| !m.trim().is_empty()).unwrap_or(s.profile.model.clone())).unwrap_or_default();
-                }
-                team.record(vec![Event::Usage { member: member.clone(), usage }]);
+            // when the agent did not name one — unless the meter counts them.
+            if let acp::Event::Usage(usage) = event {
+                team.used(&member, usage, false);
                 return;
             }
             let changed = {
@@ -540,7 +553,7 @@ impl Teams {
     pub fn metered(&self, key: &str, usage: crate::usage::Usage) {
         let Some((team, member)) = key.strip_prefix("team:").and_then(|k| k.split_once(':')) else { return };
         if let Some(team) = self.get(team) {
-            (team.sink(member))(acp::Event::Usage(usage));
+            team.used(member, usage, true);
         }
     }
 
@@ -598,15 +611,18 @@ impl Teams {
                 model: Some(member.model.trim().to_string()).filter(|m| !m.is_empty()),
             };
             let mut launch = launch;
-            // Copilot on an endpoint of its own reports no tokens: its calls
-            // go through Coucou's meter, which reads them on the way (meter.rs).
+            let mut metered = false;
+            // Copilot on an endpoint of its own: its calls go through
+            // Coucou's meter, which reads each one's tokens and the model it
+            // really asked for (meter.rs).
             if let Some(meter) = crate::meter::global() {
                 let base = profile.env.get("COPILOT_PROVIDER_BASE_URL").map(|b| b.trim()).filter(|b| b.starts_with("http") && !b.contains('…'));
                 if let (crate::acp::Protocol::Acp, Some(base)) = (&profile.protocol, base) {
                     launch.env.insert("COPILOT_PROVIDER_BASE_URL".into(), meter.route(base, &seat_key(&config.id, &member.id)));
+                    metered = true;
                 }
             }
-            seats.insert(member.id.clone(), Seat { key: seat_key(&config.id, &member.id), profile, launch });
+            seats.insert(member.id.clone(), Seat { key: seat_key(&config.id, &member.id), profile, launch, metered });
             tokens.insert(member.id.clone(), secret);
         }
 
@@ -1731,6 +1747,13 @@ mod tests {
             assert_eq!(ai3.usage.len(), 1);
             assert_eq!((ai3.usage[0].model.as_str(), ai3.usage[0].input, ai3.usage[0].output), ("deepseek-v4.1-flash", 100, 5));
             assert!(bench.member("ai4").usage.is_empty());
+
+            // Copilot's own report of the turn (no model named) repeats what
+            // the meter counted: a metered seat leaves it out.
+            let team = bench.teams.get("shop").unwrap();
+            (team.sink("ai3"))(acp::Event::Usage(crate::usage::Usage { input: 100, output: 5, requests: 1, ..Default::default() }));
+            let ai3 = bench.member("ai3");
+            assert_eq!((ai3.usage.len(), ai3.usage[0].input), (1, 100));
         });
     }
 

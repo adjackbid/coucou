@@ -164,6 +164,44 @@ pub fn from_gemini(model: &str, u: &Value) -> Usage {
     }
 }
 
+/// Each member's usage turn by turn, to tell apart a running total repeated
+/// after the calls it adds up. Copilot over ACP reports its session's running
+/// total at the end of every turn; a member behind Coucou's meter also had
+/// every call reported, and records written before 2026-10-05 kept both. A
+/// session starts with a turn, so a record equal to everything the member
+/// used from the start of some turn up to now is such a total, and is not
+/// counted again.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TurnSums(HashMap<String, Vec<(u32, Usage)>>);
+
+impl TurnSums {
+    pub fn turn_started(&mut self, member: &str) {
+        self.0.entry(member.to_string()).or_default().push(Default::default());
+    }
+
+    /// Whether `u` is usage of its own (true), or a running total again (false).
+    pub fn counts(&mut self, member: &str, u: &Usage) -> bool {
+        let turns = self.0.entry(member.to_string()).or_default();
+        if turns.is_empty() {
+            turns.push(Default::default());
+        }
+        let same = |s: &Usage| u.input == s.input && u.output == s.output && u.cache_read == s.cache_read && u.cache_write == s.cache_write;
+        let mut since = Usage::default();
+        let mut calls = 0;
+        for (n, sum) in turns.iter().rev() {
+            since.add(sum);
+            calls += n;
+            if calls > 0 && same(&since) {
+                return false;
+            }
+        }
+        let (n, sum) = turns.last_mut().unwrap();
+        *n += 1;
+        sum.add(u);
+        true
+    }
+}
+
 /// Running totals by model, turned into what is new since last time.
 #[derive(Default)]
 pub struct Totals(std::sync::Mutex<HashMap<String, Usage>>);
@@ -224,6 +262,26 @@ mod tests {
         let totals = Totals::default();
         assert!(totals.advance_keyed("th1", u.clone()).is_some());
         assert!(totals.advance_keyed("th1", u).is_none());
+    }
+
+    #[test]
+    fn a_turn_s_total_after_its_calls_is_not_counted_again() {
+        let call = |input: u64, output: u64, cache_read: u64| Usage { model: "deepseek-v4.1-flash".into(), input, output, cache_read, requests: 1, ..Default::default() };
+        let mut sums = TurnSums::default();
+        assert!(sums.counts("ai1", &call(15588, 414, 0)));
+        assert!(sums.counts("ai1", &call(1391, 1730, 15458)));
+        assert!(sums.counts("ai2", &call(15323, 165, 0)));
+        // ai1's turn ends with its total, under another model's name.
+        let total = Usage { model: "deepseek-v4-flash".into(), ..call(16979, 2144, 15458) };
+        assert!(!sums.counts("ai1", &total));
+        // The next turn: one call, then the session's running total so far.
+        sums.turn_started("ai1");
+        assert!(sums.counts("ai1", &call(500, 50, 20000)));
+        assert!(!sums.counts("ai1", &call(17479, 2194, 35458)));
+        // …or, from a session that started with this turn, just the turn's.
+        assert!(!sums.counts("ai1", &call(500, 50, 20000)));
+        // Calls of their own still count.
+        assert!(sums.counts("ai1", &call(501, 50, 20000)));
     }
 
     #[test]

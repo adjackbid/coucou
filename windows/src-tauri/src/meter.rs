@@ -355,9 +355,16 @@ mod tests {
         let meter = runtime.block_on(Meter::start()).unwrap();
         let r2 = reported.clone();
         meter.set_report(Arc::new(move |_, u| r2.lock().unwrap().push(u)));
-        let mut launch = Launch::default();
+        // A team member's own model, which must win over the profile's COPILOT_MODEL.
+        let mut launch = Launch { model: Some("glm-5.3-flash".into()), ..Launch::default() };
         launch.env.insert("COPILOT_PROVIDER_BASE_URL".into(), meter.route(&profile.env["COPILOT_PROVIDER_BASE_URL"], "test:metered"));
-        let sink: Sink = Arc::new(|_: Event| {});
+        let own = Arc::new(Mutex::new(Vec::<Usage>::new()));
+        let o2 = own.clone();
+        let sink: Sink = Arc::new(move |e: Event| {
+            if let Event::Usage(u) = e {
+                o2.lock().unwrap().push(u);
+            }
+        });
         let agents = Agents::default();
         let outcome = runtime.block_on(agents.prompt(&sink, "test:metered", &profile, &launch, "Reply with the single word OK.".into()));
         runtime.block_on(agents.shutdown());
@@ -365,7 +372,8 @@ mod tests {
         let got = reported.lock().unwrap().clone();
         eprintln!("metered: {got:?}");
         assert!(!got.is_empty(), "nothing was metered");
-        assert!(got.iter().all(|u| !u.model.is_empty() && u.input + u.cache_read > 0 && u.output > 0));
+        assert!(got.iter().all(|u| u.model == "glm-5.3-flash" && u.input + u.cache_read > 0 && u.output > 0), "{got:?}");
+        eprintln!("the agent's own report: {:?}", own.lock().unwrap());
     }
     /// A stand-in endpoint behind the meter: the request arrives as sent,
     /// the answer comes back whole, and its usage is reported for the seat.

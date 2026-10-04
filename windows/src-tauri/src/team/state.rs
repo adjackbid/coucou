@@ -217,6 +217,8 @@ pub struct State {
     pub lost: BTreeMap<String, String>,
     /// What each member's models used in this run: member → model → totals.
     pub usage: BTreeMap<String, BTreeMap<String, crate::usage::Usage>>,
+    #[serde(skip)]
+    turn_usage: crate::usage::TurnSums,
     pub feed: Vec<FeedItem>,
     pub total_turns: u32,
 }
@@ -486,6 +488,7 @@ impl State {
                 self.say(at, "answered", YOU, &by, text, None);
             }
             Event::TurnStarted { member } => {
+                self.turn_usage.turn_started(member);
                 let t = self.turns.entry(member.clone()).or_default();
                 t.count += 1;
                 t.active = true;
@@ -521,11 +524,12 @@ impl State {
                 }
             }
             Event::Wrapping { on } => self.wrapping = *on,
-            Event::Usage { member, usage } => {
+            Event::Usage { member, usage } if self.turn_usage.counts(member, usage) => {
                 let models = self.usage.entry(member.clone()).or_default();
                 let total = models.entry(usage.model.clone()).or_insert_with(|| crate::usage::Usage { model: usage.model.clone(), ..Default::default() });
                 total.add(usage);
             }
+            Event::Usage { .. } => {}
             Event::Reopened => {
                 self.status = TeamStatus::Running;
                 self.finished_at = 0;
