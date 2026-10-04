@@ -481,8 +481,11 @@ impl Team {
                 let is_leader = state.leader() == member;
                 // Finished once the leader has heard the request for the
                 // report and ended the turn it was given for it — not at the
-                // end of the turn in which it accepted the last task.
-                if is_leader && state.wrapping && state.all_done() && state.unheard(&member).is_empty() {
+                // end of the turn in which it accepted the last task, and not
+                // while anyone still works or has something to read (the
+                // leader may have just asked the team a question). Then the
+                // last turn to end closes the team.
+                if state.may_finish() {
                     Some(Event::Finished)
                 } else if state.status != TeamStatus::Finished && state.unheard(&member).is_empty() && state.open_question(&member).is_none() {
                     // Work it was given, has not handed in, and is not waiting on anyone for.
@@ -1507,6 +1510,51 @@ mod tests {
             let leader = bench.turns_of("ai1");
             assert!(leader.iter().any(|t| t.contains("has come back with more") && t.contains("Message from the user:\n再加優惠券功能")));
             assert_eq!(done.messages.iter().filter(|m| m.text == "再加優惠券功能").count(), 1);
+        });
+    }
+
+    /// Reopened with a question, the leader asks its team and answers the
+    /// user once the answers are in: the team does not close while they
+    /// are still being written.
+    #[test]
+    fn a_reopened_team_waits_for_the_answers_its_leader_asked_for() {
+        run(async {
+            let diligent = diligent();
+            let asked: Script = Arc::new(move |mate, text| {
+                if mate.member == "ai1" && text.contains("各自用什麼模型") {
+                    for to in ["ai2", "ai3"] {
+                        mate.tool("message_send", json!({ "to": to, "text": "請回報你用的模型" }));
+                    }
+                    mate.tool("message_send", json!({ "to": "you", "text": "我已請大家回報,收到後整理給你" }));
+                    return Ok("end_turn".into());
+                }
+                if text.contains("請回報你用的模型") {
+                    let sent = mate.tool("message_send", json!({ "to": "leader", "text": format!("{} 用 glm-5.3-flash", mate.member) }));
+                    assert!(!sent.starts_with("ERROR"), "{sent}");
+                    return Ok("end_turn".into());
+                }
+                if mate.member == "ai1" && text.contains("用 glm-5.3-flash") {
+                    mate.tool("message_send", json!({ "to": "you", "text": "大家都用 glm-5.3-flash" }));
+                    return Ok("end_turn".into());
+                }
+                diligent(mate, text)
+            });
+            let bench = bench(asked);
+            bench.start(shop(&work_dir()));
+            bench.until("the team finishes", |s| s.status == TeamStatus::Finished).await;
+
+            // AI 2 takes its time to answer: the leader's turn ends first.
+            bench.drive.held.lock().unwrap().push("ai2".into());
+            bench.teams.reopen("shop", "", "大家各自用什麼模型?", None, &[AgentProfile::copilot()]).unwrap();
+            bench.until("the leader has answered for now", |s| s.messages.iter().any(|m| m.text.starts_with("我已請大家回報")) && s.members[0].status != MemberStatus::Working).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            assert_eq!(bench.snap().status, TeamStatus::Running, "closed while AI 2 was still answering");
+
+            bench.drive.held.lock().unwrap().clear();
+            bench.drive.hold.notify_one();
+            let done = bench.until("the team finishes again", |s| s.status == TeamStatus::Finished && s.messages.iter().any(|m| m.text == "大家都用 glm-5.3-flash")).await;
+            let answers: Vec<_> = done.messages.iter().filter(|m| m.to == "ai1" && m.text.ends_with("用 glm-5.3-flash")).collect();
+            assert_eq!(answers.len(), 2);
         });
     }
 

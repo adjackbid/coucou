@@ -264,6 +264,18 @@ impl State {
         !self.tasks.is_empty() && self.tasks.iter().all(|t| t.status == TaskStatus::Done)
     }
 
+    /// The team can close: every task accepted, the leader asked for its
+    /// report and done with it — and nobody still at work or with a message
+    /// waiting, such as the answers the leader just asked its team for.
+    pub fn may_finish(&self) -> bool {
+        let Some(config) = self.config.as_ref() else { return false };
+        self.status != TeamStatus::Finished
+            && self.wrapping
+            && self.all_done()
+            && !self.turns.values().any(|t| t.active)
+            && self.messages.iter().all(|m| m.heard || !config.has_member(&m.to) || self.lost.contains_key(&m.to))
+    }
+
     /// Who accepts a task: the leader, unless the leader did it — then
     /// whoever receives it, and failing that nobody (it is accepted as is).
     pub fn reviewer(&self, task: &Task) -> Option<String> {
