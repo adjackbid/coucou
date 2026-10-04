@@ -27,6 +27,8 @@ export interface TeamConfig {
   maxTurns: number;
   /** The Office's look: warm, nordic, studio, premium; absent or empty for Coucou's choice. */
   officeTheme?: string;
+  /** Put away: out of the team list and the company map, not deleted. */
+  archived?: boolean;
 }
 
 export interface TeamFile {

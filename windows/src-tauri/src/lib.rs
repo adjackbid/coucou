@@ -770,6 +770,23 @@ fn team_delete(teams: State<Arc<Teams>>, file: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Puts a team away (or takes it out again): its file is kept, marked
+/// `archived`, and the Teamwork window leaves it out of the list and the
+/// company map. A running team is not put away.
+#[tauri::command]
+fn team_archive(teams: State<Arc<Teams>>, file: String, archived: bool) -> Result<(), String> {
+    let path = team_file_path(&file)?;
+    let mut config = read_team_file(&file)?;
+    if archived && teams.is_live(&config.id) {
+        return Err("This team is running. Stop it before putting it away.".into());
+    }
+    config.archived = archived;
+    let json = serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?;
+    std::fs::write(path, json).map_err(|e| format!("Could not save {file}: {e}"))?;
+    log::line(format!("team {}: {}", config.id, if archived { "archived" } else { "taken out of the archive" }));
+    Ok(())
+}
+
 /// The system's folder dialog, over the Teamwork window. `None` when cancelled.
 #[tauri::command]
 async fn pick_folder(app: AppHandle, start: String, title: String) -> Result<Option<String>, String> {
@@ -1150,6 +1167,7 @@ pub fn run() {
             team_interrupt_member,
             team_join,
             team_open,
+            team_archive,
             team_preview,
             team_history,
             team_past,

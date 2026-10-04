@@ -249,11 +249,11 @@ export class OfficeStore {
     if (!team) return { completed: 0, total: 0, percent: null };
     return calculateProgress(this.all("task"), team.currentRunId);
   }
-  /** Distinct agents across the company, and seats across its teams. */
+  /** Distinct agents across the company, and seats across its teams (put-away teams left out). */
   headcount(): { agents: number; seats: number } {
     const agents = new Set<Id>();
     let seats = 0;
-    for (const t of this.teams()) {
+    for (const t of this.teams().filter((x) => !x.archived)) {
       for (const m of this.members(t.teamId)) agents.add(m.agentId);
       seats += t.memberIds.length;
     }

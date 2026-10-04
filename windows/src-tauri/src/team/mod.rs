@@ -69,6 +69,10 @@ pub struct TeamConfig {
     /// or premium; empty leaves it to Coucou (by the team's size).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub office_theme: String,
+    /// Put away: kept, not deleted, and left out of the team list and the
+    /// company map until it is taken out again.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub archived: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -263,6 +267,7 @@ pub(crate) mod fixtures {
             shared_board: true,
             max_turns: 60,
             office_theme: String::new(),
+            archived: false,
         }
     }
 }
@@ -271,6 +276,17 @@ pub(crate) mod fixtures {
 mod tests {
     use super::fixtures::shop;
     use super::*;
+
+    #[test]
+    fn a_team_put_away_says_so_in_its_file_and_one_in_use_does_not() {
+        let mut team = shop("D:\\shop");
+        assert!(!serde_json::to_string(&team).unwrap().contains("archived"));
+        team.archived = true;
+        let json = serde_json::to_string(&team).unwrap();
+        assert!(json.contains("\"archived\":true"));
+        let back: TeamConfig = serde_json::from_str(&json).unwrap();
+        assert!(back.archived);
+    }
 
     #[test]
     fn only_pictures_inside_the_work_folder_are_previewed() {

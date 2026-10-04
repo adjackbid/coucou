@@ -263,9 +263,11 @@ export class Office {
 
   company(): HTMLElement {
     this.viewing = null;
-    const teams = this.store.teams();
+    // Teams put away stay in the record but not on the floor.
+    const teams = this.store.teams().filter((t) => !t.archived);
+    const away = this.store.teams().length - teams.length;
     const count = this.store.headcount();
-    if (!teams.length) return h("div", { class: "office-empty" }, h("p", { text: "還沒有團隊。按左下角的「新增團隊」開始。" }));
+    if (!teams.length) return h("div", { class: "office-empty" }, h("p", { text: away ? `${away} 個團隊都已封存。到側欄下方的「已封存」可以取出。` : "還沒有團隊。按左下角的「新增團隊」開始。" }));
     const pick = teams.find((t) => t.teamId === this.companyPick) ?? teams[0];
     // Rooms laid out as a floor: as many columns as rows. A large office takes 2 × 2 cells.
     const large = (t: (typeof teams)[number]) => themeName(t.teamId, t.officeLayoutId, t.memberIds.length) === "premium";
@@ -343,7 +345,7 @@ export class Office {
       "div",
       { class: "office office-company" },
       h("div", { class: "office-head" },
-        h("div", {}, h("h1", { text: "我的公司" }), h("p", { class: "dim", text: `${teams.length} 間辦公室 · ${count.agents} 位 Agents(${count.seats} 個席位)` })),
+        h("div", {}, h("h1", { text: "我的公司" }), h("p", { class: "dim", text: `${teams.length} 間辦公室 · ${count.agents} 位 Agents(${count.seats} 個席位)${away ? ` · 另有 ${away} 個團隊已封存` : ""}` })),
         this.demoTag(),
         this.demo ? h("button", { class: "btn plain", type: "button", title: "播放規格附帶的下一個事件", onClick: () => { if (!this.step()) { this.notice = "示範事件已全部播放。"; this.host.render(); } } }, "下一個示範事件") : null),
       this.connection(),

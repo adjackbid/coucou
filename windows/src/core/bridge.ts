@@ -188,6 +188,8 @@ export const Bridge = {
   teamDuplicate: (file: string) => callOrThrow<string>("team_duplicate", { file }),
   /** Takes a team off the list: its file moves to the teams folder's `.deleted`. */
   teamDelete: (file: string) => callOrThrow<void>("team_delete", { file }),
+  /** Puts a team away, or takes it out again. */
+  teamArchive: (file: string, archived: boolean) => callOrThrow<void>("team_archive", { file, archived }),
   /** A new team file with one member to fill in; returns its name. */
   teamNew: () => callOrThrow<string>("team_new"),
   /** The system's folder dialog; null when cancelled. */

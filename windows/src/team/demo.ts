@@ -59,6 +59,8 @@ export const demoFiles: { dir: string; files: TeamFile[] } = {
     },
   ],
 };
+// `?archived` shows the second demo team put away.
+if (typeof location !== "undefined" && new URLSearchParams(location.search).has("archived")) demoFiles.files[1].config!.archived = true;
 
 const task = (
   n: number,

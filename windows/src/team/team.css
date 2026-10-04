@@ -615,6 +615,45 @@ input[type="number"].field.narrow {
   box-shadow: var(--edge);
 }
 
+/* 已封存: teams put away, at the end of the list. */
+.archive-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--dim-glass);
+  font: 500 12px var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.archive-toggle span {
+  display: inline-flex;
+}
+
+.archive-toggle i {
+  margin-left: auto;
+  font-style: normal;
+}
+
+.archive-toggle:hover,
+.archive-toggle.on {
+  background: var(--lift);
+  color: var(--ink);
+}
+
+.archive-toggle:focus-visible {
+  outline: 2px solid var(--blue);
+}
+
+.team-row.away .team-item-name {
+  color: var(--dim-glass);
+}
+
 .team-item-name {
   font-weight: 600;
 }

@@ -10,6 +10,8 @@ export interface Agent extends Versioned { agentId: Id; name: string; avatarKey:
 export interface Team extends Versioned {
   teamId: Id; name: string; goal: string; memberIds: Id[]; leaderMemberId: Id;
   currentRunId: Id; officeLayoutId: Id;
+  /** Coucou: put away by the person — not on the company map. */
+  archived?: boolean;
 }
 export interface Progress {
   completed: number; total: number;

@@ -51,7 +51,11 @@ const modelLists = new Map<string, ModelChoice[] | string>();
 let confirming: string | null = null;
 /** The members panel's help, opened by its ? button. */
 let memberHelp = false;
+/** The sidebar's 已封存 section, open or not. */
+let showArchived = import.meta.env.DEV && typeof location !== "undefined" && new URLSearchParams(location.search).get("archived") === "open";
 const ICON_COPY = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>';
+const ICON_ARCHIVE = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4"/></svg>';
+const ICON_UNARCHIVE = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M12 18v-6M9.5 14.5 12 12l2.5 2.5"/></svg>';
 const ICON_TRASH = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
 
 /** The member whose screen is shown large; null for everyone side by side. */
@@ -232,14 +236,15 @@ function select(file: string) {
 
 function sidebar(): HTMLElement {
   const list = h("div", { class: "team-list" });
-  for (const file of files) {
+  const row = (file: TeamFile, away: boolean): HTMLElement => {
     const run = file.config ? runs.get(file.config.id) : undefined;
+    const busy = !!run && run.status !== "finished" && !run.detached;
     const state = run ? TEAM_STATUS[run.status] : file.problems.length ? "尚未設定完成" : "可以啟動";
     const needsYou = run?.members.some((m) => m.status === "waitingYou" || m.status === "lost") ?? false;
-    list.append(
+    return (
       h(
         "div",
-        { class: `team-row${file.file === selected && place === "team" ? " on" : ""}` },
+        { class: `team-row${file.file === selected && place === "team" ? " on" : ""}${away ? " away" : ""}` },
         h(
           "button",
           {
@@ -256,6 +261,20 @@ function sidebar(): HTMLElement {
         h(
           "span",
           { class: "team-actions" },
+          // Putting away keeps the file: the team leaves the list and the company map, nothing is lost.
+          h("button", {
+            class: "icon-btn",
+            type: "button",
+            title: away ? "取消封存:放回團隊清單和公司總覽" : busy ? "團隊執行中,先停下才能封存" : "封存(不刪除):不再顯示在團隊清單和公司總覽,可以在「已封存」找回",
+            "aria-label": away ? "取消封存" : "封存這個團隊",
+            disabled: !away && busy,
+            html: away ? ICON_UNARCHIVE : ICON_ARCHIVE,
+            onClick: () =>
+              void act(async () => {
+                await Bridge.teamArchive(file.file, !away);
+                await load();
+              }),
+          }),
           h("button", {
             class: "icon-btn",
             type: "button",
@@ -286,9 +305,9 @@ function sidebar(): HTMLElement {
             : h("button", {
                 class: "icon-btn",
                 type: "button",
-                title: run && run.status !== "finished" && !run.detached ? "團隊執行中,先停下才能刪除" : "刪除這個團隊",
+                title: busy ? "團隊執行中,先停下才能刪除" : "刪除這個團隊",
                 "aria-label": "刪除這個團隊",
-                disabled: !!run && run.status !== "finished" && !run.detached,
+                disabled: busy,
                 html: ICON_TRASH,
                 onClick: () => {
                   confirming = file.file;
@@ -302,10 +321,26 @@ function sidebar(): HTMLElement {
                 },
               }),
         ),
+      )
+    );
+  };
+  const inUse = files.filter((f) => !f.config?.archived);
+  const away = files.filter((f) => f.config?.archived);
+  for (const file of inUse) list.append(row(file, false));
+  if (!inUse.length) list.append(h("p", { class: "hint", text: away.length ? "團隊都已封存。" : "還沒有團隊。" }));
+  // Teams put away: a quiet section at the end of the list, closed until asked for.
+  if (away.length) {
+    list.append(
+      h(
+        "button",
+        { class: `archive-toggle${showArchived ? " on" : ""}`, type: "button", "aria-expanded": String(showArchived), onClick: () => ((showArchived = !showArchived), render()) },
+        h("span", { html: ICON_ARCHIVE }),
+        `已封存 ${away.length}`,
+        h("i", { "aria-hidden": "true", text: showArchived ? "▾" : "▸" }),
       ),
     );
+    if (showArchived) for (const file of away) list.append(row(file, true));
   }
-  if (!files.length) list.append(h("p", { class: "hint", text: "還沒有團隊。" }));
 
   return h(
     "aside",
@@ -1277,8 +1312,8 @@ async function load() {
   }
   office.feed(files, runs);
   if (!selected || !files.some((f) => f.file === selected)) {
-    // The team that is running, else the first.
-    const first = files.find((f) => f.config && runs.get(f.config.id)?.status === "running")?.file ?? files[0]?.file ?? null;
+    // The team that is running, else the first one not put away.
+    const first = files.find((f) => f.config && runs.get(f.config.id)?.status === "running")?.file ?? (files.find((f) => !f.config?.archived) ?? files[0])?.file ?? null;
     if (first) select(first);
     else selected = null;
   } else if (!unsaved) {
