@@ -66,6 +66,7 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
     }
 
     out.push_str(&format!("\nEveryone works in the same folder: {}\nStay inside it. Other members edit files there too, so keep to the files your task is about.\n", config.work_dir));
+    out.push_str(&crate::constitution::brief_text());
 
     out.push_str("\nHow the team works:\n");
     if is_leader {
@@ -195,6 +196,11 @@ pub fn wrap_up(state: &State) -> String {
 pub fn finish_reminder() -> String {
     "Every task is accepted and nobody on the team is working. If the user's request is fully handled and you have reported to them, call `team_finish` to close the team. If something is still left, create the tasks for it or say what you are waiting for."
         .to_string()
+}
+
+/// A member's request the constitution refused.
+pub fn refused(title: &str, rule: &str) -> String {
+    format!("Coucou refused \"{title}\": the user's constitution says {rule}. It will be refused every time — do not try it again. Find another way, or tell the leader (or ask the user with `ask_human`) if the task cannot be done without it.")
 }
 
 /// The leader of a finished team, when the person comes back with more.

@@ -262,6 +262,89 @@ fn command_danger(scope: &Scope, command: &str, depth: u8) -> Option<Danger> {
     None
 }
 
+/// Every danger the general rules see in a request — each command of a
+/// command line, not only the first that would stop it. For the
+/// constitution (constitution.rs), which asks about some of them.
+pub fn dangers_of(scope: &Scope, request: &Request) -> Vec<Danger> {
+    match (request.kind, request.command.as_deref()) {
+        (Kind::Execute, Some(command)) if command.len() <= MAX_COMMAND => segments(command).iter().filter_map(|s| segment_danger(scope, s, 0)).collect(),
+        _ => match decide(scope, request) {
+            Verdict::Ask(d) => vec![d],
+            Verdict::Allow => vec![],
+        },
+    }
+}
+
+/// What a command line — and what it runs inside `cmd /c`, `powershell -c`,
+/// `bash -c`, `sudo` … — would remove or move away, as written; a disk it
+/// would format or wipe comes back as `<format> X:`.
+pub fn removal_targets(command: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    removals(command, 0, &mut out);
+    out
+}
+
+fn removals(command: &str, depth: u8, out: &mut Vec<String>) {
+    if depth > MAX_DEPTH || command.len() > MAX_COMMAND {
+        return;
+    }
+    for segment in segments(command) {
+        // Not the file a redirection writes, nor `FOO=bar` before the program.
+        let mut tokens: Vec<Token> = Vec::new();
+        let mut skip = false;
+        for t in segment {
+            if skip {
+                skip = false;
+            } else if t.text == ">" && !t.quoted {
+                skip = true;
+            } else {
+                tokens.push(t);
+            }
+        }
+        let start = tokens.iter().take_while(|t| !t.quoted && is_assignment(&t.text)).count();
+        let tokens = &tokens[start..];
+        let Some(first) = tokens.first() else { continue };
+        let program = program_name(&first.text);
+        let args = &tokens[1..];
+        let from = |at: usize| args[at.min(args.len())..].iter().map(|t| t.text.as_str()).collect::<Vec<_>>().join(" ");
+        let words = |dos: bool| args.iter().filter(|t| !is_flag(t) && !(dos && is_dos_switch(t))).map(|t| t.text.clone()).collect::<Vec<_>>();
+        match program.as_str() {
+            "cmd" => {
+                if let Some(at) = args.iter().position(|t| matches!(t.text.to_lowercase().as_str(), "/c" | "/k")) {
+                    removals(&from(at + 1), depth + 1, out);
+                }
+            }
+            "powershell" | "pwsh" => {
+                let at = args.iter().position(|t| {
+                    let f = t.text.to_lowercase();
+                    is_flag(t) && (f == "-c" || f.starts_with("-com") || f == "-f" || f.starts_with("-fi"))
+                });
+                match at {
+                    Some(at) => removals(&from(at + 1), depth + 1, out),
+                    None => removals(&words(false).join(" "), depth + 1, out),
+                }
+            }
+            "bash" | "sh" | "zsh" | "wsl" => {
+                if let Some(at) = args.iter().position(|t| t.text == "-c" || t.text == "-lc" || t.text == "--") {
+                    removals(&from(at + 1), depth + 1, out);
+                }
+            }
+            "start" | "call" | "time" | "env" | "nohup" | "exec" | "command" | "sudo" | "runas" | "gsudo" | "start-process" | "saps" => removals(&from(0), depth + 1, out),
+            "rm" | "rmdir" | "rd" | "del" | "erase" | "remove-item" | "ri" | "unlink" | "shred" | "mv" | "move" | "move-item" | "mi" => {
+                out.extend(words(matches!(program.as_str(), "rmdir" | "rd" | "del" | "erase" | "move")));
+            }
+            "robocopy" if args.iter().any(|t| matches!(t.text.to_lowercase().as_str(), "/mir" | "/purge" | "/move")) => {
+                out.extend(words(true));
+            }
+            "format" | "format-volume" | "clear-disk" | "initialize-disk" | "diskpart" | "cipher" => {
+                let target = words(true).into_iter().next().unwrap_or_default();
+                out.push(format!("<format> {target}"));
+            }
+            _ => {}
+        }
+    }
+}
+
 /// One token of a command line, and whether it was written inside quotes.
 #[derive(Debug, Clone, PartialEq)]
 struct Token {
@@ -687,6 +770,25 @@ mod tests {
 
     fn scope() -> Scope {
         Scope::new(r"D:\Work\shop")
+    }
+
+    #[test]
+    fn what_a_command_would_remove_is_found_inside_whatever_runs_it() {
+        assert_eq!(removal_targets("Remove-Item -Recurse -Force .git"), [".git"]);
+        assert_eq!(removal_targets("git status && rm -rf ./.git"), ["./.git"]);
+        assert_eq!(removal_targets(r#"cmd /c "rd /s /q C:\""#), [r"C:\"]);
+        assert_eq!(removal_targets(r#"powershell -Command "Remove-Item C:\Windows -Recurse""#), [r"C:\Windows"]);
+        assert_eq!(removal_targets("mv .git ../old-git"), [".git", "../old-git"]);
+        assert_eq!(removal_targets("format D: /q"), ["<format> D:"]);
+        assert!(removal_targets("git commit -m 'remove .git mention' && npm test > out.txt").is_empty());
+    }
+
+    #[test]
+    fn every_danger_of_a_command_line_is_seen() {
+        let run = |c: &str| dangers_of(&scope(), &Request { kind: Kind::Execute, command: Some(c.into()), paths: vec![] });
+        let found = run("cd D:\\Elsewhere ; npm install left-pad");
+        assert!(found.contains(&Danger::OutsideWorkDir) && found.contains(&Danger::Installs), "{found:?}");
+        assert!(run("npm test").is_empty());
     }
 
     #[test]

@@ -197,6 +197,9 @@ pub struct AcpPermission {
     /// Why the session's rules would not answer this themselves.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub danger: Option<Danger>,
+    /// The constitution's rule that asks the person about it, when one does.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rule: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -213,6 +216,17 @@ pub enum Event {
     Exit(String),
     /// Tokens the session's model used since its last report.
     Usage(crate::usage::Usage),
+    /// A request the person's constitution forbids, refused without asking.
+    Refused(Refusal),
+}
+
+/// What was refused, and the rule that refused it.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Refusal {
+    pub agent_id: String,
+    pub title: String,
+    pub rule: String,
 }
 
 /// Where a session's events go: the island for the chat's agent, the team's
@@ -229,6 +243,7 @@ pub fn to_island(app: &AppHandle) -> Sink {
             Event::Exit(key) => app.emit_to(WINDOW_LABEL, "acp-exit", key),
             // The chat does not count; teams do.
             Event::Usage(_) => Ok(()),
+            Event::Refused(r) => app.emit_to(WINDOW_LABEL, "acp-refused", r),
         };
     })
 }
@@ -485,6 +500,8 @@ pub(crate) struct Route {
     pending: PendingMap,
     pub(crate) writer: Writer,
     pub(crate) auto: Option<Scope>,
+    /// Where the session works: the constitution reads relative paths against it.
+    pub(crate) work_dir: std::path::PathBuf,
     /// Set for a Codex session: its lines are read by codex.rs.
     codex: Option<Arc<CodexState>>,
     /// Set for a Claude Code session: its lines are read by claude.rs.
@@ -512,6 +529,7 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
             pending: pending.clone(),
             writer: writer.clone(),
             auto: launch.auto.clone(),
+            work_dir: working_dir(profile, launch),
             codex: (profile.protocol == Protocol::Codex).then(|| codex.clone()),
             claude: (profile.protocol == Protocol::Claude).then(|| claude.clone()),
             agy: (profile.protocol == Protocol::Agy).then(|| agy.clone()),
@@ -742,10 +760,22 @@ async fn dispatch(route: &Route, msg: Value) {
                     let title = tool.get("title").and_then(Value::as_str).unwrap_or("A tool call").to_string();
                     let kind = tool.get("kind").and_then(Value::as_str).unwrap_or("other").to_string();
 
-                    // The session's rules first. Allowed once, never "always":
+                    // The constitution first: what it forbids is refused here,
+                    // with no card; what it asks about goes to the person.
+                    let asked = policy::Request::from_acp(&tool);
+                    let ruled = crate::constitution::rule_for(&asked, &route.work_dir);
+                    if let Some((crate::constitution::Level::Never, rule)) = &ruled {
+                        log::line(format!("acp {key}: {kind} refused by the constitution — {}", rule.text));
+                        let refuse = option_of(&options, &["reject_once", "reject_always"]);
+                        let _ = write_line(&route.writer, &permission_reply(&id, refuse.as_deref())).await;
+                        (route.sink)(Event::Refused(Refusal { agent_id: key.clone(), title, rule: rule.text.clone() }));
+                        return;
+                    }
+                    let rule = ruled.map(|(_, r)| r.text);
+                    // Then the session's rules. Allowed once, never "always":
                     // the next request is judged on its own.
                     let mut danger = None;
-                    if let Some(scope) = &route.auto {
+                    if let Some(scope) = route.auto.as_ref().filter(|_| rule.is_none()) {
                         // The shape of the input, not its content: enough to
                         // see a CLI the rules do not read yet.
                         let fields: Vec<&str> = tool
@@ -753,7 +783,7 @@ async fn dispatch(route: &Route, msg: Value) {
                             .and_then(Value::as_object)
                             .map(|o| o.keys().map(String::as_str).collect())
                             .unwrap_or_default();
-                        match policy::decide(scope, &policy::Request::from_acp(&tool)) {
+                        match policy::decide(scope, &asked) {
                             Verdict::Allow => {
                                 if let Some(option) = option_of(&options, &["allow_once"]) {
                                     log::line(format!("acp {key}: {kind} allowed by the rules (input: {fields:?})"));
@@ -779,6 +809,7 @@ async fn dispatch(route: &Route, msg: Value) {
                         raw_input: tool.get("rawInput").cloned().unwrap_or(Value::Null),
                         options,
                         danger,
+                        rule,
                     }));
                 }
                 // We declared no fs or terminal capability; a well-behaved
@@ -1061,7 +1092,7 @@ mod tests {
                     }
                 }
                 Event::Permission(p) => asked.lock().unwrap().push(p.title),
-                Event::Exit(_) | Event::Usage(_) => {}
+                Event::Exit(_) | Event::Usage(_) | Event::Refused(_) => {}
             })
         };
         let launch = Launch {
@@ -1175,6 +1206,10 @@ mod tests {
                     _ => None,
                 })
                 .collect()
+        }
+
+        fn refused(&self) -> Vec<Refusal> {
+            self.0.lock().unwrap().iter().filter_map(|e| match e { Event::Refused(r) => Some(r.clone()), _ => None }).collect()
         }
 
         async fn wait_for_permissions(&self, count: usize) -> Vec<AcpPermission> {
@@ -1315,6 +1350,46 @@ mod tests {
             agents.answer_permission("m", p.request_id, Some("no".into())).await.unwrap();
             risky.await.unwrap().unwrap();
             assert_eq!(heard.given("m"), vec!["yes", "no"]);
+        });
+    }
+
+    /// The constitution before the session's rules: what it forbids is
+    /// refused with no card; what it asks about is a card even where the
+    /// rules would let it through.
+    #[test]
+    fn the_constitution_refuses_what_it_forbids_and_asks_about_what_it_names() {
+        let mut rules = crate::constitution::Constitution::starting();
+        rules.rules.push(crate::constitution::Rule {
+            id: "mine".into(),
+            text: "跑測試前要問我".into(),
+            level: crate::constitution::Level::Ask,
+            check: String::new(),
+            patterns: vec!["npm test".into()],
+        });
+        crate::constitution::for_tests(rules);
+        run(async {
+            let (agents, _, heard) = fixture();
+            let dir = r"D:\Work\constitution-test";
+            let member = Launch { cwd: Some(dir.into()), auto: Some(Scope::new(dir)), ..Launch::default() };
+
+            turn(&agents, &heard, "m", member.clone(), "Remove-Item -Recurse -Force .git").await.unwrap().unwrap();
+            assert!(heard.permissions().is_empty(), "no card for what is forbidden");
+            assert_eq!(heard.given("m"), vec!["no"]);
+            let refused = heard.refused();
+            assert_eq!(refused.len(), 1);
+            assert!(refused[0].rule.contains(".git"));
+
+            // Even without the session's rules (逐步確認), it is never put to the person.
+            turn(&agents, &heard, "plain", Launch { cwd: Some(dir.into()), ..Launch::default() }, "format D: /q").await.unwrap().unwrap();
+            assert!(heard.permissions().is_empty());
+            assert_eq!(heard.given("plain"), vec!["no"]);
+
+            // Asked about: a card naming the rule, though the session's rules would allow it.
+            let asked = turn(&agents, &heard, "m", member.clone(), "npm test");
+            let p = heard.wait_for_permissions(1).await.pop().unwrap();
+            assert_eq!(p.rule.as_deref(), Some("跑測試前要問我"));
+            agents.answer_permission("m", p.request_id, Some("yes".into())).await.unwrap();
+            asked.await.unwrap().unwrap();
         });
     }
 

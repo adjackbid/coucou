@@ -616,6 +616,9 @@ pub struct PermissionView {
     pub raw_input: Value,
     pub options: Vec<Value>,
     pub danger: Option<Danger>,
+    /// The constitution's rule that asks about it, when one does.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rule: Option<String>,
 }
 
 /// What is known about a member right now and is not worth writing down:

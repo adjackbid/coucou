@@ -64,6 +64,8 @@ export interface Permission {
   rawInput: unknown;
   options: { optionId: string; name: string; kind: string }[];
   danger: Danger | null;
+  /** The constitution's rule that asks about it, when one does. */
+  rule?: string;
 }
 
 export interface MemberView {
@@ -333,4 +335,23 @@ export interface SecretaryReply {
   text: string;
   steps: SecretaryStep[];
   proposals: SecretaryProposal[];
+}
+
+// ── The constitution — mirror of constitution.rs ─────────────────────────────
+
+export type ConstitutionLevel = "off" | "ask" | "never";
+
+export interface ConstitutionRule {
+  id: string;
+  /** What the rule is about, in the person's words. */
+  text: string;
+  level: ConstitutionLevel;
+  /** One of Coucou's own checks; empty for the person's own rule. */
+  check: string;
+  /** The person's own rule: words in the command or a path, `*` for anything. */
+  patterns: string[];
+}
+
+export interface Constitution {
+  rules: ConstitutionRule[];
 }

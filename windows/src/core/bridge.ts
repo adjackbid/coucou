@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentProfile, ModelChoice, Provider, Settings } from "./state";
-import type { Found, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
+import type { Constitution, ConstitutionLevel, Found, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -156,6 +156,11 @@ export const Bridge = {
   pricingFetchList: () => callOrThrow<number>("pricing_fetch_list"),
   /** Reads the prices an agent's own endpoint gives (a LiteLLM proxy); how many. */
   pricingFromAgent: (agent: string) => callOrThrow<number>("pricing_from_agent", { agent }),
+  /** The person's constitution: rules every agent keeps. */
+  constitutionLoad: () => callOrThrow<Constitution>("constitution_load"),
+  constitutionSave: (constitution: Constitution) => callOrThrow<void>("constitution_save", { constitution }),
+  /** Which rule a command falls under, if any, and at what level. */
+  constitutionTry: (command: string) => call<[ConstitutionLevel, string] | null>("constitution_try", { command }),
   /** Each agent's own folder (agent id, path), for the team setup. */
   teamAgentFolders: () => call<[string, string][]>("team_agent_folders"),
   /** The chat providers the secretary can think with: (id, name, model). */

@@ -1,0 +1,162 @@
+/* 憲法 — the rules, each with its level: red for never, amber for ask. */
+
+.law {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 14px;
+}
+
+.law-intro ul {
+  margin: 8px 0;
+  padding-left: 18px;
+  line-height: 1.7;
+}
+
+.never-text {
+  color: var(--red-text);
+}
+
+.ask-text {
+  color: var(--amber);
+}
+
+.law .panel-head {
+  margin-bottom: 10px;
+}
+
+.law .panel-head h2 {
+  margin-bottom: 0;
+}
+
+.law-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.law-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--solid);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.law-row.lv-never {
+  box-shadow: inset 3px 0 0 var(--red), inset 0 0 0 1px rgba(244, 80, 94, 0.25);
+}
+
+.law-row.lv-ask {
+  box-shadow: inset 3px 0 0 var(--amber), inset 0 0 0 1px rgba(245, 165, 36, 0.25);
+}
+
+.law-text {
+  min-width: 0;
+  line-height: 1.5;
+}
+
+.law-row.own {
+  align-items: flex-start;
+}
+
+.law-fields {
+  display: grid;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.law-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.law-seg {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.law-seg button {
+  font: 500 12px var(--font);
+  padding: 5px 11px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--dim-glass);
+  background: transparent;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.law-seg button:hover:not(.on) {
+  color: var(--ink);
+  background: var(--lift);
+}
+
+.law-seg button.on {
+  color: var(--ink);
+  font-weight: 600;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.law-seg button.lv-never.on {
+  color: #fff;
+  background: rgba(244, 80, 94, 0.55);
+}
+
+.law-seg button.lv-ask.on {
+  color: #1b1405;
+  background: rgba(245, 165, 36, 0.85);
+}
+
+.law-seg button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.law-state {
+  font-size: 12px;
+}
+
+.law-verdict {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--lift);
+  font-size: 12.5px;
+}
+
+.law-verdict.lv-never {
+  color: var(--red-text);
+  background: rgba(244, 80, 94, 0.13);
+}
+
+.law-verdict.lv-ask {
+  color: var(--amber);
+  background: rgba(245, 165, 36, 0.13);
+}
+
+.law-verdict.lv-off {
+  color: var(--dim-glass);
+}
+
+@media (max-width: 760px) {
+  .law-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .law-side {
+    align-items: stretch;
+  }
+}

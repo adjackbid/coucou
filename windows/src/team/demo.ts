@@ -450,3 +450,20 @@ export async function demoSecretary(text: string): Promise<import("./types").Sec
     proposals: [],
   };
 }
+
+/** The starting constitution, for a browser. */
+export function demoConstitution(): import("./types").Constitution {
+  const r = (id: string, text: string, level: "off" | "ask" | "never") => ({ id, text, level, check: id, patterns: [] as string[] });
+  return {
+    rules: [
+      r("git-folder", "不能刪除或搬走 .git 資料夾(整個版本紀錄會不見)", "never"),
+      r("drive-root", "不能刪除或格式化整顆磁碟,或 Windows、Program Files、使用者資料夾這類系統資料夾", "never"),
+      r("install", "安裝軟體或套件之前要先問我", "ask"),
+      r("git-destructive", "會丟掉變更的 git 指令(reset --hard、clean、強制推送)之前要先問我", "ask"),
+      r("send-out", "對外發送或發布(git push、npm publish、寄信、上傳)之前要先問我", "ask"),
+      r("system", "變更系統(登錄檔、服務、關閉程式、權限)之前要先問我", "ask"),
+      r("download", "從網路下載檔案之前要先問我", "ask"),
+      { id: "mine-1", text: "不能動 D:\\重要資料", level: "never" as const, check: "", patterns: ["D:\\重要資料\\*"] },
+    ],
+  };
+}

@@ -431,10 +431,18 @@ impl Team {
                             raw_input: p.raw_input,
                             options: p.options,
                             danger: p.danger,
+                            rule: p.rule,
                         });
                         true
                     }
                     acp::Event::Usage(_) => false,
+                    // Told to the member, who reads it at its next turn; the person sees it in the feed.
+                    acp::Event::Refused(r) => {
+                        drop(live);
+                        let id = team.with_state(|s| s.next_message_id());
+                        team.record(vec![Event::Message { id, from: SYSTEM.into(), to: member.clone(), text: brief::refused(&r.title, &r.rule), task: None }]);
+                        return;
+                    }
                     // The agent is gone; the next one is a new session.
                     acp::Event::Exit(_) => {
                         team.briefed.lock().unwrap().remove(&member);
@@ -1028,7 +1036,18 @@ impl Teams {
         }
         let Some(seat) = team.seat(member) else { return deny("That is not a member of the team.") };
         let asked = crate::agy::request_of(tool, args);
-        let verdict = seat.launch.auto.as_ref().map(|scope| crate::policy::decide(scope, &asked));
+        // The constitution first: refused here, or asked for whatever the rules say.
+        let work_dir = std::path::PathBuf::from(seat.launch.cwd.clone().unwrap_or_default());
+        let ruled = crate::constitution::rule_for(&asked, &work_dir);
+        if let Some((crate::constitution::Level::Never, rule)) = &ruled {
+            let (title, _) = crate::agy::title_of(tool, args);
+            log::line(format!("team {}: {member} {tool} refused by the constitution — {}", team.id, rule.text));
+            let id = team.with_state(|s| s.next_message_id());
+            team.record(vec![Event::Message { id, from: SYSTEM.into(), to: member.to_string(), text: brief::refused(&title, &rule.text), task: None }]);
+            return deny(&format!("Refused by the user's constitution: {}. Do not try this again.", rule.text));
+        }
+        let rule = ruled.map(|(_, r)| r.text);
+        let verdict = seat.launch.auto.as_ref().filter(|_| rule.is_none()).map(|scope| crate::policy::decide(scope, &asked));
         if verdict == Some(crate::policy::Verdict::Allow) {
             return serde_json::json!({ "decision": "allow" });
         }
@@ -1058,6 +1077,7 @@ impl Teams {
                 serde_json::json!({ "optionId": "deny", "name": "Deny", "kind": "reject_once" }),
             ],
             danger,
+            rule,
         });
         team.changed();
         match rx.await {
@@ -1219,6 +1239,7 @@ mod tests {
                             json!({ "optionId": format!("no{i}"), "name": "Reject", "kind": "reject_once" }),
                         ],
                         danger: Some(crate::policy::Danger::DeletesFolder),
+                        rule: None,
                     }));
                 }
                 if let Some(hold) = hold {

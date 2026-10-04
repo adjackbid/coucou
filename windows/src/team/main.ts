@@ -20,6 +20,7 @@ import { Office } from "./office/office";
 import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
 import { onStep as secretaryStep, secretaryName, secretaryPage, secretaryTitle, type SecretaryHost } from "./secretary";
+import { constitutionPage } from "./constitution";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
@@ -36,7 +37,7 @@ let tab: "setup" | "links" | "monitor" | "log" = "setup";
 /** The monitor as a board, or as the team's office. */
 let monitorMode: "board" | "office" = "board";
 /** The company map instead of one team; or the office of a team that has no file here (示範資料). */
-let place: "team" | "company" | "office" | "cost" | "secretary" = "team";
+let place: "team" | "company" | "office" | "cost" | "secretary" | "law" = "team";
 let officeTeam: string | null = null;
 /** The form's working copy of the selected team; saved on request. */
 let editing: TeamConfig | null = null;
@@ -388,6 +389,19 @@ function sidebar(): HTMLElement {
       },
       h("span", { class: "team-item-name", text: "成本與用量" }),
       h("span", { class: "team-item-state", text: "Token 用量與預估費用" }),
+    ),
+    h(
+      "button",
+      {
+        class: `team-item company${place === "law" ? " on" : ""}`,
+        type: "button",
+        onClick: () => {
+          place = "law";
+          render();
+        },
+      },
+      h("span", { class: "team-item-name", text: "憲法" }),
+      h("span", { class: "team-item-state", text: "所有成員都要遵守的規則" }),
     ),
     h("div", { class: "side-title", text: "團隊" }),
     list,
@@ -900,7 +914,7 @@ function asks(snap: Snapshot, m: MemberView): HTMLElement[] {
       h(
         "div",
         { class: "ask" },
-        h("div", { class: "ask-why", text: p.danger ? `要你批准:${DANGER[p.danger]}` : "要你批准" }),
+        h("div", { class: "ask-why", text: p.rule ? `憲法要你批准:${p.rule}` : p.danger ? `要你批准:${DANGER[p.danger]}` : "要你批准" }),
         h("div", { class: "ask-what mono", text: command || p.title }),
         more.length
           ? h(
@@ -1276,6 +1290,14 @@ function tabs(snap: Snapshot | undefined): HTMLElement {
 }
 
 function main(): HTMLElement {
+  if (place === "law") {
+    return h(
+      "main",
+      { class: "main pane" },
+      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": "位置" }, h("b", { text: "憲法" })), windowButtons()),
+      h("div", { class: "scroll" }, constitutionPage({ render: () => render() })),
+    );
+  }
   if (place === "secretary") {
     return h(
       "main",
@@ -1510,6 +1532,7 @@ async function load() {
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "cost") place = "cost";
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "secretary") place = "secretary";
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "setup") tab = "setup";
+  if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "law") place = "law";
   firstLoad = false;
   render();
 }

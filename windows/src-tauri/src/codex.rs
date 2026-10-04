@@ -434,8 +434,17 @@ pub async fn dispatch(route: &Route, state: &CodexState, msg: Value) {
         return;
     };
 
+    // The constitution first: refused here, or asked for whatever the rules say.
+    let ruled = crate::constitution::rule_for(&asked, &route.work_dir);
+    if let Some((crate::constitution::Level::Never, rule)) = &ruled {
+        log::line(format!("codex {key}: {kind} refused by the constitution — {}", rule.text));
+        let _ = acp::write_line(&route.writer, &permission_reply(&id, Some("decline"))).await;
+        (route.sink)(Event::Refused(acp::Refusal { agent_id: key.clone(), title, rule: rule.text.clone() }));
+        return;
+    }
+    let rule = ruled.map(|(_, r)| r.text);
     let mut danger = None;
-    if let Some(scope) = &route.auto {
+    if let Some(scope) = route.auto.as_ref().filter(|_| rule.is_none()) {
         match policy::decide(scope, &asked) {
             Verdict::Allow => {
                 log::line(format!("codex {key}: {kind} allowed by the rules"));
@@ -469,6 +478,7 @@ pub async fn dispatch(route: &Route, state: &CodexState, msg: Value) {
         raw_input: raw,
         options: options(),
         danger,
+        rule,
     }));
 }
 
@@ -664,7 +674,7 @@ mod tests {
                     }
                 }
                 Event::Permission(_) => *asked.lock().unwrap() += 1,
-                Event::Exit(_) | Event::Usage(_) => {}
+                Event::Exit(_) | Event::Usage(_) | Event::Refused(_) => {}
             })
         };
         let launch = Launch {

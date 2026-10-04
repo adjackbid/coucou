@@ -15,6 +15,7 @@ mod log;
 mod meter;
 mod pipe;
 mod policy;
+mod constitution;
 mod cost;
 mod pricing;
 mod secrets;
@@ -974,6 +975,27 @@ fn secretary_reset(secretary: State<Arc<secretary::Secretary>>) {
     secretary.reset();
 }
 
+/// The person's constitution (Coucou's starting one until they save their own).
+#[tauri::command]
+fn constitution_load() -> constitution::Constitution {
+    constitution::current()
+}
+
+#[tauri::command]
+fn constitution_save(constitution: constitution::Constitution) -> Result<(), String> {
+    constitution::save(constitution)?;
+    log::line("constitution saved");
+    Ok(())
+}
+
+/// Which rule a command would fall under, and at what level — for trying rules out.
+#[tauri::command]
+fn constitution_try(command: String) -> Option<(constitution::Level, String)> {
+    let home = std::path::PathBuf::from(std::env::var_os("USERPROFILE").unwrap_or_default());
+    let request = policy::Request { kind: policy::Kind::Execute, command: Some(command), paths: vec![] };
+    constitution::current().judge(&request, &home).map(|(level, rule)| (level, rule.text))
+}
+
 /// Each agent's own folder (agent id, path), for the team setup's "trust it" choice.
 #[tauri::command]
 fn team_agent_folders(shared: State<Shared>) -> Vec<(String, String)> {
@@ -1330,6 +1352,9 @@ pub fn run() {
             endpoint_spend,
             secretary_providers,
             team_agent_folders,
+            constitution_load,
+            constitution_save,
+            constitution_try,
             secretary_ask,
             secretary_confirm,
             secretary_decline,
