@@ -557,7 +557,7 @@ export function logScreen(config: TeamConfig, snap: Snapshot, page: Page): HTMLE
         )
       : h("h2", { text: "溝通紀錄" }),
     convo,
-    snap.status === "finished" ? null : page.composer(snap),
+    page.composer(snap),
   );
   requestAnimationFrame(() => (convo.scrollTop = convo.scrollHeight));
 

@@ -179,7 +179,8 @@ export interface FeedItem {
     | "lost"
     | "paused"
     | "finished"
-    | "joined";
+    | "joined"
+    | "reopened";
   from: string;
   to: string;
   text: string;

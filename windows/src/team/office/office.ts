@@ -675,7 +675,9 @@ export class Office {
     const leader = this.store.member(teamId, team.leaderMemberId);
     const area = h("textarea", {
       class: "office-input", rows: "2", maxlength: String(MAX_INSTRUCTION), "data-key": `office-instruct-${teamId}`,
-      placeholder: caps.canSendInstruction ? `補充指示給 Leader${leader ? `(${leader.displayName})` : ""}…` : caps.unavailableReasons.instruction ?? "",
+      placeholder: !caps.canSendInstruction ? caps.unavailableReasons.instruction ?? ""
+        : this.store.run(team.currentRunId)?.status === "completed" ? `團隊已完成 · 有新需求或修改意見就寫給 Leader${leader ? `(${leader.displayName})` : ""},團隊會繼續工作`
+        : `補充指示給 Leader${leader ? `(${leader.displayName})` : ""}…`,
       disabled: !caps.canSendInstruction,
       "aria-label": "補充指示給 Leader",
     }) as HTMLTextAreaElement;

@@ -86,6 +86,8 @@ pub enum Event {
     /// Everything is accepted and the leader has been asked for the report
     /// (`on`), or work was added after that (`!on`).
     Wrapping { on: bool },
+    /// The person came back to a finished team with more: it runs again.
+    Reopened,
 }
 
 /// An event with its place in the log and its time (ms since 1970).
@@ -515,6 +517,12 @@ impl State {
                 }
             }
             Event::Wrapping { on } => self.wrapping = *on,
+            Event::Reopened => {
+                self.status = TeamStatus::Running;
+                self.finished_at = 0;
+                self.paused_why.clear();
+                self.say(at, "reopened", YOU, "", "", None);
+            }
         }
     }
 }

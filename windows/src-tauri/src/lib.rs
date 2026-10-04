@@ -533,7 +533,12 @@ async fn team_start(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, fil
 
 /// The person writes to the leader (`to` empty) or to one member.
 #[tauri::command]
-fn team_instruct(teams: State<Arc<Teams>>, team: String, to: String, text: String, request: Option<String>) -> Result<String, String> {
+async fn team_instruct(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, team: String, to: String, text: String, request: Option<String>) -> Result<String, String> {
+    // A finished team is not closed: the person's next words start it again.
+    if teams.is_finished(&team) {
+        let profiles = shared.settings.lock().unwrap().agents.clone();
+        return teams.reopen(&team, &to, &text, request.as_deref(), &profiles);
+    }
     teams.instruct(&team, &to, &text, request.as_deref())
 }
 

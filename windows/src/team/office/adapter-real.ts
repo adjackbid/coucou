@@ -246,15 +246,17 @@ export class RealAdapter {
   capabilities(run: TeamRun | undefined): Capabilities {
     const status = run?.status;
     const live = status === "running" || status === "needs_attention";
+    // A finished team takes more: the instruction starts it again.
+    const talks = live || status === "paused" || status === "pausing" || status === "completed";
     return {
       canPause: live,
       canResume: status === "paused",
-      canSendInstruction: live || status === "paused" || status === "pausing",
+      canSendInstruction: talks,
       pauseMode: "cooperative",
       unavailableReasons: {
         ...(live ? {} : { pause: status === "pausing" ? "正在暫停:還在做的成員會把這一輪做完" : "團隊沒有在執行" }),
         ...(status === "paused" ? {} : { resume: "團隊沒有暫停" }),
-        ...(live || status === "paused" || status === "pausing" ? {} : { instruction: "團隊啟動後才能補充指示" }),
+        ...(talks ? {} : { instruction: "團隊啟動後才能補充指示" }),
       },
     };
   }

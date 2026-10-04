@@ -807,6 +807,78 @@ impl Teams {
     }
 
     /// The person writes to a member — by default the leader.
+    /// Whether the team is done: the person's next words start it again (`reopen`).
+    pub fn is_finished(&self, id: &str) -> bool {
+        self.get(id).is_some_and(|t| t.with_state(|s| s.status == TeamStatus::Finished))
+    }
+
+    /// The person writes to a finished team: it runs again, with an agent
+    /// per member again — the old ones were stopped when it finished — and
+    /// the leader is told the person has come back with more. Returns the
+    /// message's id; a `request` already sent comes back as it was.
+    pub fn reopen(&self, id: &str, to: &str, text: &str, request: Option<&str>, profiles: &[AgentProfile]) -> Result<String, String> {
+        let runtime = runtime()?;
+        let old = self.team(id)?;
+        if let Some(sent) = request.and_then(|r| old.requests.lock().unwrap().get(r).cloned()) {
+            return Ok(sent);
+        }
+        let text = text.trim();
+        if text.is_empty() {
+            return Err("There is nothing to send.".into());
+        }
+        if !old.with_state(|s| s.status == TeamStatus::Finished) {
+            return Err("The team has not finished: write to it as usual.".into());
+        }
+        let config = old.config().ok_or("The team's record has no setup to pick up.")?;
+        let to = if to.is_empty() || to == "leader" { config.leader.clone() } else { to.to_string() };
+        if !config.has_member(&to) {
+            return Err("That is not a member of the team.".into());
+        }
+        let known: Vec<String> = profiles.iter().map(|p| p.id.clone()).collect();
+        let problems = config.problems(&known);
+        if !problems.is_empty() {
+            return Err(problems.join("\n"));
+        }
+        let (seats, tokens) = self.seats_for(&config, profiles)?;
+        let store = std::mem::replace(&mut *old.store.lock().unwrap(), Store::memory());
+        let requests = std::mem::take(&mut *old.requests.lock().unwrap());
+        let team = Arc::new(Team {
+            id: id.to_string(),
+            store: Mutex::new(store),
+            live: Mutex::new(BTreeMap::new()),
+            screens: Mutex::new(BTreeMap::new()),
+            briefed: Mutex::new(HashSet::new()),
+            requests: Mutex::new(requests),
+            gates: Mutex::new(HashMap::new()),
+            seats: Mutex::new(seats),
+            tokens: Mutex::new(tokens),
+            wake: Notify::new(),
+            drive: self.drive.clone(),
+            emit: self.emit.clone(),
+            show: self.show.clone(),
+        });
+        let message = {
+            let mut store = team.store.lock().unwrap();
+            store.append(Event::Reopened);
+            let lost: Vec<String> = store.state().lost.keys().cloned().collect();
+            store.append_all(lost.into_iter().map(|member| Event::Recovered { member }).collect());
+            let id = store.state().next_message_id();
+            store.append(Event::Message { id, from: SYSTEM.into(), to: config.leader.clone(), text: brief::reopened(), task: None });
+            let id = store.state().next_message_id();
+            store.append(Event::Message { id: id.clone(), from: YOU.into(), to, text: text.to_string(), task: None });
+            settle(&mut store);
+            id
+        };
+        if let Some(r) = request {
+            team.requests.lock().unwrap().insert(r.to_string(), message.clone());
+        }
+        self.teams.lock().unwrap().insert(id.to_string(), team.clone());
+        log::line(format!("team {id}: reopened with {} member(s)", team.seat_keys().len()));
+        runtime.spawn(team.clone().run());
+        team.changed();
+        Ok(message)
+    }
+
     /// The person writes to the leader (`to` empty) or one member. Returns
     /// the message's id. A `request` already sent is not sent twice: its
     /// message's id comes back again.
@@ -1353,6 +1425,40 @@ mod tests {
             bench.drive.hold.notify_one();
             bench.until("the leader hears it", |_| bench.turns_of("ai1").iter().any(|t| t.contains("Message from the user:\n首版不要做優惠券"))).await;
             assert!(bench.teams.instruct("shop", "nobody", "x", None).is_err());
+        });
+    }
+
+    #[test]
+    fn a_finished_team_takes_more_work_and_finishes_again() {
+        run(async {
+            let diligent = diligent();
+            // Back with more: the leader plans a coupon task for AI 3.
+            let more: Script = Arc::new(move |mate, text| {
+                if text.contains("has come back with more") && text.contains("優惠券") {
+                    mate.tool("task_create", json!({ "title": "優惠券", "owner": "ai3" }));
+                }
+                diligent(mate, text)
+            });
+            let bench = bench(more);
+            bench.start(shop(&work_dir()));
+            bench.until("the team finishes", |s| s.status == TeamStatus::Finished).await;
+            let reports = |s: &Snapshot| s.messages.iter().filter(|m| m.to == YOU).count();
+            assert_eq!(reports(&bench.snap()), 1);
+            assert!(bench.teams.is_finished("shop"));
+
+            let sent = bench.teams.reopen("shop", "", "再加優惠券功能", Some("more-1"), &[AgentProfile::copilot()]).unwrap();
+            // A retry of the same request sends nothing more.
+            assert_eq!(bench.teams.reopen("shop", "", "再加優惠券功能", Some("more-1"), &[AgentProfile::copilot()]).unwrap(), sent);
+            let again = bench.until("the team runs again", |s| s.status == TeamStatus::Running || s.tasks.len() == 4).await;
+            assert_eq!(again.finished_at, 0);
+            assert!(again.feed.iter().any(|f| f.kind == "reopened"));
+
+            let done = bench.until("the team finishes again", |s| s.status == TeamStatus::Finished && s.tasks.len() == 4).await;
+            assert_eq!((done.done, done.total), (4, 4));
+            assert_eq!(reports(&done), 2);
+            let leader = bench.turns_of("ai1");
+            assert!(leader.iter().any(|t| t.contains("has come back with more") && t.contains("Message from the user:\n再加優惠券功能")));
+            assert_eq!(done.messages.iter().filter(|m| m.text == "再加優惠券功能").count(), 1);
         });
     }
 

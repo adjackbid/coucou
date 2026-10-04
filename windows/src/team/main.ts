@@ -813,6 +813,7 @@ const FEED_TITLE: Record<FeedItem["kind"], string> = {
   paused: "團隊暫停",
   finished: "團隊完成",
   joined: "加入團隊",
+  reopened: "再次開工",
 };
 
 function feed(snap: Snapshot): HTMLElement {
@@ -893,7 +894,11 @@ function composer(snap: Snapshot): HTMLElement {
       },
     );
   };
-  const input = field(`instruct:${snap.id}`, "傳送新指示…可貼上、拖進或附上圖片(對方這一輪結束後才會讀到)", (t) => send(t));
+  // A finished team is not closed: new words start it again, the leader first.
+  const hint = snap.status === "finished"
+    ? "團隊已完成。對成果不滿意或有新需求,寫在這裡送出,Leader 會接著處理,團隊會繼續工作"
+    : "傳送新指示…可貼上、拖進或附上圖片(對方這一輪結束後才會讀到)";
+  const input = field(`instruct:${snap.id}`, hint, (t) => send(t));
   // Ctrl+V of a screenshot attaches it.
   input.addEventListener("paste", (e) => {
     const pasted = [...(e.clipboardData?.files ?? [])];
@@ -970,7 +975,7 @@ function monitor(snap: Snapshot): HTMLElement {
     stage(snap),
     h("div", { class: "split" }, board(snap), feed(snap)),
     deliverables(snap),
-    snap.status === "finished" ? null : composer(snap),
+    composer(snap),
   );
 }
 
@@ -1259,7 +1264,7 @@ async function start() {
     if (e.type !== "drop" || !e.paths?.length || tab !== "monitor") return;
     const file = files.find((f) => f.file === selected);
     const team = file?.config ? runs.get(file.config.id) : undefined;
-    if (!team || team.status === "finished") return;
+    if (!team) return;
     for (const path of e.paths) {
       const name = path.split(/[\\/]/).pop() ?? path;
       void attach(team.id, async () => ({ path: await Bridge.teamAttachPath(team.id, path), name, preview: null }));

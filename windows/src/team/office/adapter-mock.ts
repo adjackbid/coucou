@@ -66,12 +66,12 @@ export class MockAdapter {
   capabilities(run: TeamRun | undefined): Capabilities {
     const live = run?.status === "running" || run?.status === "needs_attention";
     return {
-      canPause: live, canResume: run?.status === "paused", canSendInstruction: !!run && run.status !== "completed",
+      canPause: live, canResume: run?.status === "paused", canSendInstruction: !!run,
       pauseMode: "cooperative",
       unavailableReasons: {
         ...(live ? {} : { pause: "團隊沒有在執行" }),
         ...(run?.status === "paused" ? {} : { resume: "團隊沒有暫停" }),
-        ...(run && run.status !== "completed" ? {} : { instruction: "團隊已結束" }),
+        ...(run ? {} : { instruction: "團隊還沒有開始" }),
       },
     };
   }
@@ -90,6 +90,11 @@ export class MockAdapter {
       const applied = { ...rec, status: "applied" as const, revision: 2, updatedAt: new Date().toISOString() };
       this.commands.set(rec.commandId, applied);
       const changes: DomainEvent["changes"] = [{ entityKind: "command", entityKey: rec.commandId, revision: 2, op: "upsert", value: applied }];
+      const finished = this.snap.runs.find((r) => r.runId === req.runId && r.status === "completed");
+      if (req.kind === "instruction" && finished) {
+        // Like Coucou: words to a finished team start it again.
+        changes.push({ entityKind: "run", entityKey: finished.runId, revision: 100 + this.seq, op: "upsert", value: { ...finished, status: "running", revision: 100 + this.seq, updatedAt: applied.updatedAt } });
+      }
       if (req.kind === "pause" || req.kind === "resume") {
         const run = this.snap.runs.find((r) => r.runId === req.runId);
         if (run) changes.push({ entityKind: "run", entityKey: run.runId, revision: 100 + this.seq, op: "upsert", value: { ...run, status: req.kind === "pause" ? "paused" : "running", revision: 100 + this.seq, updatedAt: applied.updatedAt } });

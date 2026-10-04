@@ -191,6 +191,12 @@ pub fn wrap_up(state: &State) -> String {
     )
 }
 
+/// The leader of a finished team, when the person comes back with more.
+pub fn reopened() -> String {
+    "The team had finished and you had reported. The user has come back with more — their message follows. If it needs work, plan it: create the tasks with `task_create` and the team carries on; when everything is accepted again you will be asked for a new report. If it is a question, or something you can settle in a word, answer the user with `message_send` (to \"you\")."
+        .to_string()
+}
+
 /// The start of a turn: everything that arrived for the member since its last.
 pub fn turn(config: &TeamConfig, messages: &[&Message]) -> String {
     let mut out = String::new();
