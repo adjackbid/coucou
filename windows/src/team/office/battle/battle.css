@@ -781,3 +781,74 @@
   85% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* ── The company map's rooms, fighting small ───────────────────────────────── */
+
+.bt-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim-glass);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.office-scene.mini .bt-card {
+  top: 6%;
+  min-width: 0;
+  max-width: 92%;
+  gap: 8px;
+  padding: 5px 10px 5px 6px;
+  border-radius: 10px;
+}
+
+.office-scene.mini .bt-card-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+
+.office-scene.mini .bt-card-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.office-scene.mini .bt-card-text b {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.office-scene.mini .bt-card-text small {
+  display: none;
+}
+
+.office-scene.mini .bt-card em {
+  font-size: 15px;
+}
+
+.office-scene.mini .bt-float b {
+  font-size: 15px;
+}
+
+.office-scene.mini .bt-float small {
+  display: none;
+}
+
+.office-scene.mini .bt-float.t-hit {
+  padding: 0 7px 1px;
+  border-radius: 7px;
+}
+
+.office-scene.mini .bt-float.t-hit b {
+  font-size: 15px;
+}
+
+.office-scene.mini .bt-speech {
+  padding: 3px 8px;
+  font-size: 10px;
+}
+
+.office-scene.mini .bt-speech b {
+  display: none;
+}

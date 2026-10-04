@@ -51,6 +51,8 @@ export interface LayerHost {
   contributions(s: BattleSignal): Contribution[];
   /** A move was chosen for accepted work (the 戰鬥紀錄 can name it). */
   planned?(plan: HitPlan): void;
+  /** On the company map: whether this room plays its fight, or stands still. */
+  live?(): boolean;
 }
 
 type Pt = { x: number; y: number };
@@ -220,7 +222,12 @@ export class BattleLayer implements SceneLayer {
   private lastSaid = -1e9;
 
   constructor(private scene: TeamScene, private host: LayerHost) {
-    this.pad = scene.mini ? 0 : 56;
+    this.pad = scene.mini ? 40 : 56;
+  }
+
+  /** A room of the company map with its fight turned off: the boss and the line-up, nothing moving. */
+  private get still(): boolean {
+    return this.scene.mini && !this.host.live?.();
   }
 
   // ── The battlefield ───────────────────────────────────────────────────────
@@ -254,7 +261,7 @@ export class BattleLayer implements SceneLayer {
     }) as HTMLImageElement;
     for (const st of Object.values(b.states)) image(st.file);
     stage.append(this.shadow, this.boss);
-    if (!this.scene.mini) {
+    {
       const c = this.scene.cropBox;
       this.fx = h("canvas", { class: "bt-fx", "aria-hidden": "true", style: `left:${c.x}px;top:${c.y}px;width:${c.w}px;height:${c.h}px` }) as HTMLCanvasElement;
       stage.append(this.fx);
@@ -369,7 +376,7 @@ export class BattleLayer implements SceneLayer {
 
   /** A signal seen live: played if this office is on screen, else let go. */
   play(s: BattleSignal) {
-    if (this.scene.mini || !this.boss || !this.scene.el.isConnected || document.hidden) return;
+    if (this.still || !this.boss || !this.scene.el.isConnected || document.hidden) return;
     if (s.kind === "acceptance_hit") {
       // Accepted work waits a moment for others' to come with it: a combo, or each its own move.
       this.accepted.set(s.signalId, s);
@@ -518,7 +525,10 @@ export class BattleLayer implements SceneLayer {
 
   frame(dt: number): boolean {
     const now = this.now();
-    if (this.scene.mini || !this.boss) return false;
+    if (this.still || !this.boss) {
+      if (this.queue.busy || this.particles.length) this.stop();
+      return false;
+    }
     if (this.host.calm()) {
       if (this.queue.busy || this.particles.length) this.stop();
       return false;
@@ -553,7 +563,7 @@ export class BattleLayer implements SceneLayer {
   /** A member's lunge as it strikes, or its flinch when the boss strikes back. */
   offset(memberId: string): Pt | null {
     const b = this.bossPoints();
-    if (!b || this.scene.mini) return null;
+    if (!b || this.still) return null;
     const now = this.now();
     for (const e of this.queue.active) {
       const ms = now - (e.startedAt ?? now);

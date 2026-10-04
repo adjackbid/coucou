@@ -17,7 +17,7 @@ import { loadArt, STATUS, TeamScene, themeName, THEME_LABELS, wake } from "./sce
 import { dropdown, editableText } from "../ui";
 import type { PastRun, Snapshot, TeamFile, Usage } from "../types";
 import { fmtMoney, fmtTokens, usageSummary } from "../cost";
-import { Battle, HERO_LABELS, heroOf, savedMode, saveMode, setHero, setSkill, skillOf } from "./battle/session";
+import { Battle, companyLive, HERO_LABELS, heroOf, savedMode, saveCompanyLive, saveMode, setHero, setSkill, skillOf } from "./battle/session";
 import { BattleLayer } from "./battle/layer";
 import { HIT_SKILLS, SKILLS, type Contribution, type HitPlan, type SkillId } from "./battle/skills";
 import { battleLog, bossCard, bossHud, companyState, roomBadge } from "./battle/hud";
@@ -117,6 +117,8 @@ export class Office {
   private runs = new Map<string, Snapshot>();
   /** 中二模式: the same work told as a raid; the person's own preference. */
   mode: PresentationMode = savedMode();
+  /** In 中二模式, whether the company map plays every room's fight (it costs more to draw). */
+  companyLive = companyLive();
   /** In 中二模式, what the column beside the room shows. */
   private sideView: "battle" | "raw" = "battle";
   /** Each team's raid as the window has watched it. */
@@ -127,10 +129,13 @@ export class Office {
     this.main = new OfficeStore(() => this.resync());
     this.battle = new Battle(() => this.main, (teamId) => this.extras(teamId));
     // A signal seen live is played in that team's office, if it is the one on screen.
+    // On the company map too, when its fights are on: only the room on screen plays it.
     this.battle.onSignal((sig) => {
       if (this.mode !== "battle") return;
-      const layer = this.scenes.get(sig.teamId)?.currentLayer;
-      if (layer instanceof BattleLayer) layer.play(sig);
+      for (const sc of [this.scenes.get(sig.teamId), this.minis.get(sig.teamId)]) {
+        const layer = sc?.currentLayer;
+        if (layer instanceof BattleLayer) layer.play(sig);
+      }
     });
     if (this.demo) {
       this.mock = new MockAdapter(Number(new URLSearchParams(location.search).get("rooms")) || 4);
@@ -265,6 +270,7 @@ export class Office {
       name: (memberId: string) => store.member(teamId, memberId)?.displayName ?? memberId,
       taskTitle: (taskId: string) => store.task(taskId)?.title ?? "任務",
       members: () => store.members(teamId).map((m) => m.memberId),
+      live: () => this.companyLive,
       calm: () => this.calm || (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false),
       waiting: () => store.members(teamId).find((m) => m.workStatus === "waiting_input" || m.workStatus === "blocked")?.memberId ?? null,
       contributions: (sig: BattleSignal) => this.contributions(teamId, sig),
@@ -638,6 +644,20 @@ export class Office {
         this.demo ? h("button", { class: "btn plain", type: "button", title: "播放規格附帶的下一個事件", onClick: () => { if (!this.step()) this.notice = "示範事件已全部播放。"; this.host.render(); } }, "下一個示範事件") : null,
         h("span", { style: "flex:1" }),
         battle ? h("span", { class: "bt-tagline", text: "每個團隊的目標都是一隻需求魔王" }) : null,
+        battle
+          ? h("label", { class: "bt-live", title: "在公司總覽也播放每間辦公室的戰鬥過程:比較耗效能,關掉後縮圖只顯示靜態的戰況" },
+              h("input", {
+                type: "checkbox", checked: this.companyLive,
+                onChange: (e: Event) => {
+                  this.companyLive = (e.target as HTMLInputElement).checked;
+                  saveCompanyLive(this.companyLive);
+                  // Off: every room stops where it is.
+                  if (!this.companyLive) for (const sc of this.minis.values()) { const l = sc.currentLayer; if (l instanceof BattleLayer) l.stop(); }
+                  this.host.render();
+                },
+              }),
+              "戰鬥動畫")
+          : null,
         this.modeSwitch()),
       this.connection(),
       this.trouble(),

@@ -618,7 +618,7 @@ export class TeamScene {
     const body = BODY * (this.layer?.heroScale ?? 1);
     const size = Math.round(body / 0.6);
     // What it holds needs room around it: a canvas that size bigger, put back by as much.
-    const pad = this.opts.mini ? 0 : this.layer?.pad ?? 0;
+    const pad = this.layer?.pad ?? 0;
     if (actor.pad !== pad || actor.size !== size) {
       // Drawn at another size: kept where it stands, measured from its feet.
       const feet = actor.at ? { x: actor.at.x + actor.pad + actor.size / 2, y: actor.at.y + actor.pad + actor.size / 2 } : null;
@@ -862,7 +862,7 @@ export class TeamScene {
       ctx.clearRect(0, 0, full, full);
       ctx.translate(a.pad, a.pad);
       a.engine.draw(ctx, a.size, a.size);
-      if (this.layer?.decorate && !this.opts.mini) this.layer.decorate(a.memberId, ctx, a.size, a.engine, facing);
+      if (this.layer?.decorate) this.layer.decorate(a.memberId, ctx, a.size, a.engine, facing);
       a.dirty = false;
       if (!still) moving = true;
     }

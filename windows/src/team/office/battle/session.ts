@@ -108,6 +108,15 @@ export function savedMode(): PresentationMode {
   return read("coucou.office.mode") === "battle" ? "battle" : "office";
 }
 
+/** Whether the company map plays each room's fight too (it costs more to draw); on unless turned off. */
+export function companyLive(): boolean {
+  return read("coucou.battle.companyLive") !== "off";
+}
+
+export function saveCompanyLive(on: boolean) {
+  write("coucou.battle.companyLive", on ? null : "off");
+}
+
 export function saveMode(mode: PresentationMode) {
   write("coucou.office.mode", mode);
 }
