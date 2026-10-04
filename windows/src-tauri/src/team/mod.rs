@@ -98,6 +98,12 @@ pub struct MemberConfig {
     pub model: String,
     #[serde(default)]
     pub color: String,
+    /// At most this many tokens in a run; none: no limit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u64>,
+    /// At most this estimated cost in a run, US dollars; none: no limit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_cost_usd: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -249,6 +255,8 @@ pub(crate) mod fixtures {
             agent: "copilot".into(),
             model: String::new(),
             color: String::new(),
+            max_tokens: None,
+            max_cost_usd: None,
         };
         let link = |from: &str, to: &str, kind, what: &str| Link { from: from.into(), to: to.into(), kind, what: what.into() };
         TeamConfig {

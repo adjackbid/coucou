@@ -231,6 +231,25 @@ pub fn save_choices(c: &Choices) -> Result<(), String> {
     std::fs::write(path, serde_json::to_vec_pretty(c).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 
+/// The public list, read once and kept (it is large): for checks that run on every usage report.
+pub fn cached_table() -> std::sync::Arc<Table> {
+    static CACHE: std::sync::RwLock<Option<(u64, std::sync::Arc<Table>)>> = std::sync::RwLock::new(None);
+    let stamp = load_stamp();
+    if let Some((at, t)) = CACHE.read().unwrap().as_ref() {
+        if *at == stamp {
+            return t.clone();
+        }
+    }
+    let t = std::sync::Arc::new(load_table());
+    *CACHE.write().unwrap() = Some((stamp, t.clone()));
+    t
+}
+
+/// When the saved list was fetched (0 when none): a newer one is read again.
+fn load_stamp() -> u64 {
+    std::fs::metadata(table_path()).ok().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
 /// The public list in use: the one fetched last, else the one that shipped.
 pub fn load_table() -> Table {
     std::fs::read(table_path())

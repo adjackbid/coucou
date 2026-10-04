@@ -710,12 +710,15 @@ fn team_preview(teams: State<Arc<Teams>>, team: String, locator: String) -> Resu
 /// Writes a team file from the Teamwork window's form. The file is named
 /// after the team's id, and only ever inside the teams folder.
 #[tauri::command]
-fn team_save(file: String, mut config: TeamConfig) -> Result<(), String> {
+fn team_save(teams: State<Arc<Teams>>, file: String, mut config: TeamConfig) -> Result<(), String> {
     let path = team_file_path(&file)?;
     config.id = file.trim_end_matches(".json").to_string();
     let json = serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?;
     std::fs::create_dir_all(settings::team_configs_dir()).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| format!("Could not save {file}: {e}"))
+    std::fs::write(path, json).map_err(|e| format!("Could not save {file}: {e}"))?;
+    // Members' limits hold at once, even while the team runs.
+    teams.update_limits(&config);
+    Ok(())
 }
 
 /// A new team file with one member, the leader, to fill in. Returns its name.

@@ -132,6 +132,8 @@ pub struct Team {
     /// while the team runs.
     seats: Mutex<BTreeMap<String, Seat>>,
     tokens: Mutex<BTreeMap<String, String>>,
+    /// Members' limits as last saved while the team runs (the run's own setup otherwise).
+    limits: Mutex<BTreeMap<String, (Option<u64>, Option<f64>)>>,
     wake: Notify,
     drive: Arc<dyn Drive>,
     emit: Emit,
@@ -391,6 +393,50 @@ impl Team {
             usage.model = seat.map(|s| crate::acp::running_model(&s.profile, &s.launch)).unwrap_or_default();
         }
         self.record(vec![Event::Usage { member: member.to_string(), usage }]);
+        // Past its limit: the team stops here, and so does this member's turn.
+        if let Some(why) = self.over_limit(member) {
+            if self.with_state(|s| s.status == TeamStatus::Running) {
+                log::line(format!("team {}: {why}", self.id));
+                self.record(vec![Event::Paused { why }]);
+                if let (Some(seat), Ok(rt)) = (self.seat(member), tokio::runtime::Handle::try_current()) {
+                    let drive = self.drive.clone();
+                    rt.spawn(async move { drive.cancel(seat.key).await });
+                }
+            }
+        }
+    }
+
+    /// A member's limits: as saved while the team runs, else as the run started.
+    fn limit_of(&self, member: &str) -> (Option<u64>, Option<f64>) {
+        if let Some(l) = self.limits.lock().unwrap().get(member) {
+            return *l;
+        }
+        self.with_state(|s| s.config.as_ref().and_then(|c| c.member(member)).map(|m| (m.max_tokens, m.max_cost_usd)).unwrap_or((None, None)))
+    }
+
+    /// Why a member may not go on — its tokens or cost this run past its limit — or none.
+    fn over_limit(&self, member: &str) -> Option<String> {
+        let (max_tokens, max_usd) = self.limit_of(member);
+        if max_tokens.is_none() && max_usd.is_none() {
+            return None;
+        }
+        let (name, used) = self.with_state(|s| {
+            let name = s.config.as_ref().and_then(|c| c.member(member)).map(|m| m.name.clone()).unwrap_or_else(|| member.to_string());
+            (name, s.usage.get(member).cloned().unwrap_or_default())
+        });
+        let tokens: u64 = used.values().map(|u| u.input + u.output + u.cache_read + u.cache_write).sum();
+        if let Some(max) = max_tokens.filter(|m| tokens >= *m) {
+            return Some(format!("{name} reached its limit: {tokens} / {max} tokens."));
+        }
+        if let Some(max) = max_usd {
+            let choices = crate::pricing::load_choices();
+            let table = crate::pricing::cached_table();
+            let usd: f64 = used.values().map(|u| crate::pricing::lookup(&u.model, &choices, &table).map(|f| f.price.cost(u)).or(u.cost_usd).unwrap_or(0.0)).sum();
+            if usd >= max {
+                return Some(format!("{name} reached its limit: ${usd:.2} / ${max:.2}."));
+            }
+        }
+        None
     }
 
     /// What reaches Coucou while a member's agent works: the tool it is in,
@@ -682,6 +728,7 @@ impl Teams {
             gates: Mutex::new(HashMap::new()),
             seats: Mutex::new(seats),
             tokens: Mutex::new(tokens),
+            limits: Mutex::new(BTreeMap::new()),
             wake: Notify::new(),
             drive: self.drive.clone(),
             emit: self.emit.clone(),
@@ -729,6 +776,7 @@ impl Teams {
             gates: Mutex::new(HashMap::new()),
             seats: Mutex::new(seats),
             tokens: Mutex::new(tokens),
+            limits: Mutex::new(BTreeMap::new()),
             wake: Notify::new(),
             drive: self.drive.clone(),
             emit: self.emit.clone(),
@@ -831,6 +879,7 @@ impl Teams {
             gates: Mutex::new(HashMap::new()),
             seats: Mutex::new(BTreeMap::new()),
             tokens: Mutex::new(BTreeMap::new()),
+            limits: Mutex::new(BTreeMap::new()),
             wake: Notify::new(),
             drive: self.drive.clone(),
             emit: self.emit.clone(),
@@ -921,6 +970,7 @@ impl Teams {
             gates: Mutex::new(HashMap::new()),
             seats: Mutex::new(seats),
             tokens: Mutex::new(tokens),
+            limits: Mutex::new(BTreeMap::new()),
             wake: Notify::new(),
             drive: self.drive.clone(),
             emit: self.emit.clone(),
@@ -1101,10 +1151,22 @@ impl Teams {
             return self.revive(team, profiles).map(|_| ());
         }
         let team = self.team(team)?;
+        // A member still past its limit would only stop the team again.
+        let members: Vec<String> = team.with_state(|s| s.config.as_ref().map(|c| c.members.iter().map(|m| m.id.clone()).collect()).unwrap_or_default());
+        if let Some(why) = members.iter().find_map(|m| team.over_limit(m)) {
+            return Err(format!("{why} Raise the limit in the team's setup and save, then resume."));
+        }
         if team.with_state(|s| s.status == TeamStatus::Paused) {
             team.record(vec![Event::Resumed]);
         }
         Ok(())
+    }
+
+    /// Members' limits saved while the team runs: they hold from now on.
+    pub fn update_limits(&self, config: &TeamConfig) {
+        if let Some(team) = self.get(&config.id) {
+            *team.limits.lock().unwrap() = config.members.iter().map(|m| (m.id.clone(), (m.max_tokens, m.max_cost_usd))).collect();
+        }
     }
 
     /// The emergency stop: pause, and interrupt every turn under way.
@@ -1884,6 +1946,34 @@ mod tests {
             (team.sink("ai3"))(acp::Event::Usage(crate::usage::Usage { input: 100, output: 5, requests: 1, ..Default::default() }));
             let ai3 = bench.member("ai3");
             assert_eq!((ai3.usage.len(), ai3.usage[0].input), (1, 100));
+        });
+    }
+
+    #[test]
+    fn a_member_past_its_limit_stops_the_team_until_the_limit_is_raised() {
+        run(async {
+            let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));
+            let mut config = shop(&work_dir());
+            config.members.iter_mut().find(|m| m.id == "ai3").unwrap().max_tokens = Some(1_000);
+            bench.teams.start(config.clone(), &[AgentProfile::copilot()]).expect("start");
+            let team = bench.teams.get("shop").unwrap();
+            let used = |input: u64| crate::usage::Usage { model: "m".into(), input, output: 10, ..Default::default() };
+            team.used("ai3", used(500), true);
+            assert_eq!(bench.snap().status, TeamStatus::Running);
+            team.used("ai3", used(600), true);
+            let snap = bench.snap();
+            assert_eq!(snap.status, TeamStatus::Paused);
+            assert!(snap.paused_why.contains("AI 3 reached its limit: 1120 / 1000 tokens"), "{}", snap.paused_why);
+            // Not again until the limit is raised; then it goes on.
+            let refused = bench.teams.resume("shop", &[AgentProfile::copilot()]).unwrap_err();
+            assert!(refused.contains("Raise the limit"), "{refused}");
+            config.members.iter_mut().find(|m| m.id == "ai3").unwrap().max_tokens = Some(5_000);
+            bench.teams.update_limits(&config);
+            bench.teams.resume("shop", &[AgentProfile::copilot()]).unwrap();
+            assert_eq!(bench.snap().status, TeamStatus::Running);
+            // Other members have no limit.
+            team.used("ai4", used(1_000_000), true);
+            assert_eq!(bench.snap().status, TeamStatus::Running);
         });
     }
 

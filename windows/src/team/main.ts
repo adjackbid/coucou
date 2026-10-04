@@ -54,6 +54,8 @@ const modelLists = new Map<string, ModelChoice[] | string>();
 let confirming: string | null = null;
 /** Each agent's own folder (agent id, path); asked once. */
 let agentFolders: [string, string][] | null = null;
+/** Members whose 進階設定 is open, by id. */
+const advancedOpen = new Set<string>();
 /** The members panel's help, opened by its ? button. */
 let memberHelp = false;
 /** The sidebar's 已封存 section, open or not. */
@@ -134,6 +136,7 @@ function said(text: string): string {
   const rules: [RegExp, (m: RegExpMatchArray) => string][] = [
     [/^It ended two turns in a row without a word about its open work\.$/, () => "連續兩輪結束時都沒有回報手上的工作"],
     [/^Paused by the user\.$/, () => "由你暫停"],
+    [/^(.+) reached its limit: (.+?)\.( Raise the limit in the team's setup and save, then resume\.)?$/, (m) => `${m[1]} 已達用量上限(${m[2]}),團隊先暫停。${m[3] ? "請先到團隊設定提高上限並儲存,再按繼續。" : "到團隊設定提高上限並儲存後,可以按繼續。"}`],
     [/^The team has used its (\d+) turns\.$/, (m) => `已用完 ${m[1]} 回合的上限`],
     [/^(TASK-\d+) was sent back (\d+) times\.$/, (m) => `${m[1]} 已被退回 ${m[2]} 次`],
     [/^Coucou was closed while the team was running\.$/, () => "團隊執行中時 Coucou 被關閉"],
@@ -535,6 +538,42 @@ function memberHelpCard(): HTMLElement {
   );
 }
 
+/**
+ * A member's 進階設定: limits on what it may use in a run. Empty is no
+ * limit (the default); past a limit the team pauses and the member's turn
+ * is stopped, until the limit is raised (it holds at once, even mid-run).
+ */
+function advanced(config: TeamConfig, m: TeamConfig["members"][number], at: number): HTMLElement {
+  const isOpen = advancedOpen.has(m.id);
+  const limits = [m.maxTokens ? `${fmtTokens(m.maxTokens)} tokens` : "", m.maxCostUsd ? `$${m.maxCostUsd}` : ""].filter(Boolean);
+  const toggle = h(
+    "button",
+    { class: "link member-adv-toggle", type: "button", "aria-expanded": String(isOpen), onClick: () => (isOpen ? advancedOpen.delete(m.id) : advancedOpen.add(m.id), render()) },
+    `${isOpen ? "▾" : "▸"} 進階設定`,
+    limits.length ? h("span", { class: "chip", text: `上限 ${limits.join(" · ")}` }) : null,
+  );
+  if (!isOpen) return toggle;
+  const number = (key: string, value: number | undefined, set: (v: number | undefined) => void, attrs: Record<string, string>) =>
+    bound("input", `m${at}.${key}`, value ? String(value) : "", (v) => set(Number(v) > 0 ? Number(v) : undefined), { type: "number", min: "0", class: "field narrow member-limit", ...attrs });
+  const used = runs.get(config.id)?.members.find((x) => x.id === m.id)?.usage ?? [];
+  const now = used.length ? usageSummary(used, () => render()) : null;
+  return h(
+    "div",
+    { class: "member-adv" },
+    toggle,
+    h(
+      "div",
+      { class: "member-adv-body" },
+      h("label", { text: "這一輪最多用" }),
+      h("div", { class: "row nowrap" }, number("maxTokens", m.maxTokens, (v) => (m.maxTokens = v), { placeholder: "不限制", step: "100000" }), h("span", { class: "hint", text: "tokens(含快取)" })),
+      h("label", { text: "費用上限" }),
+      h("div", { class: "row nowrap" }, h("span", { class: "hint", text: "US$" }), number("maxCostUsd", m.maxCostUsd, (v) => (m.maxCostUsd = v), { placeholder: "不限制", step: "0.5" }), h("span", { class: "hint", text: "依「成本與用量」的價格表估算" })),
+      now ? h("p", { class: "hint", text: `這一輪目前已用 ${fmtTokens(now.tokens)} tokens${now.usd != null ? ` · ${fmtMoney(now.usd)}` : ""}。` }) : null,
+      h("p", { class: "hint", text: "留空就不限制(預設)。到達上限時,團隊會先暫停並中斷這位成員正在做的這一輪;提高上限並儲存後就生效(執行中也是),再按「繼續」。" }),
+    ),
+  );
+}
+
 /** An input bound to the form's working copy. Typing does not redraw. */
 function bound<K extends "input" | "textarea">(tag: K, key: string, value: string, set: (v: string) => void, attrs: Record<string, string> = {}): HTMLElementTagNameMap[K] {
   const el = h(tag, { class: "field", "data-key": key, spellcheck: "false", ...attrs }) as HTMLInputElement | HTMLTextAreaElement;
@@ -698,6 +737,7 @@ function setup(file: TeamFile): HTMLElement {
           ),
           h("div", { class: "row nowrap" }, model),
           bound("input", `m${at}.duty`, m.duty, (v) => (m.duty = v), { placeholder: "職責:這位成員負責什麼、交付什麼(只給它自己看)", title: "只寫給這位成員的工作說明" }),
+          advanced(config, m, at),
         ),
         h(
           "div",
@@ -1538,7 +1578,12 @@ async function load() {
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "company") place = "company";
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "cost") place = "cost";
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "secretary") place = "secretary";
-  if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "setup") tab = "setup";
+  if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "setup") {
+    tab = "setup";
+    // `&adv=ai1` opens that member's 進階設定, to look at it.
+    const adv = new URLSearchParams(location.search).get("adv");
+    if (adv) advancedOpen.add(adv);
+  }
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "law") place = "law";
   firstLoad = false;
   render();

@@ -9,6 +9,10 @@ export interface MemberConfig {
   /** Instead of the agent's own; empty for its default. */
   model?: string;
   color: string;
+  /** At most this many tokens in a run; absent for no limit. */
+  maxTokens?: number;
+  /** At most this estimated cost in a run, US dollars; absent for no limit. */
+  maxCostUsd?: number;
 }
 
 export interface TeamConfig {

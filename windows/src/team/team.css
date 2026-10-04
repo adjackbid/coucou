@@ -2795,3 +2795,45 @@ h2 {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* A member's 進階設定: its limits. */
+.member-adv-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  font-size: 12px;
+}
+
+.member-adv {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.member-adv-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.member-adv-body label {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.member-adv-body .hint {
+  grid-column: 1 / -1;
+}
+
+.member-adv-body .row .hint {
+  grid-column: auto;
+}
+
+.member-limit {
+  width: 140px !important;
+}
