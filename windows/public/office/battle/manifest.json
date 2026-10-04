@@ -507,1326 +507,6 @@
       "status": "produced"
     },
     {
-      "assetKey": "battle/worlds/frost_court/idle",
-      "file": "battle/worlds/frost_court/idle.webp",
-      "width": 416,
-      "height": 798,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          208.5,
-          722.2
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          185.4,
-          457.7
-        ],
-        "hitTarget": [
-          181.4,
-          475.5
-        ],
-        "top": [
-          208.5,
-          86.9
-        ],
-        "counterOrigin": [
-          155.7,
-          468.1
-        ],
-        "mirrorOrigin": [
-          208.8,
-          333.4
-        ],
-        "crownTip": [
-          201.2,
-          110.8
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/frost_court/guard",
-      "file": "battle/worlds/frost_court/guard.webp",
-      "width": 416,
-      "height": 798,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          208.5,
-          722.2
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          174.8,
-          472.2
-        ],
-        "hitTarget": [
-          170.9,
-          490.0
-        ],
-        "top": [
-          172.7,
-          120.2
-        ],
-        "counterOrigin": [
-          145.1,
-          482.6
-        ],
-        "mirrorOrigin": [
-          187.5,
-          361.9
-        ],
-        "crownTip": [
-          170.3,
-          141.2
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/frost_court/hurt",
-      "file": "battle/worlds/frost_court/hurt.webp",
-      "width": 416,
-      "height": 798,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          208.5,
-          722.2
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          227.3,
-          403.5
-        ],
-        "hitTarget": [
-          223.3,
-          421.4
-        ],
-        "top": [
-          311.1,
-          9.3
-        ],
-        "counterOrigin": [
-          197.6,
-          413.9
-        ],
-        "mirrorOrigin": [
-          278.6,
-          253.1
-        ],
-        "crownTip": [
-          292.5,
-          36.2
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/frost_court/regen",
-      "file": "battle/worlds/frost_court/regen.webp",
-      "width": 416,
-      "height": 798,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          208.5,
-          722.2
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          185.4,
-          423.7
-        ],
-        "hitTarget": [
-          181.4,
-          441.6
-        ],
-        "top": [
-          208.5,
-          52.9
-        ],
-        "counterOrigin": [
-          155.7,
-          434.1
-        ],
-        "mirrorOrigin": [
-          208.8,
-          299.4
-        ],
-        "crownTip": [
-          201.2,
-          76.9
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/frost_court/sealed",
-      "file": "battle/worlds/frost_court/sealed.webp",
-      "width": 416,
-      "height": 798,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          208.5,
-          722.2
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          166.4,
-          534.1
-        ],
-        "hitTarget": [
-          162.5,
-          551.9
-        ],
-        "top": [
-          143.3,
-          201.7
-        ],
-        "counterOrigin": [
-          136.7,
-          544.5
-        ],
-        "mirrorOrigin": [
-          170.4,
-          436.9
-        ],
-        "crownTip": [
-          144.9,
-          219.4
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/frost_court/defeated",
-      "file": "battle/worlds/frost_court/defeated.webp",
-      "width": 416,
-      "height": 798,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          208.5,
-          722.2
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          165.2,
-          658.9
-        ],
-        "hitTarget": [
-          161.2,
-          676.7
-        ],
-        "top": [
-          110.3,
-          404.4
-        ],
-        "counterOrigin": [
-          135.5,
-          669.3
-        ],
-        "mirrorOrigin": [
-          170.4,
-          604.4
-        ],
-        "crownTip": [
-          118.9,
-          408.6
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/frost_court/attack",
-      "file": "battle/worlds/frost_court/attack.webp",
-      "width": 416,
-      "height": 798,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          208.5,
-          722.2
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          187.3,
-          427.3
-        ],
-        "hitTarget": [
-          183.4,
-          445.1
-        ],
-        "top": [
-          247.5,
-          38.3
-        ],
-        "counterOrigin": [
-          157.6,
-          437.7
-        ],
-        "mirrorOrigin": [
-          227.5,
-          285.6
-        ],
-        "crownTip": [
-          233.3,
-          64.8
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/frost_court/arena",
-      "file": "battle/worlds/frost_court/arena.webp",
-      "width": 3200,
-      "height": 2000,
-      "pixelRatio": 2,
-      "note": "rendered in the office camera: the room worldToScreen applies unchanged",
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/frost_court/front",
-      "file": "battle/worlds/frost_court/front.webp",
-      "width": 3200,
-      "height": 2000,
-      "pixelRatio": 2,
-      "note": "rendered in the office camera: the room worldToScreen applies unchanged",
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/verdant_ruins/idle",
-      "file": "battle/worlds/verdant_ruins/idle.webp",
-      "width": 582,
-      "height": 976,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          327.3,
-          754.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          245.9,
-          707.0
-        ],
-        "hitTarget": [
-          241.9,
-          724.8
-        ],
-        "top": [
-          320.5,
-          331.7
-        ],
-        "counterOrigin": [
-          216.2,
-          717.4
-        ],
-        "rootOrigin": [
-          325.9,
-          866.7
-        ],
-        "vineTip": [
-          470.2,
-          272.5
-        ],
-        "canopyCenter": [
-          320.5,
-          368.0
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/verdant_ruins/guard",
-      "file": "battle/worlds/verdant_ruins/guard.webp",
-      "width": 582,
-      "height": 976,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          327.3,
-          754.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          246.3,
-          721.1
-        ],
-        "hitTarget": [
-          242.3,
-          739.0
-        ],
-        "top": [
-          303.3,
-          349.9
-        ],
-        "counterOrigin": [
-          216.6,
-          731.5
-        ],
-        "rootOrigin": [
-          333.2,
-          876.6
-        ],
-        "vineTip": [
-          445.4,
-          304.5
-        ],
-        "canopyCenter": [
-          305.4,
-          384.3
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/verdant_ruins/hurt",
-      "file": "battle/worlds/verdant_ruins/hurt.webp",
-      "width": 582,
-      "height": 976,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          327.3,
-          754.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          247.2,
-          679.7
-        ],
-        "hitTarget": [
-          243.2,
-          697.6
-        ],
-        "top": [
-          351.5,
-          306.5
-        ],
-        "counterOrigin": [
-          217.5,
-          690.1
-        ],
-        "rootOrigin": [
-          315.3,
-          843.9
-        ],
-        "vineTip": [
-          515.9,
-          225.6
-        ],
-        "canopyCenter": [
-          347.8,
-          345.6
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/verdant_ruins/regen",
-      "file": "battle/worlds/verdant_ruins/regen.webp",
-      "width": 582,
-      "height": 976,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          327.3,
-          754.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          245.9,
-          692.4
-        ],
-        "hitTarget": [
-          241.9,
-          710.2
-        ],
-        "top": [
-          320.5,
-          317.1
-        ],
-        "counterOrigin": [
-          216.2,
-          702.8
-        ],
-        "rootOrigin": [
-          325.9,
-          852.2
-        ],
-        "vineTip": [
-          470.2,
-          258.0
-        ],
-        "canopyCenter": [
-          320.5,
-          353.5
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/verdant_ruins/sealed",
-      "file": "battle/worlds/verdant_ruins/sealed.webp",
-      "width": 582,
-      "height": 976,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          327.3,
-          754.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          247.5,
-          734.4
-        ],
-        "hitTarget": [
-          243.5,
-          752.2
-        ],
-        "top": [
-          286.4,
-          371.0
-        ],
-        "counterOrigin": [
-          217.8,
-          744.8
-        ],
-        "rootOrigin": [
-          341.3,
-          884.3
-        ],
-        "vineTip": [
-          421.2,
-          340.2
-        ],
-        "canopyCenter": [
-          290.4,
-          403.0
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/verdant_ruins/defeated",
-      "file": "battle/worlds/verdant_ruins/defeated.webp",
-      "width": 582,
-      "height": 976,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          327.3,
-          754.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          257.5,
-          807.1
-        ],
-        "hitTarget": [
-          253.5,
-          825.0
-        ],
-        "top": [
-          271.1,
-          457.1
-        ],
-        "counterOrigin": [
-          227.8,
-          817.5
-        ],
-        "rootOrigin": [
-          362.8,
-          943.5
-        ],
-        "vineTip": [
-          417.6,
-          438.1
-        ],
-        "canopyCenter": [
-          276.3,
-          485.6
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/verdant_ruins/attack",
-      "file": "battle/worlds/verdant_ruins/attack.webp",
-      "width": 582,
-      "height": 976,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          327.3,
-          754.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          237.0,
-          663.8
-        ],
-        "hitTarget": [
-          233.0,
-          681.7
-        ],
-        "top": [
-          347.4,
-          292.8
-        ],
-        "counterOrigin": [
-          207.3,
-          674.2
-        ],
-        "rootOrigin": [
-          302.5,
-          828.4
-        ],
-        "vineTip": [
-          515.2,
-          207.6
-        ],
-        "canopyCenter": [
-          343.0,
-          332.3
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/verdant_ruins/arena",
-      "file": "battle/worlds/verdant_ruins/arena.webp",
-      "width": 3200,
-      "height": 2000,
-      "pixelRatio": 2,
-      "note": "rendered in the office camera: the room worldToScreen applies unchanged",
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/verdant_ruins/front",
-      "file": "battle/worlds/verdant_ruins/front.webp",
-      "width": 3200,
-      "height": 2000,
-      "pixelRatio": 2,
-      "note": "rendered in the office camera: the room worldToScreen applies unchanged",
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/thunder_foundry/idle",
-      "file": "battle/worlds/thunder_foundry/idle.webp",
-      "width": 614,
-      "height": 790,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          320.1,
-          638.6
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          236.0,
-          462.3
-        ],
-        "hitTarget": [
-          232.0,
-          480.1
-        ],
-        "top": [
-          320.1,
-          85.7
-        ],
-        "counterOrigin": [
-          206.3,
-          472.7
-        ],
-        "coilLeft": [
-          501.4,
-          218.4
-        ],
-        "coilRight": [
-          138.9,
-          117.9
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/thunder_foundry/guard",
-      "file": "battle/worlds/thunder_foundry/guard.webp",
-      "width": 614,
-      "height": 790,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          320.1,
-          638.6
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          232.8,
-          477.5
-        ],
-        "hitTarget": [
-          228.8,
-          495.3
-        ],
-        "top": [
-          303.2,
-          102.2
-        ],
-        "counterOrigin": [
-          203.1,
-          487.9
-        ],
-        "coilLeft": [
-          488.1,
-          231.3
-        ],
-        "coilRight": [
-          125.7,
-          130.8
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/thunder_foundry/hurt",
-      "file": "battle/worlds/thunder_foundry/hurt.webp",
-      "width": 614,
-      "height": 790,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          320.1,
-          638.6
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          244.0,
-          432.2
-        ],
-        "hitTarget": [
-          240.0,
-          450.0
-        ],
-        "top": [
-          353.9,
-          60.1
-        ],
-        "counterOrigin": [
-          214.3,
-          442.6
-        ],
-        "coilLeft": [
-          527.8,
-          198.4
-        ],
-        "coilRight": [
-          165.3,
-          97.9
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/thunder_foundry/regen",
-      "file": "battle/worlds/thunder_foundry/regen.webp",
-      "width": 614,
-      "height": 790,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          320.1,
-          638.6
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          236.0,
-          447.8
-        ],
-        "hitTarget": [
-          232.0,
-          465.6
-        ],
-        "top": [
-          320.1,
-          71.2
-        ],
-        "counterOrigin": [
-          206.3,
-          458.2
-        ],
-        "coilLeft": [
-          501.4,
-          203.9
-        ],
-        "coilRight": [
-          138.9,
-          103.4
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/thunder_foundry/sealed",
-      "file": "battle/worlds/thunder_foundry/sealed.webp",
-      "width": 614,
-      "height": 790,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          320.1,
-          638.6
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          230.7,
-          503.3
-        ],
-        "hitTarget": [
-          226.8,
-          521.2
-        ],
-        "top": [
-          290.6,
-          130.6
-        ],
-        "counterOrigin": [
-          201.1,
-          513.7
-        ],
-        "coilLeft": [
-          478.3,
-          256.7
-        ],
-        "coilRight": [
-          115.8,
-          156.2
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/thunder_foundry/defeated",
-      "file": "battle/worlds/thunder_foundry/defeated.webp",
-      "width": 614,
-      "height": 790,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          320.1,
-          638.6
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          237.4,
-          582.1
-        ],
-        "hitTarget": [
-          233.4,
-          599.9
-        ],
-        "top": [
-          262.4,
-          221.4
-        ],
-        "counterOrigin": [
-          207.7,
-          592.5
-        ],
-        "coilLeft": [
-          463.8,
-          328.2
-        ],
-        "coilRight": [
-          83.1,
-          246.3
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/thunder_foundry/attack",
-      "file": "battle/worlds/thunder_foundry/attack.webp",
-      "width": 614,
-      "height": 790,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          320.1,
-          638.6
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          235.4,
-          415.1
-        ],
-        "hitTarget": [
-          231.5,
-          432.9
-        ],
-        "top": [
-          351.4,
-          45.7
-        ],
-        "counterOrigin": [
-          205.7,
-          425.5
-        ],
-        "coilLeft": [
-          523.4,
-          185.0
-        ],
-        "coilRight": [
-          161.0,
-          84.6
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/thunder_foundry/arena",
-      "file": "battle/worlds/thunder_foundry/arena.webp",
-      "width": 3200,
-      "height": 2000,
-      "pixelRatio": 2,
-      "note": "rendered in the office camera: the room worldToScreen applies unchanged",
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/thunder_foundry/front",
-      "file": "battle/worlds/thunder_foundry/front.webp",
-      "width": 3200,
-      "height": 2000,
-      "pixelRatio": 2,
-      "note": "rendered in the office camera: the room worldToScreen applies unchanged",
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/astral_rift/idle",
-      "file": "battle/worlds/astral_rift/idle.webp",
-      "width": 756,
-      "height": 802,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          385.3,
-          617.3
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          295.9,
-          231.0
-        ],
-        "hitTarget": [
-          345.7,
-          305.3
-        ],
-        "top": [
-          385.3,
-          59.6
-        ],
-        "counterOrigin": [
-          266.0,
-          389.9
-        ],
-        "orbitOrigin": [
-          402.6,
-          315.2
-        ],
-        "riftOrigin": [
-          194.7,
-          386.4
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/astral_rift/guard",
-      "file": "battle/worlds/astral_rift/guard.webp",
-      "width": 756,
-      "height": 802,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          385.3,
-          617.3
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          281.9,
-          258.8
-        ],
-        "hitTarget": [
-          337.8,
-          312.5
-        ],
-        "top": [
-          377.4,
-          66.8
-        ],
-        "counterOrigin": [
-          260.4,
-          411.7
-        ],
-        "orbitOrigin": [
-          389.6,
-          348.2
-        ],
-        "riftOrigin": [
-          187.6,
-          419.1
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/astral_rift/hurt",
-      "file": "battle/worlds/astral_rift/hurt.webp",
-      "width": 756,
-      "height": 802,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          385.3,
-          617.3
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          345.9,
-          145.2
-        ],
-        "hitTarget": [
-          376.9,
-          269.0
-        ],
-        "top": [
-          416.5,
-          23.2
-        ],
-        "counterOrigin": [
-          295.6,
-          312.5
-        ],
-        "orbitOrigin": [
-          452.0,
-          214.8
-        ],
-        "riftOrigin": [
-          230.5,
-          281.2
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/astral_rift/regen",
-      "file": "battle/worlds/astral_rift/regen.webp",
-      "width": 756,
-      "height": 802,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          385.3,
-          617.3
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          295.9,
-          206.7
-        ],
-        "hitTarget": [
-          345.7,
-          281.0
-        ],
-        "top": [
-          385.3,
-          35.3
-        ],
-        "counterOrigin": [
-          266.0,
-          365.7
-        ],
-        "orbitOrigin": [
-          402.6,
-          290.9
-        ],
-        "riftOrigin": [
-          194.7,
-          362.1
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/astral_rift/sealed",
-      "file": "battle/worlds/astral_rift/sealed.webp",
-      "width": 756,
-      "height": 802,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          385.3,
-          617.3
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          271.5,
-          350.0
-        ],
-        "hitTarget": [
-          331.5,
-          387.2
-        ],
-        "top": [
-          371.1,
-          141.4
-        ],
-        "counterOrigin": [
-          256.8,
-          497.1
-        ],
-        "orbitOrigin": [
-          380.1,
-          443.2
-        ],
-        "riftOrigin": [
-          183.1,
-          513.0
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/astral_rift/defeated",
-      "file": "battle/worlds/astral_rift/defeated.webp",
-      "width": 756,
-      "height": 802,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          385.3,
-          617.3
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          281.4,
-          559.0
-        ],
-        "hitTarget": [
-          321.8,
-          539.9
-        ],
-        "top": [
-          361.4,
-          294.2
-        ],
-        "counterOrigin": [
-          280.0,
-          681.9
-        ],
-        "orbitOrigin": [
-          412.9,
-          652.4
-        ],
-        "riftOrigin": [
-          218.8,
-          728.4
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/astral_rift/attack",
-      "file": "battle/worlds/astral_rift/attack.webp",
-      "width": 756,
-      "height": 802,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          385.3,
-          617.3
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          304.0,
-          180.2
-        ],
-        "hitTarget": [
-          343.1,
-          284.7
-        ],
-        "top": [
-          382.7,
-          39.0
-        ],
-        "counterOrigin": [
-          261.7,
-          345.3
-        ],
-        "orbitOrigin": [
-          410.1,
-          255.9
-        ],
-        "riftOrigin": [
-          193.8,
-          325.1
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/astral_rift/arena",
-      "file": "battle/worlds/astral_rift/arena.webp",
-      "width": 3200,
-      "height": 2000,
-      "pixelRatio": 2,
-      "note": "rendered in the office camera: the room worldToScreen applies unchanged",
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/astral_rift/front",
-      "file": "battle/worlds/astral_rift/front.webp",
-      "width": 3200,
-      "height": 2000,
-      "pixelRatio": 2,
-      "note": "rendered in the office camera: the room worldToScreen applies unchanged",
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
       "assetKey": "battle/worlds/lava_crater/idle",
       "file": "battle/worlds/lava_crater/idle.webp",
       "width": 1024,
@@ -2155,6 +835,1362 @@
       "pixelRatio": 2,
       "note": "The sheet's eighth cell, kept for a later 討伐成果 badge; not referenced by scene.json yet.",
       "source": "OpenAI built-in imagegen (first 2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only, no repainting; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/lava_crater/_generation; sheet sha256 dd77d56037af17c315d1fce61dd3524c6c0b62e83cf198feb107e5dae7990ec3",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/frost_court/idle",
+      "file": "battle/worlds/frost_court/idle.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          593.5,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          578.2,
+          764.7
+        ],
+        "hitTarget": [
+          578.2,
+          779.7
+        ],
+        "top": [
+          575.4,
+          312.0
+        ],
+        "counterOrigin": [
+          563.7,
+          455.4
+        ],
+        "crownTip": [
+          575.4,
+          320.0
+        ],
+        "mirrorOrigin": [
+          578.2,
+          694.7
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/frost_court/_generation; sheet sha256 e3a7392f9668df76fddf73f869b9856ab81c618afcb1ab2089dcf2e199422cf4",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/frost_court/guard",
+      "file": "battle/worlds/frost_court/guard.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          593.5,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          528.3,
+          726.9
+        ],
+        "hitTarget": [
+          528.3,
+          741.9
+        ],
+        "top": [
+          544.1,
+          303.0
+        ],
+        "counterOrigin": [
+          526.1,
+          453.3
+        ],
+        "crownTip": [
+          544.1,
+          311.0
+        ],
+        "mirrorOrigin": [
+          528.3,
+          656.9
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/frost_court/_generation; sheet sha256 e3a7392f9668df76fddf73f869b9856ab81c618afcb1ab2089dcf2e199422cf4",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/frost_court/hurt",
+      "file": "battle/worlds/frost_court/hurt.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          593.5,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          472.2,
+          733.0
+        ],
+        "hitTarget": [
+          472.2,
+          748.0
+        ],
+        "top": [
+          550.0,
+          295.0
+        ],
+        "counterOrigin": [
+          415.3,
+          478.8
+        ],
+        "crownTip": [
+          550.0,
+          303.0
+        ],
+        "mirrorOrigin": [
+          472.2,
+          663.0
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/frost_court/_generation; sheet sha256 e3a7392f9668df76fddf73f869b9856ab81c618afcb1ab2089dcf2e199422cf4",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/frost_court/regen",
+      "file": "battle/worlds/frost_court/regen.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          593.5,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          476.1,
+          744.7
+        ],
+        "hitTarget": [
+          476.1,
+          759.7
+        ],
+        "top": [
+          499.8,
+          308.0
+        ],
+        "counterOrigin": [
+          356.5,
+          514.4
+        ],
+        "crownTip": [
+          499.8,
+          316.0
+        ],
+        "mirrorOrigin": [
+          476.1,
+          674.7
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/frost_court/_generation; sheet sha256 e3a7392f9668df76fddf73f869b9856ab81c618afcb1ab2089dcf2e199422cf4",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/frost_court/sealed",
+      "file": "battle/worlds/frost_court/sealed.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          593.5,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          565.1,
+          776.8
+        ],
+        "hitTarget": [
+          565.1,
+          791.8
+        ],
+        "top": [
+          576.2,
+          314.0
+        ],
+        "counterOrigin": [
+          579.8,
+          452.5
+        ],
+        "crownTip": [
+          576.2,
+          322.0
+        ],
+        "mirrorOrigin": [
+          565.1,
+          706.8
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/frost_court/_generation; sheet sha256 e3a7392f9668df76fddf73f869b9856ab81c618afcb1ab2089dcf2e199422cf4",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/frost_court/defeated",
+      "file": "battle/worlds/frost_court/defeated.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          593.5,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          527.3,
+          864.2
+        ],
+        "hitTarget": [
+          527.3,
+          879.2
+        ],
+        "top": [
+          522.5,
+          580.0
+        ],
+        "counterOrigin": [
+          477.7,
+          661.8
+        ],
+        "crownTip": [
+          522.5,
+          588.0
+        ],
+        "mirrorOrigin": [
+          527.3,
+          794.2
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/frost_court/_generation; sheet sha256 e3a7392f9668df76fddf73f869b9856ab81c618afcb1ab2089dcf2e199422cf4",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/frost_court/attack",
+      "file": "battle/worlds/frost_court/attack.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          593.5,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          573.3,
+          749.5
+        ],
+        "hitTarget": [
+          573.3,
+          764.5
+        ],
+        "top": [
+          510.3,
+          323.0
+        ],
+        "counterOrigin": [
+          474.5,
+          493.0
+        ],
+        "crownTip": [
+          510.3,
+          331.0
+        ],
+        "mirrorOrigin": [
+          573.3,
+          679.5
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/frost_court/_generation; sheet sha256 e3a7392f9668df76fddf73f869b9856ab81c618afcb1ab2089dcf2e199422cf4",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/frost_court/arena",
+      "file": "battle/worlds/frost_court/arena.webp",
+      "width": 3200,
+      "height": 2000,
+      "pixelRatio": 2,
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/frost_court/_generation; png sha256 7d792982f58c2b9cd15c1d7a3c277f1f9df8ca8925187464472faa83626b902d",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/frost_court/front",
+      "file": "battle/worlds/frost_court/front.webp",
+      "width": 3200,
+      "height": 2000,
+      "pixelRatio": 2,
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/frost_court/_generation; png sha256 4e10a6e5e21c56305d1a90150c8d5d52913530ab65131b807c38988945ecdc88",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/frost_court/trophy",
+      "file": "battle/worlds/frost_court/trophy.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "note": "The sheet's eighth cell, kept for a later 討伐成果 badge; not referenced by scene.json yet.",
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/frost_court/_generation; sheet sha256 e3a7392f9668df76fddf73f869b9856ab81c618afcb1ab2089dcf2e199422cf4",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/verdant_ruins/idle",
+      "file": "battle/worlds/verdant_ruins/idle.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          653.9,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          459.8,
+          726.1
+        ],
+        "hitTarget": [
+          459.8,
+          741.1
+        ],
+        "top": [
+          611.1,
+          223.0
+        ],
+        "counterOrigin": [
+          630.0,
+          472.2
+        ],
+        "canopyCenter": [
+          612.4,
+          336.1
+        ],
+        "rootOrigin": [
+          553.9,
+          936.0
+        ],
+        "vineTip": [
+          918.0,
+          379.5
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/verdant_ruins/_generation; sheet sha256 ecd4f779ae7d7f2e755f9f86dbff7b8cf07116348c8977306c04f476bfed019e",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/verdant_ruins/guard",
+      "file": "battle/worlds/verdant_ruins/guard.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          653.9,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          459.8,
+          726.1
+        ],
+        "hitTarget": [
+          459.8,
+          741.1
+        ],
+        "top": [
+          545.4,
+          233.0
+        ],
+        "counterOrigin": [
+          563.0,
+          472.9
+        ],
+        "canopyCenter": [
+          577.8,
+          336.5
+        ],
+        "rootOrigin": [
+          519.0,
+          936.0
+        ],
+        "vineTip": [
+          857.0,
+          829.5
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/verdant_ruins/_generation; sheet sha256 ecd4f779ae7d7f2e755f9f86dbff7b8cf07116348c8977306c04f476bfed019e",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/verdant_ruins/hurt",
+      "file": "battle/worlds/verdant_ruins/hurt.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          653.9,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          405.4,
+          730.7
+        ],
+        "hitTarget": [
+          405.4,
+          745.7
+        ],
+        "top": [
+          598.8,
+          233.0
+        ],
+        "counterOrigin": [
+          613.5,
+          486.1
+        ],
+        "canopyCenter": [
+          573.4,
+          348.0
+        ],
+        "rootOrigin": [
+          568.9,
+          936.0
+        ],
+        "vineTip": [
+          884.0,
+          386.0
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/verdant_ruins/_generation; sheet sha256 ecd4f779ae7d7f2e755f9f86dbff7b8cf07116348c8977306c04f476bfed019e",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/verdant_ruins/regen",
+      "file": "battle/worlds/verdant_ruins/regen.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          653.9,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          440.0,
+          717.6
+        ],
+        "hitTarget": [
+          440.0,
+          732.6
+        ],
+        "top": [
+          527.7,
+          219.0
+        ],
+        "counterOrigin": [
+          526.2,
+          468.6
+        ],
+        "canopyCenter": [
+          555.2,
+          335.6
+        ],
+        "rootOrigin": [
+          503.1,
+          936.0
+        ],
+        "vineTip": [
+          868.0,
+          684.0
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/verdant_ruins/_generation; sheet sha256 ecd4f779ae7d7f2e755f9f86dbff7b8cf07116348c8977306c04f476bfed019e",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/verdant_ruins/sealed",
+      "file": "battle/worlds/verdant_ruins/sealed.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          653.9,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          459.8,
+          726.1
+        ],
+        "hitTarget": [
+          459.8,
+          741.1
+        ],
+        "top": [
+          630.8,
+          218.0
+        ],
+        "counterOrigin": [
+          637.9,
+          461.6
+        ],
+        "canopyCenter": [
+          606.2,
+          331.8
+        ],
+        "rootOrigin": [
+          577.7,
+          936.0
+        ],
+        "vineTip": [
+          938.0,
+          394.0
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/verdant_ruins/_generation; sheet sha256 ecd4f779ae7d7f2e755f9f86dbff7b8cf07116348c8977306c04f476bfed019e",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/verdant_ruins/defeated",
+      "file": "battle/worlds/verdant_ruins/defeated.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          653.9,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          509.2,
+          885.4
+        ],
+        "hitTarget": [
+          509.2,
+          900.4
+        ],
+        "top": [
+          606.9,
+          489.0
+        ],
+        "counterOrigin": [
+          630.0,
+          472.2
+        ],
+        "canopyCenter": [
+          542.8,
+          558.3
+        ],
+        "rootOrigin": [
+          446.8,
+          936.0
+        ],
+        "vineTip": [
+          928.0,
+          771.5
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/verdant_ruins/_generation; sheet sha256 ecd4f779ae7d7f2e755f9f86dbff7b8cf07116348c8977306c04f476bfed019e",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/verdant_ruins/attack",
+      "file": "battle/worlds/verdant_ruins/attack.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          653.9,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          497.0,
+          717.1
+        ],
+        "hitTarget": [
+          497.0,
+          732.1
+        ],
+        "top": [
+          627.4,
+          214.0
+        ],
+        "counterOrigin": [
+          651.6,
+          484.9
+        ],
+        "canopyCenter": [
+          599.4,
+          329.4
+        ],
+        "rootOrigin": [
+          542.6,
+          936.0
+        ],
+        "vineTip": [
+          939.0,
+          391.5
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/verdant_ruins/_generation; sheet sha256 ecd4f779ae7d7f2e755f9f86dbff7b8cf07116348c8977306c04f476bfed019e",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/verdant_ruins/arena",
+      "file": "battle/worlds/verdant_ruins/arena.webp",
+      "width": 3200,
+      "height": 2000,
+      "pixelRatio": 2,
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/verdant_ruins/_generation; png sha256 93fe16275137ee71bdb22469f210c321287641ac212b579224d1063f443f836d",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/verdant_ruins/front",
+      "file": "battle/worlds/verdant_ruins/front.webp",
+      "width": 3200,
+      "height": 2000,
+      "pixelRatio": 2,
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/verdant_ruins/_generation; png sha256 d5e33572412600bb8b52cb82a43abab548c10628fe5a70083c324bccd2b8a80c",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/verdant_ruins/trophy",
+      "file": "battle/worlds/verdant_ruins/trophy.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "note": "The sheet's eighth cell, kept for a later 討伐成果 badge; not referenced by scene.json yet.",
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/verdant_ruins/_generation; sheet sha256 ecd4f779ae7d7f2e755f9f86dbff7b8cf07116348c8977306c04f476bfed019e",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/thunder_foundry/idle",
+      "file": "battle/worlds/thunder_foundry/idle.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          633.7,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          471.9,
+          707.9
+        ],
+        "hitTarget": [
+          471.9,
+          722.9
+        ],
+        "top": [
+          351.0,
+          250.0
+        ],
+        "counterOrigin": [
+          471.9,
+          707.9
+        ],
+        "coilLeft": [
+          357.7,
+          297.7
+        ],
+        "coilRight": [
+          803.6,
+          359.5
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/thunder_foundry/_generation; sheet sha256 ddb72b56351a488a0c29d073ce8625327f7cef161c493f7583f36df482f0cd58",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/thunder_foundry/guard",
+      "file": "battle/worlds/thunder_foundry/guard.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          633.7,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          502.2,
+          614.9
+        ],
+        "hitTarget": [
+          502.2,
+          629.9
+        ],
+        "top": [
+          350.7,
+          240.0
+        ],
+        "counterOrigin": [
+          502.2,
+          614.9
+        ],
+        "coilLeft": [
+          355.7,
+          289.3
+        ],
+        "coilRight": [
+          782.3,
+          349.2
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/thunder_foundry/_generation; sheet sha256 ddb72b56351a488a0c29d073ce8625327f7cef161c493f7583f36df482f0cd58",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/thunder_foundry/hurt",
+      "file": "battle/worlds/thunder_foundry/hurt.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          633.7,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          423.0,
+          667.7
+        ],
+        "hitTarget": [
+          423.0,
+          682.7
+        ],
+        "top": [
+          317.1,
+          246.0
+        ],
+        "counterOrigin": [
+          372.3,
+          302.2
+        ],
+        "coilLeft": [
+          361.0,
+          304.0
+        ],
+        "coilRight": [
+          782.8,
+          408.8
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/thunder_foundry/_generation; sheet sha256 ddb72b56351a488a0c29d073ce8625327f7cef161c493f7583f36df482f0cd58",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/thunder_foundry/regen",
+      "file": "battle/worlds/thunder_foundry/regen.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          633.7,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          465.2,
+          713.7
+        ],
+        "hitTarget": [
+          465.2,
+          728.7
+        ],
+        "top": [
+          336.9,
+          248.0
+        ],
+        "counterOrigin": [
+          358.9,
+          286.0
+        ],
+        "coilLeft": [
+          336.3,
+          294.3
+        ],
+        "coilRight": [
+          757.6,
+          359.2
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/thunder_foundry/_generation; sheet sha256 ddb72b56351a488a0c29d073ce8625327f7cef161c493f7583f36df482f0cd58",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/thunder_foundry/sealed",
+      "file": "battle/worlds/thunder_foundry/sealed.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          633.7,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          471.9,
+          707.9
+        ],
+        "hitTarget": [
+          471.9,
+          722.9
+        ],
+        "top": [
+          355.2,
+          241.0
+        ],
+        "counterOrigin": [
+          471.9,
+          707.9
+        ],
+        "coilLeft": [
+          363.8,
+          283.7
+        ],
+        "coilRight": [
+          798.1,
+          349.1
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/thunder_foundry/_generation; sheet sha256 ddb72b56351a488a0c29d073ce8625327f7cef161c493f7583f36df482f0cd58",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/thunder_foundry/defeated",
+      "file": "battle/worlds/thunder_foundry/defeated.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          633.7,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          471.9,
+          707.9
+        ],
+        "hitTarget": [
+          471.9,
+          722.9
+        ],
+        "top": [
+          341.2,
+          440.0
+        ],
+        "counterOrigin": [
+          471.9,
+          707.9
+        ],
+        "coilLeft": [
+          357.7,
+          297.7
+        ],
+        "coilRight": [
+          803.6,
+          359.5
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/thunder_foundry/_generation; sheet sha256 ddb72b56351a488a0c29d073ce8625327f7cef161c493f7583f36df482f0cd58",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/thunder_foundry/attack",
+      "file": "battle/worlds/thunder_foundry/attack.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          633.7,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          463.7,
+          707.9
+        ],
+        "hitTarget": [
+          463.7,
+          722.9
+        ],
+        "top": [
+          336.0,
+          225.0
+        ],
+        "counterOrigin": [
+          466.5,
+          317.4
+        ],
+        "coilLeft": [
+          343.6,
+          293.6
+        ],
+        "coilRight": [
+          796.4,
+          384.6
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/thunder_foundry/_generation; sheet sha256 ddb72b56351a488a0c29d073ce8625327f7cef161c493f7583f36df482f0cd58",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/thunder_foundry/arena",
+      "file": "battle/worlds/thunder_foundry/arena.webp",
+      "width": 3200,
+      "height": 2000,
+      "pixelRatio": 2,
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/thunder_foundry/_generation; png sha256 e5fe9c9ee917e58a360d8f0b8175e09f7d7d4f152928f9ad093f488bcd1e6200",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/thunder_foundry/front",
+      "file": "battle/worlds/thunder_foundry/front.webp",
+      "width": 3200,
+      "height": 2000,
+      "pixelRatio": 2,
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/thunder_foundry/_generation; png sha256 1aa695c9875310af28fad9748ef6eb49c6f8eefa92aa402265639dcfe504e583",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/thunder_foundry/trophy",
+      "file": "battle/worlds/thunder_foundry/trophy.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "note": "The sheet's eighth cell, kept for a later 討伐成果 badge; not referenced by scene.json yet.",
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/thunder_foundry/_generation; sheet sha256 ddb72b56351a488a0c29d073ce8625327f7cef161c493f7583f36df482f0cd58",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/astral_rift/idle",
+      "file": "battle/worlds/astral_rift/idle.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          572.2,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          485.0,
+          753.4
+        ],
+        "hitTarget": [
+          485.0,
+          768.4
+        ],
+        "top": [
+          528.2,
+          281.0
+        ],
+        "counterOrigin": [
+          502.9,
+          605.4
+        ],
+        "orbitOrigin": [
+          538.3,
+          378.9
+        ],
+        "riftOrigin": [
+          485.0,
+          753.4
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/astral_rift/_generation; sheet sha256 ca4f32d006546671088f42cbe687a16e968196b5e3a30cc1614ca17a54b0362a",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/astral_rift/guard",
+      "file": "battle/worlds/astral_rift/guard.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          572.2,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          494.0,
+          784.1
+        ],
+        "hitTarget": [
+          494.0,
+          799.1
+        ],
+        "top": [
+          518.2,
+          289.0
+        ],
+        "counterOrigin": [
+          482.5,
+          624.6
+        ],
+        "orbitOrigin": [
+          526.2,
+          383.6
+        ],
+        "riftOrigin": [
+          494.0,
+          784.1
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/astral_rift/_generation; sheet sha256 ca4f32d006546671088f42cbe687a16e968196b5e3a30cc1614ca17a54b0362a",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/astral_rift/hurt",
+      "file": "battle/worlds/astral_rift/hurt.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          572.2,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          450.0,
+          748.8
+        ],
+        "hitTarget": [
+          450.0,
+          763.8
+        ],
+        "top": [
+          522.1,
+          283.0
+        ],
+        "counterOrigin": [
+          523.6,
+          594.9
+        ],
+        "orbitOrigin": [
+          522.2,
+          379.8
+        ],
+        "riftOrigin": [
+          450.0,
+          748.8
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/astral_rift/_generation; sheet sha256 ca4f32d006546671088f42cbe687a16e968196b5e3a30cc1614ca17a54b0362a",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/astral_rift/regen",
+      "file": "battle/worlds/astral_rift/regen.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          572.2,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          447.4,
+          751.9
+        ],
+        "hitTarget": [
+          447.4,
+          766.9
+        ],
+        "top": [
+          510.3,
+          264.0
+        ],
+        "counterOrigin": [
+          523.6,
+          619.0
+        ],
+        "orbitOrigin": [
+          519.7,
+          361.9
+        ],
+        "riftOrigin": [
+          447.4,
+          751.9
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/astral_rift/_generation; sheet sha256 ca4f32d006546671088f42cbe687a16e968196b5e3a30cc1614ca17a54b0362a",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/astral_rift/sealed",
+      "file": "battle/worlds/astral_rift/sealed.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          572.2,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          477.5,
+          804.2
+        ],
+        "hitTarget": [
+          477.5,
+          819.2
+        ],
+        "top": [
+          522.6,
+          297.0
+        ],
+        "counterOrigin": [
+          502.8,
+          620.2
+        ],
+        "orbitOrigin": [
+          535.4,
+          392.1
+        ],
+        "riftOrigin": [
+          477.5,
+          804.2
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/astral_rift/_generation; sheet sha256 ca4f32d006546671088f42cbe687a16e968196b5e3a30cc1614ca17a54b0362a",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/astral_rift/defeated",
+      "file": "battle/worlds/astral_rift/defeated.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          572.2,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          361.2,
+          882.8
+        ],
+        "hitTarget": [
+          361.2,
+          897.8
+        ],
+        "top": [
+          521.4,
+          605.0
+        ],
+        "counterOrigin": [
+          405.9,
+          786.1
+        ],
+        "orbitOrigin": [
+          502.5,
+          631.4
+        ],
+        "riftOrigin": [
+          361.2,
+          882.8
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/astral_rift/_generation; sheet sha256 ca4f32d006546671088f42cbe687a16e968196b5e3a30cc1614ca17a54b0362a",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/astral_rift/attack",
+      "file": "battle/worlds/astral_rift/attack.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          572.2,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          392.8,
+          764.7
+        ],
+        "hitTarget": [
+          392.8,
+          779.7
+        ],
+        "top": [
+          539.4,
+          313.0
+        ],
+        "counterOrigin": [
+          541.3,
+          611.9
+        ],
+        "orbitOrigin": [
+          548.9,
+          402.9
+        ],
+        "riftOrigin": [
+          392.8,
+          764.7
+        ]
+      },
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/astral_rift/_generation; sheet sha256 ca4f32d006546671088f42cbe687a16e968196b5e3a30cc1614ca17a54b0362a",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/astral_rift/arena",
+      "file": "battle/worlds/astral_rift/arena.webp",
+      "width": 3200,
+      "height": 2000,
+      "pixelRatio": 2,
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/astral_rift/_generation; png sha256 e588b925526c7e33b6e15128b768a76cad623e5f2cbd34945895606854ef1b63",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/astral_rift/front",
+      "file": "battle/worlds/astral_rift/front.webp",
+      "width": 3200,
+      "height": 2000,
+      "pixelRatio": 2,
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/astral_rift/_generation; png sha256 50f916664d2206775dbafe55518e22d93c3b14a0a67bc2508bf67adf34d7dca2",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/astral_rift/trophy",
+      "file": "battle/worlds/astral_rift/trophy.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "note": "The sheet's eighth cell, kept for a later 討伐成果 badge; not referenced by scene.json yet.",
+      "source": "OpenAI built-in imagegen (2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/astral_rift/_generation; sheet sha256 ca4f32d006546671088f42cbe687a16e968196b5e3a30cc1614ca17a54b0362a",
       "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
       "status": "produced"
     }
