@@ -293,6 +293,8 @@ export class BattleLayer implements SceneLayer {
     if (vm && (vm.bossState === "paused" || vm.bossState === "syncing" || vm.bossState === "inconsistent" || vm.bossState === "stopped")) this.stop();
     this.vm = vm;
     if (!this.boss) return;
+    // The few desks the fight leaves in the room (the scene draws them afresh with every update).
+    for (const [x, y] of this.scene.roomTheme?.battle?.desks ?? []) this.scene.drawDesk({ x, y, facing: "SE" }, "#2E3A52");
     const state = vm?.bossState ?? "planning";
     // No task counted yet: the boss has not shown itself.
     const shown = !!vm && state !== "planning";
@@ -469,7 +471,7 @@ export class BattleLayer implements SceneLayer {
     const el = h("span", { class: `bt-float ${label.tone.split(" ").map((t) => `t-${t}`).join(" ")}${still || this.frozen !== null ? " still" : ""}` }, h("b", { text: label.text }), label.sub ? h("small", { text: label.sub }) : null);
     this.floats.add(el);
     this.scene.pinAt(el, at.x, at.y);
-    window.setTimeout(() => {
+    if (this.frozen === null) window.setTimeout(() => {
       el.remove();
       this.floats.delete(el);
     }, still ? 2600 : 1600);
@@ -489,7 +491,8 @@ export class BattleLayer implements SceneLayer {
     );
     this.scene.overlayEl.append(el);
     this.card = el;
-    this.cardTimer = window.setTimeout(() => {
+    // Held still (development): the card stays to be looked at.
+    if (this.frozen === null) this.cardTimer = window.setTimeout(() => {
       el.remove();
       if (this.card === el) this.card = null;
     }, 1900);
@@ -503,9 +506,9 @@ export class BattleLayer implements SceneLayer {
     this.lastSaid = this.now();
     this.speech?.remove();
     const el = h("span", { class: `bt-speech${this.frozen !== null ? " still" : ""}` }, h("b", { text: "需求魔王" }), h("span", { text: lines[Math.floor(Math.random() * lines.length)] }));
-    this.scene.pinAt(el, b.top.x - 150 * b.scale, b.top.y + 30);
+    this.scene.pinAt(el, b.top.x, b.top.y - 34);
     this.speech = el;
-    window.setTimeout(() => {
+    if (this.frozen === null) window.setTimeout(() => {
       el.remove();
       if (this.speech === el) this.speech = null;
     }, 2200);
@@ -704,7 +707,8 @@ export class BattleLayer implements SceneLayer {
     if (e.plan) return this.hit(ctx, e, e.plan, ms, b);
     const w = this.about(e);
     const label = this.label(e.kind, e.signal);
-    const head = { x: b.top.x, y: b.top.y - 10 };
+    // Marks about the boss go on its chest, beside where blows land; its words go over its head.
+    const head = { x: b.hit.x + 90 * b.scale, y: b.hit.y - 20 };
     if (this.once(e, "say")) this.say(e.kind);
     switch (e.kind) {
       case "delivery_waiting": {
@@ -824,7 +828,6 @@ export class BattleLayer implements SceneLayer {
           ring(ctx, b.core.x, b.core.y, lerp(30, 260, ease(span(ms, 500, 1400))), GOLD, 1 - span(ms, 500, 1400), 8);
           ring(ctx, b.feet.x, b.feet.y, lerp(40, 200, ease(span(ms, 600, 1500))), GOLD, 0.8 * (1 - span(ms, 600, 1500)), 4);
         }
-        if (ms >= 900 && this.once(e, "medal") && label) this.float({ ...label, tone: "win big" }, { x: b.top.x, y: b.top.y - 24 });
         break;
       }
       case "reopen":
@@ -857,7 +860,7 @@ export class BattleLayer implements SceneLayer {
     // The blow lands once: the boss flinches, the number shows, the sparks fly.
     if (ms >= c && this.once(e, "impact")) {
       this.hurtAt = this.now();
-      this.float({ text: `-${plan.displayDamage}`, sub: skill?.name ?? "驗收命中", tone: "hit" }, { x: b.top.x, y: b.top.y - 10 });
+      this.float({ text: `-${plan.displayDamage}`, tone: "hit" }, { x: b.hit.x + 80 * b.scale, y: b.hit.y - 10 });
       const combo = plan.memberIds.length > 1;
       this.spark(e, target.x, target.y, combo ? 20 : 14, pal[0], { speed: 260, kind: "streak", size: 4 });
       this.spark(e, target.x, target.y, 8, pal[1] ?? "#ffffff", { speed: 160, size: 3 });
@@ -871,6 +874,16 @@ export class BattleLayer implements SceneLayer {
     }
     const u = easeIn(span(ms, a, c)) * 0.4 + ease(span(ms, a, c)) * 0.6;
     const after = span(ms, c, end);
+    // Under each who strikes, its circle; where the blow lands, a flash and a ring of force.
+    for (const [k, m] of plan.memberIds.entries()) {
+      const at = this.scene.mochi(m);
+      if (at) magicCircle(ctx, { x: at.x, y: at.y + at.size * 0.3 }, 54 * ease(span(ms, 0, a + 60)), pal[k % pal.length], 1 - span(ms, c, end), ms / 700 + k);
+    }
+    if (ms >= c) {
+      flash(ctx, target, 70 + 60 * (plan.memberIds.length - 1), 1 - span(ms, c, c + 160));
+      ring(ctx, target.x, target.y + 10, lerp(30, 180, ease(after)), "#ffffff", 0.7 * (1 - after), 3);
+      floorRing(ctx, b.feet.x, b.feet.y, lerp(60, 200, ease(after)), pal[0], 0.6 * (1 - after));
+    }
     if (skill.family !== "combo") {
       const p = from[0];
       charge(ctx, p, pal[0], span(ms, 0, a), 1 - span(ms, c, i), ms);
@@ -1603,4 +1616,59 @@ function trefoil(ctx: CanvasRenderingContext2D, c: Pt, r: number, pal: string[],
     }
   }, 10);
   glow(ctx, c.x, c.y, r * 0.8, pal[1], alpha * 0.7);
+}
+
+/** A turning circle of runes on the floor, under whoever casts. */
+function magicCircle(ctx: CanvasRenderingContext2D, c: Pt, r: number, color: string, alpha: number, turn: number) {
+  if (alpha <= 0.01 || r <= 2) return;
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.scale(1, 0.42);
+  ctx.globalAlpha = clamp01(alpha);
+  ctx.globalCompositeOperation = "lighter";
+  ctx.strokeStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 16;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.78, 0, Math.PI * 2);
+  ctx.stroke();
+  // A six-pointed star inside, turning the other way.
+  ctx.beginPath();
+  for (let k = 0; k < 2; k++) {
+    for (let i = 0; i <= 3; i++) {
+      const a = -turn * 1.4 + k * Math.PI / 3 + (i * Math.PI * 2) / 3;
+      const x = Math.cos(a) * r * 0.76;
+      const y = Math.sin(a) * r * 0.76;
+      if (i) ctx.lineTo(x, y);
+      else ctx.moveTo(x, y);
+    }
+  }
+  ctx.stroke();
+  for (let i = 0; i < 12; i++) {
+    const a = turn + (i * Math.PI) / 6;
+    ctx.save();
+    ctx.rotate(a);
+    ctx.translate(r * 0.89, 0);
+    ctx.fillStyle = color;
+    ctx.fillRect(-2, -5, 4, 10);
+    ctx.restore();
+  }
+  ctx.globalAlpha = clamp01(alpha) * 0.22;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** The instant a blow lands: a short white flash, local, never the whole screen. */
+function flash(ctx: CanvasRenderingContext2D, c: Pt, r: number, alpha: number) {
+  if (alpha <= 0.01) return;
+  glow(ctx, c.x, c.y, r, "#ffffff", alpha);
+  glow(ctx, c.x, c.y, r * 0.45, "#ffffff", alpha);
 }

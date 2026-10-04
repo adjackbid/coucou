@@ -587,8 +587,16 @@
   opacity: 0.9;
 }
 
-.bt-float.t-hit { color: #ffd1c2; }
-.bt-float.t-hit b { color: #ff7a6b; }
+/* A blow's number: a red plate on the boss, the way the design shows it. */
+.bt-float.t-hit {
+  padding: 2px 14px 4px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ff5a4e, #c8202e);
+  box-shadow: 0 0 0 2px rgba(255, 220, 210, 0.85), 0 0 22px rgba(255, 70, 60, 0.6);
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(120, 0, 10, 0.6);
+}
+.bt-float.t-hit b { color: #fff; font-size: 34px; }
 .bt-float.t-regen { color: var(--bt-heal); }
 .bt-float.t-shield { color: #d6c8ff; }
 .bt-float.t-counter { color: #ffc2a6; }
@@ -601,6 +609,9 @@
 /* 減少動態: still marks that simply go. */
 .bt-float.still {
   animation: none;
+}
+
+.bt-float.still:not(.t-hit) {
   padding: 2px 8px;
   border-radius: 8px;
   background: rgba(14, 12, 26, 0.7);
@@ -727,8 +738,9 @@
 .bt-speech {
   position: absolute;
   display: grid;
+  justify-items: center;
   gap: 2px;
-  padding: 8px 14px;
+  padding: 8px 16px;
   border-radius: 14px;
   background: rgba(16, 10, 30, 0.88);
   box-shadow: 0 0 0 1.5px #b58cff, 0 0 18px rgba(150, 80, 255, 0.45);
@@ -750,12 +762,12 @@
 .bt-speech::after {
   content: "";
   position: absolute;
-  right: -8px;
-  top: 50%;
-  margin-top: -8px;
+  left: 50%;
+  bottom: -8px;
+  margin-left: -8px;
   border: 8px solid transparent;
-  border-right: 0;
-  border-left-color: rgba(16, 10, 30, 0.88);
+  border-bottom: 0;
+  border-top-color: rgba(16, 10, 30, 0.88);
 }
 
 .bt-speech.still {

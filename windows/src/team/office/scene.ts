@@ -48,7 +48,7 @@ interface ThemeJson {
   workstations: "standard" | Record<"SE" | "SW", StationArt>;
   /** 中二模式: where the boss stands (metres), how big, and what makes way for it. */
   /** Where the members stand, by how many there are: the smallest list that seats them all, front line first. */
-  battle?: { boss: [number, number]; scale: number; hide: string[]; formation: Record<string, [number, number][]> };
+  battle?: { boss: [number, number]; scale: number; hide: string[]; formation: Record<string, [number, number][]>; desks: [number, number][] };
 }
 /** A picture rendered in the office camera: its canvas and where it touches the floor (2× px). */
 export interface Sprite {
@@ -606,28 +606,8 @@ export class TeamScene {
     const color = m.color ?? "#3B9EFF";
     const [W, Ht] = ws.canvas.map(H);
     const sel = this.selected === m.memberId;
-
-    this.stage.append(
-      h("div", { class: `office-shadow${sel ? " on" : ""}`, style: `left:${at.x}px;top:${at.y + 8}px;z-index:${z};--c:${color}` }),
-      h("img", { class: "office-layer office-ws", src: `/office/${ws.layers[0]}`, alt: "", draggable: "false", style: `left:${ox}px;top:${oy}px;width:${W}px;height:${Ht}px;z-index:${z + 1}` }),
-    );
-    // The screen: the member's colour, lit while it works.
-    const quad = ws.screenQuad.map(local);
-    const svgNS = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("class", `office-screen ${STATUS[m.workStatus].tone}`);
-    svg.setAttribute("width", String(H(t.room.canvas[0])));
-    svg.setAttribute("height", String(H(t.room.canvas[1])));
-    svg.setAttribute("style", `z-index:${z + 2}`);
-    const lerp = (p: { x: number; y: number }, q: { x: number; y: number }, t: number) => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
-    const lines = [0.3, 0.48, 0.66].map((t, k) => {
-      const l = lerp(quad[0], quad[3], t), r = lerp(quad[1], quad[2], t);
-      const p = lerp(l, r, 0.12), q = lerp(l, r, [0.8, 0.62, 0.72][k]);
-      return `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}"/>`;
-    }).join("");
-    svg.innerHTML = `<polygon points="${quad.map((p) => `${p.x},${p.y}`).join(" ")}" fill="${color}"/>${lines}`;
-    this.stage.append(svg);
-    this.stage.append(h("img", { class: "office-layer office-ws", src: `/office/${ws.layers[1]}`, alt: "", draggable: "false", style: `left:${ox}px;top:${oy}px;width:${W}px;height:${Ht}px;z-index:${z + 3}` }));
+    // 中二模式 clears the floor: the members stand in the fight, their desks put away.
+    const quad = yaw === null ? this.drawDesk(desk, color, STATUS[m.workStatus].tone, sel) : ws.screenQuad.map(local);
 
     // The Mochi: on its chair, or standing at the whiteboard.
     const sofaAt = t.props.sofa?.at;
@@ -664,6 +644,8 @@ export class TeamScene {
     actor.canvas.classList.toggle("selected", sel);
     if (!actor.canvas.isConnected) this.stage.append(actor.canvas);
     const screenMid = (quad[0].x + quad[1].x) / 2;
+    void W;
+    void Ht;
     actor.yaw = yaw ?? (standing ? 0.5 : lounge ? 0 : screenMid < seat.x ? -0.42 : 0.42);
     this.pose(actor, m.workStatus);
     if (standing) this.stage.append(h("div", { class: "office-shadow small", style: `left:${seat.x}px;top:${seat.y}px;z-index:${seatZ - 1}` }));
@@ -697,6 +679,43 @@ export class TeamScene {
     this.labels.set(m.memberId, label);
     // Over the member's head, where nothing nearer the camera can hide it.
     this.pin(label, seat.x, bottom - body - 4);
+  }
+
+  /**
+   * A desk at a place of the floor, its screen in a colour: a member's, or (中二模式)
+   * one kept as part of the room. Drawn afresh at every update with the members'.
+   */
+  drawDesk(desk: Desk, color: string, tone = "quiet", sel = false): { x: number; y: number }[] {
+    const t = this.theme!;
+    const ws = t.workstations[desk.facing];
+    const at = this.toScreen(desk.x, desk.y);
+    const ox = at.x - H(ws.groundPivot[0]);
+    const oy = at.y - H(ws.groundPivot[1]);
+    const local = ([px, py]: [number, number]) => ({ x: ox + H(px), y: oy + H(py) });
+    const z = this.depth(desk.x, desk.y);
+    const [W, Ht] = ws.canvas.map(H);
+    this.stage.append(
+      h("div", { class: `office-shadow${sel ? " on" : ""}`, style: `left:${at.x}px;top:${at.y + 8}px;z-index:${z};--c:${color}` }),
+      h("img", { class: "office-layer office-ws", src: `/office/${ws.layers[0]}`, alt: "", draggable: "false", style: `left:${ox}px;top:${oy}px;width:${W}px;height:${Ht}px;z-index:${z + 1}` }),
+    );
+    // The screen: the member's colour, lit while it works.
+    const quad = ws.screenQuad.map(local);
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("class", `office-screen ${tone}`);
+    svg.setAttribute("width", String(H(t.room.canvas[0])));
+    svg.setAttribute("height", String(H(t.room.canvas[1])));
+    svg.setAttribute("style", `z-index:${z + 2}`);
+    const lerp = (p: { x: number; y: number }, q: { x: number; y: number }, t: number) => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+    const lines = [0.3, 0.48, 0.66].map((t, k) => {
+      const l = lerp(quad[0], quad[3], t), r = lerp(quad[1], quad[2], t);
+      const p = lerp(l, r, 0.12), q = lerp(l, r, [0.8, 0.62, 0.72][k]);
+      return `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}"/>`;
+    }).join("");
+    svg.innerHTML = `<polygon points="${quad.map((p) => `${p.x},${p.y}`).join(" ")}" fill="${color}"/>${lines}`;
+    this.stage.append(svg);
+    this.stage.append(h("img", { class: "office-layer office-ws", src: `/office/${ws.layers[1]}`, alt: "", draggable: "false", style: `left:${ox}px;top:${oy}px;width:${W}px;height:${Ht}px;z-index:${z + 3}` }));
+    return quad;
   }
 
   private actor(m: MemberSnapshot, color: string): Actor {
