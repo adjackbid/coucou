@@ -1376,7 +1376,14 @@ const secretaryHost: SecretaryHost = {
 };
 
 /** The 成本與用量 page draws inside this window, with its agents' names. */
-const costHost: CostHost = { render: () => render(), agents: () => agents };
+const costHost: CostHost = {
+  render: () => render(),
+  agents: () => agents,
+  openSecretary: () => {
+    place = "secretary";
+    render();
+  },
+};
 
 /** The model a member was given, when the calls it made used another (as the meter saw them). */
 function otherModel(m: MemberView): HTMLElement | null {

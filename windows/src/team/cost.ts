@@ -14,10 +14,13 @@ import { Bridge, IS_TAURI } from "../core/bridge";
 import type { AgentProfile } from "../core/state";
 import { h } from "../views/dom";
 import type { Billing, Found, KeySpend, Price, PricingChoices, Usage, UsageReport, UsageRow } from "./types";
+import { analysisView } from "./cost-analysis";
+import { consult } from "./secretary";
 
 export interface CostHost {
   render(): void;
   agents(): AgentProfile[];
+  openSecretary(): void;
 }
 
 type Period = "today" | "yesterday" | "7d" | "30d" | "month" | "custom";
@@ -47,6 +50,8 @@ let period: Period = "7d";
 let customFrom = dateText(Date.now() - 6 * DAY);
 let customTo = dateText(Date.now());
 let group: Group = "team";
+/** The page: the numbers, or one team taken apart. */
+let view: "overview" | "analysis" = "overview";
 let measure: Measure = "cost";
 /** Which currency is shown large: US dollars or the person's own. */
 let primary: "usd" | "local" = stored("coucou.cost.primary") === "usd" ? "usd" : "local";
@@ -77,6 +82,7 @@ if (import.meta.env.DEV && !IS_TAURI && typeof location !== "undefined") {
   const g = q.get("group") as Group | null;
   if (g && GROUPS.some(([v]) => v === g)) group = g;
   if (q.get("measure") === "tokens") measure = "tokens";
+  if (q.get("tab") === "analysis") view = "analysis";
   openAll = q.get("open") === "all";
   showHelp = q.has("help");
 }
@@ -323,6 +329,20 @@ export function costPage(host: CostHost): HTMLElement {
     page.append(h("section", { class: "panel cost-empty" }, h("p", { class: "dim", text: "讀取用量中…" })));
     return page;
   }
+  if (view === "analysis") {
+    const [from, to] = range();
+    page.append(
+      analysisView(report, {
+        render: () => host.render(),
+        money: moneyText,
+        tokens: fmtTokens,
+        periodLabel: () => (period === "custom" ? `${dateText(from)} ~ ${dateText(to - 1)}` : PERIODS.find(([p]) => p === period)?.[1] ?? ""),
+        consult: (text) => consult(text, () => host.render()),
+        openSecretary: () => host.openSecretary(),
+      }),
+    );
+    return page;
+  }
   page.append(kpis(rows));
   if (!rows.length) {
     page.append(
@@ -367,12 +387,13 @@ function toolbar(host: CostHost): HTMLElement {
   return h(
     "section",
     { class: "cost-toolbar" },
+    segmented<"overview" | "analysis">([["overview", "總覽"], ["analysis", "分析"]], view, (v) => ((view = v), host.render()), "總覽或分析"),
     segmented(PERIODS, period, (p) => ((period = p), host.render()), "期間"),
     period === "custom"
       ? h("div", { class: "cost-dates" }, date("cost-from", customFrom, (v) => (customFrom = v)), h("span", { class: "dim", text: "到" }), date("cost-to", customTo, (v) => (customTo = v)))
       : h("span", { class: "cost-range dim", text: days <= 1 ? dateText(from) : `${dateText(from)} ~ ${dateText(to - 1)}` }),
     h("span", { class: "grow" }),
-    segmented(GROUPS, group, (g) => ((group = g), open.clear(), host.render()), "分組"),
+    view === "overview" ? segmented(GROUPS, group, (g) => ((group = g), open.clear(), host.render()), "分組") : null,
     report?.choices.rate
       ? segmented<"local" | "usd">([["local", report.choices.currency || "TWD"], ["usd", "USD"]], primary, (v) => ((primary = v), store("coucou.cost.primary", v), host.render()), "幣別")
       : null,

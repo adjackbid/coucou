@@ -211,6 +211,7 @@ impl Secretary {
             "team_detail" => Ok(Called::Text(team_detail(office, &need(a, "team")?)?)),
             "team_messages" => Ok(Called::Text(team_messages(office, &need(a, "team")?, a.get("limit").and_then(Value::as_u64).unwrap_or(20) as usize)?)),
             "usage_summary" => Ok(Called::Text(usage_summary(office, a.get("period").and_then(Value::as_str).unwrap_or("7d")))),
+            "cost_analysis" => Ok(Called::Text(cost_analysis(office, &need(a, "team")?, a.get("period").and_then(Value::as_str).unwrap_or("30d"))?)),
             "list_agents" => Ok(Called::Text(list_agents(office))),
             "agent_models" => {
                 let id = need(a, "agent")?;
@@ -555,6 +556,121 @@ fn team_messages(office: &Office, given: &str, limit: usize) -> Result<String, S
     Ok(if lines.is_empty() { "No messages yet.".into() } else { lines.join("\n") })
 }
 
+/// [from, to) in ms and its name, for a period word, on the person's clock.
+fn period_range(office: &Office, period: &str) -> (u64, u64, &'static str) {
+    let now = crate::team::store::now_ms() as i64;
+    let tz = office.tz_minutes * 60_000;
+    let day = 86_400_000i64;
+    let today = (now + tz).div_euclid(day) * day - tz;
+    let (from, to, name) = match period {
+        "today" => (today, today + day, "today"),
+        "yesterday" => (today - day, today, "yesterday"),
+        "7d" => (today - 6 * day, today + day, "the last 7 days"),
+        "month" => {
+            let (_, _, d) = civil((now + tz).div_euclid(day));
+            (today - (d - 1) * day, today + day, "this month")
+        }
+        "all" => (0, today + day, "all time"),
+        _ => (today - 29 * day, today + day, "the last 30 days"),
+    };
+    (from.max(0) as u64, to as u64, name)
+}
+
+/// One team's cost taken apart: who spent it on which model, on what kind
+/// of token, how hard they worked for it, and whether their context grew.
+fn cost_analysis(office: &Office, given: &str, period: &str) -> Result<String, String> {
+    let (id, c) = find_team(office, given)?;
+    let (from, to, name) = period_range(office, period);
+    let report = crate::cost::report(&settings::team_logs_dir(), from, to);
+    let rows: Vec<&crate::cost::Row> = report.rows.iter().filter(|r| r.team == id).collect();
+    if rows.is_empty() {
+        return Ok(format!("{} used no tokens in {name}.", c.name));
+    }
+    let money = |usd: f64| if report.choices.rate > 0.0 { format!("${usd:.4} (≈ {} {:.2})", report.choices.currency, usd * report.choices.rate) } else { format!("${usd:.4}") };
+    let total_usd: f64 = rows.iter().filter_map(|r| r.estimated_usd).sum();
+    let mut out = vec![format!("Team {} (id {id}), {name}: {} usage records, estimated {}.", c.name, rows.len(), money(total_usd))];
+    // The kinds of token, and what each cost.
+    let (mut i, mut o, mut cr, mut cw) = (0u64, 0u64, 0u64, 0u64);
+    let (mut ui, mut uo, mut ucr, mut ucw) = (0f64, 0f64, 0f64, 0f64);
+    for r in &rows {
+        let u = &r.usage;
+        i += u.input;
+        o += u.output;
+        cr += u.cache_read;
+        cw += u.cache_write;
+        if let Some(Some(f)) = report.models.iter().find(|m| m.model == u.model).map(|m| m.found.as_ref()) {
+            ui += u.input as f64 * f.price.input / 1e6;
+            uo += u.output as f64 * f.price.output / 1e6;
+            ucr += u.cache_read as f64 * f.price.cache_read / 1e6;
+            ucw += u.cache_write as f64 * f.price.cache_write / 1e6;
+        }
+    }
+    let hit = if i + cr + cw > 0 { cr as f64 * 100.0 / (i + cr + cw) as f64 } else { 0.0 };
+    out.push(format!(
+        "Tokens: input (not cached) {i} costing {}, output {o} costing {}, cache read {cr} costing {}, cache write {cw} costing {}. Cache hit rate {hit:.0}% of the input side.",
+        money(ui), money(uo), money(ucr), money(ucw)
+    ));
+    // Members: model, spend, share, work done, context growth.
+    out.push("Members:".into());
+    let mut members: Vec<String> = rows.iter().map(|r| r.member.clone()).collect();
+    members.sort();
+    members.dedup();
+    let mut lines: Vec<(f64, String)> = Vec::new();
+    for m in members {
+        let mine: Vec<&&crate::cost::Row> = rows.iter().filter(|r| r.member == m).collect();
+        let usd: f64 = mine.iter().filter_map(|r| r.estimated_usd).sum();
+        let tokens: u64 = mine.iter().map(|r| r.usage.input + r.usage.output + r.usage.cache_read + r.usage.cache_write).sum();
+        let mut models: Vec<String> = mine.iter().map(|r| r.usage.model.clone()).collect();
+        models.sort();
+        models.dedup();
+        let did = report.activity.iter().find(|a| a.team == id && a.member == m).cloned().unwrap_or_default();
+        // Input per call, early against late: a context that keeps growing costs more each turn.
+        let per_call: Vec<u64> = mine.iter().map(|r| r.usage.input + r.usage.cache_read + r.usage.cache_write).collect();
+        let third = (per_call.len() / 3).max(1);
+        let avg = |s: &[u64]| if s.is_empty() { 0 } else { s.iter().sum::<u64>() / s.len() as u64 };
+        let (early, late) = (avg(&per_call[..third.min(per_call.len())]), avg(&per_call[per_call.len().saturating_sub(third)..]));
+        let name = mine.first().map(|r| r.member_name.clone()).unwrap_or(m.clone());
+        lines.push((
+            usd,
+            format!(
+                "- {name} ({m}){}{}: model {}, {} ({:.0}% of the team), {tokens} tokens in {} records; {} turns ({} failed), {} hand-ins, {} sent back, {} accepted, {} reviews made; cost per turn {}; context per call {early} early vs {late} late.",
+                if did.leader { " leader" } else { "" },
+                if did.role.is_empty() { String::new() } else { format!(", role {}", did.role) },
+                models.join(" + "),
+                money(usd),
+                if total_usd > 0.0 { usd * 100.0 / total_usd } else { 0.0 },
+                mine.len(),
+                did.turns,
+                did.failed_turns,
+                did.delivered,
+                did.rejected,
+                did.accepted,
+                did.reviews,
+                if did.turns > 0 { money(usd / did.turns as f64) } else { "—".into() },
+            ),
+        ));
+    }
+    lines.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    out.extend(lines.into_iter().map(|(_, l)| l));
+    // The prices behind it.
+    let mut used: Vec<&String> = rows.iter().map(|r| &r.usage.model).collect();
+    used.sort();
+    used.dedup();
+    out.push("Prices used (USD per 1M tokens, input/output/cache read):".into());
+    for m in used {
+        match report.models.iter().find(|x| &x.model == m).and_then(|x| x.found.as_ref()) {
+            Some(f) => out.push(format!("- {m}: {}/{}/{}", f.price.input, f.price.output, f.price.cache_read)),
+            None => out.push(format!("- {m}: no price known")),
+        }
+    }
+    let accepted: u32 = report.activity.iter().filter(|a| a.team == id).map(|a| a.accepted).sum();
+    let rejected: u32 = report.activity.iter().filter(|a| a.team == id).map(|a| a.rejected).sum();
+    if accepted > 0 {
+        out.push(format!("Cost per accepted task: {} ({accepted} accepted, {rejected} sent back first).", money(total_usd / accepted as f64)));
+    }
+    Ok(out.join("\n"))
+}
+
 fn usage_summary(office: &Office, period: &str) -> String {
     let now = crate::team::store::now_ms() as i64;
     let tz = office.tz_minutes * 60_000;
@@ -732,6 +848,12 @@ fn describe() -> Vec<Tool> {
         tool("team_detail", "One team in detail: members (agent, model, status, what they are on or waiting for, tokens), tasks, open questions, what was handed in.", json!({ "team": team }), &["team"]),
         tool("team_messages", "The latest messages within a team, oldest first.", json!({ "team": team, "limit": { "type": "integer", "description": "How many, 1-60 (default 20)." } }), &["team"]),
         tool("usage_summary", "Tokens used and estimated cost, by team, agent and model.", json!({ "period": { "type": "string", "enum": ["today", "yesterday", "7d", "30d", "month"] } }), &["period"]),
+        tool(
+            "cost_analysis",
+            "One team's cost taken apart, to explain why it is high or low and how to bring it down: the kinds of token and what each cost, the cache hit rate, each member's model, spend, share, turns, hand-ins, rejections and how its context per call grew, the prices used, and the cost per accepted task.",
+            json!({ "team": team, "period": { "type": "string", "enum": ["today", "yesterday", "7d", "30d", "month", "all"] } }),
+            &["team"],
+        ),
         tool("list_agents", "The agents members can run as, with their default models.", json!({}), &[]),
         tool("agent_models", "The models one agent offers (asks the agent's endpoint).", json!({ "agent": { "type": "string", "description": "The agent's id." } }), &["agent"]),
         tool(
@@ -778,6 +900,7 @@ fn label(call: &Call, office: &Office) -> String {
         "list_teams" => "查看所有團隊".into(),
         "team_detail" => format!("查看「{}」的現況", team()),
         "team_messages" => format!("讀「{}」的溝通紀錄", team()),
+        "cost_analysis" => format!("分析「{}」的成本", team()),
         "usage_summary" => format!(
             "查詢{}的用量與成本",
             match a.get("period").and_then(Value::as_str).unwrap_or("7d") {
@@ -816,7 +939,7 @@ mod tests {
     #[test]
     fn the_tools_are_described_for_every_wire() {
         let tools = describe();
-        assert_eq!(tools.len(), 9);
+        assert_eq!(tools.len(), 10);
         for t in &tools {
             assert_eq!(t.parameters["type"], "object");
             assert!(t.description.len() > 20);
@@ -838,6 +961,30 @@ mod tests {
 
     /// The person's own chat provider, teams (a copy of their logs) and
     /// agents: a question, then a request for a team. Nothing is confirmed,
+
+    /// The person's own team logs and chat provider: why a team cost what it did. Needs the network.
+    #[test]
+    #[ignore]
+    fn the_real_secretary_explains_a_team_s_cost() {
+        use crate::team::orchestrator::AcpDrive;
+        let settings = crate::settings::load();
+        let provider = settings.providers.first().cloned().expect("a chat provider in Settings");
+        let logs = std::env::temp_dir().join(format!("coucou-secretary-cost-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&logs);
+        copy_dir(&settings::team_logs_dir(), &logs);
+        let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap();
+        runtime.block_on(async {
+            let driver = Arc::new(Agents::default());
+            let teams = Arc::new(Teams::new(Arc::new(AcpDrive(driver.clone())), Arc::new(|_| {}), Some(logs.clone()), settings::team_mcp_exe_path()));
+            let office = Office { teams, agents: settings.agents.clone(), driver, tz_minutes: 480, name: String::new() };
+            let secretary = Secretary::default();
+            let step = |s: &Step| eprintln!("  step: {} ({})", s.label, s.tool);
+            let reply = secretary.ask(&provider, &office, "幫我分析「購物網站 DEMO」這 30 天的成本:為什麼這麼高?怎麼優化?", &step).await.expect("an answer");
+            eprintln!("\n{}", reply.text);
+            assert!(reply.steps.iter().any(|s| s.tool == "cost_analysis"));
+        });
+        let _ = std::fs::remove_dir_all(&logs);
+    }
     /// so nothing is created. Needs the network.
     #[test]
     #[ignore]

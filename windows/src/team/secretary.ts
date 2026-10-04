@@ -82,6 +82,18 @@ async function ensureProviders(host: SecretaryHost) {
   host.render();
 }
 
+/**
+ * Asks the secretary from another page (成本分析): the exchange joins the
+ * conversation, and the answer — or why there is none — comes back as words.
+ */
+export async function consult(text: string, render: () => void): Promise<string> {
+  if (waiting) return "秘書還在處理上一件事,稍等一下再試。";
+  if (!providers) await ensureProviders({ render, reload: async () => {}, openTeam: () => {} });
+  await ask({ render, reload: async () => {}, openTeam: () => {} }, text);
+  const last = entries[entries.length - 1];
+  return last?.who === "error" ? `沒有成功:${last.text}` : (last?.text ?? "");
+}
+
 async function ask(host: SecretaryHost, text: string) {
   const words = text.trim();
   if (!words || waiting) return;
@@ -136,6 +148,12 @@ function words(text: string): HTMLElement {
   let list: HTMLElement | null = null;
   for (const raw of text.split("\n")) {
     const line = raw.trimEnd();
+    const heading = /^#{1,6}\s+(.*)$/.exec(line);
+    if (heading) {
+      list = null;
+      box.append(inline(h("h4"), heading[1]));
+      continue;
+    }
     const item = /^\s*(?:[-*•]|\d+[.)])\s+(.*)$/.exec(line);
     if (item) {
       if (!list) box.append((list = h("ul")));

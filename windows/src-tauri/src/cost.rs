@@ -32,6 +32,29 @@ pub struct Row {
     pub priced_by: String,
 }
 
+/// What a member did in the period, beside what it used: for telling a
+/// costly member that works hard from one that goes round in circles.
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Activity {
+    pub team: String,
+    pub member: String,
+    pub member_name: String,
+    pub role: String,
+    pub leader: bool,
+    pub turns: u32,
+    /// Turns that ended in an error.
+    pub failed_turns: u32,
+    /// Hand-ins, and how many of them were sent back.
+    pub delivered: u32,
+    pub rejected: u32,
+    /// Tasks of its own accepted.
+    pub accepted: u32,
+    /// Reviews it made (a leader's work).
+    pub reviews: u32,
+    pub messages: u32,
+}
+
 /// A model seen in the period, with the price used for it.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,6 +67,7 @@ pub struct ModelPrice {
 #[serde(rename_all = "camelCase")]
 pub struct Report {
     pub rows: Vec<Row>,
+    pub activity: Vec<Activity>,
     pub models: Vec<ModelPrice>,
     pub choices: Choices,
     pub table_source: String,
@@ -51,26 +75,71 @@ pub struct Report {
     pub table_size: usize,
 }
 
-/// The usage records of one log in [from, to), with who spent them.
-fn read_log(file: &Path, team: &str, from: u64, to: u64, out: &mut Vec<Row>) {
+/// The usage records of one log in [from, to), with who spent them, and what each member did.
+fn read_log(file: &Path, team: &str, from: u64, to: u64, out: &mut Vec<Row>, did: &mut BTreeMap<(String, String), Activity>) {
     let Ok(text) = std::fs::read_to_string(file) else { return };
     let mut team_name = team.to_string();
     let mut run = 0u64;
     // member id → (name, agent)
     let mut who: HashMap<String, (String, String)> = HashMap::new();
     let mut turns = crate::usage::TurnSums::default();
+    // task id → owner, for whose work a review is about
+    let mut owner: HashMap<String, String> = HashMap::new();
+    let mut leader = String::new();
+    let mut roles: HashMap<String, String> = HashMap::new();
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
         let Ok(record) = serde_json::from_str::<Record>(line) else { continue };
+        let inside = record.at >= from && record.at < to;
+        let mut count = |member: &str, f: &dyn Fn(&mut Activity)| {
+            if !inside || member.is_empty() {
+                return;
+            }
+            let a = did.entry((team.to_string(), member.to_string())).or_insert_with(|| Activity {
+                team: team.to_string(),
+                member: member.to_string(),
+                member_name: who.get(member).map(|w| w.0.clone()).unwrap_or_else(|| member.to_string()),
+                role: roles.get(member).cloned().unwrap_or_default(),
+                leader: member == leader,
+                ..Default::default()
+            });
+            f(a);
+        };
+        match &record.event {
+            Event::TaskCreated { id, owner: o, .. } => {
+                owner.insert(id.clone(), o.clone());
+            }
+            Event::TaskAssigned { id, owner: o, .. } => {
+                owner.insert(id.clone(), o.clone());
+            }
+            Event::TurnEnded { member, ok, .. } => count(member, &|a| {
+                a.turns += 1;
+                if !ok {
+                    a.failed_turns += 1;
+                }
+            }),
+            Event::Delivered { by, .. } => count(by, &|a| a.delivered += 1),
+            Event::Reviewed { task, accepted, by, .. } => {
+                count(by, &|a| a.reviews += 1);
+                let o = owner.get(task).cloned().unwrap_or_default();
+                let accepted = *accepted;
+                count(&o, &|a| if accepted { a.accepted += 1 } else { a.rejected += 1 });
+            }
+            Event::Message { from, .. } => count(from, &|a| a.messages += 1),
+            _ => {}
+        }
         match &record.event {
             Event::Started { config } => {
                 team_name = config.name.clone();
                 run = record.at;
+                leader = config.leader.clone();
                 for m in &config.members {
                     who.insert(m.id.clone(), (m.name.clone(), m.agent.clone()));
+                    roles.insert(m.id.clone(), m.role.clone());
                 }
             }
             Event::Joined { member } => {
                 who.insert(member.id.clone(), (member.name.clone(), member.agent.clone()));
+                roles.insert(member.id.clone(), member.role.clone());
             }
             Event::TurnStarted { member } => turns.turn_started(member),
             Event::Usage { member, usage } if turns.counts(member, usage) && record.at >= from && record.at < to => {
@@ -99,8 +168,14 @@ fn read_log(file: &Path, team: &str, from: u64, to: u64, out: &mut Vec<Row>) {
 
 /// Every team's usage in [from, to), from the logs under `root`.
 pub fn collect(root: &Path, from: u64, to: u64) -> Vec<Row> {
+    collect_all(root, from, to).0
+}
+
+/// Usage and what each member did, in [from, to).
+pub fn collect_all(root: &Path, from: u64, to: u64) -> (Vec<Row>, Vec<Activity>) {
     let mut rows = Vec::new();
-    let Ok(teams) = std::fs::read_dir(root) else { return rows };
+    let mut did = BTreeMap::new();
+    let Ok(teams) = std::fs::read_dir(root) else { return (rows, vec![]) };
     for team in teams.flatten() {
         let id = team.file_name().to_string_lossy().to_string();
         if !crate::team::is_plain_id(&id) {
@@ -110,12 +185,19 @@ pub fn collect(root: &Path, from: u64, to: u64) -> Vec<Row> {
         for f in files.flatten() {
             let name = f.file_name().to_string_lossy().to_string();
             if name == "events.jsonl" || (name.starts_with("events-") && name.ends_with(".jsonl")) {
-                read_log(&f.path(), &id, from, to, &mut rows);
+                read_log(&f.path(), &id, from, to, &mut rows, &mut did);
             }
         }
     }
     rows.sort_by_key(|r| r.at);
-    rows
+    // A member's name as the newest run gives it.
+    let mut activity: Vec<Activity> = did.into_values().collect();
+    for a in &mut activity {
+        if let Some(r) = rows.iter().rev().find(|r| r.team == a.team && r.member == a.member) {
+            a.member_name = r.member_name.clone();
+        }
+    }
+    (rows, activity)
 }
 
 /// Prices every row: the price found for its model, else the agent's own figure.
@@ -141,9 +223,9 @@ pub fn price(rows: &mut [Row], choices: &Choices, table: &Table) -> Vec<ModelPri
 pub fn report(root: &Path, from: u64, to: u64) -> Report {
     let choices = pricing::load_choices();
     let table = pricing::load_table();
-    let mut rows = collect(root, from, to);
+    let (mut rows, activity) = collect_all(root, from, to);
     let models = price(&mut rows, &choices, &table);
-    Report { rows, models, table_source: table.source.clone(), table_fetched_at: table.fetched_at, table_size: table.models.len(), choices }
+    Report { rows, activity, models, table_source: table.source.clone(), table_fetched_at: table.fetched_at, table_size: table.models.len(), choices }
 }
 
 /// A LiteLLM proxy's prices, read with the agent's own endpoint and key.
@@ -269,6 +351,22 @@ mod tests {
         let unknown = rows.iter().find(|r| r.member == "ai1").unwrap();
         assert!(unknown.estimated_usd.is_none());
         assert_eq!(models.len(), 2);
+
+        // What each did: a turn, a hand-in sent back, then accepted.
+        let mut third = Store::fresh(&dir).unwrap();
+        third.append(Event::Started { config: shop("D:\\shop") });
+        third.append(Event::TaskCreated { id: "TASK-01".into(), title: "圖".into(), detail: String::new(), owner: "ai4".into(), priority: crate::team::state::Priority::Medium, criteria: vec![], depends_on: vec![], deliver_to: None, by: "ai1".into() });
+        third.append(Event::TurnStarted { member: "ai4".into() });
+        third.append(Event::Delivered { id: "D-1".into(), task: "TASK-01".into(), kind: "image".into(), locator: "a.png".into(), summary: "x".into(), by: "ai4".into() });
+        third.append(Event::TurnEnded { member: "ai4".into(), ok: true, outcome: "end_turn".into() });
+        third.append(Event::Reviewed { task: "TASK-01".into(), accepted: false, reason: "太小".into(), by: "ai1".into() });
+        third.append(Event::Reviewed { task: "TASK-01".into(), accepted: true, reason: String::new(), by: "ai1".into() });
+        drop(third);
+        let (_, did) = collect_all(&root, 0, u64::MAX);
+        let ai4 = did.iter().find(|a| a.member == "ai4").unwrap();
+        assert_eq!((ai4.turns, ai4.delivered, ai4.rejected, ai4.accepted), (1, 1, 1, 1));
+        let ai1 = did.iter().find(|a| a.member == "ai1").unwrap();
+        assert_eq!((ai1.reviews, ai1.leader), (2, true));
 
         // Outside the period: nothing.
         assert!(collect(&root, u64::MAX - 1, u64::MAX).is_empty());

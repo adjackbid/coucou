@@ -293,8 +293,25 @@ export interface UsageRow {
   pricedBy: string;
 }
 
+/** What a member did in the period — mirror of cost::Activity. */
+export interface Activity {
+  team: string;
+  member: string;
+  memberName: string;
+  role: string;
+  leader: boolean;
+  turns: number;
+  failedTurns: number;
+  delivered: number;
+  rejected: number;
+  accepted: number;
+  reviews: number;
+  messages: number;
+}
+
 export interface UsageReport {
   rows: UsageRow[];
+  activity: Activity[];
   models: { model: string; found: Found | null }[];
   choices: PricingChoices;
   tableSource: string;

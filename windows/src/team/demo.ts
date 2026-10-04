@@ -397,8 +397,19 @@ export function demoReport(from: number, to: number): UsageReport {
       r.pricedBy = found.source;
     }
   }
+  // What each member did: turns as many as its records, a hand-in or two, now and then sent back.
+  const activity: import("./types").Activity[] = [];
+  for (const t of teams) {
+    for (const [id, name] of t.members) {
+      const mine = inRange.filter((r) => r.team === t.id && r.member === id);
+      if (!mine.length) continue;
+      const delivered = Math.max(1, Math.round(mine.length / 6));
+      activity.push({ team: t.id, member: id, memberName: name, role: "", leader: id === t.members[0][0], turns: mine.length, failedTurns: mine.length > 20 ? 1 : 0, delivered, rejected: id === "ai3" ? 2 : 0, accepted: delivered, reviews: id === t.members[0][0] ? delivered * 2 : 0, messages: delivered * 2 });
+    }
+  }
   return {
     rows: inRange,
+    activity,
     models: [...seen].map(([model, found]) => ({ model, found })).sort((a, b) => a.model.localeCompare(b.model)),
     choices: structuredClone(demoChoices),
     tableSource: "Coucou 內建的價目表 (LiteLLM)",
