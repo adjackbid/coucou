@@ -49,6 +49,8 @@ const drafts = new Map<string, string>();
 const modelLists = new Map<string, ModelChoice[] | string>();
 /** The team file whose delete button has been pressed once. */
 let confirming: string | null = null;
+/** The members panel's help, opened by its ? button. */
+let memberHelp = false;
 const ICON_COPY = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>';
 const ICON_TRASH = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
 
@@ -348,6 +350,28 @@ function teamMark(size: number): HTMLElement {
 
 // ── Team setup ────────────────────────────────────────────────────────────────
 
+/** What each field of a member means, for whoever sets a team up the first time. */
+function memberHelpCard(): HTMLElement {
+  const item = (term: string, text: string, example = "") =>
+    h("div", { class: "help-item" }, h("dt", { text: term }), h("dd", {}, text, example ? h("span", { class: "help-eg", text: `例:${example}` }) : null));
+  return h(
+    "div",
+    { class: "member-help", id: "member-help", role: "note" },
+    h(
+      "dl",
+      {},
+      item("名稱", "畫面上和隊友之間稱呼這位成員的名字。", "AI 1、設計師"),
+      item("角色", "2～6 個字的職稱。全隊都看得到,Leader 依它決定任務派給誰;工位和 Office 的標籤也顯示它。", "網站開發、圖片生成、測試"),
+      item("代理", "這位成員用哪個 AI 工具工作。每位成員可以用不同的代理;要新增或修改代理,到「設定 → Agents」。"),
+      item("模型", "留空就用代理自己的預設模型。也可以指定一個:點這一欄會列出這個代理提供的模型。"),
+      item("職責", "一兩句只寫給這位成員的工作說明:負責什麼、交付什麼、不碰什麼。隊友看不到;空著也可以,它就只依角色和 Leader 派的任務做事。", "依需求產生商品圖,存到 public/images 交給網站開發;不改程式碼"),
+      item("Leader", "每個團隊一位。負責把目標拆成任務、派給隊友、驗收成果,最後向你回報。建議交給能力較強的代理或模型。"),
+      item("移除", "至少要留一位成員。團隊已經在執行時,要加人請到「工作監控」按「＋ 加人手」。"),
+    ),
+    h("p", { class: "hint", text: "成員之間誰把成果交給誰、能不能直接對話,在「協作關係」設定。" }),
+  );
+}
+
 /** An input bound to the form's working copy. Typing does not redraw. */
 function bound<K extends "input" | "textarea">(tag: K, key: string, value: string, set: (v: string) => void, attrs: Record<string, string> = {}): HTMLElementTagNameMap[K] {
   const el = h(tag, { class: "field", "data-key": key, spellcheck: "false", ...attrs }) as HTMLInputElement | HTMLTextAreaElement;
@@ -505,11 +529,11 @@ function setup(file: TeamFile): HTMLElement {
             "div",
             { class: "row nowrap" },
             bound("input", `m${at}.name`, m.name, (v) => (m.name = v), { placeholder: "名稱", class: "field name" }),
-            bound("input", `m${at}.role`, m.role, (v) => (m.role = v), { placeholder: "角色,例如:網站開發" }),
+            bound("input", `m${at}.role`, m.role, (v) => (m.role = v), { placeholder: "角色,例如:網站開發", title: "全隊看得到的短職稱,Leader 依它派工" }),
             agent,
           ),
           h("div", { class: "row nowrap" }, model),
-          bound("input", `m${at}.duty`, m.duty, (v) => (m.duty = v), { placeholder: "職責:這位成員負責什麼" }),
+          bound("input", `m${at}.duty`, m.duty, (v) => (m.duty = v), { placeholder: "職責:這位成員負責什麼、交付什麼(只給它自己看)", title: "只寫給這位成員的工作說明" }),
         ),
         h(
           "div",
@@ -542,7 +566,28 @@ function setup(file: TeamFile): HTMLElement {
   const team = h(
     "section",
     { class: "panel form" },
-    h("h2", {}, "團隊成員", h("span", { class: "count", text: String(config.members.length) })),
+    h(
+      "div",
+      { class: "panel-head" },
+      h("h2", {}, "團隊成員", h("span", { class: "count", text: String(config.members.length) })),
+      h(
+        "button",
+        {
+          type: "button",
+          class: `help-toggle${memberHelp ? " on" : ""}`,
+          "aria-expanded": String(memberHelp),
+          "aria-controls": "member-help",
+          title: memberHelp ? "收起說明" : "每一欄怎麼填",
+          onClick: () => {
+            memberHelp = !memberHelp;
+            render();
+          },
+        },
+        h("b", { "aria-hidden": "true", text: "?" }),
+        memberHelp ? "收起說明" : "怎麼填",
+      ),
+    ),
+    memberHelp ? memberHelpCard() : null,
     members,
     h(
       "button",
