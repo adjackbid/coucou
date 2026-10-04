@@ -401,7 +401,16 @@ export class Office {
       h("button", { class: "icon-btn", type: "button", title: "縮小", "aria-label": "縮小", disabled: this.view.zoom <= 0.6, onClick: () => this.zoomTo(this.view.zoom - 0.1) }, "−"),
       h("span", { class: "dim", "aria-live": "polite", text: `${Math.round(this.view.zoom * 100)}%` }),
       h("button", { class: "icon-btn", type: "button", title: "放大", "aria-label": "放大", disabled: this.view.zoom >= 1.6, onClick: () => this.zoomTo(this.view.zoom + 0.1) }, "+"),
-      h("button", { class: "btn plain", type: "button", title: "回到全景", onClick: () => { this.view = { zoom: 1, x: 0, y: 0 }; this.host.render(); } }, "全景"),
+      h("button", {
+        class: "btn plain", type: "button", title: "縮放到看得見所有辦公室",
+        onClick: () => {
+          // The whole floor in view: as large as fits, never past the 60–160 % range.
+          const w = grid.offsetWidth, hgt = grid.offsetHeight;
+          const fit = Math.min(1, (vp.clientWidth - 8) / w, (vp.clientHeight - 8) / hgt);
+          this.view = { zoom: Math.min(1.6, Math.max(0.6, Math.floor(fit * 10) / 10)), x: 0, y: 0 };
+          this.host.render();
+        },
+      }, "全景"),
     );
     return h("div", { class: "office-map-wrap" }, vp, controls, h("p", { class: "dim office-hint", text: "點房間看摘要,雙擊或按「進入辦公室」進去 · 拖曳移動,Ctrl + 滾輪縮放" }));
   }

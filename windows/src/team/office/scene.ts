@@ -82,8 +82,18 @@ function toScreenIn(w: WorldToScreen, x: number, y: number, z = 0) {
 // ── The looks of an office ────────────────────────────────────────────────────
 
 /** Office looks, in the order the team settings offer them. */
-export const THEME_LABELS: Record<string, string> = { warm: "溫暖木質", nordic: "北歐明亮", studio: "綠意工作室", premium: "高級辦公室" };
-const STANDARD = ["warm", "nordic", "studio"];
+export const THEME_LABELS: Record<string, string> = {
+  warm: "溫暖木質",
+  japandi: "日式靜謐",
+  industrial: "工業創作",
+  biophilic: "植感共創",
+  futurelab: "未來科技",
+  library: "書房策略",
+  premium: "高級辦公室",
+};
+const STANDARD = ["warm", "japandi", "industrial", "biophilic", "futurelab", "library"];
+/** Looks that were renamed: a team file may still name the old one. */
+const RENAMED: Record<string, string> = { nordic: "japandi", studio: "biophilic" };
 /** From this many members a team gets the large office. */
 export const LARGE_FROM = 5;
 
@@ -93,7 +103,8 @@ export const LARGE_FROM = 5;
  * standard looks, the same for a team every time (from its id).
  */
 export function themeName(teamId: string, setting: string | undefined, members: number): string {
-  if (setting && THEME_LABELS[setting]) return setting;
+  const named = setting ? RENAMED[setting] ?? setting : "";
+  if (THEME_LABELS[named]) return named;
   if (members >= LARGE_FROM) return "premium";
   let h = 0;
   for (const ch of teamId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -135,7 +146,8 @@ const ROWS = [1.1, 3.1];
 export const MAX_DESKS = 8;
 export function desksFor(count: number): Desk[] {
   // Desks side by side make one long bench per row: 1.4 m apart, as long as a desk.
-  const cols = count <= 4 ? [2.3, 3.7] : count <= 6 ? [1.6, 3.0, 4.4] : [0.95, 2.35, 3.75, 5.15];
+  // Eight keep clear of what stands against the right wall (bookcase, rack, plants).
+  const cols = count <= 4 ? [2.3, 3.7] : count <= 6 ? [1.6, 3.0, 4.4] : [1.1, 2.5, 3.9, 5.3];
   const all = ROWS.flatMap((y) => cols.map((x) => ({ x, y, facing: "SE" as const })));
   // Fill a whole row before the next; two in a row of three sit at its ends.
   return all.slice(0, Math.max(0, Math.min(count, MAX_DESKS)));

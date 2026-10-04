@@ -32,6 +32,8 @@ const config: TeamConfig = {
   maxTurns: 60,
 };
 
+// `?theme=library` dresses the demo team's office in one look.
+if (typeof location !== "undefined") config.officeTheme = new URLSearchParams(location.search).get("theme") ?? undefined;
 // `?members=8` adds members to the demo team, to look at a full room.
 const wanted = typeof location === "undefined" ? 4 : Math.min(8, Number(new URLSearchParams(location.search).get("members")) || 4);
 const EXTRA_ROLES = ["文案撰寫", "測試驗收", "資料整理", "營運支援"];
