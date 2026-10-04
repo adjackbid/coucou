@@ -382,6 +382,15 @@ impl Team {
             if let acp::Event::Update(u) = &event {
                 team.on_screen(&member, |screen| screen.update(&u.update));
             }
+            // Tokens go in the team's record, under the model the member runs
+            // when the agent did not name one.
+            if let acp::Event::Usage(mut usage) = event {
+                if usage.model.trim().is_empty() {
+                    usage.model = team.seat(&member).map(|s| s.launch.model.clone().filter(|m| !m.trim().is_empty()).unwrap_or(s.profile.model.clone())).unwrap_or_default();
+                }
+                team.record(vec![Event::Usage { member: member.clone(), usage }]);
+                return;
+            }
             let changed = {
                 let mut live = team.live.lock().unwrap();
                 let entry = live.entry(member.clone()).or_default();
@@ -407,6 +416,7 @@ impl Team {
                         });
                         true
                     }
+                    acp::Event::Usage(_) => false,
                     // The agent is gone; the next one is a new session.
                     acp::Event::Exit(_) => {
                         team.briefed.lock().unwrap().remove(&member);

@@ -37,6 +37,8 @@ use crate::policy::{self, Kind};
 pub struct AgyState {
     /// Settled by the `result` that ends a turn.
     done: Mutex<Option<oneshot::Sender<Result<String, String>>>>,
+    /// The model it was started with, to name the usage it reports.
+    pub model: Mutex<String>,
 }
 
 /// The name of Coucou's gate in the work folder's hooks.json.
@@ -94,6 +96,9 @@ pub fn prepare_folder(cwd: &std::path::Path, relay: &McpServer) -> Result<(), St
 }
 
 pub async fn setup(running: &mut Running, key: &str, cwd: &std::path::Path, launch: &Launch) -> Result<(), String> {
+    if let Some(m) = launch.model.as_deref().filter(|m| !m.trim().is_empty()) {
+        *running.agy.model.lock().unwrap() = m.trim().to_string();
+    }
     if let Some(relay) = launch.mcp_servers.first() {
         prepare_folder(cwd, relay)?;
     }
@@ -245,6 +250,18 @@ pub async fn dispatch(route: &Route, state: &AgyState, msg: Value) {
         }
         "result" => {
             let result = msg.get("result").cloned().unwrap_or(Value::Null);
+            // Usage, if this agy version reports any: Gemini's usageMetadata,
+            // or an OpenAI-style usage.
+            let model = state.model.lock().unwrap().clone();
+            let found = [result.get("usageMetadata"), msg.get("usageMetadata"), result.get("usage_metadata")]
+                .into_iter()
+                .flatten()
+                .next()
+                .map(|u| crate::usage::from_gemini(&model, u))
+                .or_else(|| [result.get("usage"), msg.get("usage")].into_iter().flatten().next().map(|u| crate::usage::from_openai(&model, u)));
+            if let Some(u) = found.filter(|u| !u.is_empty()) {
+                (route.sink)(Event::Usage(u));
+            }
             let status = result.get("status").and_then(Value::as_str).unwrap_or("SUCCESS");
             let outcome = match status {
                 "SUCCESS" => Ok("end_turn".to_string()),

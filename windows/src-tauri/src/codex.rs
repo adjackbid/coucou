@@ -44,6 +44,11 @@ pub struct CodexState {
     /// The files each file-change item touches, from `item/started`: an
     /// approval request names only the item.
     edits: Mutex<HashMap<String, Vec<String>>>,
+    /// The model the thread runs, from `thread/start` (and `model/rerouted`).
+    model: Mutex<String>,
+    /// Each thread's token totals so far (sub-agents' threads too: their
+    /// tokens are the member's).
+    usage: crate::usage::Totals,
 }
 
 /// A TOML basic string, for `-c key=value` overrides.
@@ -127,6 +132,9 @@ pub async fn setup(
         .ok_or("thread/start returned no thread id")?
         .to_string();
     *running.codex.thread.lock().unwrap() = thread.clone();
+    if let Some(m) = started.get("model").and_then(Value::as_str) {
+        *running.codex.model.lock().unwrap() = m.to_string();
+    }
     running.session_id = thread.clone();
     log::line(format!(
         "codex {key}: thread {thread} in {} ({} MCP server(s), {})",
@@ -281,6 +289,27 @@ pub async fn dispatch(route: &Route, state: &CodexState, msg: Value) {
         // thread of its own whose notifications come down the same pipe:
         // only the thread Coucou opened speaks for the member — above all,
         // only its `turn/completed` ends the member's turn.
+        // Tokens count whichever thread spent them: a sub-agent works for the member.
+        match method {
+            "thread/tokenUsage/updated" => {
+                let thread = params.get("threadId").and_then(Value::as_str).unwrap_or("").to_string();
+                if let Some(total) = params.pointer("/tokenUsage/total") {
+                    let model = state.model.lock().unwrap().clone();
+                    let now = crate::usage::from_codex_breakdown(&model, total);
+                    if let Some(new) = state.usage.advance_keyed(&thread, now) {
+                        (route.sink)(Event::Usage(new));
+                    }
+                }
+                return;
+            }
+            "model/rerouted" => {
+                if let Some(m) = params.get("toModel").and_then(Value::as_str) {
+                    *state.model.lock().unwrap() = m.to_string();
+                }
+                return;
+            }
+            _ => {}
+        }
         let ours = {
             let thread = state.thread.lock().unwrap();
             thread.is_empty() || params.get("threadId").and_then(Value::as_str).map(|t| t == thread.as_str()).unwrap_or(true)
@@ -517,7 +546,7 @@ mod tests {
                         Some("initialized") => {}
                         Some("thread/start") => {
                             assert_eq!(msg["params"]["approvalPolicy"], "untrusted");
-                            out.push(json!({ "id": msg["id"], "result": { "thread": { "id": "th1" } } }));
+                            out.push(json!({ "id": msg["id"], "result": { "thread": { "id": "th1" }, "model": "gpt-5.6-sol" } }));
                         }
                         Some("turn/start") => {
                             turn += 1;
@@ -533,6 +562,14 @@ mod tests {
                             // A sub-agent of its own talks and finishes first, on its own thread.
                             out.push(json!({ "method": "item/agentMessage/delta", "params": { "threadId": "th-sub", "delta": "chatter" } }));
                             out.push(json!({ "method": "turn/completed", "params": { "threadId": "th-sub", "turn": { "id": "sub", "status": "completed" } } }));
+                            // Each thread's running totals: the member's thread grows by 1000 in, 100 out a turn.
+                            let n = turn as u64;
+                            out.push(json!({ "method": "thread/tokenUsage/updated", "params": { "threadId": "th1", "turnId": "x", "tokenUsage": {
+                                "total": { "totalTokens": 1100 * n, "inputTokens": 1000 * n, "cachedInputTokens": 600 * n, "cacheWriteInputTokens": 0, "outputTokens": 100 * n, "reasoningOutputTokens": 0 },
+                                "last": { "totalTokens": 0, "inputTokens": 0, "cachedInputTokens": 0, "cacheWriteInputTokens": 0, "outputTokens": 0, "reasoningOutputTokens": 0 }, "modelContextWindow": null } } }));
+                            out.push(json!({ "method": "thread/tokenUsage/updated", "params": { "threadId": "th-sub", "turnId": "sub", "tokenUsage": {
+                                "total": { "totalTokens": 55, "inputTokens": 50, "cachedInputTokens": 0, "cacheWriteInputTokens": 0, "outputTokens": 5, "reasoningOutputTokens": 0 },
+                                "last": { "totalTokens": 0, "inputTokens": 0, "cachedInputTokens": 0, "cacheWriteInputTokens": 0, "outputTokens": 0, "reasoningOutputTokens": 0 }, "modelContextWindow": null } } }));
                             out.push(json!({ "method": "item/agentMessage/delta", "params": { "threadId": "th1", "delta": decision } }));
                             out.push(json!({ "method": "turn/completed", "params": { "threadId": "th1", "turn": { "id": format!("tu{turn}"), "status": "completed" } } }));
                         }
@@ -585,6 +622,14 @@ mod tests {
             agents.answer_permission("m", card.request_id, Some("decline".into())).await.unwrap();
             turn.await.unwrap().unwrap();
             assert_eq!(said(&heard), vec!["accept", "decline"]);
+
+            // Usage: what each turn added, the sub-agent's thread counted once.
+            let used: Vec<crate::usage::Usage> = heard.lock().unwrap().iter().filter_map(|e| match e { Event::Usage(u) => Some(u.clone()), _ => None }).collect();
+            assert!(used.iter().all(|u| u.model == "gpt-5.6-sol"));
+            let input: u64 = used.iter().map(|u| u.input).sum();
+            let cached: u64 = used.iter().map(|u| u.cache_read).sum();
+            let output: u64 = used.iter().map(|u| u.output).sum();
+            assert_eq!((input, cached, output), (800 + 50, 1200, 200 + 5));
         });
     }
 
@@ -619,7 +664,7 @@ mod tests {
                     }
                 }
                 Event::Permission(_) => *asked.lock().unwrap() += 1,
-                Event::Exit(_) => {}
+                Event::Exit(_) | Event::Usage(_) => {}
             })
         };
         let launch = Launch {

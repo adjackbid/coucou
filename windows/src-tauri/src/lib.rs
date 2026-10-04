@@ -18,6 +18,7 @@ mod secrets;
 mod settings;
 mod team;
 mod tray;
+mod usage;
 mod win_user;
 
 use std::os::windows::process::CommandExt;

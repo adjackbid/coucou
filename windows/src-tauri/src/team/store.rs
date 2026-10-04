@@ -201,6 +201,25 @@ mod tests {
     }
 
     #[test]
+    fn usage_is_kept_in_the_log_and_added_up_by_member_and_model() {
+        let dir = temp("usage");
+        let mut store = Store::fresh(&dir).unwrap();
+        store.append(Event::Started { config: shop("D:\\shop") });
+        let used = |model: &str, input: u64| crate::usage::Usage { model: model.into(), input, output: 10, ..Default::default() };
+        store.append(Event::Usage { member: "ai3".into(), usage: used("gpt-5.6-sol", 100) });
+        store.append(Event::Usage { member: "ai3".into(), usage: used("gpt-5.6-sol", 50) });
+        store.append(Event::Usage { member: "ai3".into(), usage: used("gpt-5.6-luna", 7) });
+        drop(store);
+        let again = Store::open(&dir).unwrap();
+        let ai3 = &again.state().usage["ai3"];
+        assert_eq!((ai3["gpt-5.6-sol"].input, ai3["gpt-5.6-sol"].output), (150, 20));
+        assert_eq!(ai3["gpt-5.6-luna"].input, 7);
+        let snap = again.state().snapshot(&std::collections::BTreeMap::new()).unwrap();
+        assert_eq!(snap.members.iter().find(|m| m.id == "ai3").unwrap().usage.len(), 2);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn earlier_runs_are_listed_newest_first_and_read_without_changing_them() {
         let dir = temp("earlier");
         let mut first = Store::fresh(&dir).unwrap();

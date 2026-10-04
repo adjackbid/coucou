@@ -88,6 +88,8 @@ pub enum Event {
     Wrapping { on: bool },
     /// The person came back to a finished team with more: it runs again.
     Reopened,
+    /// Tokens a member's model used since the last report.
+    Usage { member: String, usage: crate::usage::Usage },
 }
 
 /// An event with its place in the log and its time (ms since 1970).
@@ -213,6 +215,8 @@ pub struct State {
     pub questions: Vec<Question>,
     pub turns: BTreeMap<String, Turns>,
     pub lost: BTreeMap<String, String>,
+    /// What each member's models used in this run: member → model → totals.
+    pub usage: BTreeMap<String, BTreeMap<String, crate::usage::Usage>>,
     pub feed: Vec<FeedItem>,
     pub total_turns: u32,
 }
@@ -517,6 +521,11 @@ impl State {
                 }
             }
             Event::Wrapping { on } => self.wrapping = *on,
+            Event::Usage { member, usage } => {
+                let models = self.usage.entry(member.clone()).or_default();
+                let total = models.entry(usage.model.clone()).or_insert_with(|| crate::usage::Usage { model: usage.model.clone(), ..Default::default() });
+                total.add(usage);
+            }
             Event::Reopened => {
                 self.status = TeamStatus::Running;
                 self.finished_at = 0;
@@ -606,6 +615,8 @@ pub struct MemberView {
     pub status: MemberStatus,
     /// Planning or reviewing, while it works; nothing otherwise.
     pub phase: Option<Phase>,
+    /// What its models used in this run, model by model.
+    pub usage: Vec<crate::usage::Usage>,
     /// The task it is on, if any.
     pub task: Option<String>,
     pub waiting: Option<Waiting>,
@@ -725,6 +736,7 @@ impl State {
                     is_leader: m.id == config.leader,
                     status,
                     phase: self.phase(&m.id, status),
+                    usage: self.usage.get(&m.id).map(|u| u.values().cloned().collect()).unwrap_or_default(),
                     task,
                     waiting,
                     activity: l.map(|l| l.activity.clone()).unwrap_or_default(),

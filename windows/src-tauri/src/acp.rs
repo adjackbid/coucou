@@ -200,6 +200,8 @@ pub enum Event {
     Permission(AcpPermission),
     /// The agent's process is gone; the payload is the session's key.
     Exit(String),
+    /// Tokens the session's model used since its last report.
+    Usage(crate::usage::Usage),
 }
 
 /// Where a session's events go: the island for the chat's agent, the team's
@@ -214,6 +216,8 @@ pub fn to_island(app: &AppHandle) -> Sink {
             Event::Update(u) => app.emit_to(WINDOW_LABEL, "acp-update", u),
             Event::Permission(p) => app.emit_to(WINDOW_LABEL, "acp-permission", p),
             Event::Exit(key) => app.emit_to(WINDOW_LABEL, "acp-exit", key),
+            // The chat does not count; teams do.
+            Event::Usage(_) => Ok(()),
         };
     })
 }
@@ -424,6 +428,13 @@ async fn copilot_models(profile: &AgentProfile) -> Result<Vec<ModelChoice>, Stri
 /// spawned leaves the real agent running, so the whole tree goes.
 async fn stop(running: &Running) {
     let Some(mut child) = running.child.lock().await.take() else { return };
+    // Asked to go, an agent closes its session properly: Copilot then writes
+    // what the session used (its `session.shutdown` event), which a kill
+    // would lose. Its input closed, it has a moment to do so.
+    let _ = running.writer.lock().await.shutdown().await;
+    if tokio::time::timeout(Duration::from_secs(4), child.wait()).await.is_ok() {
+        return;
+    }
     if let Some(pid) = child.id() {
         let _ = Command::new("taskkill")
             .args(["/PID", &pid.to_string(), "/T", "/F"])
@@ -519,7 +530,12 @@ async fn setup(running: &mut Running, key: &str, profile: &AgentProfile, launch:
             return crate::codex::setup(running, key, &cwd, launch, model_of(profile, launch), SETUP_TIMEOUT).await;
         }
         Protocol::Claude => return crate::claude::setup(running, key, launch, SETUP_TIMEOUT).await,
-        Protocol::Agy => return crate::agy::setup(running, key, &working_dir(profile, launch), launch).await,
+        Protocol::Agy => {
+            if let Some(m) = model_of(profile, launch) {
+                *running.agy.model.lock().unwrap() = m;
+            }
+            return crate::agy::setup(running, key, &working_dir(profile, launch), launch).await;
+        }
         Protocol::Acp => {}
     }
     let init = request(
@@ -818,6 +834,12 @@ impl Agents {
             TURN_TIMEOUT,
         )
         .await?;
+        if let Some(u) = result.get("usage").filter(|u| u.is_object()) {
+            let usage = crate::usage::from_acp(&model_of(profile, launch).unwrap_or_default(), u);
+            if !usage.is_empty() {
+                sink(Event::Usage(usage));
+            }
+        }
         Ok(AcpOutcome {
             stop_reason: result
                 .get("stopReason")
@@ -992,7 +1014,7 @@ mod tests {
                     }
                 }
                 Event::Permission(p) => asked.lock().unwrap().push(p.title),
-                Event::Exit(_) => {}
+                Event::Exit(_) | Event::Usage(_) => {}
             })
         };
         let launch = Launch {

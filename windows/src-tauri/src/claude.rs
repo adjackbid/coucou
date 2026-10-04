@@ -53,6 +53,8 @@ pub struct ClaudeState {
     streamed: AtomicBool,
     /// Claude Code has no login and no key: every turn would fail.
     pub signed_out: AtomicBool,
+    /// `modelUsage` so far: each result carries the session's running totals.
+    usage: crate::usage::Totals,
 }
 
 /// Said instead of starting a turn that cannot run.
@@ -336,6 +338,12 @@ pub async fn dispatch(route: &Route, state: &ClaudeState, msg: Value) {
             }
         }
         "result" => {
+            // What this turn used: the running totals by model, less what was reported before.
+            if let Some(mu) = msg.get("modelUsage").filter(|m| m.is_object()) {
+                for u in state.usage.advance(crate::usage::from_claude_model_usage(mu)) {
+                    (route.sink)(Event::Usage(u));
+                }
+            }
             let failed = msg.get("is_error").and_then(Value::as_bool).unwrap_or(false);
             let subtype = msg.get("subtype").and_then(Value::as_str).unwrap_or("success");
             let outcome = if failed || subtype != "success" {
@@ -413,7 +421,7 @@ mod tests {
             Arc::new(move |event| match event {
                 Event::Update(u) => heard.lock().unwrap().push(u.update),
                 Event::Permission(_) => *asked.lock().unwrap() += 1,
-                Event::Exit(_) => {}
+                Event::Exit(_) | Event::Usage(_) => {}
             })
         };
         let launch = Launch {
@@ -476,7 +484,9 @@ mod tests {
                                 assert!(msg["response"]["response"]["updatedInput"]["command"].is_string());
                             }
                             out.push(json!({ "type": "assistant", "message": { "content": [{ "type": "text", "text": decision }] } }));
-                            out.push(json!({ "type": "result", "subtype": "success", "is_error": false, "result": "done" }));
+                            // modelUsage holds the session's running totals.
+                            out.push(json!({ "type": "result", "subtype": "success", "is_error": false, "result": "done", "total_cost_usd": 0.1 * asked as f64,
+                                "modelUsage": { "claude-sonnet-5-5": { "inputTokens": 100 * asked, "outputTokens": 10 * asked, "cacheReadInputTokens": 500 * asked, "cacheCreationInputTokens": 0, "costUSD": 0.1 * asked as f64 } } }));
                         }
                         _ => {}
                     }
@@ -535,6 +545,11 @@ mod tests {
             agents.answer_permission("m", card.request_id, Some("deny".into())).await.unwrap();
             turn.await.unwrap().unwrap();
             assert_eq!(said(&heard), vec!["allow", "deny"]);
+            // Two turns: each reports what it added to the running totals.
+            let used: Vec<crate::usage::Usage> = heard.lock().unwrap().iter().filter_map(|e| match e { Event::Usage(u) => Some(u.clone()), _ => None }).collect();
+            assert_eq!(used.len(), 2);
+            assert!(used.iter().all(|u| u.model == "claude-sonnet-5-5" && u.input == 100 && u.cache_read == 500 && u.output == 10));
+            assert!((used[1].cost_usd.unwrap() - 0.1).abs() < 1e-9);
 
             // The handshake's model list is what the drop-down offers.
             let listed = agents.models(&claude_profile()).await.unwrap();
