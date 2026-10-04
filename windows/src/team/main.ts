@@ -19,7 +19,8 @@ import { linksScreen, logScreen, openThread, type Page } from "./screens";
 import { Office } from "./office/office";
 import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
-import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, Snapshot, Task, TeamConfig, TeamFile } from "./types";
+import { onStep as secretaryStep, secretaryPage, type SecretaryHost } from "./secretary";
+import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
 
@@ -35,7 +36,7 @@ let tab: "setup" | "links" | "monitor" | "log" = "setup";
 /** The monitor as a board, or as the team's office. */
 let monitorMode: "board" | "office" = "board";
 /** The company map instead of one team; or the office of a team that has no file here (示範資料). */
-let place: "team" | "company" | "office" | "cost" = "team";
+let place: "team" | "company" | "office" | "cost" | "secretary" = "team";
 let officeTeam: string | null = null;
 /** The form's working copy of the selected team; saved on request. */
 let editing: TeamConfig | null = null;
@@ -347,6 +348,19 @@ function sidebar(): HTMLElement {
     "aside",
     { class: "sidebar pane" },
     h("div", { class: "brand", "data-drag": "" }, teamMark(30), h("span", { text: "Teamwork" })),
+    h(
+      "button",
+      {
+        class: `team-item company${place === "secretary" ? " on" : ""}`,
+        type: "button",
+        onClick: () => {
+          place = "secretary";
+          render();
+        },
+      },
+      h("span", { class: "team-item-name", text: "秘書" }),
+      h("span", { class: "team-item-state", text: "需要時叫我:查現況、開團隊" }),
+    ),
     h(
       "button",
       {
@@ -1165,6 +1179,14 @@ function tabs(snap: Snapshot | undefined): HTMLElement {
 }
 
 function main(): HTMLElement {
+  if (place === "secretary") {
+    return h(
+      "main",
+      { class: "main pane" },
+      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": "位置" }, h("b", { text: "秘書" })), windowButtons()),
+      secretaryPage(secretaryHost),
+    );
+  }
   if (place === "cost") {
     return h(
       "main",
@@ -1220,6 +1242,19 @@ function main(): HTMLElement {
     h("div", { class: "scroll" }, view),
   );
 }
+
+/** The secretary's page: it may add a team, and point at one. */
+const secretaryHost: SecretaryHost = {
+  render: () => render(),
+  reload: () => load(),
+  openTeam: (id) => {
+    const file = files.find((f) => f.config?.id === id);
+    if (file) {
+      select(file.file);
+      render();
+    }
+  },
+};
 
 /** The 成本與用量 page draws inside this window, with its agents' names. */
 const costHost: CostHost = { render: () => render(), agents: () => agents };
@@ -1370,6 +1405,7 @@ async function load() {
   // A browser opened at `?view=company` starts on the company map.
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "company") place = "company";
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "cost") place = "cost";
+  if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "secretary") place = "secretary";
   firstLoad = false;
   render();
 }
@@ -1399,6 +1435,8 @@ async function start() {
       void attach(team.id, async () => ({ path: await Bridge.teamAttachPath(team.id, path), name, preview: null }));
     }
   });
+  // What the secretary is doing while it works on a request.
+  await onEvent<SecretaryStep>("secretary-step", (step) => secretaryStep(step, secretaryHost));
   // Each member's screen, as it happens: no redraw, just the lines.
   await onEvent<ScreenPatch>("team-screen", live.applyPatch);
   // Agents may have been added in the settings window meanwhile.

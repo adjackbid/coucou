@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentProfile, ModelChoice, Provider, Settings } from "./state";
-import type { Found, KeySpend, PastRun, PricingChoices, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
+import type { Found, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -156,6 +156,14 @@ export const Bridge = {
   pricingFetchList: () => callOrThrow<number>("pricing_fetch_list"),
   /** Reads the prices an agent's own endpoint gives (a LiteLLM proxy); how many. */
   pricingFromAgent: (agent: string) => callOrThrow<number>("pricing_from_agent", { agent }),
+  /** The chat providers the secretary can think with: (id, name, model). */
+  secretaryProviders: () => call<[string, string, string][]>("secretary_providers"),
+  /** The person asks the secretary; its steps arrive as `secretary-step` while it works. */
+  secretaryAsk: (text: string, provider: string | null, tzMinutes: number) => callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes }),
+  /** Carries out one of its proposals — only ever from the click on its card. */
+  secretaryConfirm: (id: string, tzMinutes: number) => callOrThrow<SecretaryProposal>("secretary_confirm", { id, tzMinutes }),
+  secretaryDecline: (id: string) => call<SecretaryProposal | null>("secretary_decline", { id }),
+  secretaryReset: () => call<void>("secretary_reset"),
   /** What an agent's own endpoint has billed its key (asked only on a click). */
   endpointSpend: (agent: string) => callOrThrow<KeySpend>("endpoint_spend", { agent }),
   /** A deliverable that is a picture in the team's work folder, as bytes. */

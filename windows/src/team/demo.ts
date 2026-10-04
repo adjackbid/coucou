@@ -423,3 +423,30 @@ export function demoQuote(models: string[]): Record<string, import("./types").Fo
 export function demoKeySpend(): import("./types").KeySpend {
   return { spend: 15.55, maxBudget: 150, budgetDuration: "7d", budgetResetAt: new Date(NOW + 2 * 86_400_000).toISOString(), modelSpend: { "deepseek-v4-flash": 11.92, "glm-5.3-flash": 2.41, "gemini-3.8-flash": 1.22 }, askedAt: Date.now() };
 }
+
+/** The secretary in a browser: a canned answer, after a moment, with a card when asked for a team. */
+export async function demoSecretary(text: string): Promise<import("./types").SecretaryReply> {
+  await new Promise((r) => setTimeout(r, 900));
+  if (/開|建立|新團隊/.test(text)) {
+    return {
+      text: "已擬好新團隊,**尚未建立**。按卡片上的「建立並啟動」才會執行。",
+      steps: [{ tool: "list_agents", label: "查看可用的代理" }, { tool: "propose_team", label: "擬好新團隊「官網改版」" }],
+      proposals: [
+        {
+          id: "P-1",
+          kind: "team",
+          title: "新團隊「官網改版」",
+          lines: ["目標:把公司官網改成新版設計,含首頁、產品頁、聯絡我們", "工作資料夾:D:\\Code\\site(會建立)", "AI 1(Leader) · 規劃 · claude / sonnet — 拆解需求、派工、驗收", "AI 2 · 前端 · cg / glm-5.3-flash — 實作頁面", "AI 3 · 文案 · codex / gpt-5.6-sol — 撰寫各頁文案"],
+          confirm: "建立並啟動",
+          state: "open",
+          outcome: "",
+        },
+      ],
+    };
+  }
+  return {
+    text: "目前有 2 個團隊:\n- **購物網站團隊**:執行中,任務 3/7 已驗收,第 11/60 回合。AI 3 正在做購物車,AI 2 在等 AI 3 交付。\n- **文件翻譯團隊**:還沒啟動(工作資料夾不存在)。\n\n**在等你的**:沒有權限卡;Leader 有 1 個問題「首版要支援手機版嗎?」。\n近 7 天花費約 NT$21(1.03M tokens)。",
+    steps: [{ tool: "list_teams", label: "查看所有團隊" }, { tool: "team_detail", label: "查看「購物網站團隊」的現況" }, { tool: "usage_summary", label: "查詢近 7 天的用量與成本" }],
+    proposals: [],
+  };
+}

@@ -107,7 +107,7 @@ fn chat_message(message: &Message) -> Value {
 }
 
 /// `content` is a string on most servers and an array of text parts on a few.
-fn content_text(content: Option<&Value>) -> String {
+pub(super) fn content_text(content: Option<&Value>) -> String {
     match content {
         Some(Value::String(s)) => s.clone(),
         Some(Value::Array(parts)) => parts

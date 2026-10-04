@@ -18,6 +18,7 @@ mod policy;
 mod cost;
 mod pricing;
 mod secrets;
+mod secretary;
 mod settings;
 mod team;
 mod tray;
@@ -898,6 +899,80 @@ async fn endpoint_spend(shared: State<'_, Shared>, agent: String) -> Result<cost
     cost::key_spend(&base, key).await
 }
 
+/// The chat providers the secretary can think with: (id, name, model), the
+/// one in use for the island's chat first.
+#[tauri::command]
+fn secretary_providers(shared: State<Shared>) -> Vec<(String, String, String)> {
+    let settings = shared.settings.lock().unwrap();
+    let mut out: Vec<(String, String, String)> = settings.providers.iter().map(|p| (p.id.clone(), p.name.clone(), p.model.clone())).collect();
+    if let Some(i) = out.iter().position(|p| p.0 == settings.active_provider) {
+        let first = out.remove(i);
+        out.insert(0, first);
+    }
+    out
+}
+
+/// The person asks the secretary something. Steps are told to the Teamwork
+/// window as they happen (`secretary-step`).
+#[tauri::command]
+async fn secretary_ask(
+    app: AppHandle,
+    shared: State<'_, Shared>,
+    teams: State<'_, Arc<Teams>>,
+    agents: State<'_, Arc<Agents>>,
+    secretary: State<'_, Arc<secretary::Secretary>>,
+    text: String,
+    provider: Option<String>,
+    tz_minutes: i64,
+) -> Result<secretary::Reply, String> {
+    let (provider, profiles) = {
+        let settings = shared.settings.lock().unwrap();
+        let wanted = provider.unwrap_or_default();
+        let found = settings
+            .providers
+            .iter()
+            .find(|p| p.id == wanted)
+            .or_else(|| settings.providers.iter().find(|p| p.id == settings.active_provider))
+            .or_else(|| settings.providers.first())
+            .cloned();
+        (found, settings.agents.clone())
+    };
+    let provider = provider.ok_or("The secretary needs a chat model: add one in Settings → Chat providers.")?;
+    let office = secretary::Office { teams: teams.inner().clone(), agents: profiles, driver: agents.inner().clone(), tz_minutes };
+    let window = app.clone();
+    secretary
+        .ask(&provider, &office, &text, &move |step| {
+            let _ = window.emit_to("team", "secretary-step", step.clone());
+        })
+        .await
+}
+
+/// The person clicked 確認 on one of the secretary's proposals — the only way any of them happens.
+#[tauri::command]
+async fn secretary_confirm(
+    shared: State<'_, Shared>,
+    teams: State<'_, Arc<Teams>>,
+    agents: State<'_, Arc<Agents>>,
+    secretary: State<'_, Arc<secretary::Secretary>>,
+    id: String,
+    tz_minutes: i64,
+) -> Result<secretary::Proposal, String> {
+    let profiles = shared.settings.lock().unwrap().agents.clone();
+    let office = secretary::Office { teams: teams.inner().clone(), agents: profiles, driver: agents.inner().clone(), tz_minutes };
+    secretary.confirm(&id, &office).await
+}
+
+#[tauri::command]
+fn secretary_decline(secretary: State<Arc<secretary::Secretary>>, id: String) -> Option<secretary::Proposal> {
+    secretary.decline(&id)
+}
+
+/// A new conversation.
+#[tauri::command]
+fn secretary_reset(secretary: State<Arc<secretary::Secretary>>) {
+    secretary.reset();
+}
+
 /// The models an agent offers, for the drop-downs in Settings and Teamwork.
 #[tauri::command]
 async fn agent_models(agents: State<'_, Arc<Agents>>, profile: AgentProfile) -> Result<Vec<claude::ModelChoice>, String> {
@@ -1181,6 +1256,7 @@ pub fn run() {
         .manage(Pending::default())
         .manage(Chat::default())
         .manage(agents.clone())
+        .manage(Arc::new(secretary::Secretary::default()))
         .invoke_handler(tauri::generate_handler![
             boot,
             save_settings,
@@ -1245,6 +1321,11 @@ pub fn run() {
             pricing_fetch_list,
             pricing_from_agent,
             endpoint_spend,
+            secretary_providers,
+            secretary_ask,
+            secretary_confirm,
+            secretary_decline,
+            secretary_reset,
             team_past,
             team_open_configs,
             team_save,

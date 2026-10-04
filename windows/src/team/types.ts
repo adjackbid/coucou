@@ -305,3 +305,28 @@ export interface KeySpend {
   modelSpend: Record<string, number>;
   askedAt: number;
 }
+
+// ── The secretary — mirrors of secretary.rs ─────────────────────────────────
+
+/** A look-up or a preparation the secretary made on the way to its answer. */
+export interface SecretaryStep {
+  tool: string;
+  label: string;
+}
+
+/** Something the secretary prepared; it happens only when the person clicks `confirm`. */
+export interface SecretaryProposal {
+  id: string;
+  kind: "team" | "instruction" | "action";
+  title: string;
+  lines: string[];
+  confirm: string;
+  state: "open" | "done" | "declined" | "failed";
+  outcome: string;
+}
+
+export interface SecretaryReply {
+  text: string;
+  steps: SecretaryStep[];
+  proposals: SecretaryProposal[];
+}

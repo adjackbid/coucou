@@ -11,6 +11,7 @@
 
 pub mod anthropic;
 pub mod openai;
+pub mod tools;
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
