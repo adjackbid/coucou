@@ -121,6 +121,8 @@ export interface SceneOptions {
   /** Small and still: the company map's thumbnails. */
   mini?: boolean;
   onSelect?: (memberId: string) => void;
+  /** A bubble was clicked: the message's speaker, to open on its conversation. */
+  onMessage?: (memberId: string) => void;
   /** A click on the room where there is no one: the selection is let go. */
   onBlank?: () => void;
   /** A deliverable's picture, when there is one to show (an object URL), else null. */
@@ -451,7 +453,7 @@ export class TeamScene {
       {
         class: "office-bubble", type: "button",
         title: msg.text,
-        onClick: () => from && this.opts.onSelect?.(from),
+        onClick: (e: Event) => { e.stopPropagation(); if (from) (this.opts.onMessage ?? this.opts.onSelect)?.(from); },
       },
       h("small", { text: to ? `${name(from!)} → ${to}` : name(from!) }),
       h("span", { text: msg.text.length > 40 ? `${msg.text.slice(0, 40)}…` : msg.text }),

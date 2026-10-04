@@ -70,6 +70,8 @@ export class Office {
   private drafts = new Map<string, string>();
   private sending = new Map<string, { clientRequestId: string; commandId?: string; error?: string }>();
   private files: TeamFile[] = [];
+  /** How much of each member's conversation is unfolded. */
+  private threadLength = new Map<string, number>();
   /** Pictures of deliverables: an object URL, null when there is none to show, or pending. */
   private previews = new Map<string, string | null | "pending">();
   /** Each team's earlier runs, as last asked; and the one picked, with its record. */
@@ -152,6 +154,11 @@ export class Office {
       s = new TeamScene(teamId, this.store, {
         mini,
         onSelect: (memberId) => {
+          this.select(teamId, memberId);
+        },
+        // A bubble is a message: it opens the speaker's conversation.
+        onMessage: (memberId) => {
+          this.tab = "talk";
           this.select(teamId, memberId);
         },
         preview: (a) => this.preview(a),
@@ -618,7 +625,14 @@ export class Office {
   private thread(teamId: string, talk: Message[]) {
     const name = (id: string) => this.store.member(teamId, id)?.displayName ?? id;
     if (!talk.length) return h("p", { class: "dim", text: "還沒有和這位成員有關的對話。" });
-    return h("ol", { class: "office-thread" }, ...talk.slice(-40).map((x) => {
+    // The newest forty, and the way to earlier ones forty at a time.
+    const key = `${teamId}/${this.sel?.memberId}`;
+    const shown = this.threadLength.get(key) ?? 40;
+    const hidden = Math.max(0, talk.length - shown);
+    const more = hidden
+      ? h("li", { class: "office-more" }, h("button", { class: "link", type: "button", onClick: () => { this.threadLength.set(key, shown + 40); this.host.render(); } }, `顯示更早的 ${Math.min(40, hidden)} 則(還有 ${hidden} 則)`))
+      : null;
+    return h("ol", { class: "office-thread" }, more, ...talk.slice(-shown).map((x) => {
       const from = x.from.kind === "member" ? name(x.from.memberId) : x.from.kind === "user" ? "你" : "Coucou";
       const long = x.text.length > 160;
       const body = h("p", { class: long ? "clip" : "", text: x.text });

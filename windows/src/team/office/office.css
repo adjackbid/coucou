@@ -798,6 +798,12 @@
   font-size: 12px;
 }
 
+.office-thread li.office-more {
+  background: none;
+  padding: 0;
+  text-align: center;
+}
+
 .office-thread p {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
