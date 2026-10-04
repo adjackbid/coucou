@@ -1,224 +1,7 @@
 {
   "schemaVersion": 1,
-  "note": "中二模式 art, made for this project. Coordinates are 2x pixels of each file (divide by pixelRatio). The boss's states share one canvas and one groundPivot. Planned paths in feature2 kit v2 named .png; these are .webp like the rest of public/office.",
+  "note": "中二模式 art, made for this project. Coordinates are 2x pixels of each file (divide by pixelRatio). The boss's eight states share one canvas and one groundPivot.",
   "assets": [
-    {
-      "assetKey": "battle/boss/requirements/idle_SE",
-      "file": "battle/boss/requirements/idle_SE.webp",
-      "width": 338,
-      "height": 286,
-      "pixelRatio": 2,
-      "facing": "SE",
-      "pivot": {
-        "groundPivot": [
-          169.0,
-          243.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          169.0,
-          176.7
-        ],
-        "hitTarget": [
-          169.0,
-          181.7
-        ],
-        "top": [
-          169.0,
-          54.9
-        ]
-      },
-      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/boss/requirements/rage_SE",
-      "file": "battle/boss/requirements/rage_SE.webp",
-      "width": 338,
-      "height": 286,
-      "pixelRatio": 2,
-      "facing": "SE",
-      "pivot": {
-        "groundPivot": [
-          169.0,
-          243.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          169.0,
-          176.7
-        ],
-        "hitTarget": [
-          169.0,
-          181.7
-        ],
-        "top": [
-          169.0,
-          54.9
-        ]
-      },
-      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/boss/requirements/guard_SE",
-      "file": "battle/boss/requirements/guard_SE.webp",
-      "width": 338,
-      "height": 286,
-      "pixelRatio": 2,
-      "facing": "SE",
-      "pivot": {
-        "groundPivot": [
-          169.0,
-          243.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          169.0,
-          176.7
-        ],
-        "hitTarget": [
-          169.0,
-          181.7
-        ],
-        "top": [
-          169.0,
-          54.9
-        ]
-      },
-      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/boss/requirements/hurt_SE",
-      "file": "battle/boss/requirements/hurt_SE.webp",
-      "width": 338,
-      "height": 286,
-      "pixelRatio": 2,
-      "facing": "SE",
-      "pivot": {
-        "groundPivot": [
-          169.0,
-          243.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          169.0,
-          163.3
-        ],
-        "hitTarget": [
-          169.0,
-          168.4
-        ],
-        "top": [
-          169.0,
-          54.9
-        ]
-      },
-      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/boss/requirements/regen_SE",
-      "file": "battle/boss/requirements/regen_SE.webp",
-      "width": 338,
-      "height": 286,
-      "pixelRatio": 2,
-      "facing": "SE",
-      "pivot": {
-        "groundPivot": [
-          169.0,
-          243.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          169.0,
-          176.7
-        ],
-        "hitTarget": [
-          169.0,
-          181.7
-        ],
-        "top": [
-          169.0,
-          54.9
-        ]
-      },
-      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/boss/requirements/sealed_SE",
-      "file": "battle/boss/requirements/sealed_SE.webp",
-      "width": 338,
-      "height": 286,
-      "pixelRatio": 2,
-      "facing": "SE",
-      "pivot": {
-        "groundPivot": [
-          169.0,
-          243.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          169.0,
-          176.7
-        ],
-        "hitTarget": [
-          169.0,
-          181.7
-        ],
-        "top": [
-          169.0,
-          54.9
-        ]
-      },
-      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/boss/requirements/defeated_SE",
-      "file": "battle/boss/requirements/defeated_SE.webp",
-      "width": 338,
-      "height": 286,
-      "pixelRatio": 2,
-      "facing": "SE",
-      "pivot": {
-        "groundPivot": [
-          169.0,
-          243.8
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          169.0,
-          193.4
-        ],
-        "hitTarget": [
-          169.0,
-          198.5
-        ],
-        "top": [
-          169.0,
-          54.9
-        ]
-      },
-      "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_Boss), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
     {
       "assetKey": "battle/hero/hat_SE",
       "file": "battle/hero/hat_SE.webp",
@@ -360,6 +143,366 @@
         ]
       },
       "source": "Blender 5.2: procedural model built for this project in the CoucouOffice scene (collection CO_BtOrb), EEVEE, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/idle",
+      "file": "battle/boss/requirements/idle.webp",
+      "width": 782,
+      "height": 888,
+      "pixelRatio": 2,
+      "facing": "toward the heroes (world +x)",
+      "pivot": {
+        "groundPivot": [
+          413.7,
+          705.6
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          342.4,
+          450.3
+        ],
+        "hitTarget": [
+          318.7,
+          462.1
+        ],
+        "eyes": [
+          [
+            324.6,
+            273.8
+          ],
+          [
+            380.0,
+            301.5
+          ]
+        ],
+        "top": [
+          405.8,
+          202.8
+        ],
+        "fist": [
+          239.5,
+          531.6
+        ]
+      },
+      "source": "Blender 5.2: block golem modelled for this project in the CoucouOffice scene (collection CO_Golem), EEVEE, Standard view transform, the office's orthographic camera (az 45, el 30), 280 px/m at 2x; faces the heroes (world +x, screen down-left)",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/rage",
+      "file": "battle/boss/requirements/rage.webp",
+      "width": 782,
+      "height": 888,
+      "pixelRatio": 2,
+      "facing": "toward the heroes (world +x)",
+      "pivot": {
+        "groundPivot": [
+          413.7,
+          705.6
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          342.4,
+          450.3
+        ],
+        "hitTarget": [
+          318.7,
+          462.1
+        ],
+        "eyes": [
+          [
+            320.3,
+            283.3
+          ],
+          [
+            375.8,
+            311.0
+          ]
+        ],
+        "top": [
+          396.5,
+          208.5
+        ],
+        "fist": [
+          115.8,
+          508.4
+        ]
+      },
+      "source": "Blender 5.2: block golem modelled for this project in the CoucouOffice scene (collection CO_Golem), EEVEE, Standard view transform, the office's orthographic camera (az 45, el 30), 280 px/m at 2x; faces the heroes (world +x, screen down-left)",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/guard",
+      "file": "battle/boss/requirements/guard.webp",
+      "width": 782,
+      "height": 888,
+      "pixelRatio": 2,
+      "facing": "toward the heroes (world +x)",
+      "pivot": {
+        "groundPivot": [
+          413.7,
+          705.6
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          342.4,
+          450.3
+        ],
+        "hitTarget": [
+          318.7,
+          462.1
+        ],
+        "eyes": [
+          [
+            324.6,
+            273.8
+          ],
+          [
+            380.0,
+            301.5
+          ]
+        ],
+        "top": [
+          405.8,
+          202.8
+        ],
+        "fist": [
+          179.3,
+          462.5
+        ]
+      },
+      "source": "Blender 5.2: block golem modelled for this project in the CoucouOffice scene (collection CO_Golem), EEVEE, Standard view transform, the office's orthographic camera (az 45, el 30), 280 px/m at 2x; faces the heroes (world +x, screen down-left)",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/hurt",
+      "file": "battle/boss/requirements/hurt.webp",
+      "width": 782,
+      "height": 888,
+      "pixelRatio": 2,
+      "facing": "toward the heroes (world +x)",
+      "pivot": {
+        "groundPivot": [
+          413.7,
+          705.6
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          359.1,
+          429.6
+        ],
+        "hitTarget": [
+          335.3,
+          441.4
+        ],
+        "eyes": [
+          [
+            368.5,
+            236.7
+          ],
+          [
+            423.9,
+            264.4
+          ]
+        ],
+        "top": [
+          460.7,
+          180.5
+        ],
+        "fist": [
+          178.4,
+          433.0
+        ]
+      },
+      "source": "Blender 5.2: block golem modelled for this project in the CoucouOffice scene (collection CO_Golem), EEVEE, Standard view transform, the office's orthographic camera (az 45, el 30), 280 px/m at 2x; faces the heroes (world +x, screen down-left)",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/regen",
+      "file": "battle/boss/requirements/regen.webp",
+      "width": 782,
+      "height": 888,
+      "pixelRatio": 2,
+      "facing": "toward the heroes (world +x)",
+      "pivot": {
+        "groundPivot": [
+          413.7,
+          705.6
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          342.4,
+          450.3
+        ],
+        "hitTarget": [
+          318.7,
+          462.1
+        ],
+        "eyes": [
+          [
+            324.6,
+            273.8
+          ],
+          [
+            380.0,
+            301.5
+          ]
+        ],
+        "top": [
+          405.8,
+          202.8
+        ],
+        "fist": [
+          125.3,
+          460.6
+        ]
+      },
+      "source": "Blender 5.2: block golem modelled for this project in the CoucouOffice scene (collection CO_Golem), EEVEE, Standard view transform, the office's orthographic camera (az 45, el 30), 280 px/m at 2x; faces the heroes (world +x, screen down-left)",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/sealed",
+      "file": "battle/boss/requirements/sealed.webp",
+      "width": 782,
+      "height": 888,
+      "pixelRatio": 2,
+      "facing": "toward the heroes (world +x)",
+      "pivot": {
+        "groundPivot": [
+          413.7,
+          705.6
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          342.4,
+          450.3
+        ],
+        "hitTarget": [
+          318.7,
+          462.1
+        ],
+        "eyes": [
+          [
+            324.6,
+            273.8
+          ],
+          [
+            380.0,
+            301.5
+          ]
+        ],
+        "top": [
+          405.8,
+          202.8
+        ],
+        "fist": [
+          239.5,
+          531.6
+        ]
+      },
+      "source": "Blender 5.2: block golem modelled for this project in the CoucouOffice scene (collection CO_Golem), EEVEE, Standard view transform, the office's orthographic camera (az 45, el 30), 280 px/m at 2x; faces the heroes (world +x, screen down-left)",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/defeated",
+      "file": "battle/boss/requirements/defeated.webp",
+      "width": 782,
+      "height": 888,
+      "pixelRatio": 2,
+      "facing": "toward the heroes (world +x)",
+      "pivot": {
+        "groundPivot": [
+          413.7,
+          705.6
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          314.3,
+          556.8
+        ],
+        "hitTarget": [
+          290.5,
+          568.7
+        ],
+        "eyes": [
+          [
+            262.9,
+            432.3
+          ],
+          [
+            318.3,
+            460.0
+          ]
+        ],
+        "top": [
+          307.9,
+          352.5
+        ],
+        "fist": [
+          178.1,
+          609.3
+        ]
+      },
+      "source": "Blender 5.2: block golem modelled for this project in the CoucouOffice scene (collection CO_Golem), EEVEE, Standard view transform, the office's orthographic camera (az 45, el 30), 280 px/m at 2x; faces the heroes (world +x, screen down-left)",
+      "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/boss/requirements/attack",
+      "file": "battle/boss/requirements/attack.webp",
+      "width": 782,
+      "height": 888,
+      "pixelRatio": 2,
+      "facing": "toward the heroes (world +x)",
+      "pivot": {
+        "groundPivot": [
+          413.7,
+          705.6
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          342.4,
+          450.3
+        ],
+        "hitTarget": [
+          318.7,
+          462.1
+        ],
+        "eyes": [
+          [
+            321.1,
+            281.4
+          ],
+          [
+            376.6,
+            309.1
+          ]
+        ],
+        "top": [
+          398.4,
+          207.2
+        ],
+        "fist": [
+          260.9,
+          116.2
+        ]
+      },
+      "source": "Blender 5.2: block golem modelled for this project in the CoucouOffice scene (collection CO_Golem), EEVEE, Standard view transform, the office's orthographic camera (az 45, el 30), 280 px/m at 2x; faces the heroes (world +x, screen down-left)",
       "license": "Original work made for Coucou; no third-party models, textures or images",
       "status": "produced"
     }

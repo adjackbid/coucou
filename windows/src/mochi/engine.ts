@@ -168,6 +168,11 @@ export class BotEngine {
   isMini = false;
   /** Solid body colour for mini bots / integration pills (null = Mochi gradient). */
   bodyColor: RGB | null = null;
+  /** A solid-colour bot drawn rounder: light from the top, shade below, a shine (中二模式's heroes). */
+  glossy = false;
+  /** Two small feet under the body; `stride` (−1…1) lifts one or the other as it walks. */
+  feet = false;
+  stride = 0;
 
   // Animated state (BotEngine `s`)
   yaw = 0; pitch = 0; roll = 0; tilt = 0; open = 1;
@@ -648,6 +653,7 @@ export class BotEngine {
     const cy = H / 2 + this.particleOverhang / 2 + this.oy * R + R * 0.06;
 
     this.drawHandsBehind(x, R, rx, ry, cx, cy);
+    if (this.feet) this.drawFeet(x, rx, ry, cx, cy);
 
     x.save();
     x.translate(cx, cy);
@@ -710,7 +716,47 @@ export class BotEngine {
     return p;
   }
 
+  /** Little feet, a darker shade of the body, peeking out below it. */
+  private drawFeet(x: CanvasRenderingContext2D, rx: number, ry: number, cx: number, cy: number) {
+    const c = this.bodyColor ?? BASE_BOTTOM;
+    for (const side of [-1, 1]) {
+      const lift = Math.max(0, side * this.stride) * ry * 0.18;
+      const fx = cx + side * rx * 0.4;
+      const fy = cy + ry * this.sy * 0.97 - lift;
+      x.fillStyle = rgba(mix3(c, [0, 0, 0], 0.32), 1);
+      x.beginPath();
+      x.ellipse(fx, fy, rx * 0.25, ry * 0.2, 0, 0, Math.PI * 2);
+      x.fill();
+      x.fillStyle = rgba(mix3(c, [1, 1, 1], 0.12), 0.55);
+      x.beginPath();
+      x.ellipse(fx - rx * 0.05, fy - ry * 0.07, rx * 0.12, ry * 0.07, 0, 0, Math.PI * 2);
+      x.fill();
+    }
+  }
+
   private drawBody(x: CanvasRenderingContext2D, body: Path2D, R: number, rx: number, ry: number) {
+    if (this.bodyColor && this.glossy) {
+      // A round, lit body: its colour lighter on top, deeper below, a rim of shade and a shine.
+      const c = this.bodyColor;
+      const g = x.createLinearGradient(rx * 0.5, -ry, -rx * 0.4, ry);
+      g.addColorStop(0, rgba(mix3(c, [1, 1, 1], 0.28)));
+      g.addColorStop(0.55, rgba(c));
+      g.addColorStop(1, rgba(mix3(c, [0, 0, 0], 0.3)));
+      x.fillStyle = g;
+      x.fill(body);
+      const sh = x.createRadialGradient(rx * 0.15, -ry * 0.2, R * 0.3, 0, 0, R * 1.2);
+      sh.addColorStop(0, "rgba(0,0,0,0)");
+      sh.addColorStop(0.7, "rgba(0,0,0,0)");
+      sh.addColorStop(1, "rgba(0,0,0,0.28)");
+      x.fillStyle = sh;
+      x.fill(body);
+      const hl = x.createRadialGradient(rx * 0.32, -ry * 0.5, 0, rx * 0.32, -ry * 0.5, R * 0.46);
+      hl.addColorStop(0, "rgba(255,255,255,0.7)");
+      hl.addColorStop(1, "rgba(255,255,255,0)");
+      x.fillStyle = hl;
+      x.fill(body);
+      return;
+    }
     if (this.bodyColor) {
       // Mini bots: flat solid fill — no gradient, no reflection, no highlight
       x.fillStyle = rgba(this.bodyColor, 1);

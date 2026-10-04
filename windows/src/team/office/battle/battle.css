@@ -526,6 +526,16 @@
   position: absolute;
   pointer-events: none;
   user-select: none;
+  filter: drop-shadow(0 0 16px rgba(150, 80, 255, 0.45));
+}
+
+.bt-golem.rage,
+.bt-golem.last_seal {
+  filter: drop-shadow(0 0 18px rgba(255, 110, 60, 0.5));
+}
+
+.bt-golem.defeated {
+  filter: none;
 }
 
 /* Paused, stopped, or the records not adding up: the boss stands still and pale. */
@@ -566,13 +576,13 @@
 }
 
 .bt-float b {
-  font-size: 20px;
+  font-size: 30px;
   font-weight: 800;
   letter-spacing: 0.02em;
 }
 
 .bt-float small {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   opacity: 0.9;
 }
@@ -586,7 +596,7 @@
 .bt-float.t-seal { color: #d9c6ff; }
 .bt-float.t-quiet { color: #d6d3e0; }
 .bt-float.t-win { color: var(--bt-gold); }
-.bt-float.t-win.t-big b { font-size: 30px; }
+.bt-float.t-win.t-big b { font-size: 40px; }
 
 /* 減少動態: still marks that simply go. */
 .bt-float.still {
@@ -605,4 +615,157 @@
 
 .bt-move {
   color: #d9c6ff !important;
+}
+
+/* ── A move's card: named the way a game names a skill ──────────────────── */
+
+.bt-card {
+  --c1: #ffb24a;
+  --c2: #ff6a2a;
+  position: absolute;
+  top: 14%;
+  left: 50%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  min-width: 340px;
+  max-width: 78%;
+  padding: 12px 22px 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(100deg, rgba(14, 10, 30, 0.92), rgba(30, 18, 52, 0.86));
+  box-shadow: 0 0 0 1.5px var(--c1), 0 0 28px color-mix(in srgb, var(--c1) 55%, transparent), 0 10px 30px rgba(0, 0, 0, 0.45);
+  color: #fff;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 6;
+  animation: bt-card-in 1.9s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards;
+}
+
+.bt-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(100deg, color-mix(in srgb, var(--c1) 30%, transparent), transparent 55%);
+  pointer-events: none;
+}
+
+.bt-card.still {
+  animation: none;
+}
+
+.bt-card-icon {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c1) 70%, white), var(--c2));
+  color: #fff;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--c1) 70%, transparent);
+}
+
+.bt-card-text {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bt-card-text b {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--c1) 80%, transparent);
+  white-space: nowrap;
+}
+
+.bt-card-word {
+  color: var(--c1);
+}
+
+.bt-card-text small {
+  color: #d9d2ec;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bt-card em {
+  position: relative;
+  color: #ff8a7a;
+  font-size: 30px;
+  font-style: normal;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 14px rgba(255, 90, 70, 0.7);
+}
+
+.bt-card.c-fire { --c1: #ffb24a; --c2: #e0461f; }
+.bt-card.c-ice { --c1: #8fe0ff; --c2: #3b7fd6; }
+.bt-card.c-wind { --c1: #6fe8c2; --c2: #1f9a86; }
+.bt-card.c-bolt { --c1: #a8a0ff; --c2: #5a4ee6; }
+.bt-card.c-blade { --c1: #ffd36b; --c2: #d9901f; }
+.bt-card.c-ward { --c1: #b5a8ff; --c2: #6c55e6; }
+.bt-card.c-heal { --c1: #8de9c5; --c2: #e57fb8; }
+.bt-card.c-seal { --c1: #d2b6ff; --c2: #b08a3c; }
+.bt-card.c-combo { --c1: #ff9ad8; --c2: #7b4dff; }
+.bt-card.c-win { --c1: #ffd36b; --c2: #c8901f; }
+
+@keyframes bt-card-in {
+  0% { opacity: 0; transform: translateX(-62%) scale(0.85); }
+  12% { opacity: 1; transform: translateX(-50%) scale(1.04); }
+  20% { transform: translateX(-50%) scale(1); }
+  82% { opacity: 1; transform: translateX(-50%) scale(1); }
+  100% { opacity: 0; transform: translateX(-46%) scale(0.98); }
+}
+
+/* ── The boss's words ─────────────────────────────────────────────────────── */
+
+.bt-speech {
+  position: absolute;
+  display: grid;
+  gap: 2px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: rgba(16, 10, 30, 0.88);
+  box-shadow: 0 0 0 1.5px #b58cff, 0 0 18px rgba(150, 80, 255, 0.45);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  z-index: 4;
+  animation: bt-say 2.2s ease-out forwards;
+}
+
+.bt-speech b {
+  color: #d2b6ff;
+  font-size: 11px;
+}
+
+.bt-speech::after {
+  content: "";
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  margin-top: -8px;
+  border: 8px solid transparent;
+  border-right: 0;
+  border-left-color: rgba(16, 10, 30, 0.88);
+}
+
+.bt-speech.still {
+  animation: none;
+}
+
+@keyframes bt-say {
+  0% { opacity: 0; transform: translate(-50%, -80%) scale(0.8); }
+  10% { opacity: 1; transform: translate(-50%, -100%) scale(1.05); }
+  18% { transform: translate(-50%, -100%) scale(1); }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
 }

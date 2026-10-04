@@ -47,7 +47,8 @@ interface ThemeJson {
   /** "standard" uses the shared desks. */
   workstations: "standard" | Record<"SE" | "SW", StationArt>;
   /** 中二模式: where the boss stands (metres), how big, and what makes way for it. */
-  battle?: { boss: [number, number]; scale: number; hide: string[] };
+  /** Where the members stand, by how many there are: the smallest list that seats them all, front line first. */
+  battle?: { boss: [number, number]; scale: number; hide: string[]; formation: Record<string, [number, number][]> };
 }
 /** A picture rendered in the office camera: its canvas and where it touches the floor (2× px). */
 export interface Sprite {
@@ -57,13 +58,13 @@ export interface Sprite {
   /** Where its effects start: a staff's gem, a sword's tip. */
   effectOrigin?: [number, number];
 }
-export type BossState = "idle" | "rage" | "guard" | "hurt" | "regen" | "sealed" | "defeated";
+export type BossState = "idle" | "rage" | "guard" | "hurt" | "regen" | "sealed" | "defeated" | "attack";
 /** The boss: every state on one canvas with one groundPivot (public/office/battle/manifest.json). */
 export interface BossArt {
   canvas: [number, number];
   groundPivot: [number, number];
-  top: [number, number];
-  states: Record<BossState, { file: string; coreCenter: [number, number]; hitTarget: [number, number] }>;
+  /** Each state's picture and its points: the crystal core, where blows land, the eyes, the top of the head, the raised fist. */
+  states: Record<BossState, { file: string; coreCenter: [number, number]; hitTarget: [number, number]; eyes: [number, number][]; top: [number, number]; fist: [number, number] }>;
 }
 export interface BattleArt {
   boss: BossArt;
@@ -228,6 +229,8 @@ interface Actor {
   dirty: boolean;
   /** Room around the body for what it holds (中二模式); the canvas is size + 2 × pad. */
   pad: number;
+  /** Moved off its place this frame by the layer (a lunge); drawn back when it ends. */
+  off?: { x: number; y: number };
   /** Where its canvas is (top-left, stage pixels), and where it is going: between desk and sofa it walks. */
   at?: { x: number; y: number };
   to?: { x: number; y: number; z: number };
@@ -262,6 +265,12 @@ export interface SceneLayer {
   frame(dt: number): boolean;
   /** Draws over a Mochi, the body drawn in size × size at the origin. */
   decorate?(memberId: string, ctx: CanvasRenderingContext2D, size: number, engine: BotEngine, facing: number): void;
+  /** Members drawn bigger than at their desks (1 = as they are). */
+  readonly heroScale?: number;
+  /** Where a member stands instead of its desk (metres), and the way it faces; null for its desk. */
+  formation?(memberId: string, index: number, count: number): { x: number; y: number; yaw: number } | null;
+  /** How far a member's Mochi is moved this frame (a lunge, a recoil), in stage pixels. */
+  offset?(memberId: string): { x: number; y: number } | null;
   /** Taken off: everything of it leaves the room, nothing keeps playing. */
   detach(): void;
 }
@@ -506,9 +515,12 @@ export class TeamScene {
    */
   private place(m: MemberSnapshot, i: number, count: number) {
     const desk = this.theme!.desks(count)[i];
+    // 中二模式: everyone takes their place facing the boss, whatever they are doing.
+    const spot = this.layer?.formation?.(m.memberId, i, count) ?? null;
+    if (spot) return { desk, standing: [spot.x, spot.y] as [number, number], lounge: null, yaw: spot.yaw };
     const standing = m.workStatus === "planning" ? this.theme!.room.spots.whiteboard ?? null : null;
     const lounge = this.lounge.get(m.memberId) ?? null;
-    return { desk, standing, lounge };
+    return { desk, standing, lounge, yaw: null as number | null };
   }
 
   /**
@@ -584,7 +596,7 @@ export class TeamScene {
 
   private drawMember(m: MemberSnapshot, i: number, count: number, leader: boolean) {
     const t = this.theme!;
-    const { desk, standing, lounge } = this.place(m, i, count);
+    const { desk, standing, lounge, yaw } = this.place(m, i, count);
     const ws = t.workstations[desk.facing];
     const at = this.toScreen(desk.x, desk.y);
     const ox = at.x - H(ws.groundPivot[0]);
@@ -622,20 +634,26 @@ export class TeamScene {
     const seat = standing ? this.toScreen(standing[0], standing[1]) : lounge ?? local(ws.actorBottom);
     const seatZ = standing ? this.depth(standing[0], standing[1]) + 4 : lounge && sofaAt ? this.depth(...sofaAt) + 4 : z + 4;
     const actor = this.actor(m, color);
-    const size = actor.size;
+    // 中二模式 draws its heroes bigger, rounder, on their feet.
+    const body = BODY * (this.layer?.heroScale ?? 1);
+    const size = Math.round(body / 0.6);
     // What it holds needs room around it: a canvas that size bigger, put back by as much.
     const pad = this.opts.mini ? 0 : this.layer?.pad ?? 0;
-    if (actor.pad !== pad) {
+    if (actor.pad !== pad || actor.size !== size) {
+      // Drawn at another size: kept where it stands, measured from its feet.
+      const feet = actor.at ? { x: actor.at.x + actor.pad + actor.size / 2, y: actor.at.y + actor.pad + actor.size / 2 } : null;
       actor.pad = pad;
+      actor.size = size;
       actor.canvas.style.width = actor.canvas.style.height = `${size + 2 * pad}px`;
-      actor.at = undefined;
+      actor.at = feet ? { x: feet.x - size / 2 - pad, y: feet.y - size / 2 - pad } : undefined;
       actor.dirty = true;
     }
-    const bottom = seat.y + (standing ? 0 : BODY * 0.06);
+    actor.engine.glossy = actor.engine.feet = !!this.layer;
+    const bottom = seat.y + (standing ? 0 : body * 0.06);
     // Between desk and sofa the Mochi walks there (frame() moves it); the
     // first picture and 減少動態 just put it in its place.
     const left = seat.x - size / 2 - pad;
-    const top = bottom - size / 2 - BODY / 2 - pad;
+    const top = bottom - size / 2 - body / 2 - pad;
     actor.to = { x: left, y: top, z: seatZ };
     const walking = !!actor.at && !this.first && !this.reduceMotion && (actor.at.x !== left || actor.at.y !== top);
     if (!walking) actor.at = { x: left, y: top };
@@ -646,7 +664,7 @@ export class TeamScene {
     actor.canvas.classList.toggle("selected", sel);
     if (!actor.canvas.isConnected) this.stage.append(actor.canvas);
     const screenMid = (quad[0].x + quad[1].x) / 2;
-    actor.yaw = standing ? 0.5 : lounge ? 0 : screenMid < seat.x ? -0.42 : 0.42;
+    actor.yaw = yaw ?? (standing ? 0.5 : lounge ? 0 : screenMid < seat.x ? -0.42 : 0.42);
     this.pose(actor, m.workStatus);
     if (standing) this.stage.append(h("div", { class: "office-shadow small", style: `left:${seat.x}px;top:${seat.y}px;z-index:${seatZ - 1}` }));
 
@@ -654,7 +672,7 @@ export class TeamScene {
       // The company map is live but small: each member's state as a mark over its head.
       const st = STATUS[m.workStatus];
       const chip = h("span", { class: `office-label office-chip ${st.tone}`, title: `${m.displayName ?? m.memberId} · ${st.label}`, style: `--c:${color}` }, st.icon);
-      this.pin(chip, seat.x, bottom - BODY - 4);
+      this.pin(chip, seat.x, bottom - body - 4);
       return;
     }
     // The label: the member's name and what it is doing, a button for mouse and keyboard.
@@ -666,7 +684,7 @@ export class TeamScene {
     const label = h(
       "button",
       {
-        class: `office-label ${st.tone}${sel ? " on" : ""}${m.engineStatus === "offline" ? " offline" : ""}${lounge || (t.large && !sel) ? " compact" : ""}`, type: "button",
+        class: `office-label ${st.tone}${sel ? " on" : ""}${m.engineStatus === "offline" ? " offline" : ""}${lounge || (t.large && !sel) || (yaw !== null && !sel) ? " compact" : ""}`, type: "button",
         style: `--c:${color}`,
         "aria-pressed": sel ? "true" : "false",
         "aria-label": `${m.displayName ?? m.memberId}${leader ? ",Leader" : ""},${m.roleLabel},${st.label}${task ? `,${task}` : ""}${m.engineStatus === "offline" ? ",未連線" : ""}`,
@@ -678,7 +696,7 @@ export class TeamScene {
     );
     this.labels.set(m.memberId, label);
     // Over the member's head, where nothing nearer the camera can hide it.
-    this.pin(label, seat.x, bottom - BODY - 4);
+    this.pin(label, seat.x, bottom - body - 4);
   }
 
   private actor(m: MemberSnapshot, color: string): Actor {
@@ -797,6 +815,17 @@ export class TeamScene {
         a.canvas.style.top = `${a.at.y}px`;
         a.dirty = true;
         moving = true;
+      }
+      // On its feet, it steps as it goes.
+      const walkingNow = !!(a.at && a.to && (a.at.x !== a.to.x || a.at.y !== a.to.y));
+      a.engine.stride = walkingNow && !still ? Math.sin(performance.now() / 70) : 0;
+      // A lunge or a recoil from the layer: moved for this frame only.
+      const off = still ? null : this.layer?.offset?.(a.memberId) ?? null;
+      if (off || a.off) {
+        const o = off ?? { x: 0, y: 0 };
+        a.canvas.style.transform = off ? `translate(${o.x}px, ${o.y}px)` : "";
+        a.off = off ?? undefined;
+        a.dirty = true;
       }
       if (still && !a.dirty) continue;
       const full = a.size + 2 * a.pad;
