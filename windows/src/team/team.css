@@ -804,6 +804,12 @@ h2 {
   background: rgba(0, 0, 0, 0.3);
 }
 
+/* Five choices: they share the row evenly and wrap on a narrow form. */
+.segmented.wrap {
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  border-radius: 18px;
+}
+
 .segmented button {
   font: 500 12.5px var(--font);
   padding: 7px 10px;

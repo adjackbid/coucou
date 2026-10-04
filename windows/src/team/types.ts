@@ -25,6 +25,8 @@ export interface TeamConfig {
   directTalk: boolean;
   sharedBoard: boolean;
   maxTurns: number;
+  /** The Office's look: warm, nordic, studio, premium; absent or empty for Coucou's choice. */
+  officeTheme?: string;
 }
 
 export interface TeamFile {

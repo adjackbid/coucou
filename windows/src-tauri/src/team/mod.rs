@@ -65,6 +65,10 @@ pub struct TeamConfig {
     /// Turns the whole team may take before it pauses and waits for the person.
     #[serde(default = "default_max_turns")]
     pub max_turns: u32,
+    /// How the team's office looks in the Office view: warm, nordic, studio
+    /// or premium; empty leaves it to Coucou (by the team's size).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub office_theme: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -258,6 +262,7 @@ pub(crate) mod fixtures {
             direct_talk: false,
             shared_board: true,
             max_turns: 60,
+            office_theme: String::new(),
         }
     }
 }

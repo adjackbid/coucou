@@ -150,7 +150,7 @@ export function teamEntities(file: TeamFile, snap: Snapshot | undefined, revisio
     const kind = /\.(png|jpe?g|gif|webp|svg)$/i.test(d.locator) ? "image" : /^https?:/i.test(d.locator) ? "website" : /\.(md|txt|pdf|docx?)$/i.test(d.locator) ? "document" : d.kind === "code" ? "code" : "bundle";
     return { ...v, artifactId: `${teamId}:${d.id}`, teamId, runId, taskId: `${teamId}:${d.task}`, authorMemberId: d.by, name: d.summary || d.locator, kind, artifactVersion: n, resourceRef: d.locator, updatedAt: iso(d.at) };
   });
-  const team: Team = { ...v, teamId, name: cfg.name || "未命名的團隊", goal: cfg.goal, memberIds: cfg.members.map((m) => m.id), leaderMemberId: cfg.leader, currentRunId: runId, officeLayoutId: teamId };
+  const team: Team = { ...v, teamId, name: cfg.name || "未命名的團隊", goal: cfg.goal, memberIds: cfg.members.map((m) => m.id), leaderMemberId: cfg.leader, currentRunId: runId, officeLayoutId: file.config!.officeTheme || "auto" };
   const run: TeamRun = { ...v, runId, teamId, status: runStatus(snap), progress: calculateProgress(tasks, runId) };
   const agents: Agent[] = cfg.members.map((c) => ({ ...v, agentId: c.agent || c.id, name: c.agent || c.id, avatarKey: c.agent || c.id }));
   return { agents, team, run, members, tasks, messages: msgs, artifacts };

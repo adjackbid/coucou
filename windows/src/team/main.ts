@@ -17,6 +17,7 @@ import * as live from "./live";
 import { dropdown, menuOpen, onMenuClosed, refreshSuggestions, suggest } from "./ui";
 import { linksScreen, logScreen, openThread, type Page } from "./screens";
 import { Office } from "./office/office";
+import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
@@ -439,6 +440,15 @@ function setup(file: TeamFile): HTMLElement {
         ? "成員改檔、建置、跑測試不會問你;刪資料夾、安裝東西、對外發送等危險動作仍然會問。"
         : "成員的每一個權限請求都會問你。",
     }),
+    h("label", { text: "辦公室風格" }),
+    h(
+      "div",
+      { class: "segmented wrap" },
+      ...[["", "自動"], ...Object.entries(THEME_LABELS)].map(([key, label]) =>
+        h("button", { type: "button", class: (config.officeTheme ?? "") === key ? "on" : "", onClick: () => ((config.officeTheme = key || undefined), (unsaved = true), render()) }, label),
+      ),
+    ),
+    h("p", { class: "hint", text: `Office 檢視裡這個團隊的辦公室長什麼樣子。自動:${LARGE_FROM} 位成員以上用高級辦公室(在公司總覽佔較大的格子),其他依團隊固定挑一種。` }),
     h("label", { text: "回合上限" }),
     h("div", { class: "row nowrap" }, bound("input", "maxTurns", String(config.maxTurns), (v) => (config.maxTurns = Math.max(1, Math.min(500, Number(v) || 60))), { type: "number", min: "1", max: "500", class: "field narrow" }), h("span", { class: "hint", text: "整個團隊用完這麼多回合後會暫停,等你決定要不要繼續。" })),
   );

@@ -22,15 +22,44 @@ interface StationArt {
   actorBottom: [number, number];
   screenQuad: [number, number][];
 }
+type WorldToScreen = { x0: number; y0: number; perMetreX: number; perMetreY: number; perMetreZ: number };
+interface Props {
+  meetingTable?: { file: string; canvas: [number, number]; groundPivot: [number, number]; at: [number, number] };
+  /** The lounge: a sofa whose seats take members with nothing to do. */
+  sofa?: { file: string; canvas: [number, number]; groundPivot: [number, number]; seats: [number, number][]; at: [number, number] };
+}
+interface RoomArt {
+  file: string;
+  /** The image, in 2× pixels, and the part of it the room fills (logical px). */
+  canvas: [number, number];
+  crop: { x: number; y: number; w: number; h: number };
+  worldToScreen: WorldToScreen;
+  artifactSlots: [number, number][][];
+  whiteboardQuad: [number, number][];
+  spots: Record<string, [number, number]>;
+}
+/** One look of an office (scene.json `themes`): its room, props and desks. */
+interface ThemeJson {
+  label: string;
+  size: "standard" | "large";
+  room: RoomArt;
+  props: Props;
+  /** "standard" uses the shared desks. */
+  workstations: "standard" | Record<"SE" | "SW", StationArt>;
+}
 export interface SceneArt {
-  room: { file: string; artifactSlots: [number, number][][]; whiteboardQuad: [number, number][]; spots: Record<string, [number, number]> };
   workstations: Record<"SE" | "SW", StationArt>;
-  props: {
-    meetingTable: { file: string; canvas: [number, number]; groundPivot: [number, number]; at: [number, number] };
-    /** The lounge: a sofa whose seats take members with nothing to do. */
-    sofa?: { file: string; canvas: [number, number]; groundPivot: [number, number]; seats: [number, number][]; at: [number, number] };
-  };
-  worldToScreen: { x0: number; y0: number; perMetreX: number; perMetreY: number; perMetreZ: number };
+  themes: Record<string, ThemeJson>;
+}
+export interface Theme {
+  name: string;
+  label: string;
+  large: boolean;
+  room: RoomArt;
+  props: Props;
+  workstations: Record<"SE" | "SW", StationArt>;
+  desks: (count: number) => Desk[];
+  maxDesks: number;
 }
 
 let art: SceneArt | null = null;
@@ -44,16 +73,55 @@ export function loadArt(): Promise<SceneArt | null> {
   return loading;
 }
 
-/** Logical room size: the art is drawn at 2×. */
-export const ROOM_W = 1600;
-export const ROOM_H = 1000;
-/** The part of the canvas the room fills: the scene shows this, not the empty corners. */
-export const CROP = { x: 190, y: 0, w: 1220, h: 990 };
 const H = (v: number) => v / 2;
 
-function toScreen(x: number, y: number, z = 0) {
-  const w = art!.worldToScreen;
+function toScreenIn(w: WorldToScreen, x: number, y: number, z = 0) {
   return { x: H(w.x0 + (y - x) * w.perMetreX), y: H(w.y0 + (x + y) * w.perMetreY - z * w.perMetreZ) };
+}
+
+// ── The looks of an office ────────────────────────────────────────────────────
+
+/** Office looks, in the order the team settings offer them. */
+export const THEME_LABELS: Record<string, string> = { warm: "溫暖木質", nordic: "北歐明亮", studio: "綠意工作室", premium: "高級辦公室" };
+const STANDARD = ["warm", "nordic", "studio"];
+/** From this many members a team gets the large office. */
+export const LARGE_FROM = 5;
+
+/**
+ * The look a team's office has: the one its settings name, else Coucou's
+ * choice — the large office for a big team, and for the others one of the
+ * standard looks, the same for a team every time (from its id).
+ */
+export function themeName(teamId: string, setting: string | undefined, members: number): string {
+  if (setting && THEME_LABELS[setting]) return setting;
+  if (members >= LARGE_FROM) return "premium";
+  let h = 0;
+  for (const ch of teamId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return STANDARD[h % STANDARD.length];
+}
+
+export function theme(name: string): Theme | null {
+  if (!art) return null;
+  const t = art.themes[name] ?? art.themes.warm;
+  const large = t.size === "large";
+  return {
+    name: art.themes[name] ? name : "warm",
+    label: t.label,
+    large,
+    room: t.room,
+    props: t.props,
+    workstations: t.workstations === "standard" ? art.workstations : t.workstations,
+    desks: large ? largeDesks : desksFor,
+    maxDesks: large ? 12 : MAX_DESKS,
+  };
+}
+
+/** The large office (10 × 9 m): benches of four between the meeting room, the lounge and the kitchen. */
+function largeDesks(count: number): Desk[] {
+  const rows = count <= 8 ? [4.2, 6.6] : [4.0, 5.9, 7.8];
+  // Two benches of two per row, with an aisle between them.
+  const cols = [3.0, 4.4, 6.3, 7.7];
+  return rows.flatMap((y) => cols.map((x) => ({ x, y, facing: "SE" as const }))).slice(0, Math.max(0, Math.min(count, 12)));
 }
 
 /**
@@ -154,6 +222,12 @@ export class TeamScene {
   private k = 1;
   private seenMessages = new Set<string>();
   private first = true;
+  /** The look on screen; the room is built again when the team's changes. */
+  private theme: Theme | null = null;
+  /** How many members have a desk in this office. */
+  get capacity(): number {
+    return this.theme?.maxDesks ?? MAX_DESKS;
+  }
   selected: string | null = null;
   bubblesOn = true;
   reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -162,15 +236,17 @@ export class TeamScene {
     this.stage = h("div", { class: "office-stage" });
     this.bubbles = h("div", { class: "office-bubbles", "aria-live": "polite" });
     this.overlay = h("div", { class: "office-overlay" }, this.bubbles);
-    this.el = h("div", { class: `office-scene${opts.mini ? " mini" : ""}`, style: `aspect-ratio:${CROP.w} / ${CROP.h}` }, this.stage, this.overlay);
-    // The room is drawn at 1600 × 1000 and scaled to whatever width it is given.
+    this.el = h("div", { class: `office-scene${opts.mini ? " mini" : ""}` }, this.stage, this.overlay);
+    // The room is drawn at its own size and scaled to whatever width it is given.
     const fit = () => {
       const w = this.el.clientWidth;
       if (!w) return;
-      this.k = w / CROP.w;
-      this.stage.style.transform = `scale(${this.k}) translate(${-CROP.x}px, ${-CROP.y}px)`;
+      const crop = this.crop;
+      this.k = w / crop.w;
+      this.stage.style.transform = `scale(${this.k}) translate(${-crop.x}px, ${-crop.y}px)`;
       this.layout();
     };
+    this.fit = fit;
     new ResizeObserver(fit).observe(this.el);
     // A Mochi picks its member; anywhere else in the room lets the selection go.
     this.el.addEventListener("click", (e) => {
@@ -184,29 +260,47 @@ export class TeamScene {
     scenes.add(this);
   }
 
+  private fit: () => void = () => {};
+  private get crop() {
+    return this.theme?.room.crop ?? { x: 0, y: 0, w: 1220, h: 990 };
+  }
+  private toScreen(x: number, y: number, z = 0) {
+    return toScreenIn(this.theme!.room.worldToScreen, x, y, z);
+  }
+
   private build() {
     this.stage.replaceChildren();
+    this.overlay.replaceChildren(this.bubbles);
+    this.pinned = [];
+    for (const a of this.actors.values()) a.canvas.remove();
     this.actors.clear();
     this.labels.clear();
-    if (!art) {
+    const t = this.theme;
+    if (!t) {
       // Without the art the office still works: the members as a list of buttons.
       this.stage.append(h("div", { class: "office-noart", text: "辦公室圖片載入中…" }));
       return;
     }
-    const a = art;
-    this.stage.append(h("img", { class: "office-room", src: `/office/${a.room.file}`, alt: "", draggable: "false" }));
+    const [cw, ch] = t.room.canvas.map(H);
+    this.stage.style.width = `${cw}px`;
+    this.stage.style.height = `${ch}px`;
+    this.el.style.aspectRatio = `${t.room.crop.w} / ${t.room.crop.h}`;
+    this.el.dataset.theme = t.name;
+    this.stage.append(h("img", { class: "office-room", src: `/office/${t.room.file}`, alt: "", draggable: "false", style: `width:${cw}px;height:${ch}px` }));
     // The meeting table stands in front of what is behind it.
-    const mt = a.props.meetingTable;
-    const at = toScreen(...mt.at);
-    this.stage.append(
-      h("img", {
-        class: "office-layer", src: `/office/${mt.file}`, alt: "", draggable: "false",
-        style: `left:${at.x - H(mt.groundPivot[0])}px;top:${at.y - H(mt.groundPivot[1])}px;width:${H(mt.canvas[0])}px;z-index:${this.depth(...mt.at)}`,
-      }),
-    );
-    const sofa = a.props.sofa;
+    const mt = t.props.meetingTable;
+    if (mt) {
+      const at = this.toScreen(...mt.at);
+      this.stage.append(
+        h("img", {
+          class: "office-layer", src: `/office/${mt.file}`, alt: "", draggable: "false",
+          style: `left:${at.x - H(mt.groundPivot[0])}px;top:${at.y - H(mt.groundPivot[1])}px;width:${H(mt.canvas[0])}px;z-index:${this.depth(...mt.at)}`,
+        }),
+      );
+    }
+    const sofa = t.props.sofa;
     if (sofa) {
-      const s = toScreen(...sofa.at);
+      const s = this.toScreen(...sofa.at);
       this.stage.append(
         h("img", {
           class: "office-layer", src: `/office/${sofa.file}`, alt: "", draggable: "false",
@@ -214,6 +308,7 @@ export class TeamScene {
         }),
       );
     }
+    this.fit();
   }
 
   /** Puts a reading-size element at a point of the room. */
@@ -223,8 +318,9 @@ export class TeamScene {
     this.place1(el, x, y);
   }
   private place1(el: HTMLElement, x: number, y: number) {
-    el.style.left = `${(x - CROP.x) * this.k}px`;
-    el.style.top = `${(y - CROP.y) * this.k}px`;
+    const crop = this.crop;
+    el.style.left = `${(x - crop.x) * this.k}px`;
+    el.style.top = `${(y - crop.y) * this.k}px`;
   }
   private layout() {
     this.pinned = this.pinned.filter((p) => p.el.isConnected);
@@ -240,9 +336,9 @@ export class TeamScene {
    * frames, its plan on the whiteboard. Nothing here is decoration made up.
    */
   private drawWalls() {
-    if (!art) return;
+    const room = this.theme!.room;
     this.stage.querySelectorAll(".office-wall").forEach((n) => n.remove());
-    const latest = [...this.store.artifacts(this.teamId)].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, art.room.artifactSlots.length);
+    const latest = [...this.store.artifacts(this.teamId)].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, room.artifactSlots.length);
     latest.forEach((a, i) => {
       const url = this.opts.preview?.(a) ?? null;
       const item = h(
@@ -255,7 +351,7 @@ export class TeamScene {
         url ? h("img", { src: url, alt: "", draggable: "false" }) : h("span", { class: "kind", text: KIND_ICON[a.kind] }),
         url ? null : h("span", { class: "name", text: a.name }),
       );
-      onQuad(item, art!.room.artifactSlots[i], 100, 96);
+      onQuad(item, room.artifactSlots[i], 100, 96);
       this.stage.append(item);
     });
     // The plan: the run's tasks, done ones ticked; the first few that fit.
@@ -268,7 +364,7 @@ export class TeamScene {
         h("b", { text: `計畫 ${done}/${tasks.length}` }),
         ...tasks.slice(0, 6).map((t) => h("span", { class: t.status === "completed" ? "ok" : t.status === "running" || t.status === "reviewing" ? "now" : "" }, t.status === "completed" ? "✓ " : t.status === "running" || t.status === "reviewing" ? "▸ " : "○ ", t.title)),
       );
-      onQuad(board, art.room.whiteboardQuad, 280, 200);
+      onQuad(board, room.whiteboardQuad, 280, 200);
       this.stage.append(board);
     }
   }
@@ -278,8 +374,8 @@ export class TeamScene {
    * planning, the whiteboard; with nothing to do, a seat in the lounge.
    */
   private place(m: MemberSnapshot, i: number, count: number) {
-    const desk = desksFor(count)[i];
-    const standing = m.workStatus === "planning" && art ? art.room.spots.whiteboard : null;
+    const desk = this.theme!.desks(count)[i];
+    const standing = m.workStatus === "planning" ? this.theme!.room.spots.whiteboard ?? null : null;
     const lounge = m.workStatus === "idle" ? this.lounge.get(m.memberId) ?? null : null;
     return { desk, standing, lounge };
   }
@@ -288,9 +384,9 @@ export class TeamScene {
   private lounge = new Map<string, { x: number; y: number }>();
   private seatLounge(members: MemberSnapshot[]) {
     this.lounge.clear();
-    const sofa = art?.props.sofa;
+    const sofa = this.theme?.props.sofa;
     if (!sofa) return;
-    const at = toScreen(...sofa.at);
+    const at = this.toScreen(...sofa.at);
     const idle = members.filter((m) => m.workStatus === "idle").slice(0, sofa.seats.length);
     idle.forEach((m, i) => this.lounge.set(m.memberId, { x: at.x - H(sofa.groundPivot[0]) + H(sofa.seats[i][0]), y: at.y - H(sofa.groundPivot[1]) + H(sofa.seats[i][1]) }));
   }
@@ -301,12 +397,17 @@ export class TeamScene {
     const team = this.store.team(this.teamId);
     if (!team) return;
     const members = this.store.members(this.teamId);
+    const name = themeName(this.teamId, team.officeLayoutId, members.length);
+    if (this.theme?.name !== name) {
+      this.theme = theme(name);
+      this.build();
+    }
     const keep = new Set<string>();
     // Everything per member is drawn afresh; only the Mochis carry over.
     this.stage.querySelectorAll(".office-ws, .office-screen, .office-shadow").forEach((n) => n.remove());
     this.overlay.querySelectorAll(".office-label").forEach((n) => n.remove());
     this.drawWalls();
-    const seated = members.slice(0, MAX_DESKS);
+    const seated = members.slice(0, this.theme!.maxDesks);
     this.seatLounge(seated);
     seated.forEach((m, i) => {
       keep.add(m.memberId);
@@ -318,16 +419,16 @@ export class TeamScene {
         this.actors.delete(id);
       }
     }
-    if (!this.opts.mini) this.drawBubbles(members);
+    this.drawBubbles(members);
     this.first = false;
     wake();
   }
 
   private drawMember(m: MemberSnapshot, i: number, count: number, leader: boolean) {
-    const a = art!;
+    const t = this.theme!;
     const { desk, standing, lounge } = this.place(m, i, count);
-    const ws = a.workstations[desk.facing];
-    const at = toScreen(desk.x, desk.y);
+    const ws = t.workstations[desk.facing];
+    const at = this.toScreen(desk.x, desk.y);
     const ox = at.x - H(ws.groundPivot[0]);
     const oy = at.y - H(ws.groundPivot[1]);
     const local = ([px, py]: [number, number]) => ({ x: ox + H(px), y: oy + H(py) });
@@ -345,8 +446,8 @@ export class TeamScene {
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("class", `office-screen ${STATUS[m.workStatus].tone}`);
-    svg.setAttribute("width", String(ROOM_W));
-    svg.setAttribute("height", String(ROOM_H));
+    svg.setAttribute("width", String(H(t.room.canvas[0])));
+    svg.setAttribute("height", String(H(t.room.canvas[1])));
     svg.setAttribute("style", `z-index:${z + 2}`);
     const lerp = (p: { x: number; y: number }, q: { x: number; y: number }, t: number) => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
     const lines = [0.3, 0.48, 0.66].map((t, k) => {
@@ -359,8 +460,8 @@ export class TeamScene {
     this.stage.append(h("img", { class: "office-layer office-ws", src: `/office/${ws.layers[1]}`, alt: "", draggable: "false", style: `left:${ox}px;top:${oy}px;width:${W}px;height:${Ht}px;z-index:${z + 3}` }));
 
     // The Mochi: on its chair, or standing at the whiteboard.
-    const sofaAt = art!.props.sofa?.at;
-    const seat = standing ? toScreen(standing[0], standing[1]) : lounge ?? local(ws.actorBottom);
+    const sofaAt = t.props.sofa?.at;
+    const seat = standing ? this.toScreen(standing[0], standing[1]) : lounge ?? local(ws.actorBottom);
     const seatZ = standing ? this.depth(standing[0], standing[1]) + 4 : lounge && sofaAt ? this.depth(...sofaAt) + 4 : z + 4;
     const actor = this.actor(m, color);
     const size = actor.size;
@@ -373,7 +474,13 @@ export class TeamScene {
     this.pose(actor, m.workStatus);
     if (standing) this.stage.append(h("div", { class: "office-shadow small", style: `left:${seat.x}px;top:${seat.y}px;z-index:${seatZ - 1}` }));
 
-    if (this.opts.mini) return;
+    if (this.opts.mini) {
+      // The company map is live but small: each member's state as a mark over its head.
+      const st = STATUS[m.workStatus];
+      const chip = h("span", { class: `office-label office-chip ${st.tone}`, title: `${m.displayName ?? m.memberId} · ${st.label}`, style: `--c:${color}` }, st.icon);
+      this.pin(chip, seat.x, bottom - BODY - 4);
+      return;
+    }
     // The label: the member's name and what it is doing, a button for mouse and keyboard.
     const st = STATUS[m.workStatus];
     const task = m.primaryTaskId ? this.store.task(m.primaryTaskId)?.title : "";
@@ -383,7 +490,7 @@ export class TeamScene {
     const label = h(
       "button",
       {
-        class: `office-label ${st.tone}${sel ? " on" : ""}${m.engineStatus === "offline" ? " offline" : ""}${lounge ? " compact" : ""}`, type: "button",
+        class: `office-label ${st.tone}${sel ? " on" : ""}${m.engineStatus === "offline" ? " offline" : ""}${lounge || (t.large && !sel) ? " compact" : ""}`, type: "button",
         style: `--c:${color}`,
         "aria-pressed": sel ? "true" : "false",
         "aria-label": `${m.displayName ?? m.memberId}${leader ? ",Leader" : ""},${m.roleLabel},${st.label}${task ? `,${task}` : ""}${m.engineStatus === "offline" ? ",未連線" : ""}`,
@@ -420,7 +527,7 @@ export class TeamScene {
     a.status = s;
     a.dirty = true;
     a.engine.setPermanentEmote(s === "completed" ? "happy" : null);
-    if (s === "completed" && was && !this.first && !this.opts.mini && !this.reduceMotion) {
+    if (s === "completed" && was && !this.first && !this.reduceMotion) {
       a.engine.setState("finished");
       window.setTimeout(() => a.status === "completed" && a.engine.setState("idle"), 2600);
       return;
@@ -448,6 +555,13 @@ export class TeamScene {
     if (!speaker) return;
     const name = (id: string) => members.find((x) => x.memberId === id)?.displayName ?? id;
     const to = msg.toMemberIds.map(name).join("、");
+    if (this.opts.mini) {
+      const mark = h("span", { class: "office-bubble mini", title: `${name(from!)}${to ? ` → ${to}` : ""}:${msg.text}` }, "💬");
+      this.pin(mark, parseFloat(speaker.canvas.style.left) + speaker.size / 2 + 30, parseFloat(speaker.canvas.style.top) + speaker.size / 2 - BODY / 2 - 40);
+      this.bubbles.append(mark);
+      window.setTimeout(() => mark.remove(), 6000);
+      return;
+    }
     const b = h(
       "button",
       {
@@ -475,13 +589,22 @@ export class TeamScene {
   }
 
   /** Drawn by the frame loop. */
+  private sinceDrawn = 0;
+
   frame(dt: number, dpr: number): boolean {
     let moving = false;
+    const still = this.reduceMotion;
+    // The company map's rooms move at about 20 frames a second: enough to be alive.
+    this.sinceDrawn += dt;
+    if (this.opts.mini && !still && this.sinceDrawn < 0.05 && ![...this.actors.values()].some((a) => a.dirty)) return true;
+    const step = this.opts.mini ? this.sinceDrawn : dt;
+    this.sinceDrawn = 0;
+    // A canvas is drawn at the size it is shown: the room is scaled down, so is the Mochi.
+    const res = dpr * Math.min(1, Math.max(0.25, this.k));
     for (const a of this.actors.values()) {
       if (!a.canvas.isConnected) continue;
-      const still = this.opts.mini || this.reduceMotion;
       if (still && !a.dirty) continue;
-      const px = Math.round(a.size * dpr);
+      const px = Math.round(a.size * res);
       if (a.canvas.width !== px) {
         a.canvas.width = px;
         a.canvas.height = px;
@@ -489,9 +612,9 @@ export class TeamScene {
       const ctx = a.canvas.getContext("2d");
       if (!ctx) continue;
       // A still Mochi is drawn as it settles, then left.
-      a.engine.update(still ? 1 : dt);
+      a.engine.update(still ? 1 : Math.min(0.1, step));
       a.engine.yaw = a.yaw;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.setTransform(res, 0, 0, res, 0, 0);
       ctx.clearRect(0, 0, a.size, a.size);
       a.engine.draw(ctx, a.size, a.size);
       a.dirty = false;

@@ -12,7 +12,7 @@ import type { Artifact, CommandRecord, MemberSnapshot, Message, TeamRun, Capabil
 import { OfficeStore } from "./store";
 import { RealAdapter, fileFromSnapshot } from "./adapter-real";
 import { MockAdapter } from "./adapter-mock";
-import { loadArt, MAX_DESKS, STATUS, TeamScene, wake } from "./scene";
+import { loadArt, STATUS, TeamScene, themeName, THEME_LABELS, wake } from "./scene";
 import type { PastRun, Snapshot, TeamFile } from "../types";
 
 export interface OfficeHost {
@@ -267,8 +267,10 @@ export class Office {
     const count = this.store.headcount();
     if (!teams.length) return h("div", { class: "office-empty" }, h("p", { text: "還沒有團隊。按左下角的「新增團隊」開始。" }));
     const pick = teams.find((t) => t.teamId === this.companyPick) ?? teams[0];
-    // Rooms laid out as a floor: as many columns as rows.
-    const cols = Math.max(1, Math.ceil(Math.sqrt(teams.length)));
+    // Rooms laid out as a floor: as many columns as rows. A large office takes 2 × 2 cells.
+    const large = (t: (typeof teams)[number]) => themeName(t.teamId, t.officeLayoutId, t.memberIds.length) === "premium";
+    const cells = teams.reduce((n, t) => n + (large(t) ? 4 : 1), 0);
+    const cols = Math.max(teams.some(large) ? 2 : 1, Math.ceil(Math.sqrt(cells)));
     const grid = h("div", { class: "office-map", role: "list", style: `${this.mapTransform()}--cols:${cols};` });
     for (const t of teams) {
       const run = this.store.run(t.currentRunId);
@@ -276,7 +278,7 @@ export class Office {
       const p = this.store.progress(t.teamId);
       const room = h(
         "div",
-        { class: `office-room-tile${t.teamId === pick.teamId ? " on" : ""}`, role: "listitem" },
+        { class: `office-room-tile${t.teamId === pick.teamId ? " on" : ""}${large(t) ? " big" : ""}`, role: "listitem" },
         h(
           "button",
           {
@@ -296,6 +298,8 @@ export class Office {
           "div",
           { class: "office-room-plate" },
           h("b", { title: t.name, text: t.name }),
+          h("span", { class: "office-theme-tag", text: THEME_LABELS[themeName(t.teamId, t.officeLayoutId, t.memberIds.length)] }),
+          run && (run.status === "running" || run.status === "needs_attention" || run.status === "pausing") ? h("span", { class: "office-live", title: "團隊正在工作,畫面即時更新", text: "LIVE" }) : null,
           this.runLabel(run),
           h("span", { class: "dim", text: p.percent === null ? "尚未派工" : `${p.percent}%` }),
           alerts ? h("span", { class: "office-count", title: `${alerts} 項需要你`, text: String(alerts) }) : null,
@@ -431,7 +435,8 @@ export class Office {
       : caps.canResume
         ? h("button", { class: "btn primary", type: "button", onClick: () => void this.command(teamId, "resume") }, "繼續")
         : h("button", { class: "btn plain", type: "button", disabled: true, title: caps.unavailableReasons.pause ?? "" }, run?.status === "pausing" ? "暫停中…" : "暫停團隊");
-    const extra = members.length > MAX_DESKS ? h("p", { class: "dim", text: `另外 ${members.length - MAX_DESKS} 位成員還沒有工位(房間最多 ${MAX_DESKS} 張桌子),在下方名單裡。` }) : null;
+    const cap = scene.capacity;
+    const extra = members.length > cap ? h("p", { class: "dim", text: `另外 ${members.length - cap} 位成員還沒有工位(這間辦公室最多 ${cap} 張桌子),在下方名單裡。` }) : null;
     const roster = h(
       "div",
       { class: "office-roster", role: "list", "aria-label": "團隊成員" },
