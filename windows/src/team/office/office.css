@@ -1234,3 +1234,10 @@
   max-height: 120px;
   overflow: auto;
 }
+
+.office-stats-title {
+  margin: 4px 0 -2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dim-glass);
+}

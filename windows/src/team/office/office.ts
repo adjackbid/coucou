@@ -374,7 +374,7 @@ export class Office {
       "div",
       { class: "office office-company" },
       h("div", { class: "office-head" },
-        h("div", {}, h("h1", { text: "我的公司" }), h("p", { class: "dim", text: `${teams.length} 間辦公室 · ${count.agents} 位 Agents(${count.seats} 個席位)${away ? ` · 另有 ${away} 個團隊已封存` : ""}` })),
+        h("div", {}, h("h1", { text: "我的公司" }), h("p", { class: "dim", text: `${teams.length} 間辦公室 · ${count.seats} 位員工${away ? ` · 另有 ${away} 個團隊已封存` : ""}` })),
         this.demoTag(),
         this.demo ? h("button", { class: "btn plain", type: "button", title: "播放規格附帶的下一個事件", onClick: () => { if (!this.step()) { this.notice = "示範事件已全部播放。"; this.host.render(); } } }, "下一個示範事件") : null),
       this.connection(),
@@ -425,8 +425,17 @@ export class Office {
     const tokens = rows.reduce((a, r) => a + (r.s?.tokens ?? 0), 0);
     const all = usageSummary(rows.flatMap((r) => r.snap!.members.flatMap((m) => m.usage ?? [])), () => this.host.render());
     rows.sort((a, b) => (b.s?.tokens ?? 0) - (a.s?.tokens ?? 0));
+    // Everyone on the payroll, by what they are doing now.
+    const staff = teams.flatMap((t) => this.store.members(t.teamId));
+    const tone = (m: (typeof staff)[number]) => STATUS[m.workStatus].tone;
+    const working = staff.filter((m) => tone(m) === "work").length;
+    const waitingYou = staff.filter((m) => tone(m) === "alert").length;
+    const resting = staff.length - working - waitingYou;
     return h("div", { class: "office-card" },
       h("div", { class: "row" }, h("h2", { text: "公司總覽" }), this.demoTag()),
+      h("h3", { class: "office-stats-title", text: "員工" }),
+      h("div", { class: "office-stats" }, stat(staff.length, "員工", "quiet"), stat(working, "工作中", "work"), stat(waitingYou, "等你處理", "alert"), stat(resting, "休息/待命", "done")),
+      h("h3", { class: "office-stats-title", text: `團隊(${teams.length} 個)` }),
       h("div", { class: "office-stats" }, stat(busy, "執行中", "work"), stat(need, "需介入", "alert"), stat(done, "已完成", "done"), stat(rest, "待命", "quiet")),
       rows.length
         ? h("div", { class: "office-figures", title: "各團隊本輪的合計,隨團隊工作即時更新" },
