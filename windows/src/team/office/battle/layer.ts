@@ -14,9 +14,12 @@
 
 import type { BotEngine } from "../../../mochi/engine";
 import { h } from "../../../views/dom";
-import { sceneArt, wake, type BossState as Look, type SceneLayer, type Sprite, type TeamScene } from "../scene";
+import { sceneArt, wake, type BossState as Look, type SceneLayer, type Sprite, type TeamScene, type WorldArt } from "../scene";
 import { DESIGN, type BattleSignal, type BattleViewModel, type HeroClass } from "./contracts";
 import { EffectQueue, type Effect } from "./effects";
+import { BOSS_MOVES, BossDirector, resolvesWholeCast, type BossBlockCause, type BossCue, type BossMove, type WorldBossId } from "./bossMoves";
+import { drawBossMove, type BossFxPoints } from "./bossFx";
+import { WORLDS, type WorldId } from "./worlds";
 import { RULES, SKILLS, SkillDirector, type Contribution, type HitPlan, type SkillId } from "./skills";
 
 export const HERO_COLOR: Record<HeroClass, string> = {
@@ -53,6 +56,20 @@ export interface LayerHost {
   planned?(plan: HitPlan): void;
   /** On the company map: whether this room plays its fight, or stands still. */
   live?(): boolean;
+  /** The team's battlefield (kit v4): a world of its own, or the office. */
+  world(): WorldId;
+  /** What a boss_counter is really about: the cause the record states, else unknown. */
+  causeOf?(s: BattleSignal): BossBlockCause;
+}
+
+/** One boss move playing or about to: its clock, its sources, what it has set off. */
+interface ActiveCue {
+  cue: BossCue;
+  move: BossMove;
+  signal: BattleSignal;
+  startedAt: number;
+  fired: Set<string>;
+  sparks: number;
 }
 
 type Pt = { x: number; y: number };
@@ -202,12 +219,16 @@ export class BattleLayer implements SceneLayer {
   private speech: HTMLElement | null = null;
   private fxDrawn = false;
   private look: Look | null = null;
+  private bossArt: import("../scene").BossArt | null = null;
   private vm: BattleViewModel | null = null;
   /** A moment held still (only to look at one move, in development); else the clock. */
   private frozen: number | null = null;
   private now = () => this.frozen ?? performance.now();
   private queue = new EffectQueue(() => this.now());
   private director = new SkillDirector(() => this.now());
+  /** The boss's own moves: chosen from real causes, at most one on stage. */
+  private bossDirector = new BossDirector(() => this.now());
+  private bossCue: ActiveCue | null = null;
   /** The acceptance signals waiting for their moves, by id. */
   private accepted = new Map<string, BattleSignal>();
   private collectTimer = 0;
@@ -223,6 +244,19 @@ export class BattleLayer implements SceneLayer {
 
   constructor(private scene: TeamScene, private host: LayerHost) {
     this.pad = scene.mini ? 40 : 56;
+  }
+
+  /** The battlefield this room becomes: a world of the kit, when its art is here. */
+  arena(): { id: string; art: WorldArt } | null {
+    const id = this.host.world();
+    if (id === "office") return null;
+    const art = sceneArt()?.battle?.worlds?.[id];
+    return art ? { id, art } : null;
+  }
+
+  /** The world on screen, office included. */
+  get worldId(): WorldId {
+    return this.arena()?.id as WorldId ?? "office";
   }
 
   /** A room of the company map with its fight turned off: the boss and the line-up, nothing moving. */
@@ -246,7 +280,8 @@ export class BattleLayer implements SceneLayer {
         this.hidden.push(el);
       }
     }
-    const b = art.boss;
+    const world = this.arena();
+    const b = world ? world.art.boss : art.boss;
     const s = theme.battle.scale;
     const [ax, ay] = theme.battle.boss;
     const at = this.scene.screen(ax, ay);
@@ -260,6 +295,7 @@ export class BattleLayer implements SceneLayer {
       style: `left:${at.x - gx}px;top:${at.y - gy}px;width:${(b.canvas[0] / 2) * s}px;height:${(b.canvas[1] / 2) * s}px;z-index:${z};transform-origin:${gx}px ${gy}px`,
     }) as HTMLImageElement;
     for (const st of Object.values(b.states)) image(st.file);
+    this.bossArt = b;
     stage.append(this.shadow, this.boss);
     {
       const c = this.scene.cropBox;
@@ -321,22 +357,33 @@ export class BattleLayer implements SceneLayer {
 
   private setLook(v: Look) {
     if (this.look === v || !this.boss) return;
-    const st = sceneArt()?.battle?.boss.states[v];
-    if (!st) return;
-    this.look = v;
+    // A boss without that picture shows the nearest it has (the worlds have no rage of their own).
+    const states = this.bossArt?.states;
+    if (!states) return;
+    const pick = (states[v] ? v : v === "rage" ? (states.attack ? "attack" : "idle") : "idle") as Look;
+    const st = states[pick];
+    if (!st || this.look === pick) return;
+    this.look = pick;
     this.boss.src = `/office/${st.file}`;
   }
 
   /** The boss's points in stage pixels: its feet, crystal core, where blows land, its head, its raised fist. */
   private bossPoints() {
     const theme = this.scene.roomTheme;
-    const b = sceneArt()?.battle?.boss;
+    const b = this.bossArt ?? sceneArt()?.battle?.boss;
     if (!theme?.battle || !b) return null;
     const s = theme.battle.scale;
     const at = this.scene.screen(...theme.battle.boss);
     const st = b.states[this.look ?? "idle"];
-    const p = (q: [number, number]): Pt => ({ x: at.x + ((q[0] - b.groundPivot[0]) / 2) * s, y: at.y + ((q[1] - b.groundPivot[1]) / 2) * s });
-    return { feet: at, core: p(st.coreCenter), hit: p(st.hitTarget), top: p(st.top), fist: p(st.fist), scale: s };
+    const pt = (q: unknown): Pt => {
+      const v = q as [number, number] | undefined;
+      return v && typeof v[0] === "number" ? { x: at.x + ((v[0] - b.groundPivot[0]) / 2) * s, y: at.y + ((v[1] - b.groundPivot[1]) / 2) * s } : at;
+    };
+    return {
+      feet: at, core: pt(st.coreCenter), hit: pt(st.hitTarget), top: pt(st.top),
+      fist: pt(st.fist ?? st.counterOrigin), scale: s,
+      anchor: (name: string): Pt => pt(st[name] ?? st.counterOrigin ?? st.coreCenter),
+    };
   }
 
   detach() {
@@ -357,6 +404,7 @@ export class BattleLayer implements SceneLayer {
   stop() {
     this.queue.clear();
     this.director.cancel();
+    this.bossCue = null;
     this.accepted.clear();
     window.clearTimeout(this.collectTimer);
     this.collectTimer = 0;
@@ -385,13 +433,113 @@ export class BattleLayer implements SceneLayer {
       return;
     }
     if (this.host.calm()) {
-      // 減少動態: a small still mark of what changed, no movement.
+      // 減少動態: a small still mark of what changed, no movement — the move is its name.
+      const cue = this.chooseCue(s, true);
       const label = this.label(s.kind, s);
-      if (label) this.float(label, this.anchorFor(s), true);
+      if (cue) this.float({ text: BOSS_MOVES[cue.moveId].name, sub: label?.text ?? s.reasonLabel, tone: "counter" }, this.anchorFor(s), true);
+      else if (label) this.float(label, this.anchorFor(s), true);
       return;
     }
     if (s.kind === "reopen") this.stop();
+    // In a world, the boss answers these itself, each with a move of its own.
+    if (this.worldId !== "office") {
+      if (s.kind === "unblock_support") {
+        // A real unblock: a cast not yet begun is called off — only when all its sources are resolved.
+        const freed = s.source.taskIds;
+        if (this.bossCue && this.now() - this.bossCue.startedAt < this.bossCue.move.phases[0] && resolvesWholeCast(this.bossCue.cue.sourceTaskIds, freed)) this.bossCue = null;
+      } else if (s.kind === "boss_counter" || s.kind === "member_interrupted" || s.kind === "review_returned" || s.kind === "delivery_waiting" || s.kind === "scope_added") {
+        const cue = this.chooseCue(s, false);
+        if (cue) this.startCue(cue, s);
+        // The mark still floats (the +HP, the 待驗收), move or no move.
+        const label = this.label(s.kind, s);
+        if (label && s.kind !== "boss_counter") this.float(label, this.anchorFor(s));
+        wake();
+        return;
+      }
+    }
     this.queue.push(s);
+    wake();
+  }
+
+  /** The kit's selection, from this signal's real sources. */
+  private chooseCue(s: BattleSignal, dry: boolean): BossCue | null {
+    const world = WORLDS[this.worldId];
+    if (!world || world.bossId === "requirements-golem") return null;
+    const vm = this.vm;
+    if (!vm) return null;
+    const kind = s.kind === "member_interrupted" ? "boss_counter" : s.kind;
+    const cause: BossBlockCause = s.kind === "member_interrupted" ? "tool_error" : this.host.causeOf?.(s) ?? "unknown";
+    const blocked = s.kind === "boss_counter" ? (s.source.taskIds.length ? s.source.taskIds : s.source.questionIds) : s.kind === "member_interrupted" ? s.source.memberIds : [];
+    const ctx = {
+      bossId: world.bossId as WorldBossId,
+      signalKind: kind,
+      sourceSignalIds: [s.signalId],
+      evidence: s.evidence,
+      cause,
+      newlyBlockedTaskIds: blocked,
+      addedCountedUncompletedTaskIds: s.kind === "scope_added" ? s.source.taskIds : [],
+      scopeGrowthContributionHp: s.kind === "scope_added" ? s.displayDelta ?? 0 : 0,
+      bossStateAfterApply: vm.bossState,
+      live: !s.replay,
+      visible: this.scene.el.isConnected && !document.hidden,
+      modeEnabled: true,
+      history: vm.isHistory,
+      syncing: false,
+      paused: false,
+      reducedMotion: this.host.calm(),
+    };
+    this.bossDirector.setRun(vm.runId);
+    if (dry) {
+      // 減少動態: the choice still counts (and is consumed), the move is words only.
+      const cue = this.bossDirector.choose(ctx);
+      return cue;
+    }
+    return this.bossDirector.choose(ctx);
+  }
+
+  /** One boss move on stage at a time; a second waits its turn in the same queue of moments. */
+  private startCue(cue: BossCue, s: BattleSignal) {
+    const move = BOSS_MOVES[cue.moveId];
+    this.bossCue = { cue, move, signal: s, startedAt: this.now(), fired: new Set(), sparks: 0 };
+    const world = WORLDS[this.worldId];
+    const kindWord = { attack: "", ultimate: "絕招・", guard: "防守・", regen: "回血・" }[cue.kind];
+    const damage = cue.kind === "regen" && cue.scopeGrowthLabelHp ? `+${cue.scopeGrowthLabelHp} HP` : null;
+    this.showBossCard(move, `${kindWord}${move.name}`, `${world.bossName} · ${s.reasonLabel} · 0 傷害${cue.kind === "regen" ? "" : " · 工作照常"}`, damage);
+    this.say(s.kind);
+  }
+
+  /** A boss move's card: the world's own colours. */
+  private showBossCard(move: BossMove, title: string, sub: string, damage: string | null) {
+    window.clearTimeout(this.cardTimer);
+    this.card?.remove();
+    const el = h(
+      "div",
+      { class: `bt-card c-boss${this.frozen !== null ? " still" : ""}`, role: "status", style: `--c1:${move.palette[1]};--c2:${move.palette[0]}` },
+      h("span", { class: "bt-card-icon", "aria-hidden": "true", html: `<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON.combo}</svg>` }),
+      h("span", { class: "bt-card-text" }, h("b", {}, h("span", { class: "bt-card-word", text: "魔王・" }), title), h("small", { text: sub })),
+      damage ? h("em", { class: "heal", text: damage }) : null,
+    );
+    this.scene.overlayEl.append(el);
+    this.card = el;
+    if (this.frozen === null) this.cardTimer = window.setTimeout(() => {
+      el.remove();
+      if (this.card === el) this.card = null;
+    }, 1900);
+  }
+
+  /**
+   * Development only: one boss move held at `ms` (team.html?…&bpose=moveId:ms).
+   * The signal is made up for the picture; nothing of the work is touched.
+   */
+  poseBossMove(moveId: string, ms: number, s: BattleSignal) {
+    const move = BOSS_MOVES[moveId];
+    if (!move) return;
+    this.stop();
+    this.frozen = 0;
+    const cue: BossCue = { moveId, kind: move.kind, consumedSourceSignalIds: [s.signalId], sourceTaskIds: [...s.source.taskIds], heroHpDelta: 0, extraBossDamage: 0, scopeGrowthLabelHp: move.kind === "regen" ? 200 : 0, durationMs: move.phases[2], animated: true };
+    this.startCue(cue, s);
+    this.bossCue!.startedAt = 0;
+    this.frozen = ms;
     wake();
   }
 
@@ -530,7 +678,7 @@ export class BattleLayer implements SceneLayer {
       return false;
     }
     if (this.host.calm()) {
-      if (this.queue.busy || this.particles.length) this.stop();
+      if (this.queue.busy || this.particles.length || this.bossCue) this.stop();
       return false;
     }
     this.t += dt;
@@ -550,6 +698,15 @@ export class BattleLayer implements SceneLayer {
         if (ms >= 500) look = "defeated";
       }
     }
+    // The boss's own move on stage: its pose while it casts.
+    if (this.bossCue) {
+      const ms = now - this.bossCue.startedAt;
+      if (ms >= this.bossCue.move.phases[2]) this.bossCue = null;
+      else if (look !== "defeated") {
+        const kind = this.bossCue.cue.kind;
+        look = kind === "guard" ? "guard" : kind === "regen" ? "regen" : ms < this.bossCue.move.phases[1] ? "attack" : look;
+      }
+    }
     const hurt = Math.max(0, 1 - (now - this.hurtAt) / 260);
     if (hurt > 0.15 && look !== "defeated") look = "hurt";
     this.setLook(look);
@@ -559,6 +716,46 @@ export class BattleLayer implements SceneLayer {
     this.draw(active, now, dt);
     return true;
   }
+
+  /** The boss cue's frame: anchors, targets and its own small share of sparks. */
+  private drawCue(ctx: CanvasRenderingContext2D, b: NonNullable<ReturnType<BattleLayer["bossPoints"]>>, now: number) {
+    const ac = this.bossCue;
+    if (!ac) return;
+    const pts: BossFxPoints = {
+      origin: b.anchor(ac.move.sourceAnchor),
+      core: b.core,
+      feet: b.feet,
+      hit: b.hit,
+      top: b.top,
+      scale: b.scale,
+    };
+    const targets: Pt[] = [];
+    for (const id of ac.signal.source.memberIds.length ? ac.signal.source.memberIds : [this.host.waiting()].filter((m): m is string => !!m)) {
+      const m = this.scene.mochi(id);
+      if (m) targets.push({ x: m.x, y: m.y + m.size * 0.3 });
+    }
+    for (const tid of ac.signal.source.taskIds) {
+      const owner = this.taskOwner?.(tid);
+      const m = owner ? this.scene.mochi(owner) : null;
+      if (m) targets.push({ x: m.x, y: m.y + m.size * 0.3 });
+    }
+    if (!targets.length) targets.push({ ...this.scene.screen(4.35, 4.5) });
+    drawBossMove(ctx, {
+      move: ac.move,
+      ms: now - ac.startedAt,
+      pts,
+      targets: targets.slice(0, 3),
+      spark: (sx, sy, n, color, opts) => {
+        const room = Math.min(n, 24 - ac.sparks);
+        if (room <= 0) return;
+        ac.sparks += room;
+        this.spark(null, sx, sy, room, color, opts);
+      },
+    });
+  }
+
+  /** Who a task of this team belongs to, for aiming a counter (set by the Office). */
+  taskOwner: ((taskId: string) => string | null) | null = null;
 
   /** A member's lunge as it strikes, or its flinch when the boss strikes back. */
   offset(memberId: string): Pt | null {
@@ -592,7 +789,7 @@ export class BattleLayer implements SceneLayer {
 
   private draw(active: Effect[], now: number, dt: number) {
     if (!this.fx) return;
-    if (!active.length && !this.particles.length) return this.clearFx();
+    if (!active.length && !this.particles.length && !this.bossCue) return this.clearFx();
     const c = this.scene.cropBox;
     const res = Math.min(2, window.devicePixelRatio || 1) * Math.min(1, Math.max(0.25, this.scene.scale));
     const W = Math.round(c.w * res);
@@ -610,6 +807,7 @@ export class BattleLayer implements SceneLayer {
     const b = this.bossPoints();
     if (!b) return;
     for (const e of active) this.effect(ctx, e, now - e.startedAt!, b);
+    this.drawCue(ctx, b, now);
     this.drawParticles(ctx, dt);
   }
 
@@ -832,7 +1030,7 @@ export class BattleLayer implements SceneLayer {
         if (ms >= 500 && this.once(e, "burst")) {
           this.spark(e, b.core.x, b.core.y, 34, GOLD, { speed: 300, up: 160, kind: "streak", size: 4 });
           this.spark(e, b.core.x, b.core.y, 12, "#ffffff", { speed: 200, size: 3 });
-          this.showCard("victory", "需求魔王 討伐成功!", "Leader 已結案 · 全部任務驗收", null);
+          this.showCard("victory", `${WORLDS[this.worldId].bossName} 討伐成功!`, "Leader 已結案 · 全部任務驗收", null);
         }
         if (ms >= 500) {
           ring(ctx, b.core.x, b.core.y, lerp(30, 260, ease(span(ms, 500, 1400))), GOLD, 1 - span(ms, 500, 1400), 8);

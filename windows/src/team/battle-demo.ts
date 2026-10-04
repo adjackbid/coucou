@@ -54,27 +54,47 @@ export function playBattle(snap: Snapshot, apply: (next: Snapshot) => void) {
     }],
     // The same two again, inside the 12 s after a combo: each its own move.
     [13500, () => accept(["TASK-08", "TASK-10"])],
+    // Two tasks newly blocked in one picture: the boss's ultimate.
+    [15000, () => {
+      for (const id of ["TASK-07", "TASK-09"]) {
+        const t = task(id);
+        t.status = "doing";
+        t.blocked = { on: "ai4", reason: "等待商品圖與金流規格" };
+      }
+    }],
+    // Freed again (支援光), and one member hits a tool error: the third attack.
+    [17500, () => {
+      for (const id of ["TASK-07", "TASK-09"]) task(id).blocked = null;
+      const m = member("ai2");
+      m.status = "lost";
+      m.lostWhy = "Tool failed twice in a row.";
+    }],
+    [19500, () => {
+      const m = member("ai2");
+      m.status = "working";
+      m.lostWhy = "";
+    }],
     // The leader asks the person: the boss counters, a guard goes up.
-    [16000, () => {
+    [21000, () => {
       const m = member("ai1");
       m.status = "waitingYou";
       m.waiting = { on: "you", what: "首版要支援手機版嗎?", task: "TASK-07" };
       snap.questions = [...snap.questions, { id: "Q-battle", by: "ai1", question: "首版要支援手機版嗎?", task: "TASK-07", at: Date.now(), answer: null }];
     }],
     // Answered: freed.
-    [18500, () => {
+    [23500, () => {
       const m = member("ai1");
       m.status = "working";
       m.waiting = null;
       snap.questions = snap.questions.map((q) => (q.id === "Q-battle" ? { ...q, answer: "要" } : q));
     }],
     // Three members' work accepted together: 三曜協奏, and every task is done — sealed, not won.
-    [23000, () => {
+    [26500, () => {
       task("TASK-07").owner = "ai1";
       accept(["TASK-07", "TASK-09", "TASK-11"]);
     }],
     // The leader's report: the boss is defeated.
-    [27000, () => {
+    [30000, () => {
       snap.status = "finished";
       snap.finishedAt = Date.now();
       for (const m of snap.members) {
@@ -109,6 +129,22 @@ const CAST: Record<string, { members: string[]; looks?: [string, HeroClass | nul
   combo_ward_blade: { members: ["ai2", "ai3"], looks: [["ai2", "guardian", "blade_counter"], ["ai3", "warrior", "blade_crescent"]] },
   combo_trinity: { members: ["ai1", "ai3", "ai4"] },
 };
+
+/** One boss move held still, to look at: `&bpose=lava_flame_breath:600`. */
+export function poseBossMove(office: Office, teamId: string, spec: string) {
+  const [moveId, at] = spec.split(":");
+  const ms = Number(at) || 0;
+  const vm = office.battle.vm(teamId);
+  const layer = office.debugLayer(teamId);
+  if (!vm || !layer) return;
+  const signal: BattleSignal = {
+    teamId, runId: vm.runId, signalId: `bpose|${moveId}`, kind: "boss_counter",
+    source: { teamId, runId: vm.runId, kind: "manual_replay", streamId: null, domainSeq: null, taskIds: [`${teamId}:TASK-04`], memberIds: ["ai3"], questionIds: [] },
+    reasonLabel: "購物車功能 卡住了", hpBefore: null, hpAfter: null, maxHpBefore: null, maxHpAfter: null,
+    displayDelta: null, actorMemberId: "ai3", observedAt: new Date().toISOString(), evidence: "observed_transition", replay: true,
+  };
+  layer.poseBossMove(moveId, ms, signal);
+}
 
 export function poseBattle(office: Office, teamId: string, spec: string) {
   const [move, at] = spec.split(":");

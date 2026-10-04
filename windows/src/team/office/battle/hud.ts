@@ -5,6 +5,7 @@
 import { h } from "../../../views/dom";
 import type { Id } from "../contracts";
 import type { BattleSignal, BattleViewModel, BossState, SignalKind } from "./contracts";
+import { WORLDS, type World } from "./worlds";
 import "./battle.css";
 
 const ICONS: Record<string, string> = {
@@ -43,14 +44,14 @@ const TELL: Record<SignalKind, { icon: string; tone: string; title: (s: BattleSi
   baseline: { icon: "spark", tone: "quiet", title: () => "目前戰況" },
 };
 
-/** The boss's line under its name, by how the fight stands. */
-function line(vm: BattleViewModel): string {
+/** The boss's line under its name, by how the fight stands — in its world's own words. */
+function line(vm: BattleViewModel, world: World): string {
   const lines: Record<BossState, string> = {
     planning: "Leader 還在拆解任務,魔王尚未現身",
-    engaged: vm.phase === "last_seal" ? "只剩最後的封印,再加把勁!" : vm.phase === "rage" ? "魔王開始焦躁了,繼續推進!" : "需求越來越多…但我們一起扛!",
-    sealing: "工作都已驗收,等待 Leader 結案",
+    engaged: vm.phase === "last_seal" ? "只剩最後的封印,再加把勁!" : vm.phase === "rage" ? "魔王開始焦躁了,繼續推進!" : world.line,
+    sealing: world.sealedLine,
     paused: "戰場冰封:團隊已暫停",
-    defeated: "謝謝大家的努力,超棒的團隊!",
+    defeated: world.defeatedLine,
     stopped: "團隊已停止,魔王沒有被擊敗",
     inconsistent: "團隊已結案,但還有任務沒完成",
     syncing: vm.consistencyIssue ?? "資料更新中…",
@@ -59,17 +60,18 @@ function line(vm: BattleViewModel): string {
 }
 
 /** Over the scene: the boss's name, HP and line; its shield and what waits on the person. */
-export function bossHud(vm: BattleViewModel): HTMLElement {
+export function bossHud(vm: BattleViewModel, world: World = WORLDS.office): HTMLElement {
   const won = vm.bossState === "defeated";
   const share = vm.hp !== null && vm.maxHp ? vm.hp / vm.maxHp : 0;
   return h(
     "div",
-    { class: `bt-hud ${vm.bossState}`, role: "group", "aria-label": "需求魔王" },
+    { class: `bt-hud ${vm.bossState}`, role: "group", "aria-label": world.bossName },
     h(
       "div",
       { class: "bt-boss" },
-      h("b", { class: "bt-name" }, "需求魔王", won ? h("span", { class: "bt-won", text: " 已擊敗" }) : null),
-      h("span", { class: "bt-line", text: line(vm) }),
+      h("b", { class: "bt-name" }, world.bossName, won ? h("span", { class: "bt-won", text: " 已擊敗" }) : null,
+        h("span", { class: "bt-arena", text: ` ${world.arenaName}` })),
+      h("span", { class: "bt-line", text: line(vm, world) }),
       h(
         "div",
         { class: "bt-hp", "aria-label": vm.hp === null ? "HP 尚未出現" : `HP ${vm.hp} / ${vm.maxHp}` },
@@ -119,14 +121,15 @@ export function battleLog(signals: readonly BattleSignal[], opts: { name: (membe
 }
 
 /** The picked room's boss, on the company map: still, its numbers, the way in. */
-export function bossCard(vm: BattleViewModel, opts: { added: number; board: () => void }): HTMLElement {
+export function bossCard(vm: BattleViewModel, opts: { added: number; board: () => void; world?: World }): HTMLElement {
   const share = vm.hp !== null && vm.maxHp ? vm.hp / vm.maxHp : 0;
   const state = companyState(vm);
+  const world = opts.world ?? WORLDS.office;
   return h(
     "div",
     { class: "office-card bt-boss-card" },
-    h("div", { class: "row" }, icon("crystal", "t-seal"), h("h3", { class: "grow", text: "需求魔王" }), h("span", { class: `bt-room-state ${state.tone}`, style: "position:static" }, state.label)),
-    h("p", { class: "dim", text: line(vm) }),
+    h("div", { class: "row" }, icon("crystal", "t-seal"), h("h3", { class: "grow", text: world.bossName }), h("span", { class: `bt-room-state ${state.tone}`, style: "position:static" }, state.label)),
+    h("p", { class: "dim", text: line(vm, world) }),
     h(
       "div",
       { class: "bt-boss-figures" },

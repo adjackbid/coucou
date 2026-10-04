@@ -1,0 +1,2209 @@
+{
+  "schemaVersion": 1,
+  "version": "1.4",
+  "status": "design_fixtures_not_feature_test_results",
+  "note": "精簡 selector context；正式來源填入 BossMoveContext.sources。expected 的 delta 是演出語義，不是寫入 HP 的命令。各 case 是獨立 session。",
+  "cases": [
+    {
+      "caseId": "lava-dragon-human",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-lava-dragon-human"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "lava_flame_breath",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-lava-dragon-human"
+    },
+    {
+      "caseId": "lava-dragon-dependency",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-lava-dragon-dependency"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "lava_tail_sweep",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-lava-dragon-dependency"
+    },
+    {
+      "caseId": "lava-dragon-error",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "tool_error",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-lava-dragon-error"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "lava_fissure_chain",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-lava-dragon-error"
+    },
+    {
+      "caseId": "lava-dragon-review-return",
+      "bossId": "lava-dragon",
+      "signalKind": "review_returned",
+      "cause": "unknown",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-lava-dragon-review-return"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "lava_fissure_chain",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-lava-dragon-review-return"
+    },
+    {
+      "caseId": "lava-dragon-ultimate",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-lava-dragon-ultimate"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "lava_crater_core",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-lava-dragon-ultimate"
+    },
+    {
+      "caseId": "lava-dragon-cooldown",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-lava-dragon-cooldown"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": true,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "lava_flame_breath",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-lava-dragon-cooldown"
+    },
+    {
+      "caseId": "lava-dragon-guard",
+      "bossId": "lava-dragon",
+      "signalKind": "delivery_waiting",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-lava-dragon-guard"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "lava_obsidian_guard",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-lava-dragon-guard"
+    },
+    {
+      "caseId": "lava-dragon-regen",
+      "bossId": "lava-dragon",
+      "signalKind": "scope_added",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-lava-dragon-regen"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [
+        "TASK-NEW"
+      ],
+      "scopeGrowthContributionHp": 100,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "lava_core_reforge",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false,
+        "scopeGrowthLabelHp": 100
+      },
+      "atomicApplyBatchId": "APPLY-lava-dragon-regen"
+    },
+    {
+      "caseId": "frost-queen-human",
+      "bossId": "frost-queen",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-frost-queen-human"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "frost_mirror_refract",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-frost-queen-human"
+    },
+    {
+      "caseId": "frost-queen-dependency",
+      "bossId": "frost-queen",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-frost-queen-dependency"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "frost_spike_grid",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-frost-queen-dependency"
+    },
+    {
+      "caseId": "frost-queen-error",
+      "bossId": "frost-queen",
+      "signalKind": "boss_counter",
+      "cause": "tool_error",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-frost-queen-error"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "frost_ring_tide",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-frost-queen-error"
+    },
+    {
+      "caseId": "frost-queen-review-return",
+      "bossId": "frost-queen",
+      "signalKind": "review_returned",
+      "cause": "unknown",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-frost-queen-review-return"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "frost_ring_tide",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-frost-queen-review-return"
+    },
+    {
+      "caseId": "frost-queen-ultimate",
+      "bossId": "frost-queen",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-frost-queen-ultimate"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "frost_crown_shatter",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-frost-queen-ultimate"
+    },
+    {
+      "caseId": "frost-queen-cooldown",
+      "bossId": "frost-queen",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-frost-queen-cooldown"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": true,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "frost_mirror_refract",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-frost-queen-cooldown"
+    },
+    {
+      "caseId": "frost-queen-guard",
+      "bossId": "frost-queen",
+      "signalKind": "delivery_waiting",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-frost-queen-guard"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "frost_mirror_guard",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-frost-queen-guard"
+    },
+    {
+      "caseId": "frost-queen-regen",
+      "bossId": "frost-queen",
+      "signalKind": "scope_added",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-frost-queen-regen"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [
+        "TASK-NEW"
+      ],
+      "scopeGrowthContributionHp": 100,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "frost_crown_rebuild",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false,
+        "scopeGrowthLabelHp": 100
+      },
+      "atomicApplyBatchId": "APPLY-frost-queen-regen"
+    },
+    {
+      "caseId": "root-king-human",
+      "bossId": "root-king",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-root-king-human"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "root_loop_bind",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-root-king-human"
+    },
+    {
+      "caseId": "root-king-dependency",
+      "bossId": "root-king",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-root-king-dependency"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "root_vine_whip",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-root-king-dependency"
+    },
+    {
+      "caseId": "root-king-error",
+      "bossId": "root-king",
+      "signalKind": "boss_counter",
+      "cause": "tool_error",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-root-king-error"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "root_thorn_return",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-root-king-error"
+    },
+    {
+      "caseId": "root-king-review-return",
+      "bossId": "root-king",
+      "signalKind": "review_returned",
+      "cause": "unknown",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-root-king-review-return"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "root_thorn_return",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-root-king-review-return"
+    },
+    {
+      "caseId": "root-king-ultimate",
+      "bossId": "root-king",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-root-king-ultimate"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "root_canopy_resonance",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-root-king-ultimate"
+    },
+    {
+      "caseId": "root-king-cooldown",
+      "bossId": "root-king",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-root-king-cooldown"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": true,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "root_loop_bind",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-root-king-cooldown"
+    },
+    {
+      "caseId": "root-king-guard",
+      "bossId": "root-king",
+      "signalKind": "delivery_waiting",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-root-king-guard"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "root_vine_guard",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-root-king-guard"
+    },
+    {
+      "caseId": "root-king-regen",
+      "bossId": "root-king",
+      "signalKind": "scope_added",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-root-king-regen"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [
+        "TASK-NEW"
+      ],
+      "scopeGrowthContributionHp": 100,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "root_bud_regrowth",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false,
+        "scopeGrowthLabelHp": 100
+      },
+      "atomicApplyBatchId": "APPLY-root-king-regen"
+    },
+    {
+      "caseId": "thunder-emperor-human",
+      "bossId": "thunder-emperor",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-thunder-emperor-human"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "thunder_polarity_lanes",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-thunder-emperor-human"
+    },
+    {
+      "caseId": "thunder-emperor-dependency",
+      "bossId": "thunder-emperor",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-thunder-emperor-dependency"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "thunder_orb_relay",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-thunder-emperor-dependency"
+    },
+    {
+      "caseId": "thunder-emperor-error",
+      "bossId": "thunder-emperor",
+      "signalKind": "boss_counter",
+      "cause": "tool_error",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-thunder-emperor-error"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "thunder_coil_pulse",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-thunder-emperor-error"
+    },
+    {
+      "caseId": "thunder-emperor-review-return",
+      "bossId": "thunder-emperor",
+      "signalKind": "review_returned",
+      "cause": "unknown",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-thunder-emperor-review-return"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "thunder_coil_pulse",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-thunder-emperor-review-return"
+    },
+    {
+      "caseId": "thunder-emperor-ultimate",
+      "bossId": "thunder-emperor",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-thunder-emperor-ultimate"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "thunder_matrix_overload",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-thunder-emperor-ultimate"
+    },
+    {
+      "caseId": "thunder-emperor-cooldown",
+      "bossId": "thunder-emperor",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-thunder-emperor-cooldown"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": true,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "thunder_polarity_lanes",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-thunder-emperor-cooldown"
+    },
+    {
+      "caseId": "thunder-emperor-guard",
+      "bossId": "thunder-emperor",
+      "signalKind": "delivery_waiting",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-thunder-emperor-guard"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "thunder_magnetic_guard",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-thunder-emperor-guard"
+    },
+    {
+      "caseId": "thunder-emperor-regen",
+      "bossId": "thunder-emperor",
+      "signalKind": "scope_added",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-thunder-emperor-regen"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [
+        "TASK-NEW"
+      ],
+      "scopeGrowthContributionHp": 100,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "thunder_cell_expand",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false,
+        "scopeGrowthLabelHp": 100
+      },
+      "atomicApplyBatchId": "APPLY-thunder-emperor-regen"
+    },
+    {
+      "caseId": "astral-devourer-human",
+      "bossId": "astral-devourer",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-astral-devourer-human"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "astral_gravity_well",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-astral-devourer-human"
+    },
+    {
+      "caseId": "astral-devourer-dependency",
+      "bossId": "astral-devourer",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-astral-devourer-dependency"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "astral_orbit_cut",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-astral-devourer-dependency"
+    },
+    {
+      "caseId": "astral-devourer-error",
+      "bossId": "astral-devourer",
+      "signalKind": "boss_counter",
+      "cause": "tool_error",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-astral-devourer-error"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "astral_rift_fold",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-astral-devourer-error"
+    },
+    {
+      "caseId": "astral-devourer-review-return",
+      "bossId": "astral-devourer",
+      "signalKind": "review_returned",
+      "cause": "unknown",
+      "evidence": "explicit_event",
+      "sourceSignalIds": [
+        "SRC-astral-devourer-review-return"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "astral_rift_fold",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-astral-devourer-review-return"
+    },
+    {
+      "caseId": "astral-devourer-ultimate",
+      "bossId": "astral-devourer",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-astral-devourer-ultimate"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "astral_eclipse_convergence",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-astral-devourer-ultimate"
+    },
+    {
+      "caseId": "astral-devourer-cooldown",
+      "bossId": "astral-devourer",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-astral-devourer-cooldown"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": true,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "astral_gravity_well",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-astral-devourer-cooldown"
+    },
+    {
+      "caseId": "astral-devourer-guard",
+      "bossId": "astral-devourer",
+      "signalKind": "delivery_waiting",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-astral-devourer-guard"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "astral_orbit_deflect",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-astral-devourer-guard"
+    },
+    {
+      "caseId": "astral-devourer-regen",
+      "bossId": "astral-devourer",
+      "signalKind": "scope_added",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-astral-devourer-regen"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [
+        "TASK-NEW"
+      ],
+      "scopeGrowthContributionHp": 100,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "astral_ring_expand",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false,
+        "scopeGrowthLabelHp": 100
+      },
+      "atomicApplyBatchId": "APPLY-astral-devourer-regen"
+    },
+    {
+      "caseId": "unknown-cause-neutral",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-unknown-cause-neutral"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "lava_flame_breath",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false,
+        "reasonLabel": "新觀察到任務阻塞",
+        "inventedHumanQuestion": false
+      },
+      "atomicApplyBatchId": "APPLY-unknown-cause-neutral"
+    },
+    {
+      "caseId": "unknown-review-return",
+      "bossId": "lava-dragon",
+      "signalKind": "review_returned",
+      "cause": "unknown",
+      "evidence": "unknown",
+      "sourceSignalIds": [
+        "SRC-unknown-review-return"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false,
+        "reasonLabel": "返回執行"
+      },
+      "atomicApplyBatchId": "APPLY-unknown-review-return"
+    },
+    {
+      "caseId": "duplicate-block-ids",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-duplicate-block-ids"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A",
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "lava_tail_sweep",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-duplicate-block-ids"
+    },
+    {
+      "caseId": "old-blocks-not-new",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-old-blocks-not-new"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": false,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false,
+        "replay": false
+      },
+      "atomicApplyBatchId": "APPLY-old-blocks-not-new",
+      "priorBlockedTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ]
+    },
+    {
+      "caseId": "live-existing-blocks-not-new",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "dependency_wait",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-live-existing-blocks-not-new"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false,
+        "replay": false
+      },
+      "atomicApplyBatchId": "APPLY-live-existing-blocks-not-new",
+      "priorBlockedTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ]
+    },
+    {
+      "caseId": "signal-already-consumed",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "ORIGINAL-A"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [
+        "ORIGINAL-A"
+      ],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-signal-already-consumed"
+    },
+    {
+      "caseId": "skin-switch-retains-consumption",
+      "bossId": "frost-queen",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "ORIGINAL-A"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [
+        "ORIGINAL-A"
+      ],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false,
+        "differentBossDoesNotReplay": true
+      },
+      "atomicApplyBatchId": "APPLY-skin-switch-retains-consumption"
+    },
+    {
+      "caseId": "accepted-hit-is-hero",
+      "bossId": "lava-dragon",
+      "signalKind": "acceptance_hit",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-accepted-hit-is-hero"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false,
+        "heroSkillsRemainAuthoritative": true
+      },
+      "atomicApplyBatchId": "APPLY-accepted-hit-is-hero"
+    },
+    {
+      "caseId": "chat-does-not-regenerate",
+      "bossId": "lava-dragon",
+      "signalKind": "scope_added",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-chat-does-not-regenerate"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-chat-does-not-regenerate"
+    },
+    {
+      "caseId": "cancelled-scope-is-not-growth",
+      "bossId": "lava-dragon",
+      "signalKind": "scope_adjusted",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-cancelled-scope-is-not-growth"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false,
+        "scopeGrowthLabelHp": 0
+      },
+      "atomicApplyBatchId": "APPLY-cancelled-scope-is-not-growth"
+    },
+    {
+      "caseId": "net-zero-hp-has-growth",
+      "bossId": "lava-dragon",
+      "signalKind": "scope_added",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-net-zero-hp-has-growth"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [
+        "TASK-11",
+        "TASK-12"
+      ],
+      "scopeGrowthContributionHp": 200,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "lava_core_reforge",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": true,
+        "writesTaskState": false,
+        "scopeGrowthLabelHp": 200,
+        "heroAcceptanceDamage": 200,
+        "hpBefore": 400,
+        "hpAfter": 400,
+        "maxHpBefore": 1000,
+        "maxHpAfter": 1200,
+        "acceptedBefore": 6,
+        "acceptedAfter": 8
+      },
+      "atomicApplyBatchId": "APPLY-net-zero-hp-has-growth"
+    },
+    {
+      "caseId": "hidden",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-hidden"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": false,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-hidden"
+    },
+    {
+      "caseId": "history",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-history"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": true,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-history"
+    },
+    {
+      "caseId": "syncing",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-syncing"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": true,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-syncing"
+    },
+    {
+      "caseId": "paused",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-paused"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": true,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-paused"
+    },
+    {
+      "caseId": "mode-off",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-mode-off"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": false,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-mode-off"
+    },
+    {
+      "caseId": "sealed",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-sealed"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "sealing"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-sealed"
+    },
+    {
+      "caseId": "defeated",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-defeated"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "defeated"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false
+      },
+      "atomicApplyBatchId": "APPLY-defeated"
+    },
+    {
+      "caseId": "reduced-motion",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-reduced-motion"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": true,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "lava_flame_breath",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false,
+        "staticLabel": true
+      },
+      "atomicApplyBatchId": "APPLY-reduced-motion"
+    },
+    {
+      "caseId": "missing-anchors",
+      "bossId": "lava-dragon",
+      "signalKind": "boss_counter",
+      "cause": "human_input",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-missing-anchors"
+      ],
+      "newlyBlockedTaskIds": [
+        "TASK-A"
+      ],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": "lava_flame_breath",
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false,
+        "staticLabel": true
+      },
+      "atomicApplyBatchId": "APPLY-missing-anchors",
+      "poseAnchorsVerified": false
+    },
+    {
+      "caseId": "resolve-before-cast",
+      "bossId": "lava-dragon",
+      "signalKind": "unblock_support",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-resolve-before-cast"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false,
+        "cancelPendingCast": true,
+        "playHeroSupportOnly": true
+      },
+      "atomicApplyBatchId": "APPLY-resolve-before-cast",
+      "activePlanSourceTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ],
+      "verifiedResolvedTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ]
+    },
+    {
+      "caseId": "partial-resolve-not-all",
+      "bossId": "lava-dragon",
+      "signalKind": "unblock_support",
+      "cause": "unknown",
+      "evidence": "observed_transition",
+      "sourceSignalIds": [
+        "SRC-partial-resolve-not-all"
+      ],
+      "newlyBlockedTaskIds": [],
+      "addedCountedUncompletedTaskIds": [],
+      "scopeGrowthContributionHp": 0,
+      "session": {
+        "live": true,
+        "visible": true,
+        "modeEnabled": true,
+        "history": false,
+        "syncing": false,
+        "paused": false,
+        "reducedMotion": false,
+        "ultimateCooldownActive": false,
+        "bossStateAfterApply": "engaged"
+      },
+      "alreadyConsumedSourceSignalIds": [],
+      "expected": {
+        "moveId": null,
+        "heroHpDelta": 0,
+        "extraBossDamage": 0,
+        "animated": false,
+        "writesTaskState": false,
+        "cancelPendingCast": false,
+        "mustNotClaimAllResolved": true
+      },
+      "atomicApplyBatchId": "APPLY-partial-resolve-not-all",
+      "activePlanSourceTaskIds": [
+        "TASK-A",
+        "TASK-B"
+      ],
+      "verifiedResolvedTaskIds": [
+        "TASK-A"
+      ]
+    }
+  ]
+}

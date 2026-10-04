@@ -59,16 +59,23 @@ export interface Sprite {
   effectOrigin?: [number, number];
 }
 export type BossState = "idle" | "rage" | "guard" | "hurt" | "regen" | "sealed" | "defeated" | "attack";
-/** The boss: every state on one canvas with one groundPivot (public/office/battle/manifest.json). */
+/** The boss: every state on one canvas with one groundPivot; each state carries its own named points. */
 export interface BossArt {
   canvas: [number, number];
   groundPivot: [number, number];
-  /** Each state's picture and its points: the crystal core, where blows land, the eyes, the top of the head, the raised fist. */
-  states: Record<BossState, { file: string; coreCenter: [number, number]; hitTarget: [number, number]; eyes: [number, number][]; top: [number, number]; fist: [number, number] }>;
+  states: Record<BossState, { file: string } & Record<string, [number, number] | [number, number][]>>;
 }
 export interface BattleArt {
   boss: BossArt;
   accessories: Record<string, Sprite>;
+  /** The five battlefields (kit v4): each an arena pair and a boss of its own states. */
+  worlds?: Record<string, WorldArt>;
+}
+/** A battlefield rendered in the office camera: its ground and backdrop, its front edge, its boss. */
+export interface WorldArt {
+  arena: { file: string; front: string };
+  boss: BossArt;
+  battle: NonNullable<ThemeJson["battle"]>;
 }
 export interface SceneArt {
   workstations: Record<"SE" | "SW", StationArt>;
@@ -267,6 +274,8 @@ export interface SceneLayer {
   decorate?(memberId: string, ctx: CanvasRenderingContext2D, size: number, engine: BotEngine, facing: number): void;
   /** Members drawn bigger than at their desks (1 = as they are). */
   readonly heroScale?: number;
+  /** The battlefield this room becomes, if any: the office's furniture and walls make way for it. */
+  arena?(): { id: string; art: WorldArt } | null;
   /** Where a member stands instead of its desk (metres), and the way it faces; null for its desk. */
   formation?(memberId: string, index: number, count: number): { x: number; y: number; yaw: number } | null;
   /** How far a member's Mochi is moved this frame (a lunge, a recoil), in stage pixels. */
@@ -426,6 +435,16 @@ export class TeamScene {
     this.el.style.aspectRatio = `${t.room.crop.w} / ${t.room.crop.h}`;
     this.el.dataset.theme = t.name;
     this.stage.append(h("img", { class: "office-room", src: `/office/${t.room.file}`, alt: "", draggable: "false", style: `width:${cw}px;height:${ch}px` }));
+    // A battlefield's front edge: chunky ground between the fight and the camera.
+    const arena = this.layer?.arena?.() ?? null;
+    if (arena && t.name === `world:${arena.id}`) {
+      this.stage.append(
+        h("img", {
+          class: "office-layer bt-arena-front", src: `/office/${arena.art.arena.front}`, alt: "", draggable: "false",
+          style: `left:0;top:0;width:${cw}px;height:${ch}px;z-index:${this.depth(7.2, 7.2)}`,
+        }),
+      );
+    }
     // The meeting table stands in front of what is behind it.
     const mt = t.props.meetingTable;
     if (mt) {
@@ -478,6 +497,7 @@ export class TeamScene {
   private drawWalls() {
     const room = this.theme!.room;
     this.stage.querySelectorAll(".office-wall").forEach((n) => n.remove());
+    if (!room.whiteboardQuad.length) return;
     const latest = [...this.store.artifacts(this.teamId)].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, room.artifactSlots.length);
     latest.forEach((a, i) => {
       const url = this.opts.preview?.(a) ?? null;
@@ -557,15 +577,39 @@ export class TeamScene {
     for (const [id, i] of kept) this.lounge.set(id, { x: at.x - H(sofa.groundPivot[0]) + H(sofa.seats[i][0]), y: at.y - H(sofa.groundPivot[1]) + H(sofa.seats[i][1]) });
   }
 
+  /** A battlefield as a look of the office: the same projection, no props, no desks. */
+  private arenaTheme(id: string, a: WorldArt): Theme {
+    return {
+      name: `world:${id}`,
+      label: id,
+      large: false,
+      room: {
+        file: a.arena.file,
+        canvas: [3200, 2000],
+        crop: { x: 190, y: 0, w: 1220, h: 990 },
+        worldToScreen: { x0: 1600, y0: 738, perMetreX: 197.99, perMetreY: 98.99, perMetreZ: 242.49 },
+        artifactSlots: [],
+        whiteboardQuad: [],
+        spots: {},
+      },
+      props: {},
+      battle: a.battle,
+      workstations: art!.workstations,
+      desks: desksFor,
+      maxDesks: MAX_DESKS,
+    };
+  }
+
   /** Read the store again and bring the scene up to it. */
   update() {
     if (!art) return;
     const team = this.store.team(this.teamId);
     if (!team) return;
     const members = this.store.members(this.teamId);
-    const name = themeName(this.teamId, team.officeLayoutId, members.length);
+    const arena = this.layer?.arena?.() ?? null;
+    const name = arena ? `world:${arena.id}` : themeName(this.teamId, team.officeLayoutId, members.length);
     if (this.theme?.name !== name) {
-      this.theme = theme(name);
+      this.theme = arena ? this.arenaTheme(arena.id, arena.art) : theme(name);
       this.build();
       // Another room: everyone is put in place, nobody walks over from the old one.
       for (const a of this.actors.values()) a.at = undefined;

@@ -852,3 +852,29 @@
 .office-scene.mini .bt-speech b {
   display: none;
 }
+
+/* ── The worlds (kit v4) ─────────────────────────────────────────────────── */
+
+.bt-arena {
+  color: #cdb8ff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bt-world-pick {
+  min-width: 190px;
+}
+
+.office-scene .bt-arena-front {
+  pointer-events: none;
+}
+
+.bt-card.c-boss .bt-card-word {
+  color: var(--c1);
+}
+
+.bt-card em.heal {
+  color: #7FE8A8;
+  text-shadow: 0 0 14px rgba(80, 230, 150, 0.7);
+  font-size: 24px;
+}

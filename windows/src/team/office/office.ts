@@ -18,6 +18,8 @@ import { dropdown, editableText } from "../ui";
 import type { PastRun, Snapshot, TeamFile, Usage } from "../types";
 import { fmtMoney, fmtTokens, usageSummary } from "../cost";
 import { Battle, companyLive, HERO_LABELS, heroOf, savedMode, saveCompanyLive, saveMode, setHero, setSkill, skillOf } from "./battle/session";
+import { savedWorld, saveWorld, WORLD_IDS, WORLDS, type WorldId } from "./battle/worlds";
+import type { BossBlockCause } from "./battle/bossMoves";
 import { BattleLayer } from "./battle/layer";
 import { HIT_SKILLS, SKILLS, type Contribution, type HitPlan, type SkillId } from "./battle/skills";
 import { battleLog, bossCard, bossHud, companyState, roomBadge } from "./battle/hud";
@@ -247,7 +249,10 @@ export class Office {
     // 中二模式: the boss and the heroes' looks over the room; the Office as it was otherwise.
     if (this.mode === "battle") {
       let layer = this.layers.get(s);
-      if (!layer) this.layers.set(s, (layer = new BattleLayer(s, this.layerHost(teamId, this.store))));
+      if (!layer) {
+        this.layers.set(s, (layer = new BattleLayer(s, this.layerHost(teamId, this.store))));
+        layer.taskOwner = (taskId) => this.store.task(taskId)?.assigneeMemberId ?? null;
+      }
       s.setLayer(layer);
     } else s.setLayer(null);
     s.update();
@@ -271,6 +276,15 @@ export class Office {
       taskTitle: (taskId: string) => store.task(taskId)?.title ?? "任務",
       members: () => store.members(teamId).map((m) => m.memberId),
       live: () => this.companyLive,
+      world: () => savedWorld(teamId),
+      // What a counter is really about, from the record: a question to the person, or a dependency.
+      causeOf: (sig: BattleSignal): BossBlockCause => {
+        if (sig.source.questionIds.length) return "human_input";
+        const statuses = sig.source.taskIds.map((id) => store.task(id)?.status);
+        if (statuses.some((st) => st === "waiting_input")) return "human_input";
+        if (statuses.some((st) => st === "blocked")) return "dependency_wait";
+        return "unknown";
+      },
       calm: () => this.calm || (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false),
       waiting: () => store.members(teamId).find((m) => m.workStatus === "waiting_input" || m.workStatus === "blocked")?.memberId ?? null,
       contributions: (sig: BattleSignal) => this.contributions(teamId, sig),
@@ -540,7 +554,7 @@ export class Office {
     return h("div", { class: "office-card bt-result" },
       h("div", { class: "bt-result-head" },
         h("span", { class: "bt-medal", "aria-hidden": "true", html: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5Z"/></svg>' }),
-        h("div", { class: "grow" }, h("h3", { text: "討伐成果" }), h("small", { class: "dim", text: `需求魔王 已擊敗 · ${leader ? `${leader.displayName} ` : ""}已結案` }))),
+        h("div", { class: "grow" }, h("h3", { text: "討伐成果" }), h("small", { class: "dim", text: `${WORLDS[savedWorld(teamId)].bossName} 已擊敗 · ${leader ? `${leader.displayName} ` : ""}已結案` }))),
       h("div", { class: "office-figures" },
         h("span", {}, h("small", { text: "驗收任務" }), h("b", { text: `${vm.progress.completed} 項` })),
         s ? h("span", {}, h("small", { text: "Token" }), h("b", { text: fmtTokens(s.tokens) })) : null,
@@ -671,6 +685,7 @@ export class Office {
     if (!vm) return null;
     const added = this.battle.log(pick.teamId).filter((s) => s.kind === "scope_added" && s.runId === vm.runId).reduce((n, s) => n + s.source.taskIds.length, 0);
     return bossCard(vm, {
+      world: WORLDS[savedWorld(pick.teamId)],
       added,
       // The team's own board: into its office first, then its tasks.
       board: () => {
@@ -934,6 +949,21 @@ export class Office {
         h("div", { class: "office-head-main" }, this.runLabel(run), this.progressBar(teamId), past ? null : this.figures(teamId, "office-figures inline"), this.demoTag()),
         toggles,
         pauseBtn,
+        battle
+          ? dropdown({
+              value: savedWorld(teamId),
+              title: "這個團隊的戰場:只改變畫面與魔王的樣子,不影響工作、任務或 HP",
+              className: "bt-world-pick",
+              choices: WORLD_IDS.map((id) => ({ value: id, label: WORLDS[id].label })),
+              onChange: (v) => {
+                saveWorld(teamId, v as WorldId);
+                // The old battlefield's moves stop where they are; the new one starts from now.
+                const layer = this.scenes.get(teamId)?.currentLayer;
+                if (layer instanceof BattleLayer) layer.stop();
+                this.host.render();
+              },
+            })
+          : null,
         this.modeSwitch()),
       past
         ? h("div", { class: "office-history-bar", role: "status" },
@@ -945,7 +975,7 @@ export class Office {
       this.trouble(),
       this.notice ? h("div", { class: "office-notice", role: "status", text: this.notice }) : null,
       h("div", { class: "office-body" },
-        h("div", { class: "office-main" }, h("div", { class: `office-frame${battle ? " battle" : ""}` }, scene.el, battle && vm ? bossHud(vm) : null), extra, roster),
+        h("div", { class: "office-main" }, h("div", { class: `office-frame${battle ? " battle" : ""}` }, scene.el, battle && vm ? bossHud(vm, WORLDS[savedWorld(teamId)]) : null), extra, roster),
         side),
     );
   }

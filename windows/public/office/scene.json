@@ -3983,6 +3983,1406 @@
           54.0
         ]
       }
+    },
+    "worlds": {
+      "lava_crater": {
+        "boss": {
+          "canvas": [
+            848,
+            868
+          ],
+          "groundPivot": [
+            306.0,
+            665.5
+          ],
+          "states": {
+            "idle": {
+              "file": "battle/worlds/lava_crater/idle.webp",
+              "coreCenter": [
+                232.3,
+                560.9
+              ],
+              "hitTarget": [
+                232.3,
+                575.8
+              ],
+              "top": [
+                198.0,
+                184.8
+              ],
+              "counterOrigin": [
+                266.4,
+                510.8
+              ],
+              "breathOrigin": [
+                115.3,
+                387.1
+              ],
+              "tailTip": [
+                785.7,
+                254.6
+              ]
+            },
+            "guard": {
+              "file": "battle/worlds/lava_crater/guard.webp",
+              "coreCenter": [
+                232.3,
+                560.9
+              ],
+              "hitTarget": [
+                232.3,
+                575.8
+              ],
+              "top": [
+                178.1,
+                224.5
+              ],
+              "counterOrigin": [
+                266.4,
+                510.8
+              ],
+              "breathOrigin": [
+                111.3,
+                442.8
+              ],
+              "tailTip": [
+                785.7,
+                254.6
+              ]
+            },
+            "hurt": {
+              "file": "battle/worlds/lava_crater/hurt.webp",
+              "coreCenter": [
+                234.9,
+                538.9
+              ],
+              "hitTarget": [
+                234.9,
+                553.8
+              ],
+              "top": [
+                281.7,
+                79.0
+              ],
+              "counterOrigin": [
+                266.4,
+                510.8
+              ],
+              "breathOrigin": [
+                177.5,
+                184.4
+              ],
+              "tailTip": [
+                790.1,
+                313.7
+              ]
+            },
+            "regen": {
+              "file": "battle/worlds/lava_crater/regen.webp",
+              "coreCenter": [
+                232.3,
+                560.9
+              ],
+              "hitTarget": [
+                232.3,
+                575.8
+              ],
+              "top": [
+                222.7,
+                148.1
+              ],
+              "counterOrigin": [
+                266.4,
+                510.8
+              ],
+              "breathOrigin": [
+                126.9,
+                320.6
+              ],
+              "tailTip": [
+                792.1,
+                310.3
+              ]
+            },
+            "sealed": {
+              "file": "battle/worlds/lava_crater/sealed.webp",
+              "coreCenter": [
+                232.3,
+                560.9
+              ],
+              "hitTarget": [
+                232.3,
+                575.8
+              ],
+              "top": [
+                163.8,
+                260.9
+              ],
+              "counterOrigin": [
+                266.4,
+                510.8
+              ],
+              "breathOrigin": [
+                112.5,
+                484.4
+              ],
+              "tailTip": [
+                785.7,
+                254.6
+              ]
+            },
+            "defeated": {
+              "file": "battle/worlds/lava_crater/defeated.webp",
+              "coreCenter": [
+                231.1,
+                651.8
+              ],
+              "hitTarget": [
+                231.1,
+                666.7
+              ],
+              "top": [
+                123.1,
+                468.9
+              ],
+              "counterOrigin": [
+                266.4,
+                583.5
+              ],
+              "breathOrigin": [
+                118.5,
+                672.2
+              ],
+              "tailTip": [
+                778.2,
+                281.6
+              ]
+            },
+            "attack": {
+              "file": "battle/worlds/lava_crater/attack.webp",
+              "coreCenter": [
+                234.0,
+                545.2
+              ],
+              "hitTarget": [
+                234.0,
+                560.2
+              ],
+              "top": [
+                258.4,
+                70.9
+              ],
+              "counterOrigin": [
+                266.4,
+                510.8
+              ],
+              "breathOrigin": [
+                156.4,
+                211.7
+              ],
+              "tailTip": [
+                711.6,
+                372.1
+              ]
+            }
+          }
+        },
+        "arena": {
+          "file": "battle/worlds/lava_crater/arena.webp",
+          "front": "battle/worlds/lava_crater/front.webp"
+        },
+        "battle": {
+          "boss": [
+            1.2,
+            3.6
+          ],
+          "scale": 1.0,
+          "hide": [],
+          "desks": [],
+          "formation": {
+            "5": [
+              [
+                3.33,
+                5.09
+              ],
+              [
+                3.79,
+                3.83
+              ],
+              [
+                2.21,
+                5.78
+              ],
+              [
+                3.61,
+                2.63
+              ],
+              [
+                1.13,
+                5.7
+              ]
+            ],
+            "8": [
+              [
+                3.33,
+                5.09
+              ],
+              [
+                3.79,
+                3.83
+              ],
+              [
+                2.21,
+                5.78
+              ],
+              [
+                3.61,
+                2.63
+              ],
+              [
+                1.13,
+                5.7
+              ],
+              [
+                4.58,
+                4.83
+              ],
+              [
+                4.76,
+                3.1
+              ],
+              [
+                3.95,
+                5.75
+              ]
+            ]
+          }
+        }
+      },
+      "frost_court": {
+        "boss": {
+          "canvas": [
+            416,
+            798
+          ],
+          "groundPivot": [
+            208.5,
+            722.2
+          ],
+          "states": {
+            "idle": {
+              "file": "battle/worlds/frost_court/idle.webp",
+              "coreCenter": [
+                185.4,
+                457.7
+              ],
+              "hitTarget": [
+                181.4,
+                475.5
+              ],
+              "top": [
+                208.5,
+                86.9
+              ],
+              "counterOrigin": [
+                155.7,
+                468.1
+              ],
+              "mirrorOrigin": [
+                208.8,
+                333.4
+              ],
+              "crownTip": [
+                201.2,
+                110.8
+              ]
+            },
+            "guard": {
+              "file": "battle/worlds/frost_court/guard.webp",
+              "coreCenter": [
+                174.8,
+                472.2
+              ],
+              "hitTarget": [
+                170.9,
+                490.0
+              ],
+              "top": [
+                172.7,
+                120.2
+              ],
+              "counterOrigin": [
+                145.1,
+                482.6
+              ],
+              "mirrorOrigin": [
+                187.5,
+                361.9
+              ],
+              "crownTip": [
+                170.3,
+                141.2
+              ]
+            },
+            "hurt": {
+              "file": "battle/worlds/frost_court/hurt.webp",
+              "coreCenter": [
+                227.3,
+                403.5
+              ],
+              "hitTarget": [
+                223.3,
+                421.4
+              ],
+              "top": [
+                311.1,
+                9.3
+              ],
+              "counterOrigin": [
+                197.6,
+                413.9
+              ],
+              "mirrorOrigin": [
+                278.6,
+                253.1
+              ],
+              "crownTip": [
+                292.5,
+                36.2
+              ]
+            },
+            "regen": {
+              "file": "battle/worlds/frost_court/regen.webp",
+              "coreCenter": [
+                185.4,
+                423.7
+              ],
+              "hitTarget": [
+                181.4,
+                441.6
+              ],
+              "top": [
+                208.5,
+                52.9
+              ],
+              "counterOrigin": [
+                155.7,
+                434.1
+              ],
+              "mirrorOrigin": [
+                208.8,
+                299.4
+              ],
+              "crownTip": [
+                201.2,
+                76.9
+              ]
+            },
+            "sealed": {
+              "file": "battle/worlds/frost_court/sealed.webp",
+              "coreCenter": [
+                166.4,
+                534.1
+              ],
+              "hitTarget": [
+                162.5,
+                551.9
+              ],
+              "top": [
+                143.3,
+                201.7
+              ],
+              "counterOrigin": [
+                136.7,
+                544.5
+              ],
+              "mirrorOrigin": [
+                170.4,
+                436.9
+              ],
+              "crownTip": [
+                144.9,
+                219.4
+              ]
+            },
+            "defeated": {
+              "file": "battle/worlds/frost_court/defeated.webp",
+              "coreCenter": [
+                165.2,
+                658.9
+              ],
+              "hitTarget": [
+                161.2,
+                676.7
+              ],
+              "top": [
+                110.3,
+                404.4
+              ],
+              "counterOrigin": [
+                135.5,
+                669.3
+              ],
+              "mirrorOrigin": [
+                170.4,
+                604.4
+              ],
+              "crownTip": [
+                118.9,
+                408.6
+              ]
+            },
+            "attack": {
+              "file": "battle/worlds/frost_court/attack.webp",
+              "coreCenter": [
+                187.3,
+                427.3
+              ],
+              "hitTarget": [
+                183.4,
+                445.1
+              ],
+              "top": [
+                247.5,
+                38.3
+              ],
+              "counterOrigin": [
+                157.6,
+                437.7
+              ],
+              "mirrorOrigin": [
+                227.5,
+                285.6
+              ],
+              "crownTip": [
+                233.3,
+                64.8
+              ]
+            }
+          }
+        },
+        "arena": {
+          "file": "battle/worlds/frost_court/arena.webp",
+          "front": "battle/worlds/frost_court/front.webp"
+        },
+        "battle": {
+          "boss": [
+            1.2,
+            3.6
+          ],
+          "scale": 1.0,
+          "hide": [],
+          "desks": [],
+          "formation": {
+            "5": [
+              [
+                3.33,
+                5.09
+              ],
+              [
+                3.79,
+                3.83
+              ],
+              [
+                2.21,
+                5.78
+              ],
+              [
+                3.61,
+                2.63
+              ],
+              [
+                1.13,
+                5.7
+              ]
+            ],
+            "8": [
+              [
+                3.33,
+                5.09
+              ],
+              [
+                3.79,
+                3.83
+              ],
+              [
+                2.21,
+                5.78
+              ],
+              [
+                3.61,
+                2.63
+              ],
+              [
+                1.13,
+                5.7
+              ],
+              [
+                4.58,
+                4.83
+              ],
+              [
+                4.76,
+                3.1
+              ],
+              [
+                3.95,
+                5.75
+              ]
+            ]
+          }
+        }
+      },
+      "verdant_ruins": {
+        "boss": {
+          "canvas": [
+            582,
+            976
+          ],
+          "groundPivot": [
+            327.3,
+            754.8
+          ],
+          "states": {
+            "idle": {
+              "file": "battle/worlds/verdant_ruins/idle.webp",
+              "coreCenter": [
+                245.9,
+                707.0
+              ],
+              "hitTarget": [
+                241.9,
+                724.8
+              ],
+              "top": [
+                320.5,
+                331.7
+              ],
+              "counterOrigin": [
+                216.2,
+                717.4
+              ],
+              "rootOrigin": [
+                325.9,
+                866.7
+              ],
+              "vineTip": [
+                470.2,
+                272.5
+              ],
+              "canopyCenter": [
+                320.5,
+                368.0
+              ]
+            },
+            "guard": {
+              "file": "battle/worlds/verdant_ruins/guard.webp",
+              "coreCenter": [
+                246.3,
+                721.1
+              ],
+              "hitTarget": [
+                242.3,
+                739.0
+              ],
+              "top": [
+                303.3,
+                349.9
+              ],
+              "counterOrigin": [
+                216.6,
+                731.5
+              ],
+              "rootOrigin": [
+                333.2,
+                876.6
+              ],
+              "vineTip": [
+                445.4,
+                304.5
+              ],
+              "canopyCenter": [
+                305.4,
+                384.3
+              ]
+            },
+            "hurt": {
+              "file": "battle/worlds/verdant_ruins/hurt.webp",
+              "coreCenter": [
+                247.2,
+                679.7
+              ],
+              "hitTarget": [
+                243.2,
+                697.6
+              ],
+              "top": [
+                351.5,
+                306.5
+              ],
+              "counterOrigin": [
+                217.5,
+                690.1
+              ],
+              "rootOrigin": [
+                315.3,
+                843.9
+              ],
+              "vineTip": [
+                515.9,
+                225.6
+              ],
+              "canopyCenter": [
+                347.8,
+                345.6
+              ]
+            },
+            "regen": {
+              "file": "battle/worlds/verdant_ruins/regen.webp",
+              "coreCenter": [
+                245.9,
+                692.4
+              ],
+              "hitTarget": [
+                241.9,
+                710.2
+              ],
+              "top": [
+                320.5,
+                317.1
+              ],
+              "counterOrigin": [
+                216.2,
+                702.8
+              ],
+              "rootOrigin": [
+                325.9,
+                852.2
+              ],
+              "vineTip": [
+                470.2,
+                258.0
+              ],
+              "canopyCenter": [
+                320.5,
+                353.5
+              ]
+            },
+            "sealed": {
+              "file": "battle/worlds/verdant_ruins/sealed.webp",
+              "coreCenter": [
+                247.5,
+                734.4
+              ],
+              "hitTarget": [
+                243.5,
+                752.2
+              ],
+              "top": [
+                286.4,
+                371.0
+              ],
+              "counterOrigin": [
+                217.8,
+                744.8
+              ],
+              "rootOrigin": [
+                341.3,
+                884.3
+              ],
+              "vineTip": [
+                421.2,
+                340.2
+              ],
+              "canopyCenter": [
+                290.4,
+                403.0
+              ]
+            },
+            "defeated": {
+              "file": "battle/worlds/verdant_ruins/defeated.webp",
+              "coreCenter": [
+                257.5,
+                807.1
+              ],
+              "hitTarget": [
+                253.5,
+                825.0
+              ],
+              "top": [
+                271.1,
+                457.1
+              ],
+              "counterOrigin": [
+                227.8,
+                817.5
+              ],
+              "rootOrigin": [
+                362.8,
+                943.5
+              ],
+              "vineTip": [
+                417.6,
+                438.1
+              ],
+              "canopyCenter": [
+                276.3,
+                485.6
+              ]
+            },
+            "attack": {
+              "file": "battle/worlds/verdant_ruins/attack.webp",
+              "coreCenter": [
+                237.0,
+                663.8
+              ],
+              "hitTarget": [
+                233.0,
+                681.7
+              ],
+              "top": [
+                347.4,
+                292.8
+              ],
+              "counterOrigin": [
+                207.3,
+                674.2
+              ],
+              "rootOrigin": [
+                302.5,
+                828.4
+              ],
+              "vineTip": [
+                515.2,
+                207.6
+              ],
+              "canopyCenter": [
+                343.0,
+                332.3
+              ]
+            }
+          }
+        },
+        "arena": {
+          "file": "battle/worlds/verdant_ruins/arena.webp",
+          "front": "battle/worlds/verdant_ruins/front.webp"
+        },
+        "battle": {
+          "boss": [
+            1.2,
+            3.6
+          ],
+          "scale": 1.0,
+          "hide": [],
+          "desks": [],
+          "formation": {
+            "5": [
+              [
+                3.33,
+                5.09
+              ],
+              [
+                3.79,
+                3.83
+              ],
+              [
+                2.21,
+                5.78
+              ],
+              [
+                3.61,
+                2.63
+              ],
+              [
+                1.13,
+                5.7
+              ]
+            ],
+            "8": [
+              [
+                3.33,
+                5.09
+              ],
+              [
+                3.79,
+                3.83
+              ],
+              [
+                2.21,
+                5.78
+              ],
+              [
+                3.61,
+                2.63
+              ],
+              [
+                1.13,
+                5.7
+              ],
+              [
+                4.58,
+                4.83
+              ],
+              [
+                4.76,
+                3.1
+              ],
+              [
+                3.95,
+                5.75
+              ]
+            ]
+          }
+        }
+      },
+      "thunder_foundry": {
+        "boss": {
+          "canvas": [
+            614,
+            790
+          ],
+          "groundPivot": [
+            320.1,
+            638.6
+          ],
+          "states": {
+            "idle": {
+              "file": "battle/worlds/thunder_foundry/idle.webp",
+              "coreCenter": [
+                236.0,
+                462.3
+              ],
+              "hitTarget": [
+                232.0,
+                480.1
+              ],
+              "top": [
+                320.1,
+                85.7
+              ],
+              "counterOrigin": [
+                206.3,
+                472.7
+              ],
+              "coilLeft": [
+                501.4,
+                218.4
+              ],
+              "coilRight": [
+                138.9,
+                117.9
+              ]
+            },
+            "guard": {
+              "file": "battle/worlds/thunder_foundry/guard.webp",
+              "coreCenter": [
+                232.8,
+                477.5
+              ],
+              "hitTarget": [
+                228.8,
+                495.3
+              ],
+              "top": [
+                303.2,
+                102.2
+              ],
+              "counterOrigin": [
+                203.1,
+                487.9
+              ],
+              "coilLeft": [
+                488.1,
+                231.3
+              ],
+              "coilRight": [
+                125.7,
+                130.8
+              ]
+            },
+            "hurt": {
+              "file": "battle/worlds/thunder_foundry/hurt.webp",
+              "coreCenter": [
+                244.0,
+                432.2
+              ],
+              "hitTarget": [
+                240.0,
+                450.0
+              ],
+              "top": [
+                353.9,
+                60.1
+              ],
+              "counterOrigin": [
+                214.3,
+                442.6
+              ],
+              "coilLeft": [
+                527.8,
+                198.4
+              ],
+              "coilRight": [
+                165.3,
+                97.9
+              ]
+            },
+            "regen": {
+              "file": "battle/worlds/thunder_foundry/regen.webp",
+              "coreCenter": [
+                236.0,
+                447.8
+              ],
+              "hitTarget": [
+                232.0,
+                465.6
+              ],
+              "top": [
+                320.1,
+                71.2
+              ],
+              "counterOrigin": [
+                206.3,
+                458.2
+              ],
+              "coilLeft": [
+                501.4,
+                203.9
+              ],
+              "coilRight": [
+                138.9,
+                103.4
+              ]
+            },
+            "sealed": {
+              "file": "battle/worlds/thunder_foundry/sealed.webp",
+              "coreCenter": [
+                230.7,
+                503.3
+              ],
+              "hitTarget": [
+                226.8,
+                521.2
+              ],
+              "top": [
+                290.6,
+                130.6
+              ],
+              "counterOrigin": [
+                201.1,
+                513.7
+              ],
+              "coilLeft": [
+                478.3,
+                256.7
+              ],
+              "coilRight": [
+                115.8,
+                156.2
+              ]
+            },
+            "defeated": {
+              "file": "battle/worlds/thunder_foundry/defeated.webp",
+              "coreCenter": [
+                237.4,
+                582.1
+              ],
+              "hitTarget": [
+                233.4,
+                599.9
+              ],
+              "top": [
+                262.4,
+                221.4
+              ],
+              "counterOrigin": [
+                207.7,
+                592.5
+              ],
+              "coilLeft": [
+                463.8,
+                328.2
+              ],
+              "coilRight": [
+                83.1,
+                246.3
+              ]
+            },
+            "attack": {
+              "file": "battle/worlds/thunder_foundry/attack.webp",
+              "coreCenter": [
+                235.4,
+                415.1
+              ],
+              "hitTarget": [
+                231.5,
+                432.9
+              ],
+              "top": [
+                351.4,
+                45.7
+              ],
+              "counterOrigin": [
+                205.7,
+                425.5
+              ],
+              "coilLeft": [
+                523.4,
+                185.0
+              ],
+              "coilRight": [
+                161.0,
+                84.6
+              ]
+            }
+          }
+        },
+        "arena": {
+          "file": "battle/worlds/thunder_foundry/arena.webp",
+          "front": "battle/worlds/thunder_foundry/front.webp"
+        },
+        "battle": {
+          "boss": [
+            1.2,
+            3.6
+          ],
+          "scale": 1.0,
+          "hide": [],
+          "desks": [],
+          "formation": {
+            "5": [
+              [
+                3.33,
+                5.09
+              ],
+              [
+                3.79,
+                3.83
+              ],
+              [
+                2.21,
+                5.78
+              ],
+              [
+                3.61,
+                2.63
+              ],
+              [
+                1.13,
+                5.7
+              ]
+            ],
+            "8": [
+              [
+                3.33,
+                5.09
+              ],
+              [
+                3.79,
+                3.83
+              ],
+              [
+                2.21,
+                5.78
+              ],
+              [
+                3.61,
+                2.63
+              ],
+              [
+                1.13,
+                5.7
+              ],
+              [
+                4.58,
+                4.83
+              ],
+              [
+                4.76,
+                3.1
+              ],
+              [
+                3.95,
+                5.75
+              ]
+            ]
+          }
+        }
+      },
+      "astral_rift": {
+        "boss": {
+          "canvas": [
+            756,
+            802
+          ],
+          "groundPivot": [
+            385.3,
+            617.3
+          ],
+          "states": {
+            "idle": {
+              "file": "battle/worlds/astral_rift/idle.webp",
+              "coreCenter": [
+                295.9,
+                231.0
+              ],
+              "hitTarget": [
+                345.7,
+                305.3
+              ],
+              "top": [
+                385.3,
+                59.6
+              ],
+              "counterOrigin": [
+                266.0,
+                389.9
+              ],
+              "orbitOrigin": [
+                402.6,
+                315.2
+              ],
+              "riftOrigin": [
+                194.7,
+                386.4
+              ]
+            },
+            "guard": {
+              "file": "battle/worlds/astral_rift/guard.webp",
+              "coreCenter": [
+                281.9,
+                258.8
+              ],
+              "hitTarget": [
+                337.8,
+                312.5
+              ],
+              "top": [
+                377.4,
+                66.8
+              ],
+              "counterOrigin": [
+                260.4,
+                411.7
+              ],
+              "orbitOrigin": [
+                389.6,
+                348.2
+              ],
+              "riftOrigin": [
+                187.6,
+                419.1
+              ]
+            },
+            "hurt": {
+              "file": "battle/worlds/astral_rift/hurt.webp",
+              "coreCenter": [
+                345.9,
+                145.2
+              ],
+              "hitTarget": [
+                376.9,
+                269.0
+              ],
+              "top": [
+                416.5,
+                23.2
+              ],
+              "counterOrigin": [
+                295.6,
+                312.5
+              ],
+              "orbitOrigin": [
+                452.0,
+                214.8
+              ],
+              "riftOrigin": [
+                230.5,
+                281.2
+              ]
+            },
+            "regen": {
+              "file": "battle/worlds/astral_rift/regen.webp",
+              "coreCenter": [
+                295.9,
+                206.7
+              ],
+              "hitTarget": [
+                345.7,
+                281.0
+              ],
+              "top": [
+                385.3,
+                35.3
+              ],
+              "counterOrigin": [
+                266.0,
+                365.7
+              ],
+              "orbitOrigin": [
+                402.6,
+                290.9
+              ],
+              "riftOrigin": [
+                194.7,
+                362.1
+              ]
+            },
+            "sealed": {
+              "file": "battle/worlds/astral_rift/sealed.webp",
+              "coreCenter": [
+                271.5,
+                350.0
+              ],
+              "hitTarget": [
+                331.5,
+                387.2
+              ],
+              "top": [
+                371.1,
+                141.4
+              ],
+              "counterOrigin": [
+                256.8,
+                497.1
+              ],
+              "orbitOrigin": [
+                380.1,
+                443.2
+              ],
+              "riftOrigin": [
+                183.1,
+                513.0
+              ]
+            },
+            "defeated": {
+              "file": "battle/worlds/astral_rift/defeated.webp",
+              "coreCenter": [
+                281.4,
+                559.0
+              ],
+              "hitTarget": [
+                321.8,
+                539.9
+              ],
+              "top": [
+                361.4,
+                294.2
+              ],
+              "counterOrigin": [
+                280.0,
+                681.9
+              ],
+              "orbitOrigin": [
+                412.9,
+                652.4
+              ],
+              "riftOrigin": [
+                218.8,
+                728.4
+              ]
+            },
+            "attack": {
+              "file": "battle/worlds/astral_rift/attack.webp",
+              "coreCenter": [
+                304.0,
+                180.2
+              ],
+              "hitTarget": [
+                343.1,
+                284.7
+              ],
+              "top": [
+                382.7,
+                39.0
+              ],
+              "counterOrigin": [
+                261.7,
+                345.3
+              ],
+              "orbitOrigin": [
+                410.1,
+                255.9
+              ],
+              "riftOrigin": [
+                193.8,
+                325.1
+              ]
+            }
+          }
+        },
+        "arena": {
+          "file": "battle/worlds/astral_rift/arena.webp",
+          "front": "battle/worlds/astral_rift/front.webp"
+        },
+        "battle": {
+          "boss": [
+            1.2,
+            3.6
+          ],
+          "scale": 1.0,
+          "hide": [],
+          "desks": [],
+          "formation": {
+            "5": [
+              [
+                3.33,
+                5.09
+              ],
+              [
+                3.79,
+                3.83
+              ],
+              [
+                2.21,
+                5.78
+              ],
+              [
+                3.61,
+                2.63
+              ],
+              [
+                1.13,
+                5.7
+              ]
+            ],
+            "8": [
+              [
+                3.33,
+                5.09
+              ],
+              [
+                3.79,
+                3.83
+              ],
+              [
+                2.21,
+                5.78
+              ],
+              [
+                3.61,
+                2.63
+              ],
+              [
+                1.13,
+                5.7
+              ],
+              [
+                4.58,
+                4.83
+              ],
+              [
+                4.76,
+                3.1
+              ],
+              [
+                3.95,
+                5.75
+              ]
+            ]
+          }
+        }
+      }
     }
   }
 }
