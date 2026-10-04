@@ -51,6 +51,8 @@ const drafts = new Map<string, string>();
 const modelLists = new Map<string, ModelChoice[] | string>();
 /** The team file whose delete button has been pressed once. */
 let confirming: string | null = null;
+/** Each agent's own folder (agent id, path); asked once. */
+let agentFolders: [string, string][] | null = null;
 /** The members panel's help, opened by its ? button. */
 let memberHelp = false;
 /** The sidebar's 已封存 section, open or not. */
@@ -413,6 +415,90 @@ function teamMark(size: number): HTMLElement {
 
 // ── Team setup ────────────────────────────────────────────────────────────────
 
+/**
+ * Folders besides the work folder where safe steps also go without asking:
+ * each member's own agent folder, and any the person adds. Nothing is
+ * trusted until it is chosen here.
+ */
+function trustedFolders(config: TeamConfig): HTMLElement {
+  if (agentFolders === null) {
+    agentFolders = [];
+    void (async () => {
+      agentFolders = IS_TAURI
+        ? ((await Bridge.teamAgentFolders()) ?? [])
+        : [["copilot", "C:\\Users\\you\\.copilot\\session-state"], ["cg", "C:\\Users\\you\\.copilot\\session-state"], ["codex", "C:\\Users\\you\\.codex\\generated_images"], ["agy", "C:\\Users\\you\\.gemini\\antigravity\\brain"]];
+      render();
+    })();
+  }
+  const used = new Set(config.members.map((m) => m.agent));
+  // One line a folder, with every agent of the team that keeps its files there.
+  const byPath = new Map<string, string[]>();
+  for (const [agent, path] of agentFolders ?? []) {
+    if (used.has(agent)) byPath.set(path, [...(byPath.get(path) ?? []), agents.find((a) => a.id === agent)?.name ?? agent]);
+  }
+  const own = [...byPath.entries()].map(([path, who]) => [path, who.join("、")] as const);
+  const dirs = config.trustedDirs ?? [];
+  const toggle = h("input", { type: "checkbox", checked: !!config.agentFolders, disabled: !own.length }) as HTMLInputElement;
+  toggle.addEventListener("change", () => {
+    config.agentFolders = toggle.checked || undefined;
+    unsaved = true;
+    render();
+  });
+  return h(
+    "div",
+    { class: "trusted" },
+    h("label", { text: "也可以自動批准的資料夾" }),
+    h(
+      "label",
+      { class: "trusted-check" },
+      toggle,
+      h(
+        "span",
+        {},
+        h("b", { text: "代理自己的暫存資料夾" }),
+        own.length
+          ? h("span", { class: "trusted-paths" }, ...own.map(([path, who]) => h("span", {}, h("span", { class: "mono", text: path }), h("small", { text: ` · ${who}` }))))
+          : h("span", { class: "hint", text: "這個團隊用到的代理沒有已知的暫存資料夾。" }),
+      ),
+    ),
+    ...dirs.map((d, i) =>
+      h(
+        "div",
+        { class: "trusted-dir" },
+        h("span", { class: "mono", text: d }),
+        h(
+          "button",
+          {
+            class: "link",
+            type: "button",
+            onClick: () => {
+              config.trustedDirs = dirs.filter((_, k) => k !== i);
+              if (!config.trustedDirs.length) config.trustedDirs = undefined;
+              unsaved = true;
+              render();
+            },
+          },
+          "移除",
+        ),
+      ),
+    ),
+    h(
+      "div",
+      { class: "row" },
+      button("新增資料夾…", "plain", () =>
+        void act(async () => {
+          const picked = await Bridge.pickFolder(config.workDir, "選擇也可以自動批准的資料夾");
+          if (picked && !dirs.some((d) => d.toLowerCase() === picked.toLowerCase())) {
+            config.trustedDirs = [...dirs, picked];
+            unsaved = true;
+          }
+        }),
+      ),
+    ),
+    h("p", { class: "hint", text: "預設都不勾。勾選或加入的資料夾,會和工作資料夾一樣:改檔、建置不會問你;刪資料夾、安裝、對外發送仍然會問。改了以後,團隊下次啟動時生效。" }),
+  );
+}
+
 /** What each field of a member means, for whoever sets a team up the first time. */
 function memberHelpCard(): HTMLElement {
   const item = (term: string, text: string, example = "") =>
@@ -527,6 +613,7 @@ function setup(file: TeamFile): HTMLElement {
         ? "成員改檔、建置、跑測試不會問你;刪資料夾、安裝東西、對外發送等危險動作仍然會問。"
         : "成員的每一個權限請求都會問你。",
     }),
+    config.autoApprove ? trustedFolders(config) : null,
     h("label", { text: "辦公室風格" }),
     h(
       "div",
@@ -1422,6 +1509,7 @@ async function load() {
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "company") place = "company";
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "cost") place = "cost";
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "secretary") place = "secretary";
+  if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "setup") tab = "setup";
   firstLoad = false;
   render();
 }

@@ -346,6 +346,19 @@ fn copilot_mcp_file(servers: &[McpServer]) -> Result<std::path::PathBuf, String>
 }
 
 /// Whether a profile runs Copilot CLI, whose MCP servers go on its command line.
+/// The folder an agent keeps its own working files in, outside any project:
+/// Copilot's sessions, the images Codex generates, Antigravity's artifacts.
+/// A team may trust it like its work folder (TeamConfig::agent_folders).
+pub fn agent_folder(profile: &AgentProfile) -> Option<std::path::PathBuf> {
+    let home = std::path::PathBuf::from(std::env::var_os("USERPROFILE")?);
+    Some(match profile.protocol {
+        Protocol::Acp if runs_copilot(profile) => home.join(".copilot").join("session-state"),
+        Protocol::Codex => home.join(".codex").join("generated_images"),
+        Protocol::Agy => home.join(".gemini").join("antigravity").join("brain"),
+        _ => return None,
+    })
+}
+
 fn runs_copilot(profile: &AgentProfile) -> bool {
     profile.protocol == Protocol::Acp && is_copilot(std::path::Path::new(&profile.command))
 }

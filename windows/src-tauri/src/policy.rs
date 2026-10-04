@@ -68,10 +68,14 @@ pub struct Request {
     pub paths: Vec<String>,
 }
 
-/// The folder a team works in. Everything is judged against it.
+/// The folder a team works in. Everything is judged against it — and
+/// against the folders the person chose to trust like it (an agent's own
+/// scratch folder, a shared one): what is safe in the work folder is safe
+/// there too; what is dangerous anywhere still asks.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Scope {
     pub work_dir: PathBuf,
+    pub also: Vec<PathBuf>,
 }
 
 const MAX_COMMAND: usize = 8 * 1024;
@@ -169,7 +173,13 @@ pub fn decide(scope: &Scope, request: &Request) -> Verdict {
 
 impl Scope {
     pub fn new(work_dir: impl Into<PathBuf>) -> Self {
-        Self { work_dir: work_dir.into() }
+        Self { work_dir: work_dir.into(), also: Vec::new() }
+    }
+
+    /// The same, with more folders trusted like the work folder. Only full paths count.
+    pub fn with_also(mut self, dirs: impl IntoIterator<Item = PathBuf>) -> Self {
+        self.also.extend(dirs.into_iter().filter(|d| d.is_absolute()));
+        self
     }
 
     /// `path` as an absolute, lexically normalised path. Nothing is read from
@@ -200,11 +210,15 @@ impl Scope {
 
     /// Whether `path` lies in the work folder (or is the folder itself).
     pub fn contains(&self, path: &str) -> bool {
-        let (Some(target), Some(root)) = (self.resolve(path), self.resolve(".")) else { return false };
+        let Some(target) = self.resolve(path) else { return false };
         let lower = |p: &Path| p.to_string_lossy().to_lowercase();
-        let (target, root) = (lower(&target), lower(&root));
-        let root = root.trim_end_matches('\\');
-        target == root || target.strip_prefix(root).map(|rest| rest.starts_with('\\')).unwrap_or(false)
+        let target = lower(&target);
+        let inside = |root: &Path| {
+            let root = lower(root);
+            let root = root.trim_end_matches('\\');
+            target == root || target.strip_prefix(root).map(|rest| rest.starts_with('\\')).unwrap_or(false)
+        };
+        self.resolve(".").is_some_and(|r| inside(&r)) || self.also.iter().filter_map(|d| self.resolve(&d.to_string_lossy())).any(|d| inside(&d))
     }
 
     fn is_dir(&self, path: &str) -> bool {
@@ -673,6 +687,25 @@ mod tests {
 
     fn scope() -> Scope {
         Scope::new(r"D:\Work\shop")
+    }
+
+    #[test]
+    fn a_folder_the_person_trusts_is_judged_like_the_work_folder() {
+        let trusted = scope().with_also([PathBuf::from(r"C:\Users\x\.copilot\session-state")]);
+        let run = |s: &Scope, c: &str| decide(s, &Request { kind: Kind::Execute, command: Some(c.into()), paths: vec![] });
+        let req = |kind, paths: &[&str]| Request { kind, command: None, paths: paths.iter().map(|p| p.to_string()).collect() };
+        let copilot = r#"Set-Location "C:\Users\x\.copilot\session-state\6ff0\files\fetest"; (Get-Item "C:\Program Files\Google\Chrome\Application\chrome.exe").VersionInfo.ProductVersion"#;
+        assert_eq!(run(&scope(), copilot), Verdict::Ask(Danger::OutsideWorkDir));
+        assert_eq!(run(&trusted, copilot), Verdict::Allow);
+        assert_eq!(decide(&trusted, &req(Kind::Edit, &[r"C:\Users\x\.copilot\session-state\a\plan.md"])), Verdict::Allow);
+        // Only inside it: its parent, a neighbour, a way out are not.
+        assert_eq!(decide(&trusted, &req(Kind::Edit, &[r"C:\Users\x\.copilot\config.json"])), Verdict::Ask(Danger::OutsideWorkDir));
+        assert_eq!(decide(&trusted, &req(Kind::Edit, &[r"C:\Users\x\.copilot\session-state-old\a"])), Verdict::Ask(Danger::OutsideWorkDir));
+        assert_eq!(decide(&trusted, &req(Kind::Edit, &[r"C:\Users\x\.copilot\session-state\..\config.json"])), Verdict::Ask(Danger::OutsideWorkDir));
+        // What is dangerous anywhere still asks there.
+        assert_eq!(run(&trusted, r"Remove-Item -Recurse C:\Users\x\.copilot\session-state\a"), Verdict::Ask(Danger::DeletesFolder));
+        // A folder given without a full path is not trusted.
+        assert_eq!(scope().with_also([PathBuf::from("relative")]).also.len(), 0);
     }
 
     #[test]

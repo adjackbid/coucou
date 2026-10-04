@@ -974,6 +974,12 @@ fn secretary_reset(secretary: State<Arc<secretary::Secretary>>) {
     secretary.reset();
 }
 
+/// Each agent's own folder (agent id, path), for the team setup's "trust it" choice.
+#[tauri::command]
+fn team_agent_folders(shared: State<Shared>) -> Vec<(String, String)> {
+    shared.settings.lock().unwrap().agents.iter().filter_map(|a| Some((a.id.clone(), acp::agent_folder(a)?.to_string_lossy().to_string()))).collect()
+}
+
 /// The models an agent offers, for the drop-downs in Settings and Teamwork.
 #[tauri::command]
 async fn agent_models(agents: State<'_, Arc<Agents>>, profile: AgentProfile) -> Result<Vec<claude::ModelChoice>, String> {
@@ -1323,6 +1329,7 @@ pub fn run() {
             pricing_from_agent,
             endpoint_spend,
             secretary_providers,
+            team_agent_folders,
             secretary_ask,
             secretary_confirm,
             secretary_decline,

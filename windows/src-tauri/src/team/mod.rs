@@ -73,6 +73,13 @@ pub struct TeamConfig {
     /// company map until it is taken out again.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub archived: bool,
+    /// Steps approved by themselves may also touch each member's own agent
+    /// folder (acp::agent_folder) — off unless the person turns it on.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub agent_folders: bool,
+    /// More folders the person trusts like the work folder, for steps approved by themselves.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trusted_dirs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -268,6 +275,8 @@ pub(crate) mod fixtures {
             max_turns: 60,
             office_theme: String::new(),
             archived: false,
+            agent_folders: false,
+            trusted_dirs: vec![],
         }
     }
 }

@@ -29,6 +29,10 @@ export interface TeamConfig {
   officeTheme?: string;
   /** Put away: out of the team list and the company map, not deleted. */
   archived?: boolean;
+  /** Steps approved by themselves may also touch each member's own agent folder. */
+  agentFolders?: boolean;
+  /** More folders trusted like the work folder, for steps approved by themselves. */
+  trustedDirs?: string[];
 }
 
 export interface TeamFile {

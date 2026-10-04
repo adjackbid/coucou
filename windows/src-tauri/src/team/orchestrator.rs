@@ -613,7 +613,14 @@ impl Teams {
                         ("COUCOU_TEAM_TOKEN".to_string(), secret.clone()),
                     ]),
                 }],
-                auto: config.auto_approve.then(|| Scope::new(&config.work_dir)),
+                // The work folder, and what the person chose to trust like it.
+                auto: config.auto_approve.then(|| {
+                    let mut also: Vec<PathBuf> = config.trusted_dirs.iter().map(|d| PathBuf::from(d.trim())).collect();
+                    if config.agent_folders {
+                        also.extend(crate::acp::agent_folder(&profile));
+                    }
+                    Scope::new(&config.work_dir).with_also(also)
+                }),
                 model: Some(member.model.trim().to_string()).filter(|m| !m.is_empty()),
             };
             let mut launch = launch;
@@ -1870,6 +1877,17 @@ mod tests {
             assert_eq!(seat.key, "team:shop:ai3");
             assert_eq!(seat.launch.cwd.as_deref(), Some(dir.as_str()));
             assert_eq!(seat.launch.auto, Some(Scope::new(&dir)));
+            // Trusted folders join the scope only when the person turns them on.
+            let mut trusting = shop(&dir);
+            trusting.id = "trusting".into();
+            trusting.agent_folders = true;
+            trusting.trusted_dirs = vec![r"D:\Shared\assets".into()];
+            bench.teams.start(trusting, &[AgentProfile::copilot()]).expect("start");
+            let scope = bench.teams.get("trusting").unwrap().seat("ai3").unwrap().launch.auto.unwrap();
+            assert!(scope.contains(r"D:\Shared\assets\logo.png"));
+            if let Some(own) = crate::acp::agent_folder(&AgentProfile::copilot()) {
+                assert!(scope.also.contains(&own), "{:?}", scope.also);
+            }
             // The CLI itself is told it is a team member (its hooks stay silent); the token is not in its environment.
             assert_eq!(seat.launch.env["COUCOU_TEAM"], "shop");
             assert!(!seat.launch.env.contains_key("COUCOU_TEAM_TOKEN"));

@@ -2746,3 +2746,52 @@ h2 {
     height: auto;
   }
 }
+
+/* Folders trusted like the work folder: the agents' own, and the person's. */
+.trusted {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trusted-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 0 !important;
+  font-weight: 400 !important;
+}
+
+.trusted-check input {
+  margin-top: 3px;
+  accent-color: var(--blue);
+}
+
+.trusted-check > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.trusted-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  color: var(--dim);
+}
+
+.trusted-dir {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--lift);
+}
+
+.trusted-dir .mono {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

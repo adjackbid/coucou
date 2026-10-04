@@ -156,6 +156,8 @@ export const Bridge = {
   pricingFetchList: () => callOrThrow<number>("pricing_fetch_list"),
   /** Reads the prices an agent's own endpoint gives (a LiteLLM proxy); how many. */
   pricingFromAgent: (agent: string) => callOrThrow<number>("pricing_from_agent", { agent }),
+  /** Each agent's own folder (agent id, path), for the team setup. */
+  teamAgentFolders: () => call<[string, string][]>("team_agent_folders"),
   /** The chat providers the secretary can think with: (id, name, model). */
   secretaryProviders: () => call<[string, string, string][]>("secretary_providers"),
   /** The person asks the secretary; its steps arrive as `secretary-step` while it works. */
