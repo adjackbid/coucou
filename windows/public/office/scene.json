@@ -3988,201 +3988,201 @@
       "lava_crater": {
         "boss": {
           "canvas": [
-            848,
-            868
+            1024,
+            1024
           ],
           "groundPivot": [
-            306.0,
-            665.5
+            518.0,
+            940.0
           ],
           "states": {
             "idle": {
               "file": "battle/worlds/lava_crater/idle.webp",
               "coreCenter": [
-                232.3,
-                560.9
+                455.0,
+                709.0
               ],
               "hitTarget": [
-                232.3,
-                575.8
+                455.0,
+                724.0
               ],
               "top": [
-                198.0,
-                184.8
+                397.0,
+                341.0
               ],
               "counterOrigin": [
-                266.4,
-                510.8
+                413.0,
+                460.0
               ],
               "breathOrigin": [
-                115.3,
-                387.1
+                216.0,
+                580.0
               ],
               "tailTip": [
-                785.7,
-                254.6
+                917.0,
+                701.0
               ]
             },
             "guard": {
               "file": "battle/worlds/lava_crater/guard.webp",
               "coreCenter": [
-                232.3,
-                560.9
+                455.0,
+                717.0
               ],
               "hitTarget": [
-                232.3,
-                575.8
+                455.0,
+                732.0
               ],
               "top": [
-                178.1,
-                224.5
+                396.0,
+                349.0
               ],
               "counterOrigin": [
-                266.4,
-                510.8
+                420.0,
+                463.0
               ],
               "breathOrigin": [
-                111.3,
-                442.8
+                216.0,
+                588.0
               ],
               "tailTip": [
-                785.7,
-                254.6
+                918.0,
+                699.0
               ]
             },
             "hurt": {
               "file": "battle/worlds/lava_crater/hurt.webp",
               "coreCenter": [
-                234.9,
-                538.9
+                393.0,
+                683.0
               ],
               "hitTarget": [
-                234.9,
-                553.8
+                393.0,
+                698.0
               ],
               "top": [
-                281.7,
-                79.0
+                496.0,
+                343.0
               ],
               "counterOrigin": [
-                266.4,
-                510.8
+                507.0,
+                441.0
               ],
               "breathOrigin": [
-                177.5,
-                184.4
+                197.0,
+                671.0
               ],
               "tailTip": [
-                790.1,
-                313.7
+                892.0,
+                727.0
               ]
             },
             "regen": {
               "file": "battle/worlds/lava_crater/regen.webp",
               "coreCenter": [
-                232.3,
-                560.9
+                368.0,
+                713.0
               ],
               "hitTarget": [
-                232.3,
-                575.8
+                368.0,
+                728.0
               ],
               "top": [
-                222.7,
-                148.1
+                399.0,
+                339.0
               ],
               "counterOrigin": [
-                266.4,
-                510.8
+                409.0,
+                461.0
               ],
               "breathOrigin": [
-                126.9,
-                320.6
+                216.0,
+                578.0
               ],
               "tailTip": [
-                792.1,
-                310.3
+                908.0,
+                717.0
               ]
             },
             "sealed": {
               "file": "battle/worlds/lava_crater/sealed.webp",
               "coreCenter": [
-                232.3,
-                560.9
+                511.0,
+                730.0
               ],
               "hitTarget": [
-                232.3,
-                575.8
+                511.0,
+                745.0
               ],
               "top": [
-                163.8,
-                260.9
+                394.0,
+                337.0
               ],
               "counterOrigin": [
-                266.4,
-                510.8
+                412.0,
+                449.0
               ],
               "breathOrigin": [
-                112.5,
-                484.4
+                213.0,
+                583.0
               ],
               "tailTip": [
-                785.7,
-                254.6
+                934.0,
+                673.0
               ]
             },
             "defeated": {
               "file": "battle/worlds/lava_crater/defeated.webp",
               "coreCenter": [
-                231.1,
-                651.8
+                550.0,
+                715.0
               ],
               "hitTarget": [
-                231.1,
-                666.7
+                550.0,
+                730.0
               ],
               "top": [
-                123.1,
-                468.9
+                484.0,
+                490.0
               ],
               "counterOrigin": [
-                266.4,
-                583.5
+                438.0,
+                627.0
               ],
               "breathOrigin": [
-                118.5,
-                672.2
+                177.0,
+                767.0
               ],
               "tailTip": [
-                778.2,
-                281.6
+                970.0,
+                743.0
               ]
             },
             "attack": {
               "file": "battle/worlds/lava_crater/attack.webp",
               "coreCenter": [
-                234.0,
-                545.2
+                522.0,
+                697.0
               ],
               "hitTarget": [
-                234.0,
-                560.2
+                522.0,
+                712.0
               ],
               "top": [
-                258.4,
-                70.9
+                443.0,
+                318.0
               ],
               "counterOrigin": [
-                266.4,
-                510.8
+                478.0,
+                430.0
               ],
               "breathOrigin": [
-                156.4,
-                211.7
+                300.0,
+                620.0
               ],
               "tailTip": [
-                711.6,
-                372.1
+                1007.0,
+                653.0
               ]
             }
           }
@@ -4196,7 +4196,7 @@
             1.2,
             3.6
           ],
-          "scale": 1.0,
+          "scale": 1.05,
           "hide": [],
           "desks": [],
           "formation": {

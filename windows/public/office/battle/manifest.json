@@ -507,329 +507,6 @@
       "status": "produced"
     },
     {
-      "assetKey": "battle/worlds/lava_crater/idle",
-      "file": "battle/worlds/lava_crater/idle.webp",
-      "width": 848,
-      "height": 868,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          306.0,
-          665.5
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          232.3,
-          560.9
-        ],
-        "hitTarget": [
-          232.3,
-          575.8
-        ],
-        "top": [
-          198.0,
-          184.8
-        ],
-        "counterOrigin": [
-          266.4,
-          510.8
-        ],
-        "breathOrigin": [
-          115.3,
-          387.1
-        ],
-        "tailTip": [
-          785.7,
-          254.6
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/lava_crater/guard",
-      "file": "battle/worlds/lava_crater/guard.webp",
-      "width": 848,
-      "height": 868,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          306.0,
-          665.5
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          232.3,
-          560.9
-        ],
-        "hitTarget": [
-          232.3,
-          575.8
-        ],
-        "top": [
-          178.1,
-          224.5
-        ],
-        "counterOrigin": [
-          266.4,
-          510.8
-        ],
-        "breathOrigin": [
-          111.3,
-          442.8
-        ],
-        "tailTip": [
-          785.7,
-          254.6
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/lava_crater/hurt",
-      "file": "battle/worlds/lava_crater/hurt.webp",
-      "width": 848,
-      "height": 868,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          306.0,
-          665.5
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          234.9,
-          538.9
-        ],
-        "hitTarget": [
-          234.9,
-          553.8
-        ],
-        "top": [
-          281.7,
-          79.0
-        ],
-        "counterOrigin": [
-          266.4,
-          510.8
-        ],
-        "breathOrigin": [
-          177.5,
-          184.4
-        ],
-        "tailTip": [
-          790.1,
-          313.7
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/lava_crater/regen",
-      "file": "battle/worlds/lava_crater/regen.webp",
-      "width": 848,
-      "height": 868,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          306.0,
-          665.5
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          232.3,
-          560.9
-        ],
-        "hitTarget": [
-          232.3,
-          575.8
-        ],
-        "top": [
-          222.7,
-          148.1
-        ],
-        "counterOrigin": [
-          266.4,
-          510.8
-        ],
-        "breathOrigin": [
-          126.9,
-          320.6
-        ],
-        "tailTip": [
-          792.1,
-          310.3
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/lava_crater/sealed",
-      "file": "battle/worlds/lava_crater/sealed.webp",
-      "width": 848,
-      "height": 868,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          306.0,
-          665.5
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          232.3,
-          560.9
-        ],
-        "hitTarget": [
-          232.3,
-          575.8
-        ],
-        "top": [
-          163.8,
-          260.9
-        ],
-        "counterOrigin": [
-          266.4,
-          510.8
-        ],
-        "breathOrigin": [
-          112.5,
-          484.4
-        ],
-        "tailTip": [
-          785.7,
-          254.6
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/lava_crater/defeated",
-      "file": "battle/worlds/lava_crater/defeated.webp",
-      "width": 848,
-      "height": 868,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          306.0,
-          665.5
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          231.1,
-          651.8
-        ],
-        "hitTarget": [
-          231.1,
-          666.7
-        ],
-        "top": [
-          123.1,
-          468.9
-        ],
-        "counterOrigin": [
-          266.4,
-          583.5
-        ],
-        "breathOrigin": [
-          118.5,
-          672.2
-        ],
-        "tailTip": [
-          778.2,
-          281.6
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/lava_crater/attack",
-      "file": "battle/worlds/lava_crater/attack.webp",
-      "width": 848,
-      "height": 868,
-      "pixelRatio": 2,
-      "facing": "toward the heroes",
-      "pivot": {
-        "groundPivot": [
-          306.0,
-          665.5
-        ]
-      },
-      "anchors": {
-        "coreCenter": [
-          234.0,
-          545.2
-        ],
-        "hitTarget": [
-          234.0,
-          560.2
-        ],
-        "top": [
-          258.4,
-          70.9
-        ],
-        "counterOrigin": [
-          266.4,
-          510.8
-        ],
-        "breathOrigin": [
-          156.4,
-          211.7
-        ],
-        "tailTip": [
-          711.6,
-          372.1
-        ]
-      },
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/lava_crater/arena",
-      "file": "battle/worlds/lava_crater/arena.webp",
-      "width": 3200,
-      "height": 2000,
-      "pixelRatio": 2,
-      "note": "rendered in the office camera: the room worldToScreen applies unchanged",
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
-      "assetKey": "battle/worlds/lava_crater/front",
-      "file": "battle/worlds/lava_crater/front.webp",
-      "width": 3200,
-      "height": 2000,
-      "pixelRatio": 2,
-      "note": "rendered in the office camera: the room worldToScreen applies unchanged",
-      "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
-      "license": "Original work made for Coucou; no third-party models, textures or images",
-      "status": "produced"
-    },
-    {
       "assetKey": "battle/worlds/frost_court/idle",
       "file": "battle/worlds/frost_court/idle.webp",
       "width": 416,
@@ -2147,6 +1824,338 @@
       "note": "rendered in the office camera: the room worldToScreen applies unchanged",
       "source": "Blender 5.2: arenas and bosses modelled for this project in the CoucouOffice scene, EEVEE, Standard view transform, the office's own orthographic camera (az 45, el 30), 280 px/m at 2x; bosses face the heroes",
       "license": "Original work made for Coucou; no third-party models, textures or images",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/lava_crater/idle",
+      "file": "battle/worlds/lava_crater/idle.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          518.0,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          455.0,
+          709.0
+        ],
+        "hitTarget": [
+          455.0,
+          724.0
+        ],
+        "top": [
+          397.0,
+          341.0
+        ],
+        "counterOrigin": [
+          413.0,
+          460.0
+        ],
+        "breathOrigin": [
+          216.0,
+          580.0
+        ],
+        "tailTip": [
+          917.0,
+          701.0
+        ]
+      },
+      "source": "OpenAI built-in imagegen (first 2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only, no repainting; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/lava_crater/_generation; sheet sha256 dd77d56037af17c315d1fce61dd3524c6c0b62e83cf198feb107e5dae7990ec3",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/lava_crater/guard",
+      "file": "battle/worlds/lava_crater/guard.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          518.0,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          455.0,
+          717.0
+        ],
+        "hitTarget": [
+          455.0,
+          732.0
+        ],
+        "top": [
+          396.0,
+          349.0
+        ],
+        "counterOrigin": [
+          420.0,
+          463.0
+        ],
+        "breathOrigin": [
+          216.0,
+          588.0
+        ],
+        "tailTip": [
+          918.0,
+          699.0
+        ]
+      },
+      "source": "OpenAI built-in imagegen (first 2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only, no repainting; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/lava_crater/_generation; sheet sha256 dd77d56037af17c315d1fce61dd3524c6c0b62e83cf198feb107e5dae7990ec3",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/lava_crater/hurt",
+      "file": "battle/worlds/lava_crater/hurt.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          518.0,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          393.0,
+          683.0
+        ],
+        "hitTarget": [
+          393.0,
+          698.0
+        ],
+        "top": [
+          496.0,
+          343.0
+        ],
+        "counterOrigin": [
+          507.0,
+          441.0
+        ],
+        "breathOrigin": [
+          197.0,
+          671.0
+        ],
+        "tailTip": [
+          892.0,
+          727.0
+        ]
+      },
+      "source": "OpenAI built-in imagegen (first 2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only, no repainting; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/lava_crater/_generation; sheet sha256 dd77d56037af17c315d1fce61dd3524c6c0b62e83cf198feb107e5dae7990ec3",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/lava_crater/regen",
+      "file": "battle/worlds/lava_crater/regen.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          518.0,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          368.0,
+          713.0
+        ],
+        "hitTarget": [
+          368.0,
+          728.0
+        ],
+        "top": [
+          399.0,
+          339.0
+        ],
+        "counterOrigin": [
+          409.0,
+          461.0
+        ],
+        "breathOrigin": [
+          216.0,
+          578.0
+        ],
+        "tailTip": [
+          908.0,
+          717.0
+        ]
+      },
+      "source": "OpenAI built-in imagegen (first 2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only, no repainting; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/lava_crater/_generation; sheet sha256 dd77d56037af17c315d1fce61dd3524c6c0b62e83cf198feb107e5dae7990ec3",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/lava_crater/sealed",
+      "file": "battle/worlds/lava_crater/sealed.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          518.0,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          511.0,
+          730.0
+        ],
+        "hitTarget": [
+          511.0,
+          745.0
+        ],
+        "top": [
+          394.0,
+          337.0
+        ],
+        "counterOrigin": [
+          412.0,
+          449.0
+        ],
+        "breathOrigin": [
+          213.0,
+          583.0
+        ],
+        "tailTip": [
+          934.0,
+          673.0
+        ]
+      },
+      "source": "OpenAI built-in imagegen (first 2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only, no repainting; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/lava_crater/_generation; sheet sha256 dd77d56037af17c315d1fce61dd3524c6c0b62e83cf198feb107e5dae7990ec3",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/lava_crater/defeated",
+      "file": "battle/worlds/lava_crater/defeated.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          518.0,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          550.0,
+          715.0
+        ],
+        "hitTarget": [
+          550.0,
+          730.0
+        ],
+        "top": [
+          484.0,
+          490.0
+        ],
+        "counterOrigin": [
+          438.0,
+          627.0
+        ],
+        "breathOrigin": [
+          177.0,
+          767.0
+        ],
+        "tailTip": [
+          970.0,
+          743.0
+        ]
+      },
+      "source": "OpenAI built-in imagegen (first 2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only, no repainting; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/lava_crater/_generation; sheet sha256 dd77d56037af17c315d1fce61dd3524c6c0b62e83cf198feb107e5dae7990ec3",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/lava_crater/attack",
+      "file": "battle/worlds/lava_crater/attack.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "facing": "toward the heroes",
+      "pivot": {
+        "groundPivot": [
+          518.0,
+          940.0
+        ]
+      },
+      "anchors": {
+        "coreCenter": [
+          522.0,
+          697.0
+        ],
+        "hitTarget": [
+          522.0,
+          712.0
+        ],
+        "top": [
+          443.0,
+          318.0
+        ],
+        "counterOrigin": [
+          478.0,
+          430.0
+        ],
+        "breathOrigin": [
+          300.0,
+          620.0
+        ],
+        "tailTip": [
+          1007.0,
+          653.0
+        ]
+      },
+      "source": "OpenAI built-in imagegen (first 2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only, no repainting; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/lava_crater/_generation; sheet sha256 dd77d56037af17c315d1fce61dd3524c6c0b62e83cf198feb107e5dae7990ec3",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/lava_crater/arena",
+      "file": "battle/worlds/lava_crater/arena.webp",
+      "width": 3200,
+      "height": 2000,
+      "pixelRatio": 2,
+      "source": "OpenAI built-in imagegen (first 2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only, no repainting; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/lava_crater/_generation; png sha256 549d9c517629191ab9b63d523659b8e6c56f2349ad42f908fd1c527bdade5760",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/lava_crater/front",
+      "file": "battle/worlds/lava_crater/front.webp",
+      "width": 3200,
+      "height": 2000,
+      "pixelRatio": 2,
+      "source": "OpenAI built-in imagegen (first 2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only, no repainting; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/lava_crater/_generation; png sha256 6f928d1609364bd196c1e9564fc843f5ebd1ff0576024644b5bed3c0d957071f",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
+      "status": "produced"
+    },
+    {
+      "assetKey": "battle/worlds/lava_crater/trophy",
+      "file": "battle/worlds/lava_crater/trophy.webp",
+      "width": 1024,
+      "height": 1024,
+      "pixelRatio": 2,
+      "note": "The sheet's eighth cell, kept for a later 討伐成果 badge; not referenced by scene.json yet.",
+      "source": "OpenAI built-in imagegen (first 2D world set, 2026-10-04), generated from this project's layout guides and prompt files; delivered PNGs normalized to size/sRGB only, no repainting; boss cells sliced from boss_sheet.png (4x2, 1024 px cells) and aligned to one ground line at y=940; full provenance in feature2/2D素材生成結果/lava_crater/_generation; sheet sha256 dd77d56037af17c315d1fce61dd3524c6c0b62e83cf198feb107e5dae7990ec3",
+      "license": "Generated output used under the applicable OpenAI terms and the project's own input-image rights; not claimed as CC0; no third-party game art used",
       "status": "produced"
     }
   ],
