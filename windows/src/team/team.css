@@ -2837,3 +2837,92 @@ h2 {
 .member-limit {
   width: 140px !important;
 }
+
+/* ── The gear on 秘書/公司總覽 and its settings panel ───────────────────────── */
+
+.team-item {
+  position: relative;
+}
+
+.team-item .team-gear {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 7px;
+  color: var(--dim);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.team-item:hover .team-gear,
+.team-item .team-gear:focus-visible {
+  opacity: 0.85;
+}
+
+.team-item .team-gear:hover {
+  background: var(--lift-2);
+  color: var(--ink);
+  opacity: 1;
+}
+
+.side-pop {
+  position: fixed;
+  left: 258px;
+  z-index: 90;
+  width: 272px;
+  padding: 12px 14px 14px;
+  border-radius: 14px;
+  background: var(--panel, #16171c);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), var(--edge);
+}
+
+.side-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.side-pop-close {
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  border-radius: 7px;
+  padding: 2px 7px;
+}
+
+.side-pop-close:hover {
+  background: var(--lift);
+  color: var(--ink);
+}
+
+.side-pop-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.side-pop-body label {
+  font-size: 12px;
+  color: var(--dim);
+  margin-top: 6px;
+}
+
+.side-pop-body input {
+  font: inherit;
+  color: var(--ink);
+  background: var(--lift);
+  border: 0;
+  border-radius: 9px;
+  padding: 7px 10px;
+  box-shadow: var(--edge);
+}
+
+.side-pop-body .hint {
+  font-size: 12px;
+  color: var(--dim);
+  margin: 4px 0 0;
+}

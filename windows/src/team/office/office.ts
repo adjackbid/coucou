@@ -17,7 +17,7 @@ import { loadArt, STATUS, TeamScene, themeName, THEME_LABELS, wake } from "./sce
 import { dropdown, editableText } from "../ui";
 import type { PastRun, Snapshot, TeamFile, Usage } from "../types";
 import { fmtMoney, fmtTokens, usageSummary } from "../cost";
-import { Battle, companyLive, HERO_LABELS, heroOf, savedMode, saveCompanyLive, saveMode, setHero, setSkill, skillOf } from "./battle/session";
+import { Battle, companyFps, companyLive, HERO_LABELS, heroOf, savedMode, saveCompanyLive, saveMode, setHero, setSkill, skillOf } from "./battle/session";
 import { savedWorld, WORLDS } from "./battle/worlds";
 import type { BossBlockCause } from "./battle/bossMoves";
 import { BattleLayer } from "./battle/layer";
@@ -57,7 +57,7 @@ const MAX_INSTRUCTION = 2000;
 const ELEMENT_WORD: Record<string, string> = { fire: "火", ice: "冰", wind: "風", lightning: "雷", physical: "刀光", support: "支援", any: "" };
 
 /** What the person calls their company; "我的公司" until they name it. */
-function companyName(): string {
+export function companyName(): string {
   try {
     return localStorage.getItem("coucou.company.name")?.trim() || "我的公司";
   } catch {
@@ -65,7 +65,7 @@ function companyName(): string {
   }
 }
 
-function setCompanyName(name: string) {
+export function setCompanyName(name: string) {
   try {
     localStorage.setItem("coucou.company.name", name);
   } catch {
@@ -121,6 +121,7 @@ export class Office {
   mode: PresentationMode = savedMode();
   /** In 中二模式, whether the company map plays every room's fight (it costs more to draw). */
   companyLive = companyLive();
+  companyFps = companyFps();
   /** In 中二模式, what the column beside the room shows. */
   private sideView: "battle" | "raw" = "battle";
   /** Each team's raid as the window has watched it. */
@@ -227,6 +228,7 @@ export class Office {
     if (!s) {
       s = new TeamScene(teamId, this.store, {
         mini,
+        fps: () => this.companyFps,
         onSelect: (memberId) => {
           this.select(teamId, memberId);
         },

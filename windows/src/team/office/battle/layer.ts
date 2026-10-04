@@ -286,7 +286,7 @@ export class BattleLayer implements SceneLayer {
     const [ax, ay] = theme.battle.boss;
     const at = this.scene.screen(ax, ay);
     const z = this.scene.depthOf(ax, ay) + 6;
-    const w = 300 * s;
+    const w = 340 * s;
     this.shadow = h("div", { class: "bt-boss-shadow", style: `left:${at.x - w / 2}px;top:${at.y - w * 0.17}px;width:${w}px;height:${w * 0.34}px;z-index:${z - 1}` });
     // Every state shares one canvas and one pivot: a change of state is a change of picture, nothing moves.
     const [gx, gy] = b.groundPivot.map((n) => (n / 2) * s);

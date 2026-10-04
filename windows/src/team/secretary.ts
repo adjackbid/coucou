@@ -46,6 +46,11 @@ let name = stored("coucou.secretary.name")?.trim() || "秘書";
 export function secretaryName(): string {
   return name;
 }
+
+export function setSecretaryName(v: string) {
+  name = v.trim() || "秘書";
+  store("coucou.secretary.name", name);
+}
 /** Proposals being carried out right now. */
 const doing = new Set<string>();
 

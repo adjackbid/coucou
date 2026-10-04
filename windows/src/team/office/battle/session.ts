@@ -117,6 +117,16 @@ export function saveCompanyLive(on: boolean) {
   write("coucou.battle.companyLive", on ? null : "off");
 }
 
+/** How smoothly the company map plays each room's fight, in frames per second. */
+export function companyFps(): number {
+  const n = Number(read("coucou.battle.companyFps"));
+  return n === 30 || n === 60 ? n : 20;
+}
+
+export function saveCompanyFps(fps: number) {
+  write("coucou.battle.companyFps", fps === 30 || fps === 60 ? String(fps) : null);
+}
+
 export function saveMode(mode: PresentationMode) {
   write("coucou.office.mode", mode);
 }

@@ -552,7 +552,7 @@
 .bt-boss-shadow {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(20, 12, 40, 0.42), rgba(20, 12, 40, 0));
+  background: radial-gradient(closest-side, rgba(6, 4, 14, 0.6), rgba(6, 4, 14, 0.35) 55%, rgba(6, 4, 14, 0));
   pointer-events: none;
 }
 

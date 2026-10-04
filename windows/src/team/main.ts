@@ -16,11 +16,12 @@ import { h, clear } from "../views/dom";
 import * as live from "./live";
 import { dropdown, menuOpen, onMenuClosed, refreshSuggestions, suggest } from "./ui";
 import { linksScreen, logScreen, openThread, type Page } from "./screens";
-import { Office } from "./office/office";
+import { companyName, Office, setCompanyName } from "./office/office";
 import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
+import { saveCompanyFps } from "./office/battle/session";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
-import { onStep as secretaryStep, secretaryName, secretaryPage, secretaryTitle, type SecretaryHost } from "./secretary";
+import { onStep as secretaryStep, secretaryName, secretaryPage, secretaryTitle, setSecretaryName, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
@@ -35,6 +36,8 @@ const runs = new Map<string, Snapshot>();
 /** The team file being looked at, and which of its screens. */
 let selected: string | null = null;
 let tab: "setup" | "links" | "monitor" | "log" = "setup";
+/** The little gear beside 秘書 or 公司總覽: which panel is open, and where. */
+let sidePop: { which: "secretary" | "company"; top: number } | null = null;
 /** The monitor as a board, or as the team's office. */
 let monitorMode: "board" | "office" = "board";
 /** The company map instead of one team; or the office of a team that has no file here (示範資料). */
@@ -351,10 +354,54 @@ function sidebar(): HTMLElement {
     if (showArchived) for (const file of away) list.append(row(file, true));
   }
 
+  // A small gear on the row: the panel beside it holds the quieter settings.
+  const gear = (which: "secretary" | "company", label: string) =>
+    h("span", {
+      class: "team-gear", role: "button", tabindex: "0", title: label, "aria-label": label,
+      html: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
+      onClick: (e: Event) => {
+        e.stopPropagation();
+        const at = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        sidePop = sidePop?.which === which ? null : { which, top: Math.min(at.top, window.innerHeight - 280) };
+        render();
+      },
+    });
+  const pop = !sidePop
+    ? null
+    : h(
+        "div",
+        { class: "side-pop", role: "dialog", "aria-label": sidePop.which === "secretary" ? "秘書設定" : "公司設定", style: `top:${sidePop.top}px` },
+        h("div", { class: "side-pop-head" },
+          h("b", { text: sidePop.which === "secretary" ? "秘書設定" : "公司設定" }),
+          h("button", { class: "side-pop-close", type: "button", "aria-label": "關閉", onClick: () => { sidePop = null; render(); } }, "✕")),
+        sidePop.which === "secretary"
+          ? h("div", { class: "side-pop-body" },
+              h("label", { text: "秘書名稱" }),
+              h("input", {
+                value: secretaryName(), placeholder: "秘書",
+                onChange: (e: Event) => { setSecretaryName((e.target as HTMLInputElement).value); render(); },
+              }),
+              h("p", { class: "hint", text: "想叫它什麼都可以;改完馬上生效。" }))
+          : h("div", { class: "side-pop-body" },
+              h("label", { text: "公司名稱" }),
+              h("input", {
+                value: companyName(), placeholder: "我的公司",
+                onChange: (e: Event) => { setCompanyName((e.target as HTMLInputElement).value); render(); },
+              }),
+              h("label", { text: "戰鬥動畫流暢度(中二模式)" }),
+              h("div", { class: "segmented" },
+                ...[20, 30, 60].map((n) =>
+                  h("button", {
+                    type: "button", class: office.companyFps === n ? "on" : "",
+                    onClick: () => { office.companyFps = n; saveCompanyFps(n); render(); },
+                  }, `${n} FPS`))),
+              h("p", { class: "hint", text: "公司總覽裡每間辦公室戰鬥動畫的更新頻率。團隊多的時候調低比較省效能,只有一兩個團隊時可以調高。" })),
+      );
   return h(
     "aside",
     { class: "sidebar pane" },
     h("div", { class: "brand", "data-drag": "" }, teamMark(30), h("span", { text: "Teamwork" })),
+    pop,
     h(
       "button",
       {
@@ -367,6 +414,7 @@ function sidebar(): HTMLElement {
       },
       h("span", { class: "team-item-name", text: secretaryName() }),
       h("span", { class: "team-item-state", text: "需要時叫我:查現況、開團隊" }),
+      gear("secretary", "秘書設定"),
     ),
     h(
       "button",
@@ -380,6 +428,7 @@ function sidebar(): HTMLElement {
       },
       h("span", { class: "team-item-name", text: "公司總覽" }),
       h("span", { class: "team-item-state", text: office.demo ? "示範資料" : "所有團隊的辦公室" }),
+      gear("company", "公司設定"),
     ),
     h(
       "button",

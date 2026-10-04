@@ -249,6 +249,8 @@ const WALK = 240;
 export interface SceneOptions {
   /** Small and still: the company map's thumbnails. */
   mini?: boolean;
+  /** A mini room's frames per second while its fight plays (default 20). */
+  fps?: () => number;
   onSelect?: (memberId: string) => void;
   /** A bubble was clicked: the message's speaker, to open on its conversation. */
   onMessage?: (memberId: string) => void;
@@ -853,7 +855,7 @@ export class TeamScene {
     const still = this.reduceMotion;
     // The company map's rooms move at about 20 frames a second: enough to be alive.
     this.sinceDrawn += dt;
-    if (this.opts.mini && !still && this.sinceDrawn < 0.05 && ![...this.actors.values()].some((a) => a.dirty)) return true;
+    if (this.opts.mini && !still && this.sinceDrawn < 1 / (this.opts.fps?.() ?? 20) && ![...this.actors.values()].some((a) => a.dirty)) return true;
     const step = this.opts.mini ? this.sinceDrawn : dt;
     this.sinceDrawn = 0;
     // A canvas is drawn at the size it is shown: the room is scaled down, so is the Mochi.
@@ -905,6 +907,21 @@ export class TeamScene {
       ctx.setTransform(res, 0, 0, res, 0, 0);
       ctx.clearRect(0, 0, full, full);
       ctx.translate(a.pad, a.pad);
+      // 中二模式 puts everyone on their feet: a pool of shade holds them to the ground.
+      if (this.layer) {
+        // Wider than the body, so the pool shows at the sides and in front of the feet.
+        ctx.save();
+        ctx.translate(a.size / 2, a.size * 0.85);
+        ctx.scale(1, 0.34);
+        const r = a.size * 0.46;
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+        g.addColorStop(0, "rgba(6, 4, 12, 0.55)");
+        g.addColorStop(0.55, "rgba(6, 4, 12, 0.34)");
+        g.addColorStop(1, "rgba(6, 4, 12, 0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(-r, -r, r * 2, r * 2);
+        ctx.restore();
+      }
       a.engine.draw(ctx, a.size, a.size);
       if (this.layer?.decorate) this.layer.decorate(a.memberId, ctx, a.size, a.engine, facing);
       a.dirty = false;
