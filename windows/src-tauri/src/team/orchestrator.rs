@@ -1734,10 +1734,19 @@ mod tests {
             let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));
             let mut cg = AgentProfile::copilot();
             cg.env.insert("COPILOT_PROVIDER_BASE_URL".into(), "https://llm.example/v1".into());
-            bench.teams.start(shop(&work_dir()), &[cg]).expect("start");
+            // The agent's own default, which a member's choice must win over (acp::spawn_agent).
+            cg.env.insert("COPILOT_MODEL".into(), "deepseek-v4.1-flash".into());
+            let mut config = shop(&work_dir());
+            config.members.iter_mut().find(|m| m.id == "ai3").unwrap().model = "glm-5.3-flash".into();
+            bench.teams.start(config, &[cg]).expect("start");
             let seat = bench.teams.get("shop").unwrap().seat("ai3").unwrap();
             let base = &seat.launch.env["COPILOT_PROVIDER_BASE_URL"];
             assert!(base.starts_with("http://127.0.0.1:") && base.contains("/m/"), "{base}");
+            assert_eq!(seat.launch.model.as_deref(), Some("glm-5.3-flash"));
+            assert_eq!(crate::acp::running_model(&seat.profile, &seat.launch), "glm-5.3-flash");
+            // A member left on the agent's default runs the profile's COPILOT_MODEL.
+            let ai4 = bench.teams.get("shop").unwrap().seat("ai4").unwrap();
+            assert_eq!(crate::acp::running_model(&ai4.profile, &ai4.launch), "deepseek-v4.1-flash");
 
             let used = crate::usage::Usage { model: "deepseek-v4.1-flash".into(), input: 100, output: 5, requests: 1, ..Default::default() };
             bench.teams.metered("team:shop:ai3", used.clone());

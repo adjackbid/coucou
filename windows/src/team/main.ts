@@ -811,6 +811,7 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
       "div",
       { class: "pulse-row" },
       pulse,
+      otherModel(m),
       spend(m.usage, `${m.name} 這一輪用掉的 token`),
       m.status === "working"
         ? h("button", { class: "btn plain stall", type: "button", title: "停掉它這一輪;它下一輪會被提醒手上的工作", onClick: () => void act(() => Bridge.teamInterruptMember(snap.id, m.id)) }, "打斷這一輪")
@@ -1222,6 +1223,16 @@ function main(): HTMLElement {
 
 /** The 成本與用量 page draws inside this window, with its agents' names. */
 const costHost: CostHost = { render: () => render(), agents: () => agents };
+
+/** The model a member was given, when the calls it made used another (as the meter saw them). */
+function otherModel(m: MemberView): HTMLElement | null {
+  // An alias ("sonnet") or an effort suffix ("-high") still names the same model.
+  const norm = (x: string) => x.toLowerCase().replace(/\[.*\]$/, "").replace(/\./g, "-").trim();
+  const same = (a: string, b: string) => norm(a).includes(norm(b)) || norm(b).includes(norm(a));
+  const ran = (m.usage ?? []).map((u) => u.model).filter(Boolean);
+  if (!m.model || !ran.length || ran.some((r) => same(r, m.model))) return null;
+  return h("span", { class: "chip warn", title: `指定的模型是 ${m.model},但實際送出的請求用的是 ${ran.join("、")}。請檢查這個代理的設定。`, text: `實際:${ran.join("、")}` });
+}
 
 /** Tokens and cost beside a member or a team at work: "182K tokens · $0.04". */
 function spend(usage: MemberView["usage"], title: string): HTMLElement | null {

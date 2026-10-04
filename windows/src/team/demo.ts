@@ -66,6 +66,8 @@ export const demoFiles: { dir: string; files: TeamFile[] } = {
 };
 // `?archived` shows the second demo team put away.
 if (typeof location !== "undefined" && new URLSearchParams(location.search).has("archived")) demoFiles.files[1].config!.archived = true;
+// `?model=mismatch`: AI 3 was given one model, its calls used another (the board flags it).
+if (typeof location !== "undefined" && new URLSearchParams(location.search).get("model") === "mismatch") config.members[2].model = "minimax-m2.7";
 
 const task = (
   n: number,
