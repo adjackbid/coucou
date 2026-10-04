@@ -127,7 +127,10 @@ export const THEME_LABELS: Record<string, string> = {
   futurelab: "未來科技",
   library: "書房策略",
   premium: "高級辦公室",
+  penthouse: "頂樓景觀",
 };
+/** The large rooms: a big team gets one of these, the same per team. */
+const LARGE = ["premium", "penthouse"];
 const STANDARD = ["warm", "japandi", "industrial", "biophilic", "futurelab", "library"];
 /** Looks that were renamed: a team file may still name the old one. */
 const RENAMED: Record<string, string> = { nordic: "japandi", studio: "biophilic" };
@@ -142,9 +145,9 @@ export const LARGE_FROM = 5;
 export function themeName(teamId: string, setting: string | undefined, members: number): string {
   const named = setting ? RENAMED[setting] ?? setting : "";
   if (THEME_LABELS[named]) return named;
-  if (members >= LARGE_FROM) return "premium";
   let h = 0;
   for (const ch of teamId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  if (members >= LARGE_FROM) return LARGE[h % LARGE.length];
   return STANDARD[h % STANDARD.length];
 }
 
