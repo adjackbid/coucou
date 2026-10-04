@@ -17,7 +17,7 @@ import { h } from "../../../views/dom";
 import { sceneArt, wake, type BossState as Look, type SceneLayer, type Sprite, type TeamScene, type WorldArt } from "../scene";
 import { DESIGN, type BattleSignal, type BattleViewModel, type HeroClass } from "./contracts";
 import { EffectQueue, type Effect } from "./effects";
-import { BOSS_MOVES, BossDirector, resolvesWholeCast, type BossBlockCause, type BossCue, type BossMove, type WorldBossId } from "./bossMoves";
+import { BOSS_KIT, BOSS_MOVES, BossDirector, resolvesWholeCast, type BossBlockCause, type BossCue, type BossMove, type WorldBossId } from "./bossMoves";
 import { drawBossMove, type BossFxPoints } from "./bossFx";
 import { WORLDS, type WorldId } from "./worlds";
 import { RULES, SKILLS, SkillDirector, type Contribution, type HitPlan, type SkillId } from "./skills";
@@ -213,6 +213,10 @@ export class BattleLayer implements SceneLayer {
   }
   private boss: HTMLImageElement | null = null;
   private shadow: HTMLElement | null = null;
+  /** The world's standing weather: a still light layer behind the fight. */
+  private ambient: HTMLElement | null = null;
+  /** When the boss next lashes out on its own — a show of temper, no damage. */
+  private idleAt = 0;
   private fx: HTMLCanvasElement | null = null;
   private card: HTMLElement | null = null;
   private cardTimer = 0;
@@ -287,6 +291,12 @@ export class BattleLayer implements SceneLayer {
     const at = this.scene.screen(ax, ay);
     const z = this.scene.depthOf(ax, ay) + 6;
     const w = 340 * s;
+    if (this.worldId !== "office") {
+      const amb = this.scene.cropBox;
+      this.ambient = h("div", { class: `bt-ambient amb-${this.worldId}`, "aria-hidden": "true", style: `left:${amb.x}px;top:${amb.y}px;width:${amb.w}px;height:${amb.h}px;z-index:1` });
+      stage.append(this.ambient);
+    }
+    this.idleAt = 0;
     this.shadow = h("div", { class: "bt-boss-shadow", style: `left:${at.x - w / 2}px;top:${at.y - w * 0.17}px;width:${w}px;height:${w * 0.34}px;z-index:${z - 1}` });
     // Every state shares one canvas and one pivot: a change of state is a change of picture, nothing moves.
     const [gx, gy] = b.groundPivot.map((n) => (n / 2) * s);
@@ -343,6 +353,8 @@ export class BattleLayer implements SceneLayer {
     const shown = !!vm && state !== "planning";
     this.boss.style.display = this.shadow!.style.display = shown ? "" : "none";
     this.boss.className = `bt-golem ${state}${vm?.phase ? ` ${vm.phase}` : ""}`;
+    this.ambient?.classList.toggle("amb-seal", state === "sealing");
+    this.ambient?.classList.toggle("amb-calm", state === "defeated");
     if (state !== "syncing") this.setLook(this.baseLook());
   }
 
@@ -394,8 +406,9 @@ export class BattleLayer implements SceneLayer {
   private removeElements() {
     for (const el of this.hidden) el.style.visibility = "";
     this.hidden = [];
-    for (const el of [this.boss, this.shadow, this.fx, this.card, this.speech]) el?.remove();
+    for (const el of [this.boss, this.shadow, this.ambient, this.fx, this.card, this.speech]) el?.remove();
     this.boss = this.shadow = this.card = this.speech = null;
+    this.ambient = null;
     this.fx = null;
     this.look = null;
   }
@@ -506,6 +519,30 @@ export class BattleLayer implements SceneLayer {
     const damage = cue.kind === "regen" && cue.scopeGrowthLabelHp ? `+${cue.scopeGrowthLabelHp} HP` : null;
     this.showBossCard(move, `${kindWord}${move.name}`, `${world.bossName} · ${s.reasonLabel} · 0 傷害${cue.kind === "regen" ? "" : " · 工作照常"}`, damage);
     this.say(s.kind);
+  }
+
+  /** An unprovoked lash: one of this boss's light attacks at a random member, nothing real behind it. */
+  private idleMenace(now: number) {
+    this.idleAt = now + 16000 + Math.random() * 18000;
+    const world = WORLDS[this.worldId];
+    const kit = BOSS_KIT[world.bossId as WorldBossId];
+    const vm = this.vm;
+    if (!kit || !vm) return;
+    const pick = Math.random();
+    const moveId = pick < 0.78 ? kit.attacks[Math.floor(Math.random() * 3)] : kit.guard;
+    const move = BOSS_MOVES[moveId];
+    const members = this.host.members();
+    const at = members[Math.floor(Math.random() * members.length)];
+    const signal: BattleSignal = {
+      teamId: vm.teamId, runId: vm.runId, signalId: `idle|${now}`, kind: "boss_counter",
+      source: { teamId: vm.teamId, runId: vm.runId, kind: "manual_replay", streamId: null, domainSeq: null, taskIds: [], memberIds: at ? [at] : [], questionIds: [] },
+      reasonLabel: "", hpBefore: null, hpAfter: null, maxHpBefore: null, maxHpAfter: null, displayDelta: null,
+      actorMemberId: null, observedAt: new Date().toISOString(), evidence: "observed_transition", replay: true,
+    };
+    const cue: BossCue = { moveId, kind: move.kind, consumedSourceSignalIds: [], sourceTaskIds: [], heroHpDelta: 0, extraBossDamage: 0, scopeGrowthLabelHp: 0, durationMs: move.phases[2], animated: true };
+    // Straight onto the stage: no card, no speech, no record — the fight just breathes.
+    this.bossCue = { cue, move, signal, startedAt: now, fired: new Set(), sparks: 0 };
+    wake();
   }
 
   /** A boss move's card: the world's own colours. */
@@ -693,9 +730,11 @@ export class BattleLayer implements SceneLayer {
       if (e.kind === "scope_added" && ms > 250) look = "regen";
       if (e.kind === "boss_counter" && ms < 520) look = "attack";
       if (e.kind === "victory") {
-        dim = span(ms, 0, 500);
-        scale = 1 - 0.08 * ease(span(ms, 500, 1100));
-        if (ms >= 500) look = "defeated";
+        // The Leader's blow lands at 700: only then does the boss fall.
+        dim = span(ms, 700, 1200);
+        scale = 1 - 0.08 * ease(span(ms, 750, 1350));
+        if (ms >= 700 && ms < 860) look = "hurt";
+        else if (ms >= 860) look = "defeated";
       }
     }
     // The boss's own move on stage: its pose while it casts.
@@ -706,6 +745,12 @@ export class BattleLayer implements SceneLayer {
         const kind = this.bossCue.cue.kind;
         look = kind === "guard" ? "guard" : kind === "regen" ? "regen" : ms < this.bossCue.move.phases[1] ? "attack" : look;
       }
+    }
+    // 平常也要出招: with nothing on, the boss still lashes out now and then —
+    // pure temper, no damage, no card, and never while real moves play.
+    if (!this.bossCue && !active.length && this.frozen === null && !this.scene.mini && this.worldId !== "office" && this.vm?.bossState === "engaged") {
+      if (!this.idleAt) this.idleAt = now + 9000 + Math.random() * 9000;
+      else if (now >= this.idleAt) this.idleMenace(now);
     }
     const hurt = Math.max(0, 1 - (now - this.hurtAt) / 260);
     if (hurt > 0.15 && look !== "defeated") look = "hurt";
@@ -740,9 +785,34 @@ export class BattleLayer implements SceneLayer {
       if (m) targets.push({ x: m.x, y: m.y + m.size * 0.3 });
     }
     if (!targets.length) targets.push({ ...this.scene.screen(4.35, 4.5) });
+    const cueMs = now - ac.startedAt;
+    {
+      // 環境回應: the rim lights up in the move's colour while it casts.
+      const [tele, castEnd] = [ac.move.phases[0], ac.move.phases[1]];
+      if (cueMs >= tele && cueMs <= castEnd + 150) {
+        const k = bell(span(cueMs, tele, Math.min(castEnd + 150, tele + 650)));
+        for (const [wx, wy] of [[6.1, 0.7], [0.7, 6.1]] as const) {
+          const p = this.scene.screen(wx, wy);
+          glow(ctx, p.x, p.y, 110 * b.scale, ac.move.palette[0], 0.22 * k);
+        }
+      }
+      if (ac.move.kind === "regen") {
+        // 需求回流: the field feeds the core — the arena's light runs inward.
+        const span2 = this.scene.cropBox.w * 0.46;
+        for (let i = 0; i < 6; i++) {
+          const t0 = tele + i * 70;
+          const k = span(cueMs, t0, t0 + 620);
+          if (k <= 0 || k >= 1) continue;
+          const ang = (i / 6) * Math.PI * 2 + 0.7;
+          const start = { x: b.core.x + Math.cos(ang) * span2, y: b.core.y + Math.sin(ang) * span2 * 0.42 };
+          const p = mix(start, b.core, ease(k));
+          glow(ctx, p.x, p.y, 26, ac.move.palette[1], 0.55 * (1 - Math.abs(k - 0.5) * 0.7));
+        }
+      }
+    }
     drawBossMove(ctx, {
       move: ac.move,
-      ms: now - ac.startedAt,
+      ms: cueMs,
       pts,
       targets: targets.slice(0, 3),
       spark: (sx, sy, n, color, opts) => {
@@ -776,6 +846,14 @@ export class BattleLayer implements SceneLayer {
       }
       if (e.kind === "boss_counter" && this.about(e).id === memberId && ms > 300 && ms < 700) {
         return { x: Math.sin(ms / 20) * 4, y: 0 };
+      }
+      if (e.kind === "victory" && e.signal.actorMemberId === memberId) {
+        // The Leader steps into the last blow.
+        const m = this.scene.mochi(memberId);
+        if (!m) continue;
+        const d = Math.hypot(b.hit.x - m.x, b.hit.y - m.y) || 1;
+        const k = bell(span(ms, 260, 800));
+        return { x: ((b.hit.x - m.x) / d) * 42 * k, y: ((b.hit.y - m.y) / d) * 42 * k };
       }
     }
     return null;
@@ -1026,15 +1104,36 @@ export class BattleLayer implements SceneLayer {
         break;
       }
       case "victory": {
-        glow(ctx, b.core.x, b.core.y, 60, "#000000", 0.5 * span(ms, 0, 500));
-        if (ms >= 500 && this.once(e, "burst")) {
-          this.spark(e, b.core.x, b.core.y, 34, GOLD, { speed: 300, up: 160, kind: "streak", size: 4 });
-          this.spark(e, b.core.x, b.core.y, 12, "#ffffff", { speed: 200, size: 3 });
-          this.showCard("victory", `${WORLDS[this.worldId].bossName} 討伐成功!`, "Leader 已結案 · 全部任務驗收", null);
+        // The seal left a sliver: the Leader closes the case with the last blow.
+        const leaderId = e.signal.actorMemberId;
+        const from = (leaderId ? this.origin(leaderId) : null) ?? { x: b.core.x - 420, y: b.core.y + 300 };
+        if (ms < 460) {
+          // The charge: gold gathers round the Leader.
+          const kc = ease(span(ms, 60, 420));
+          glow(ctx, from.x, from.y - 30, 46 * (0.5 + kc), GOLD, 0.75 * kc);
+          runeRing(ctx, from.x, from.y + 24, 42 * (0.6 + 0.4 * kc), ms / 300, GOLD, 0.85 * kc);
+          if (this.once(e, "callout")) this.float({ text: "最後一擊", sub: `Leader・${leaderId ? this.host.name(leaderId) : "隊長"}`, tone: "win" }, { x: from.x, y: from.y - 130 });
         }
-        if (ms >= 500) {
-          ring(ctx, b.core.x, b.core.y, lerp(30, 260, ease(span(ms, 500, 1400))), GOLD, 1 - span(ms, 500, 1400), 8);
-          ring(ctx, b.feet.x, b.feet.y, lerp(40, 200, ease(span(ms, 600, 1500))), GOLD, 0.8 * (1 - span(ms, 600, 1500)), 4);
+        if (ms >= 420 && ms < 760) {
+          // The strike flies to the core.
+          const k = easeIn(span(ms, 420, 700));
+          const at = mix(from, b.core, k);
+          skySword(ctx, at, [GOLD, "#FFF3D0"], 1 - span(ms, 700, 760), 1.5 * b.scale);
+          glow(ctx, at.x, at.y, 46, GOLD, 0.5 * (1 - k * 0.4));
+        }
+        if (ms >= 700 && this.once(e, "impact")) {
+          this.hurtAt = this.now();
+          const sliver = Math.max(1, Math.round((this.vm?.maxHp ?? 100) * 0.02));
+          this.float({ text: `-${sliver}`, sub: "Leader・最後一擊", tone: "hit" }, { x: b.hit.x + 70, y: b.hit.y - 40 });
+          this.spark(e, b.core.x, b.core.y, 12, "#ffffff", { speed: 220, size: 3 });
+        }
+        if (ms >= 900 && this.once(e, "burst")) {
+          this.spark(e, b.core.x, b.core.y, 34, GOLD, { speed: 300, up: 160, kind: "streak", size: 4 });
+          this.showCard("victory", `${WORLDS[this.worldId].bossName} 討伐成功!`, "Leader 最後一擊 · 全部任務驗收", null);
+        }
+        if (ms >= 900) {
+          ring(ctx, b.core.x, b.core.y, lerp(30, 260, ease(span(ms, 900, 1800))), GOLD, 1 - span(ms, 900, 1800), 8);
+          ring(ctx, b.feet.x, b.feet.y, lerp(40, 200, ease(span(ms, 1000, 1900))), GOLD, 0.8 * (1 - span(ms, 1000, 1900)), 4);
         }
         break;
       }

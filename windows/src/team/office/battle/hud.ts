@@ -60,9 +60,17 @@ function line(vm: BattleViewModel, world: World): string {
 }
 
 /** Over the scene: the boss's name, HP and line; its shield and what waits on the person. */
+/** 封印中 the boss keeps a sliver of HP: the last blow is the Leader's to strike. */
+export function shownHp(vm: BattleViewModel): number | null {
+  if (vm.hp === null) return null;
+  if (vm.bossState === "sealing" && vm.maxHp) return Math.max(1, Math.round(vm.maxHp * 0.02));
+  return vm.hp;
+}
+
 export function bossHud(vm: BattleViewModel, world: World = WORLDS.office): HTMLElement {
   const won = vm.bossState === "defeated";
-  const share = vm.hp !== null && vm.maxHp ? vm.hp / vm.maxHp : 0;
+  const hp = shownHp(vm);
+  const share = hp !== null && vm.maxHp ? hp / vm.maxHp : 0;
   return h(
     "div",
     { class: `bt-hud ${vm.bossState}`, role: "group", "aria-label": world.bossName },
@@ -74,12 +82,12 @@ export function bossHud(vm: BattleViewModel, world: World = WORLDS.office): HTML
       h("span", { class: "bt-line", text: line(vm, world) }),
       h(
         "div",
-        { class: "bt-hp", "aria-label": vm.hp === null ? "HP 尚未出現" : `HP ${vm.hp} / ${vm.maxHp}` },
+        { class: "bt-hp", "aria-label": hp === null ? "HP 尚未出現" : `HP ${hp} / ${vm.maxHp}` },
         h("span", { class: "bt-hp-label", text: "HP" }),
-        h("b", { text: vm.hp === null ? "—" : String(vm.hp) }),
+        h("b", { text: hp === null ? "—" : String(hp) }),
         h("small", { text: vm.maxHp === null ? "" : ` / ${vm.maxHp}` }),
       ),
-      h("div", { class: `bt-bar ${vm.phase ?? ""}` }, h("i", { style: `width:${Math.round(share * 100)}%` })),
+      h("div", { class: `bt-bar ${vm.phase ?? ""}` }, h("i", { style: `width:${share ? Math.max(1.5, share * 100).toFixed(1) : 0}%` })),
     ),
     h(
       "div",
@@ -122,7 +130,8 @@ export function battleLog(signals: readonly BattleSignal[], opts: { name: (membe
 
 /** The picked room's boss, on the company map: still, its numbers, the way in. */
 export function bossCard(vm: BattleViewModel, opts: { added: number; board: () => void; world?: World }): HTMLElement {
-  const share = vm.hp !== null && vm.maxHp ? vm.hp / vm.maxHp : 0;
+  const hp = shownHp(vm);
+  const share = hp !== null && vm.maxHp ? hp / vm.maxHp : 0;
   const state = companyState(vm);
   const world = opts.world ?? WORLDS.office;
   return h(
@@ -134,7 +143,7 @@ export function bossCard(vm: BattleViewModel, opts: { added: number; board: () =
       "div",
       { class: "bt-boss-figures" },
       h("span", { title: "這次開窗之後新增進度的任務" }, h("small", { text: "新增需求" }), h("b", { text: opts.added ? `+${opts.added}` : "0" })),
-      h("span", {}, h("small", { text: "目前 HP" }), h("b", { text: vm.hp === null ? "—" : `${vm.hp} / ${vm.maxHp}` }), h("i", { class: "bt-mini-bar" }, h("i", { style: `width:${Math.round(share * 100)}%` }))),
+      h("span", {}, h("small", { text: "目前 HP" }), h("b", { text: hp === null ? "—" : `${hp} / ${vm.maxHp}` }), h("i", { class: "bt-mini-bar" }, h("i", { style: `width:${share ? Math.max(1.5, share * 100).toFixed(1) : 0}%` }))),
     ),
     vm.reviewingCount ? h("p", { class: "dim" }, icon("shield", "t-shield"), ` 待驗收 ${vm.reviewingCount} 項`) : null,
     h("div", { class: "bt-actions" }, h("button", { class: "btn plain", type: "button", onClick: opts.board }, "查看任務")),
@@ -145,12 +154,13 @@ export function bossCard(vm: BattleViewModel, opts: { added: number; board: () =
 export function roomBadge(vm: BattleViewModel | null): HTMLElement | null {
   if (!vm) return null;
   const state = companyState(vm);
-  const share = vm.hp !== null && vm.maxHp ? vm.hp / vm.maxHp : 0;
+  const hp = shownHp(vm);
+  const share = hp !== null && vm.maxHp ? hp / vm.maxHp : 0;
   return h(
     "div",
     { class: `bt-room ${state.tone}` },
     h("span", { class: `bt-room-state ${state.tone}` }, state.tone === "won" ? icon("crown") : null, state.label),
-    vm.maxHp !== null ? h("span", { class: "bt-room-hp" }, `HP ${vm.hp} / ${vm.maxHp}`, h("i", { class: "bt-mini-bar" }, h("i", { style: `width:${Math.round(share * 100)}%` }))) : null,
+    vm.maxHp !== null ? h("span", { class: "bt-room-hp" }, `HP ${hp} / ${vm.maxHp}`, h("i", { class: "bt-mini-bar" }, h("i", { style: `width:${share ? Math.max(1.5, share * 100).toFixed(1) : 0}%` }))) : null,
   );
 }
 

@@ -874,3 +874,59 @@
   text-shadow: 0 0 14px rgba(80, 230, 150, 0.7);
   font-size: 24px;
 }
+
+/* ── 環境氛圍: a still light layer per world, behind the fight ───────────── */
+
+.office-scene .bt-ambient {
+  position: absolute;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0.5;
+  transition: opacity 1.6s ease, filter 1.6s ease;
+}
+
+.amb-lava_crater {
+  background:
+    radial-gradient(62% 32% at 50% 4%, rgba(255, 128, 44, 0.32), transparent 72%),
+    radial-gradient(30% 42% at 3% 32%, rgba(255, 92, 30, 0.2), transparent 70%),
+    radial-gradient(30% 42% at 97% 32%, rgba(255, 92, 30, 0.2), transparent 70%);
+}
+
+.amb-frost_court {
+  background:
+    radial-gradient(64% 30% at 50% 2%, rgba(140, 220, 255, 0.28), transparent 72%),
+    radial-gradient(26% 38% at 4% 28%, rgba(120, 180, 255, 0.16), transparent 70%),
+    radial-gradient(26% 38% at 96% 28%, rgba(170, 230, 255, 0.16), transparent 70%);
+}
+
+.amb-verdant_ruins {
+  background:
+    radial-gradient(56% 30% at 42% 3%, rgba(190, 240, 140, 0.24), transparent 72%),
+    radial-gradient(28% 40% at 4% 30%, rgba(120, 210, 120, 0.15), transparent 70%),
+    radial-gradient(24% 34% at 94% 26%, rgba(240, 240, 160, 0.13), transparent 70%);
+}
+
+.amb-thunder_foundry {
+  background:
+    radial-gradient(62% 30% at 50% 3%, rgba(120, 190, 255, 0.26), transparent 72%),
+    radial-gradient(28% 40% at 3% 30%, rgba(90, 160, 255, 0.16), transparent 70%),
+    radial-gradient(28% 40% at 97% 30%, rgba(140, 210, 255, 0.16), transparent 70%);
+}
+
+.amb-astral_rift {
+  background:
+    radial-gradient(60% 32% at 56% 3%, rgba(190, 130, 255, 0.28), transparent 72%),
+    radial-gradient(28% 40% at 4% 30%, rgba(150, 90, 230, 0.17), transparent 70%),
+    radial-gradient(26% 36% at 96% 28%, rgba(255, 170, 110, 0.12), transparent 70%);
+}
+
+/* 封印等待: the weather holds its breath. 結案: it settles into a warm calm. */
+.office-scene .bt-ambient.amb-seal {
+  opacity: 0.26;
+  filter: saturate(0.55) brightness(0.85);
+}
+
+.office-scene .bt-ambient.amb-calm {
+  opacity: 0.36;
+  filter: saturate(0.7) sepia(0.3) brightness(1.06);
+}
