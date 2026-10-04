@@ -218,7 +218,7 @@ mod tests {
             assert!(answer(&teams, &leader, r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#).is_none());
 
             let list = ask(&leader, json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }));
-            assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 9);
+            assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 10);
 
             let made = ask(&leader, json!({ "jsonrpc": "2.0", "id": "c1", "method": "tools/call",
                 "params": { "name": "task_create", "arguments": { "title": "商品圖片", "owner": "ai4" } } }));

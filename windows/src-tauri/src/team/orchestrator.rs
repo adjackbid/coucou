@@ -476,41 +476,44 @@ impl Team {
                 }
             }
             // What the turn left behind decides what happens next.
-            let follow = if result.is_ok() {
+            let follow: Vec<Event> = if result.is_ok() {
                 let state = store.state();
                 let is_leader = state.leader() == member;
-                // Finished once the leader has heard the request for the
-                // report and ended the turn it was given for it — not at the
-                // end of the turn in which it accepted the last task, and not
-                // while anyone still works or has something to read (the
-                // leader may have just asked the team a question). Then the
-                // last turn to end closes the team.
-                if state.may_finish() {
-                    Some(Event::Finished)
+                // The leader closes the team (`team_finish`), and it closes
+                // only when nobody still works or has something to read — the
+                // leader may have just asked the team a question; then the
+                // last turn to end closes it. A leader that forgets is
+                // reminded once; ending a turn after that with nothing new to
+                // do closes it.
+                if state.may_finish() && (state.finish_asked || (is_leader && state.finish_reminded)) {
+                    vec![Event::Finished]
+                } else if state.may_finish() && !state.finish_reminded {
+                    vec![
+                        Event::FinishReminded,
+                        Event::Message { id: state.next_message_id(), from: SYSTEM.into(), to: state.leader().to_string(), text: brief::finish_reminder(), task: None },
+                    ]
                 } else if state.status != TeamStatus::Finished && state.unheard(&member).is_empty() && state.open_question(&member).is_none() {
                     // Work it was given, has not handed in, and is not waiting on anyone for.
                     let open: Vec<_> = state.open_tasks(&member).into_iter().filter(|t| t.blocked.is_none()).collect();
                     let no_plan = is_leader && state.tasks.is_empty();
                     if open.is_empty() && !no_plan {
-                        None
+                        vec![]
                     } else if state.turns.get(&member).map(|t| t.silent).unwrap_or(0) >= MAX_SILENT_TURNS {
-                        Some(Event::Lost {
+                        vec![Event::Lost {
                             member: member.clone(),
                             why: "It ended two turns in a row without a word about its open work.".into(),
-                        })
+                        }]
                     } else {
                         let text = if no_plan { brief::nudge_leader_no_tasks() } else { brief::nudge(&open) };
-                        Some(Event::Message { id: state.next_message_id(), from: SYSTEM.into(), to: member.clone(), text, task: None })
+                        vec![Event::Message { id: state.next_message_id(), from: SYSTEM.into(), to: member.clone(), text, task: None }]
                     }
                 } else {
-                    None
+                    vec![]
                 }
             } else {
-                None
+                vec![]
             };
-            if let Some(event) = follow {
-                store.append(event);
-            }
+            store.append_all(follow);
             settle(&mut store);
         }
         self.changed();
@@ -1335,6 +1338,7 @@ mod tests {
             }
             if text.contains("Write the final report") {
                 mate.tool("message_send", json!({ "to": "you", "text": "網站完成,預覽在 http://localhost:5173/" }));
+                mate.tool("team_finish", json!({}));
             }
             Ok("end_turn".into())
         })
@@ -1520,6 +1524,7 @@ mod tests {
     fn a_reopened_team_waits_for_the_answers_its_leader_asked_for() {
         run(async {
             let diligent = diligent();
+            let answers = Arc::new(AtomicUsize::new(0));
             let asked: Script = Arc::new(move |mate, text| {
                 if mate.member == "ai1" && text.contains("各自用什麼模型") {
                     for to in ["ai2", "ai3"] {
@@ -1534,7 +1539,12 @@ mod tests {
                     return Ok("end_turn".into());
                 }
                 if mate.member == "ai1" && text.contains("用 glm-5.3-flash") {
-                    mate.tool("message_send", json!({ "to": "you", "text": "大家都用 glm-5.3-flash" }));
+                    // The answers arrive in one turn, or one after the other.
+                    let heard = answers.fetch_add(text.matches("用 glm-5.3-flash").count(), Ordering::SeqCst) + text.matches("用 glm-5.3-flash").count();
+                    if heard >= 2 {
+                        mate.tool("message_send", json!({ "to": "you", "text": "大家都用 glm-5.3-flash" }));
+                        mate.tool("team_finish", json!({}));
+                    }
                     return Ok("end_turn".into());
                 }
                 diligent(mate, text)
@@ -1555,6 +1565,41 @@ mod tests {
             let done = bench.until("the team finishes again", |s| s.status == TeamStatus::Finished && s.messages.iter().any(|m| m.text == "大家都用 glm-5.3-flash")).await;
             let answers: Vec<_> = done.messages.iter().filter(|m| m.to == "ai1" && m.text.ends_with("用 glm-5.3-flash")).collect();
             assert_eq!(answers.len(), 2);
+        });
+    }
+
+    /// A leader that reports but forgets `team_finish` is reminded once;
+    /// ending the next turn with nothing more to do closes the team.
+    #[test]
+    fn a_leader_that_forgets_to_close_the_team_is_reminded_once() {
+        run(async {
+            let diligent = diligent();
+            let forgetful: Script = Arc::new(move |mate, text| {
+                if text.contains("Write the final report") {
+                    mate.tool("message_send", json!({ "to": "you", "text": "網站完成" }));
+                    return Ok("end_turn".into());
+                }
+                diligent(mate, text)
+            });
+            let bench = bench(forgetful);
+            bench.start(shop(&work_dir()));
+            let done = bench.until("the team finishes", |s| s.status == TeamStatus::Finished).await;
+            let reminders = bench.turns_of("ai1").iter().filter(|t| t.contains("nobody on the team is working")).count();
+            assert_eq!(reminders, 1);
+            assert_eq!(done.messages.iter().filter(|m| m.to == YOU).count(), 1);
+        });
+    }
+
+    #[test]
+    fn a_member_cannot_close_the_team_nor_the_leader_before_the_work_is_accepted() {
+        run(async {
+            let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));
+            bench.start(shop(&work_dir()));
+            let token = |m: &str| bench.teams.get("shop").unwrap().token_for_tests(m).unwrap();
+            let early = bench.teams.act("shop", "ai1", &token("ai1"), "team_finish", &json!({})).unwrap_err();
+            assert!(early.contains("no tasks"), "{early}");
+            let member = bench.teams.act("shop", "ai3", &token("ai3"), "team_finish", &json!({})).unwrap_err();
+            assert!(member.contains("Only the leader"), "{member}");
         });
     }
 

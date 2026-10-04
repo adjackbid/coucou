@@ -130,6 +130,23 @@ pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Out
             Ok(Outcome { text: format!("Created {id} \"{title}\" for {}.", brief::who(config, &owner)), events })
         }
 
+        "team_finish" => {
+            if !is_leader {
+                return Err("Only the leader closes the team. Tell the leader with `message_send` that your part is done.".into());
+            }
+            let open: Vec<String> = state.tasks.iter().filter(|t| t.status != TaskStatus::Done).map(|t| format!("{} ({})", t.id, t.title)).collect();
+            if state.tasks.is_empty() {
+                return Err("There are no tasks yet. Plan the work with `task_create` first.".into());
+            }
+            if !open.is_empty() {
+                return Err(format!("Not every task is accepted yet: {}. Close the team once they are.", open.join(", ")));
+            }
+            Ok(Outcome {
+                text: "The team closes as soon as nobody is still working and every message has been read. If you asked a teammate something, their answer reaches you first.".into(),
+                events: vec![Event::FinishAsked { by: member.to_string() }],
+            })
+        }
+
         "task_assign" => {
             if !is_leader {
                 return Err("Only the leader assigns tasks.".into());
@@ -479,6 +496,12 @@ pub fn describe(config: &TeamConfig, member: &str) -> Vec<Value> {
             json!({ "task": task, "owner": { "type": "string", "description": format!("One of: {members}.") } }),
             &["task", "owner"],
         ));
+        tools.push(tool(
+            "team_finish",
+            "Leader only. Closes the team once every task is accepted and you have reported to the user. It closes when nobody is still working and every message has been read.",
+            json!({}),
+            &[],
+        ));
     }
     tools.push(tool(
         "task_update",
@@ -777,7 +800,7 @@ mod tests {
     fn only_the_leader_is_offered_the_planning_tools() {
         let config = shop("D:\\x");
         let names = |member: &str| describe(&config, member).iter().map(|t| t["name"].as_str().unwrap().to_string()).collect::<Vec<_>>();
-        assert_eq!(names("ai1"), ["team_status", "task_create", "task_assign", "task_update", "task_block", "deliver", "review", "message_send", "ask_human"]);
+        assert_eq!(names("ai1"), ["team_status", "task_create", "task_assign", "team_finish", "task_update", "task_block", "deliver", "review", "message_send", "ask_human"]);
         assert_eq!(names("ai3"), ["team_status", "task_update", "task_block", "deliver", "review", "message_send", "ask_human"]);
         for tool in describe(&config, "ai1") {
             assert_eq!(tool["inputSchema"]["type"], "object");

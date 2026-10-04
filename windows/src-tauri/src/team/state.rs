@@ -88,6 +88,11 @@ pub enum Event {
     Wrapping { on: bool },
     /// The person came back to a finished team with more: it runs again.
     Reopened,
+    /// The leader says the work is done and reported (`team_finish`): the
+    /// team closes as soon as nobody is working and nothing is unread.
+    FinishAsked { by: String },
+    /// Coucou asked the leader whether the team is done, once.
+    FinishReminded,
     /// Tokens a member's model used since the last report.
     Usage { member: String, usage: crate::usage::Usage },
 }
@@ -219,6 +224,10 @@ pub struct State {
     pub usage: BTreeMap<String, BTreeMap<String, crate::usage::Usage>>,
     #[serde(skip)]
     turn_usage: crate::usage::TurnSums,
+    /// The leader called `team_finish` since the work was last accepted.
+    pub finish_asked: bool,
+    /// …or was reminded to, once.
+    pub finish_reminded: bool,
     pub feed: Vec<FeedItem>,
     pub total_turns: u32,
 }
@@ -535,7 +544,13 @@ impl State {
                     t.silent = 0;
                 }
             }
-            Event::Wrapping { on } => self.wrapping = *on,
+            Event::Wrapping { on } => {
+                self.wrapping = *on;
+                self.finish_asked = false;
+                self.finish_reminded = false;
+            }
+            Event::FinishAsked { .. } => self.finish_asked = true,
+            Event::FinishReminded => self.finish_reminded = true,
             Event::Usage { member, usage } if self.turn_usage.counts(member, usage) => {
                 let models = self.usage.entry(member.clone()).or_default();
                 let total = models.entry(usage.model.clone()).or_insert_with(|| crate::usage::Usage { model: usage.model.clone(), ..Default::default() });
@@ -545,6 +560,8 @@ impl State {
             Event::Reopened => {
                 self.status = TeamStatus::Running;
                 self.finished_at = 0;
+                self.finish_asked = false;
+                self.finish_reminded = false;
                 self.paused_why.clear();
                 self.say(at, "reopened", YOU, "", "", None);
             }

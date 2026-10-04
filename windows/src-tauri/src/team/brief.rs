@@ -186,14 +186,20 @@ pub fn nudge_leader_no_tasks() -> String {
 pub fn wrap_up(state: &State) -> String {
     let handed: Vec<String> = state.deliverables.iter().filter(|d| d.accepted == Some(true)).map(|d| format!("- {}: {} ({})", d.task, d.locator, d.summary)).collect();
     format!(
-        "Every task has been accepted. Write the final report for the user with `message_send` (to \"you\"): what was built, where it is, how to run or open it, and anything left undone. If something is still missing, create the tasks for it instead.\nAccepted so far:\n{}",
+        "Every task has been accepted. Write the final report for the user with `message_send` (to \"you\"): what was built, where it is, how to run or open it, and anything left undone. Then call `team_finish` to close the team. If something is still missing, create the tasks for it instead.\nAccepted so far:\n{}",
         handed.join("\n")
     )
 }
 
+/// Everything is accepted and nobody works, but the leader has not closed the team.
+pub fn finish_reminder() -> String {
+    "Every task is accepted and nobody on the team is working. If the user's request is fully handled and you have reported to them, call `team_finish` to close the team. If something is still left, create the tasks for it or say what you are waiting for."
+        .to_string()
+}
+
 /// The leader of a finished team, when the person comes back with more.
 pub fn reopened() -> String {
-    "The team had finished and you had reported. The user has come back with more — their message follows. If it needs work, plan it: create the tasks with `task_create` and the team carries on; when everything is accepted again you will be asked for a new report. If it is a question, or something you can settle in a word, answer the user with `message_send` (to \"you\")."
+    "The team had finished and you had reported. The user has come back with more — their message follows. If it needs work, plan it: create the tasks with `task_create` and the team carries on; when everything is accepted again you will be asked for a new report. If it is a question, or something you can settle in a word, answer the user with `message_send` (to \"you\"). If you ask teammates for something, wait for their answers before you answer. Once the user's request is fully handled, call `team_finish`."
         .to_string()
 }
 

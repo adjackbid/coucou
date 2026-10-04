@@ -109,6 +109,8 @@ function teamWords(snap: Snapshot | undefined, l: Line): string {
       return `建立任務「${a("title")}」→ ${nameOf(snap, a("owner"))}`;
     case "task_assign":
       return `把 ${task(a("task"))} 交給 ${nameOf(snap, a("owner"))}`;
+    case "team_finish":
+      return "宣告團隊工作完成";
     case "task_update":
       return a("status") === "doing" ? `開始做 ${task(a("task"))}` : `更新 ${task(a("task"))}${a("note") ? `:${short(a("note"), 60)}` : ""}`;
     case "task_block":
