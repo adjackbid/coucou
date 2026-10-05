@@ -62,6 +62,16 @@ npm run pack
 
 ## 5. 疑難排解(別台電腦)
 
+### Windows 10(0.1.2 起同一個 exe 自動處理)
+
+不需要為 Win10 另外出版本。程式啟動時用 `RtlGetVersion` 判斷 build:
+- Build < 22000(Win10):不開 acrylic 模糊(Win10 上它會讓拖曳卡死),
+  頁面自己畫深色底;圓角改由 CSS 切(視窗透明,四角露出桌面,看起來和
+  Win11 的 DWM 圓角一樣)。
+- Build ≥ 22000(Win11):照舊 — acrylic 玻璃 + DWM 圓角。
+
+以下兩節是 0.1.1 以前(或仍異常時)的診斷。
+
 ### 視窗沒有圓角(四角是直角)
 
 Teamwork 視窗的圓角用的是 Windows 11 的 DWM 圓角

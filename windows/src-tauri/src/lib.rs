@@ -1215,7 +1215,7 @@ fn create_team_window(app: &AppHandle) {
             ((w * 0.9).min(1680.0), (h * 0.86).min(1040.0))
         })
         .unwrap_or((1280.0, 820.0));
-    match WebviewWindowBuilder::new(app, "team", url)
+    let mut builder = WebviewWindowBuilder::new(app, "team", url)
         .additional_browser_args(BROWSER_ARGS)
         .title("Teamwork — Coucou")
         .inner_size(width, height)
@@ -1227,9 +1227,13 @@ fn create_team_window(app: &AppHandle) {
         .transparent(true)
         .shadow(true)
         .visible(false)
-        .center()
-        .build()
-    {
+        .center();
+    // Windows 10 has no DWM rounding and gets no acrylic: the page is told to
+    // paint its own dark sheet with rounded corners.
+    if glass::win10() {
+        builder = builder.initialization_script("document.documentElement.classList.add('win10');");
+    }
+    match builder.build() {
         Ok(win) => {
             // Coucou's black, thin enough for the desktop to show through.
             glass::apply(&win, GLASS_TINT);

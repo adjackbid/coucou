@@ -86,6 +86,19 @@ html.demo body.team-window {
   box-shadow: var(--edge);
 }
 
+/* Windows 10: no DWM rounding and no acrylic behind the window — the page
+   itself becomes the dark sheet, with the rounded corners cut in CSS (the
+   window is transparent, so the corners show the desktop like Win11's do). */
+html.win10,
+html.win10 body.team-window {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+html.win10 body.team-window {
+  background: #131419;
+}
+
 /* Someone who turned transparency off gets the same layout, opaque. */
 @media (prefers-reduced-transparency: reduce) {
   body.team-window {

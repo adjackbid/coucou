@@ -65,20 +65,61 @@ extern "system" {
     fn DwmSetWindowAttribute(hwnd: HWND, attribute: u32, value: *const c_void, size: u32) -> i32;
 }
 
+#[repr(C)]
+struct OsVersionInfo {
+    size: u32,
+    major: u32,
+    minor: u32,
+    build: u32,
+    platform: u32,
+    csd: [u16; 128],
+}
+
+#[link(name = "ntdll")]
+extern "system" {
+    fn RtlGetVersion(info: *mut OsVersionInfo) -> i32;
+}
+
+/// The real build number (GetVersion lies under compatibility shims; ntdll does not).
+pub fn windows_build() -> u32 {
+    unsafe {
+        let mut v: OsVersionInfo = std::mem::zeroed();
+        v.size = std::mem::size_of::<OsVersionInfo>() as u32;
+        if RtlGetVersion(&mut v) == 0 {
+            v.build
+        } else {
+            0
+        }
+    }
+}
+
+/// Windows 10: no DWM rounded corners, and the acrylic accent makes a window
+/// all but undraggable (the compositor resamples the blur every frame of the
+/// move loop). The same exe simply does without both there.
+pub fn win10() -> bool {
+    let b = windows_build();
+    b > 0 && b < 22000
+}
+
 /// Blurs what is behind `win` and lays `tint` (0xAABBGGRR) over it.
 pub fn apply(win: &WebviewWindow, tint: u32) {
     let Ok(raw) = win.hwnd() else { return };
     let hwnd = HWND(raw.0 as isize as *mut _);
     unsafe {
-        let mut policy = AccentPolicy { state: ACCENT_ENABLE_ACRYLICBLURBEHIND, flags: 0, color: tint, animation: 0 };
-        let mut data = CompositionData {
-            attribute: WCA_ACCENT_POLICY,
-            data: (&mut policy as *mut AccentPolicy).cast(),
-            size: std::mem::size_of::<AccentPolicy>(),
-        };
-        let blurred = set_composition().map(|set| set(hwnd, &mut data) != 0).unwrap_or(false);
-        if !blurred {
-            crate::log::line("glass: the blur was refused; the window stays plainly transparent");
+        if win10() {
+            // The page paints its own dark, rounded sheet instead (html.win10).
+            crate::log::line("glass: Windows 10 — no acrylic (it fights the move loop); the page tints itself");
+        } else {
+            let mut policy = AccentPolicy { state: ACCENT_ENABLE_ACRYLICBLURBEHIND, flags: 0, color: tint, animation: 0 };
+            let mut data = CompositionData {
+                attribute: WCA_ACCENT_POLICY,
+                data: (&mut policy as *mut AccentPolicy).cast(),
+                size: std::mem::size_of::<AccentPolicy>(),
+            };
+            let blurred = set_composition().map(|set| set(hwnd, &mut data) != 0).unwrap_or(false);
+            if !blurred {
+                crate::log::line("glass: the blur was refused; the window stays plainly transparent");
+            }
         }
         // No title bar, but still the rounded corners of a Windows 11 window.
         let round = DWMWCP_ROUND;
