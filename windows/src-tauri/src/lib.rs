@@ -1007,6 +1007,11 @@ fn team_agent_folders(shared: State<Shared>) -> Vec<(String, String)> {
 
 /// The models an agent offers, for the drop-downs in Settings and Teamwork.
 #[tauri::command]
+async fn agents_doctor(profiles: Vec<AgentProfile>) -> Result<Vec<acp::AgentCheck>, String> {
+    Ok(acp::doctor(profiles).await)
+}
+
+#[tauri::command]
 async fn agent_models(agents: State<'_, Arc<Agents>>, profile: AgentProfile) -> Result<Vec<claude::ModelChoice>, String> {
     agents.models(&profile).await
 }
@@ -1331,6 +1336,7 @@ pub fn run() {
             acp_reset,
             acp_test,
             agent_models,
+            agents_doctor,
             team_files,
             team_snapshots,
             team_start,

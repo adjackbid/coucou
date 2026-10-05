@@ -311,6 +311,104 @@ fn find_on_path(stem: &str) -> Option<std::path::PathBuf> {
     crate::find_on_path(stem)
 }
 
+/// Where npm and the usual installers drop CLIs — tried when PATH comes up
+/// empty, because the app inherits PATH at launch and a probe can also fail
+/// transiently (a scanner holding the shim, a sync client hydrating it).
+fn fallback_dirs() -> Vec<std::path::PathBuf> {
+    let mut dirs = Vec::new();
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        dirs.push(std::path::PathBuf::from(&appdata).join("npm"));
+    }
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        let local = std::path::PathBuf::from(&local);
+        dirs.push(local.join("Programs"));
+        dirs.push(local.join("Microsoft").join("WindowsApps"));
+    }
+    dirs
+}
+
+/// The PATH lookup with the known directories behind it and one short retry.
+/// A team resume must not fall over on a probe that fails for half a second.
+pub fn resolve_agent_exe(stem: &str) -> Option<std::path::PathBuf> {
+    for attempt in 0..2u8 {
+        if let Some(p) = find_on_path(stem) {
+            return Some(p);
+        }
+        for dir in fallback_dirs() {
+            for ext in [".cmd", ".exe", ".bat", ".com"] {
+                let candidate = dir.join(format!("{stem}{ext}"));
+                if candidate.is_file() {
+                    return Some(candidate);
+                }
+            }
+        }
+        if attempt == 0 {
+            std::thread::sleep(std::time::Duration::from_millis(400));
+        }
+    }
+    None
+}
+
+/// One agent's health, the way `agents_doctor` tells it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentCheck {
+    pub id: String,
+    pub name: String,
+    pub command: String,
+    /// The executable the lookup settles on, if any.
+    pub found: Option<String>,
+    pub version: Option<String>,
+    pub error: Option<String>,
+    pub took_ms: u64,
+}
+
+/// Looks every profile's CLI up and asks it for its version: the self-check
+/// behind 檢查代理. Finding it again also warms whatever made the last probe
+/// fail, so this doubles as the repair.
+pub async fn doctor(profiles: Vec<AgentProfile>) -> Vec<AgentCheck> {
+    let mut out = Vec::new();
+    for p in profiles {
+        let started = std::time::Instant::now();
+        let mut check = AgentCheck { id: p.id.clone(), name: p.name.clone(), command: p.command.clone(), found: None, version: None, error: None, took_ms: 0 };
+        match resolve_agent_exe(&p.command) {
+            None => {
+                let dirs: Vec<String> = fallback_dirs().iter().map(|d| d.display().to_string()).collect();
+                check.error = Some(format!("'{}' was not found on PATH nor in {}. Reinstall it, or put its full path in the profile.", p.command, dirs.join(", ")));
+            }
+            Some(exe) => {
+                check.found = Some(exe.display().to_string());
+                // npm shims are batch files: they only run through cmd.
+                let shim = exe.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
+                let mut cmd = if shim {
+                    let mut c = tokio::process::Command::new("cmd");
+                    c.arg("/c").arg(&exe);
+                    c
+                } else {
+                    tokio::process::Command::new(&exe)
+                };
+                cmd.arg("--version");
+                #[cfg(windows)]
+                cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+                match tokio::time::timeout(std::time::Duration::from_secs(15), cmd.output()).await {
+                    Err(_) => check.error = Some("It did not answer `--version` within 15 s.".into()),
+                    Ok(Err(e)) => check.error = Some(format!("It could not be started: {e}")),
+                    Ok(Ok(out_)) if !out_.status.success() && out_.stdout.is_empty() => {
+                        check.error = Some(format!("`--version` failed: {}", String::from_utf8_lossy(&out_.stderr).trim()))
+                    }
+                    Ok(Ok(out_)) => {
+                        let text = String::from_utf8_lossy(&out_.stdout);
+                        check.version = Some(text.lines().find(|l| !l.trim().is_empty()).unwrap_or("").trim().to_string());
+                    }
+                }
+            }
+        }
+        check.took_ms = started.elapsed().as_millis() as u64;
+        out.push(check);
+    }
+    out
+}
+
 fn working_dir(profile: &AgentProfile, launch: &Launch) -> std::path::PathBuf {
     match launch.cwd.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
         Some(cwd) => std::path::PathBuf::from(cwd),
@@ -379,8 +477,8 @@ fn runs_copilot(profile: &AgentProfile) -> bool {
 }
 
 fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, String> {
-    let exe = find_on_path(&profile.command)
-        .ok_or_else(|| format!("'{}' was not found on PATH.", profile.command))?;
+    let exe = resolve_agent_exe(&profile.command)
+        .ok_or_else(|| format!("'{}' was not found on PATH. 在團隊設定按「檢查代理」可以重新檢測與定位。", profile.command))?;
     let secret = secrets::get(&profile.secret_key()).unwrap_or_default();
     let cwd = working_dir(profile, launch);
     if !cwd.is_dir() {
@@ -962,7 +1060,7 @@ impl Agents {
             return copilot_models(profile).await;
         }
         if profile.protocol == Protocol::Agy {
-            let exe = find_on_path(&profile.command).ok_or_else(|| format!("'{}' was not found on PATH.", profile.command))?;
+            let exe = resolve_agent_exe(&profile.command).ok_or_else(|| format!("'{}' was not found on PATH.", profile.command))?;
             return crate::agy::models(&exe.to_string_lossy()).await;
         }
         let nowhere: Sink = Arc::new(|_| {});

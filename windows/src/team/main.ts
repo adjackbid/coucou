@@ -36,6 +36,8 @@ const runs = new Map<string, Snapshot>();
 /** The team file being looked at, and which of its screens. */
 let selected: string | null = null;
 let tab: "setup" | "links" | "monitor" | "log" = "setup";
+/** 檢查代理 results, while the setup tab shows them. */
+let doctor: import("../core/state").AgentCheck[] | "running" | string | null = null;
 /** The little gear beside 秘書 or 公司總覽: which panel is open, and where. */
 let sidePop: { which: "secretary" | "company"; top: number } | null = null;
 /** The monitor as a board, or as the team's office. */
@@ -869,8 +871,21 @@ function setup(file: TeamFile): HTMLElement {
       "＋ 加入成員",
     ),
     agents.length
-      ? h("p", { class: "hint" }, "代理在 ", h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsWindow() }, "設定 → Agents"), " 裡新增與修改。")
+      ? h("p", { class: "hint" }, "代理在 ", h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsWindow() }, "設定 → Agents"), " 裡新增與修改。 ",
+          h("button", { class: "link", type: "button", disabled: doctor === "running", title: "逐一確認每個代理的 CLI 找不找得到、能不能回答版本;找得到就等於重新定位成功", onClick: () => {
+            doctor = "running";
+            render();
+            Bridge.agentsDoctor(agents).then((r) => { doctor = r; render(); }, (e) => { doctor = String(e); render(); });
+          } }, doctor === "running" ? "檢查中…" : "檢查代理"))
       : h("p", { class: "problem" }, "還沒有任何代理。請先到 ", h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsWindow() }, "設定 → Agents"), " 建立。"),
+    Array.isArray(doctor)
+      ? h("div", { class: "agent-doctor" }, ...doctor.map((c) =>
+          h("p", { class: c.error ? "problem" : "hint" },
+            h("b", { text: c.name }), " ",
+            c.error ? `✕ ${c.error}` : `✓ ${c.version || "有回應"} · ${c.found ?? ""} · ${c.tookMs} ms`)))
+      : typeof doctor === "string" && doctor !== "running"
+        ? h("p", { class: "problem", text: `檢查代理失敗:${doctor}` })
+        : null,
   );
 
   const stops = unsaved ? [] : file.problems;

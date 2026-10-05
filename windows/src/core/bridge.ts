@@ -5,7 +5,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import type { AgentProfile, ModelChoice, Provider, Settings } from "./state";
+import type { AgentCheck, AgentProfile, ModelChoice, Provider, Settings } from "./state";
 import type { Constitution, ConstitutionLevel, Found, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
 
 export const IS_TAURI =
@@ -135,6 +135,8 @@ export const Bridge = {
   acpTest: (profile: AgentProfile) => callOrThrow<string>("acp_test", { profile }),
   /** The models an agent offers (a handshake, no prompt: nothing is spent). */
   agentModels: (profile: AgentProfile) => callOrThrow<ModelChoice[]>("agent_models", { profile }),
+  /** 檢查代理: each profile's CLI looked up and asked for its version. */
+  agentsDoctor: (profiles: AgentProfile[]) => callOrThrow<AgentCheck[]>("agents_doctor", { profiles }),
 
   // ── Teams ─────────────────────────────────────────────────────────────────
   openTeamWindow: () => call<void>("open_team_window"),

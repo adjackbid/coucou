@@ -158,6 +158,17 @@ export interface AgentProfile {
   model?: string;
 }
 
+/** One agent's health, from `agents_doctor` (檢查代理). */
+export interface AgentCheck {
+  id: string;
+  name: string;
+  command: string;
+  found: string | null;
+  version: string | null;
+  error: string | null;
+  tookMs: number;
+}
+
 /** A model an agent offers — mirror of claude::ModelChoice. */
 export interface ModelChoice {
   id: string;
