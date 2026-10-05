@@ -481,7 +481,10 @@ fn read_tail(path: &std::path::Path) -> Option<String> {
     file.seek(SeekFrom::Start(len.saturating_sub(TRANSCRIPT_TAIL))).ok()?;
     let mut tail = Vec::new();
     file.read_to_end(&mut tail).ok()?;
-    Some(String::from_utf8_lossy(&tail).to_string())
+    // The seek may have landed inside a multi-byte character: drop the
+    // continuation bytes so the first kept line decodes cleanly.
+    let start = tail.iter().position(|b| (b & 0b1100_0000) != 0b1000_0000).unwrap_or(tail.len());
+    Some(String::from_utf8_lossy(&tail[start..]).to_string())
 }
 
 enum Found {
