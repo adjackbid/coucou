@@ -12,6 +12,7 @@
     "predev": "cargo build --release -p coucou-hook -p coucou-pty -p coucou-team-mcp",
     "prebuild": "cargo build --release -p coucou-hook -p coucou-pty -p coucou-team-mcp",
     "pack": "tauri build && node scripts/pack.mjs",
+    "pack:portable": "tauri build && node scripts/portable.mjs",
     "test": "vitest run"
   },
   "devDependencies": {
