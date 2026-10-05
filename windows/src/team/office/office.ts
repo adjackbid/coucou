@@ -55,6 +55,16 @@ export interface OfficeHost {
 
 const MAX_INSTRUCTION = 2000;
 
+/** 正向滿版鏡頭 (fullbleed-frontal-v1): on by dev URL `&camera=frontal` or a saved choice. */
+function frontalCam(): boolean {
+  try {
+    if (typeof location !== "undefined" && new URLSearchParams(location.search).get("camera") === "frontal") return true;
+    return localStorage.getItem("coucou.office.camera") === "frontal";
+  } catch {
+    return false;
+  }
+}
+
 /** The element of a move, in a word. */
 const ELEMENT_WORD: Record<string, string> = { fire: "火", ice: "冰", wind: "風", lightning: "雷", physical: "刀光", support: "支援", any: "" };
 
@@ -160,8 +170,14 @@ export class Office {
       this.real = new RealAdapter({ pause: (t) => host.pause(t), resume: (t) => host.resume(t), instruct: (t, text, request) => host.instruct(t, text, request) });
     }
     this.main.onChange(() => {
-      for (const s of this.scenes.values()) s.update();
-      for (const s of this.minis.values()) s.update();
+      for (const s of this.scenes.values()) {
+        s.frontal = this.mode === "office" && frontalCam();
+        s.update();
+      }
+      for (const s of this.minis.values()) {
+        s.frontal = this.mode === "office" && frontalCam();
+        s.update();
+      }
       // What changed, told as the raid: only once the store has applied it.
       this.battle.observeAll();
       // A member that went away closes its drawer.
@@ -261,6 +277,7 @@ export class Office {
       }
       s.setLayer(layer);
     } else s.setLayer(null);
+    s.frontal = this.mode === "office" && frontalCam();
     s.update();
     return s;
   }

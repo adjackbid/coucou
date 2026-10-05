@@ -54,10 +54,20 @@ interface RoomArt {
   whiteboardQuad: [number, number][];
   spots: Record<string, [number, number]>;
 }
+/** 正向滿版 (fullbleed-frontal-v1): a second camera for the same theme. */
+interface FrontalJson {
+  room: RoomArt;
+  workstations: Record<string, StationArt>;
+  /** Fixed desk anchors, nearest first (metres of this camera's own floor basis). */
+  desks: [number, number][];
+  props?: Props;
+  mochiScale?: number;
+}
 /** One look of an office (scene.json `themes`): its room, props and desks. */
 interface ThemeJson {
   label: string;
   size: "standard" | "large";
+  frontal?: FrontalJson;
   room: RoomArt;
   props: Props;
   /** "standard" uses the shared desks. */
@@ -108,6 +118,10 @@ export interface Theme {
   workstations: Record<"SE" | "SW", StationArt>;
   desks: (count: number) => Desk[];
   maxDesks: number;
+  /** The frontal fullbleed camera: chair behind the member, desk front over it, no live screens. */
+  frontal?: boolean;
+  /** Mochis drawn this much bigger than BODY in this camera. */
+  mochiScale?: number;
 }
 
 let art: SceneArt | null = null;
@@ -163,6 +177,28 @@ export function themeName(teamId: string, setting: string | undefined, members: 
   for (const ch of teamId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   if (members >= LARGE_FROM) return LARGE[h % LARGE.length];
   return STANDARD[h % STANDARD.length];
+}
+
+/** The same theme through the frontal fullbleed camera, when its art exists. */
+export function frontalTheme(name: string): Theme | null {
+  if (!art) return null;
+  const key = art.themes[name] ? name : "warm";
+  const base = art.themes[key];
+  const f = base.frontal;
+  if (!f) return null;
+  return {
+    name: `front:${key}`,
+    label: base.label,
+    large: base.size === "large",
+    room: f.room,
+    props: f.props ?? {},
+    battle: base.battle,
+    workstations: f.workstations,
+    desks: (count: number) => f.desks.slice(0, Math.max(0, count)).map(([x, y]) => ({ x, y, facing: "SE" as const })),
+    maxDesks: f.desks.length,
+    frontal: true,
+    mochiScale: f.mochiScale ?? 1.2,
+  };
 }
 
 export function theme(name: string): Theme | null {
@@ -341,6 +377,8 @@ export class TeamScene {
   reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   /** What is drawn over the office, if anything (中二模式). */
   private layer: SceneLayer | null = null;
+  /** The office asked for the frontal fullbleed camera (never in 中二模式). */
+  frontal = false;
 
   constructor(readonly teamId: string, private store: OfficeStore, private opts: SceneOptions = {}) {
     this.stage = h("div", { class: "office-stage" });
@@ -646,9 +684,11 @@ export class TeamScene {
     if (!team) return;
     const members = this.store.members(this.teamId);
     const arena = this.layer?.arena?.() ?? null;
-    const name = arena ? `world:${arena.id}` : themeName(this.teamId, team.officeLayoutId, members.length);
+    const base = themeName(this.teamId, team.officeLayoutId, members.length);
+    const front = !arena && this.frontal && !!(art.themes[base] ?? art.themes.warm)?.frontal;
+    const name = arena ? `world:${arena.id}` : front ? `front:${base}` : base;
     if (this.theme?.name !== name) {
-      this.theme = arena ? this.arenaTheme(arena.id, arena.art) : theme(name);
+      this.theme = arena ? this.arenaTheme(arena.id, arena.art) : front ? frontalTheme(base) : theme(base);
       this.build();
       // Another room: everyone is put in place, nobody walks over from the old one.
       for (const a of this.actors.values()) a.at = undefined;
@@ -695,10 +735,11 @@ export class TeamScene {
     // The Mochi: on its chair, or standing at the whiteboard.
     const sofaAt = t.props.sofa?.at;
     const seat = standing ? this.toScreen(standing[0], standing[1]) : lounge ?? local(ws.actorBottom);
-    const seatZ = standing ? this.depth(standing[0], standing[1]) + 4 : lounge && sofaAt ? this.depth(...sofaAt) + 4 : z + 4;
+    const deskLift = this.theme?.frontal ? 2 : 4;
+    const seatZ = standing ? this.depth(standing[0], standing[1]) + 4 : lounge && sofaAt ? this.depth(...sofaAt) + 4 : z + deskLift;
     const actor = this.actor(m, color);
     // 中二模式 draws its heroes bigger, rounder, on their feet.
-    const body = BODY * (this.layer?.heroScale ?? 1);
+    const body = BODY * (this.layer?.heroScale ?? this.theme?.mochiScale ?? 1);
     const size = Math.round(body / 0.6);
     // What it holds needs room around it: a canvas that size bigger, put back by as much.
     const pad = this.layer?.pad ?? 0;
@@ -778,6 +819,20 @@ export class TeamScene {
     const local = ([px, py]: [number, number]) => ({ x: ox + H(px), y: oy + H(py) });
     const z = this.depth(desk.x, desk.y);
     const [W, Ht] = ws.canvas.map(H);
+    if (t.frontal) {
+      // 正向鏡頭: the chair behind (z+1), the member between (z+2), the desk
+      // with the monitor's BACK in front (z+3) — no live screen to draw.
+      const img = (file: string, zi: number) =>
+        file ? h("img", { class: "office-layer office-ws", src: `/office/${file}`, alt: "", draggable: "false", style: `left:${ox}px;top:${oy}px;width:${W}px;height:${Ht}px;z-index:${zi}` }) : null;
+      const chairEl = img(ws.layers[0], z + 1);
+      const deskEl = img(ws.layers[1], z + 3);
+      this.stage.append(
+        h("div", { class: `office-shadow${sel ? " on" : ""}`, style: `left:${at.x}px;top:${at.y + 6}px;z-index:${z};--c:${color}` }),
+        ...(chairEl ? [chairEl] : []),
+        ...(deskEl ? [deskEl] : []),
+      );
+      return ws.screenQuad.map(local);
+    }
     const chairAt = ws.chairFeet?.length
       ? local([ws.chairFeet.reduce((n, p) => n + p[0], 0) / ws.chairFeet.length, ws.chairFeet.reduce((n, p) => n + p[1], 0) / ws.chairFeet.length])
       : null;
