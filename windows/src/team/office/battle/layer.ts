@@ -305,9 +305,8 @@ export class BattleLayer implements SceneLayer {
     if (!theme?.battle || !art) return;
     const stage = this.scene.stageEl;
     // What makes way for the fight: the meeting table, the lounge.
-    for (const prop of theme.battle.hide) {
-      const el = stage.querySelector<HTMLElement>(`[data-prop="${prop}"]`);
-      if (el) {
+    for (const prop of [...theme.battle.hide, "decor"]) {
+      for (const el of stage.querySelectorAll<HTMLElement>(`[data-prop="${prop}"]`)) {
         el.style.visibility = "hidden";
         this.hidden.push(el);
       }

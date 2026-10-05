@@ -25,8 +25,22 @@ interface StationArt {
   chairFeet?: [number, number][];
 }
 type WorldToScreen = { x0: number; y0: number; perMetreX: number; perMetreY: number; perMetreZ: number };
+/** A piece of décor: drawn where it stands, sorted by depth like the rest. */
+interface Decor {
+  id: string;
+  file: string;
+  canvas: [number, number];
+  groundPivot: [number, number];
+  at: [number, number];
+  /** A rug or floor inlay: under everything that stands. */
+  floor?: boolean;
+  /** Its pool of shade, as wide as this share of its canvas (0 for none). */
+  shadow?: number;
+}
 interface Props {
   meetingTable?: { file: string; canvas: [number, number]; groundPivot: [number, number]; at: [number, number] };
+  /** What makes a room lived in: a coffee bar, plants, a glass meeting room… */
+  decor?: Decor[];
   /** The lounge: a sofa whose seats take members with nothing to do. */
   sofa?: { file: string; canvas: [number, number]; groundPivot: [number, number]; seats: [number, number][]; at: [number, number] };
 }
@@ -474,6 +488,20 @@ export class TeamScene {
         h("img", {
           class: "office-layer", src: `/office/${sofa.file}`, alt: "", draggable: "false", "data-prop": "sofa",
           style: `left:${s.x - H(sofa.groundPivot[0])}px;top:${s.y - H(sofa.groundPivot[1])}px;width:${H(sofa.canvas[0])}px;z-index:${this.depth(...sofa.at)}`,
+        }),
+      );
+    }
+    for (const d of t.props.decor ?? []) {
+      const p = this.toScreen(...d.at);
+      const z = d.floor ? 1 : this.depth(...d.at);
+      if (!d.floor && (d.shadow ?? 0.8) > 0) {
+        const w = H(d.canvas[0]) * (d.shadow ?? 0.8);
+        this.stage.append(h("div", { class: "office-shadow prop", "data-prop": "decor", style: `left:${p.x}px;top:${p.y - 4}px;width:${w}px;height:${w * 0.4}px;z-index:${z - 1}` }));
+      }
+      this.stage.append(
+        h("img", {
+          class: "office-layer office-decor", src: `/office/${d.file}`, alt: "", draggable: "false", "data-prop": "decor", "data-decor": d.id,
+          style: `left:${p.x - H(d.groundPivot[0])}px;top:${p.y - H(d.groundPivot[1])}px;width:${H(d.canvas[0])}px;z-index:${z}`,
         }),
       );
     }
