@@ -1719,7 +1719,13 @@ async function start() {
   // The page is the title bar: drag it by its header, double-click to maximize.
   root.addEventListener("mousedown", (e) => {
     const target = e.target as HTMLElement;
-    if (e.button === 0 && e.detail === 1 && target.hasAttribute("data-drag")) void Bridge.teamWindow("drag");
+    if (e.button === 0 && e.detail === 1 && target.hasAttribute("data-drag")) {
+      // The webview must not start a selection or its own drag while the
+      // native move loop runs: on some machines the two fight and the
+      // window jumps around.
+      e.preventDefault();
+      void Bridge.teamWindow("drag");
+    }
   });
   root.addEventListener("dblclick", (e) => {
     if ((e.target as HTMLElement).hasAttribute("data-drag")) void Bridge.teamWindow("maximize");
