@@ -117,6 +117,15 @@ export function saveCompanyLive(on: boolean) {
   write("coucou.battle.companyLive", on ? null : "off");
 }
 
+/** 場地微動: each world's light weather (embers, snow, leaves…); on unless turned off. */
+export function ambientMotion(): boolean {
+  return read("coucou.battle.ambient") !== "off";
+}
+
+export function saveAmbientMotion(on: boolean) {
+  write("coucou.battle.ambient", on ? null : "off");
+}
+
 /** How smoothly the company map plays each room's fight, in frames per second. */
 export function companyFps(): number {
   const n = Number(read("coucou.battle.companyFps"));

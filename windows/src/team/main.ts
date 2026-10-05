@@ -19,7 +19,7 @@ import { linksScreen, logScreen, openThread, type Page } from "./screens";
 import { companyName, Office, setCompanyName } from "./office/office";
 import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
-import { saveCompanyFps } from "./office/battle/session";
+import { ambientMotion, saveAmbientMotion, saveCompanyFps } from "./office/battle/session";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
 import { onStep as secretaryStep, secretaryName, secretaryPage, secretaryTitle, setSecretaryName, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
@@ -395,7 +395,11 @@ function sidebar(): HTMLElement {
                     type: "button", class: office.companyFps === n ? "on" : "",
                     onClick: () => { office.companyFps = n; saveCompanyFps(n); render(); },
                   }, `${n} FPS`))),
-              h("p", { class: "hint", text: "公司總覽裡每間辦公室戰鬥動畫的更新頻率。團隊多的時候調低比較省效能,只有一兩個團隊時可以調高。" })),
+              h("p", { class: "hint", text: "公司總覽裡每間辦公室戰鬥動畫的更新頻率。團隊多的時候調低比較省效能,只有一兩個團隊時可以調高。" }),
+              h("label", { class: "side-pop-check" },
+                h("input", { type: "checkbox", checked: ambientMotion(), onChange: (e: Event) => { saveAmbientMotion((e.target as HTMLInputElement).checked); render(); } }),
+                "場地微動(中二模式)"),
+              h("p", { class: "hint", text: "戰場上的餘燼、雪花、落葉、電花、星塵。只是氣氛,減少動態時一律停止。" })),
       );
   return h(
     "aside",

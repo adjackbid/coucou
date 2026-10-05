@@ -20,6 +20,8 @@ import { EffectQueue, type Effect } from "./effects";
 import { BOSS_KIT, BOSS_MOVES, BossDirector, resolvesWholeCast, type BossBlockCause, type BossCue, type BossMove, type WorldBossId } from "./bossMoves";
 import { drawBossMove, type BossFxPoints } from "./bossFx";
 import { WORLDS, type WorldId } from "./worlds";
+import { Weather } from "./weather";
+import { ambientMotion } from "./session";
 import { RULES, SKILLS, SkillDirector, type Contribution, type HitPlan, type SkillId } from "./skills";
 
 export const HERO_COLOR: Record<HeroClass, string> = {
@@ -208,6 +210,22 @@ const SAYS: Partial<Record<BattleSignal["kind"], string[]>> = {
   reopen: ["需求…又來了!"],
 };
 
+/**
+ * The fight's rhythm — every number a play-test may want to turn, in one place.
+ * Times in ms. Nothing here touches the work: they only pace the show.
+ */
+export const PACE = {
+  /** The boss lashes out on its own: first after this long idle, then every so often. */
+  idleFirst: [10000, 20000] as [number, number],
+  idleEvery: [10000, 30000] as [number, number],
+  /** Turns burned this fast goad the ultimate… */
+  burnTurns: 4,
+  burnWindow: 45000,
+  /** …no more often than this. */
+  burnCooldown: 20000,
+};
+const between = ([lo, hi]: [number, number]) => lo + Math.random() * (hi - lo);
+
 export class BattleLayer implements SceneLayer {
   readonly pad: number;
   /** Members drawn bigger in battle — less so when many share the floor. */
@@ -221,6 +239,8 @@ export class BattleLayer implements SceneLayer {
   private ambient: HTMLElement | null = null;
   /** When the boss next lashes out on its own — a show of temper, no damage. */
   private idleAt = 0;
+  /** 場地微動: the world's own light weather (none in the office world). */
+  private weather: Weather | null = null;
   /** Turns seen last update, recent burns, and when the last pressure ultimate played. */
   private turnSeen = -1;
   private turnBurn: { at: number; n: number }[] = [];
@@ -305,6 +325,12 @@ export class BattleLayer implements SceneLayer {
       stage.append(this.ambient);
     }
     this.idleAt = 0;
+    this.weather = this.worldId !== "office" ? new Weather(this.worldId) : null;
+    const wx = import.meta.env?.DEV && typeof location !== "undefined" ? Number(new URLSearchParams(location.search).get("wx")) : 0;
+    if (wx && this.weather) {
+      const scratch = document.createElement("canvas").getContext("2d")!;
+      for (let t = 0; t < wx; t += 0.05) this.weather.tick(scratch, 0.05, this.scene.cropBox, this.keepOut(), false);
+    }
     this.shadow = h("div", { class: "bt-boss-shadow", style: `left:${at.x - w / 2}px;top:${at.y - w * 0.17}px;width:${w}px;height:${w * 0.34}px;z-index:${z - 1}` });
     // Every state shares one canvas and one pivot: a change of state is a change of picture, nothing moves.
     const [gx, gy] = b.groundPivot.map((n) => (n / 2) * s);
@@ -364,10 +390,10 @@ export class BattleLayer implements SceneLayer {
       if (this.turnSeen >= 0 && t.used > this.turnSeen && !this.scene.mini) this.turnBurn.push({ at: Date.now(), n: t.used - this.turnSeen });
       if (this.turnSeen < 0 || t.used >= this.turnSeen || t.used < this.turnSeen - 1) this.turnSeen = t.used;
     }
-    const cut = Date.now() - 75000;
+    const cut = Date.now() - PACE.burnWindow;
     this.turnBurn = this.turnBurn.filter((x) => x.at >= cut);
     const burned = this.turnBurn.reduce((n, x) => n + x.n, 0);
-    if (burned >= 4 && Date.now() - this.turnUltAt > 90000 && state === "engaged" && !this.bossCue && !this.scene.mini && !this.still && !this.host.calm() && !document.hidden && this.scene.el.isConnected) {
+    if (burned >= PACE.burnTurns && Date.now() - this.turnUltAt > PACE.burnCooldown && state === "engaged" && !this.bossCue && !this.scene.mini && !this.still && !this.host.calm() && !document.hidden && this.scene.el.isConnected) {
       this.turnUltAt = Date.now();
       this.turnBurn = [];
       this.turnPressure(burned);
@@ -546,7 +572,7 @@ export class BattleLayer implements SceneLayer {
 
   /** An unprovoked lash: one of this boss's light attacks at a random member, nothing real behind it. */
   private idleMenace(now: number) {
-    this.idleAt = now + 16000 + Math.random() * 18000;
+    this.idleAt = now + between(PACE.idleEvery);
     const world = WORLDS[this.worldId];
     const kit = BOSS_KIT[world.bossId as WorldBossId];
     const vm = this.vm;
@@ -817,7 +843,7 @@ export class BattleLayer implements SceneLayer {
     // 平常也要出招: with nothing on, the boss still lashes out now and then —
     // pure temper, no damage, no card, and never while real moves play.
     if (!this.bossCue && !active.length && this.frozen === null && !this.scene.mini && this.worldId !== "office" && this.vm?.bossState === "engaged") {
-      if (!this.idleAt) this.idleAt = now + 9000 + Math.random() * 9000;
+      if (!this.idleAt) this.idleAt = now + between(PACE.idleFirst);
       else if (now >= this.idleAt) this.idleMenace(now);
     }
     const hurt = Math.max(0, 1 - (now - this.hurtAt) / 260);
@@ -933,9 +959,34 @@ export class BattleLayer implements SceneLayer {
     this.fxDrawn = false;
   }
 
+  /** Whether the weather plays here: a big room on screen, the person not opting out. */
+  private get weatherOn(): boolean {
+    return !!this.weather && !this.scene.mini && ambientMotion() && this.vm?.bossState !== "defeated";
+  }
+
+  /** Where weather may not be born or linger: the walkable floor (a little above it, for heads) and the HUD. */
+  private keepOut(): (x: number, y: number) => boolean {
+    const c = this.scene.cropBox;
+    const lift = 70;
+    const back = this.scene.screen(-0.2, -0.2), right = this.scene.screen(-0.2, 6.6), front = this.scene.screen(6.6, 6.6), left = this.scene.screen(6.6, -0.2);
+    const poly = [{ x: back.x, y: back.y - lift }, { x: right.x, y: right.y - lift }, front, { x: left.x, y: left.y - lift }];
+    const inPoly = (x: number, y: number) => {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i], b = poly[j];
+        if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+      }
+      return inside;
+    };
+    const hud = { x: c.x, y: c.y, w: c.w * 0.4, h: c.h * 0.22 };
+    return (x, y) => inPoly(x, y) || (x < hud.x + hud.w && y < hud.y + hud.h);
+  }
+
   private draw(active: Effect[], now: number, dt: number) {
     if (!this.fx) return;
-    if (!active.length && !this.particles.length && !this.bossCue) return this.clearFx();
+    const weather = this.weatherOn;
+    if (!weather && this.weather?.count) this.weather.clear();
+    if (!active.length && !this.particles.length && !this.bossCue && !weather) return this.clearFx();
     const c = this.scene.cropBox;
     const res = Math.min(2, window.devicePixelRatio || 1) * Math.min(1, Math.max(0.25, this.scene.scale));
     const W = Math.round(c.w * res);
@@ -952,6 +1003,8 @@ export class BattleLayer implements SceneLayer {
     this.fxDrawn = true;
     const b = this.bossPoints();
     if (!b) return;
+    // Weather first: everything the fight draws goes over it. It gives way when the fight is busy.
+    if (weather) this.weather!.tick(ctx, dt, this.scene.cropBox, this.keepOut(), active.length > 0 || !!this.bossCue || this.particles.length > 40);
     for (const e of active) this.effect(ctx, e, now - e.startedAt!, b);
     this.drawCue(ctx, b, now);
     this.drawParticles(ctx, dt);
@@ -1236,6 +1289,7 @@ export class BattleLayer implements SceneLayer {
     if (ms >= c && this.once(e, "impact")) {
       this.hurtAt = this.now();
       this.float({ text: `-${plan.displayDamage}`, tone: "hit" }, { x: b.hit.x + 80 * b.scale, y: b.hit.y - 10 });
+      this.weather?.stir(b.hit, plan.memberIds.length > 1 ? 1.6 : 1);
       const combo = plan.memberIds.length > 1;
       this.spark(e, target.x, target.y, combo ? 20 : 14, pal[0], { speed: 260, kind: "streak", size: 4 });
       this.spark(e, target.x, target.y, 8, pal[1] ?? "#ffffff", { speed: 160, size: 3 });

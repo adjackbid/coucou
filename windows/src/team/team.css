@@ -2926,3 +2926,12 @@ h2 {
   color: var(--dim);
   margin: 4px 0 0;
 }
+
+.side-pop-body .side-pop-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 13px;
+  margin-top: 10px;
+}
