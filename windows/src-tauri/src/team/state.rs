@@ -95,6 +95,8 @@ pub enum Event {
     FinishReminded,
     /// Tokens a member's model used since the last report.
     Usage { member: String, usage: crate::usage::Usage },
+    /// The person changed the team's turn limit while it ran (or paused on it).
+    TurnsLimit { max: u32 },
 }
 
 /// An event with its place in the log and its time (ms since 1970).
@@ -337,6 +339,11 @@ impl State {
                 self.config = Some(config.clone());
                 self.status = TeamStatus::Running;
                 self.started_at = at;
+            }
+            Event::TurnsLimit { max } => {
+                if let Some(c) = self.config.as_mut() {
+                    c.max_turns = *max;
+                }
             }
             Event::Paused { why } => {
                 self.status = TeamStatus::Paused;

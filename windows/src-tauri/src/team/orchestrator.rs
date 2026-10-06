@@ -1166,6 +1166,12 @@ impl Teams {
     pub fn update_limits(&self, config: &TeamConfig) {
         if let Some(team) = self.get(&config.id) {
             *team.limits.lock().unwrap() = config.members.iter().map(|m| (m.id.clone(), (m.max_tokens, m.max_cost_usd))).collect();
+            // The turn limit, too: a team paused on its turns goes on once the
+            // person raises it and presses Continue.
+            let current = team.with_state(|s| s.config.as_ref().map(|c| c.max_turns));
+            if current.is_some_and(|m| m != config.max_turns) {
+                team.record(vec![Event::TurnsLimit { max: config.max_turns }]);
+            }
         }
     }
 
@@ -1858,6 +1864,26 @@ mod tests {
             let paused = bench.until("the team pauses", |s| s.status == TeamStatus::Paused).await;
             assert!(paused.paused_why.contains("used its 2 turns"));
             assert_eq!(paused.total_turns, 2);
+        });
+    }
+
+    #[test]
+    fn raising_the_turn_limit_lets_a_paused_team_go_on() {
+        run(async {
+            let bench = bench(diligent());
+            let mut config = shop(&work_dir());
+            config.max_turns = 2;
+            bench.start(config.clone());
+            bench.until("the team pauses", |s| s.status == TeamStatus::Paused).await;
+            // Saved with a bigger limit while paused: it holds at once…
+            config.max_turns = 4;
+            bench.teams.update_limits(&config);
+            let raised = bench.until("the new limit shows", |s| s.max_turns == 4).await;
+            assert_eq!(raised.total_turns, 2);
+            // …and Continue gets more turns instead of stopping again at 2.
+            bench.teams.resume(&config.id, &[]).unwrap();
+            let more = bench.until("more turns run", |s| s.total_turns > 2).await;
+            assert!(more.total_turns <= 4);
         });
     }
 
