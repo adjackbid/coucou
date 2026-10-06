@@ -691,8 +691,10 @@ export class TeamScene {
     // bigger office (the large rooms, whose desks seat twelve) rather than
     // leaving anyone outside.
     if (front && members.length > frontDesks) {
-      front = false;
       base = themeName(this.teamId, undefined, Math.max(members.length, LARGE_FROM));
+      // The large room's own frontal art, once it seats this many (Round 7);
+      // until then its classic camera, which seats twelve.
+      front = ((art.themes[base] ?? art.themes.warm)?.frontal?.desks.length ?? 0) >= members.length;
     }
     const name = arena ? `world:${arena.id}` : front ? `front:${base}` : base;
     if (this.theme?.name !== name) {
