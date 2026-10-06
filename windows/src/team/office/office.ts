@@ -119,7 +119,20 @@ export class Office {
   private mapFrame = { w: 784, h: 670 };
   tab: "work" | "talk" = "work";
   bubbles = true;
-  calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  /**
+   * 減少動態: the checkbox decides. Windows' "show animations" only sets the
+   * first value — a machine with animations off (remote desktop, best
+   * performance) must still be able to turn the Mochis' bounce back on.
+   */
+  calm = (() => {
+    try {
+      const saved = localStorage.getItem("coucou.office.calm");
+      if (saved === "on" || saved === "off") return saved === "on";
+    } catch {
+      /* the system's choice, then */
+    }
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  })();
   /** What is being typed to each team's leader, kept through failures. */
   private drafts = new Map<string, string>();
   private sending = new Map<string, { clientRequestId: string; commandId?: string; error?: string }>();
@@ -270,7 +283,7 @@ export class Office {
     }
     s.selected = !mini && this.sel?.teamId === teamId ? this.sel.memberId : null;
     s.bubblesOn = this.bubbles;
-    s.reduceMotion = this.calm || (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
+    s.reduceMotion = this.calm;
     // 中二模式: the boss and the heroes' looks over the room; the Office as it was otherwise.
     if (this.mode === "battle") {
       let layer = this.layers.get(s);
@@ -316,7 +329,7 @@ export class Office {
         if (statuses.some((st) => st === "blocked")) return "dependency_wait";
         return "unknown";
       },
-      calm: () => this.calm || (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false),
+      calm: () => this.calm,
       waiting: () => store.members(teamId).find((m) => m.workStatus === "waiting_input" || m.workStatus === "blocked")?.memberId ?? null,
       contributions: (sig: BattleSignal) => this.contributions(teamId, sig),
       planned: (plan: HitPlan) => {
@@ -1006,7 +1019,15 @@ export class Office {
       "div",
       { class: "office-toggles" },
       h("label", {}, h("input", { type: "checkbox", checked: this.bubbles, onChange: (e: Event) => { this.bubbles = (e.target as HTMLInputElement).checked; this.host.render(); } }), "溝通泡泡"),
-      h("label", { title: "只調整畫面動畫,不影響團隊工作" }, h("input", { type: "checkbox", checked: this.calm, onChange: (e: Event) => { this.calm = (e.target as HTMLInputElement).checked; this.host.render(); } }), "減少動態"),
+      h("label", { title: "只調整畫面動畫,不影響團隊工作" }, h("input", { type: "checkbox", checked: this.calm, onChange: (e: Event) => {
+        this.calm = (e.target as HTMLInputElement).checked;
+        try {
+          localStorage.setItem("coucou.office.calm", this.calm ? "on" : "off");
+        } catch {
+          /* this session only */
+        }
+        this.host.render();
+      } }), "減少動態"),
     );
     const pauseBtn = past
       ? null

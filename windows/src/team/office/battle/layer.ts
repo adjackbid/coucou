@@ -239,6 +239,8 @@ export class BattleLayer implements SceneLayer {
   private ambient: HTMLElement | null = null;
   /** When the boss next lashes out on its own — a show of temper, no damage. */
   private idleAt = 0;
+  /** Under the seal: when it next strains against the runes. */
+  private struggleAt = 0;
   /** 場地微動: the world's own light weather (none in the office world). */
   private weather: Weather | null = null;
   /** Turns seen last update, recent burns, and when the last pressure ultimate played. */
@@ -848,9 +850,32 @@ export class BattleLayer implements SceneLayer {
     const hurt = Math.max(0, 1 - (now - this.hurtAt) / 260);
     if (hurt > 0.15 && look !== "defeated") look = "hurt";
     this.setLook(look);
-    const breathe = this.vm?.bossState === "engaged" ? Math.sin(this.t * 2) * 3 : 0;
-    this.boss.style.transform = `translate(${hurt ? Math.sin(now / 16) * 5 * hurt : 0}px, ${breathe}px) scale(${scale})`;
-    this.boss.style.filter = hurt ? `brightness(${1 + 0.6 * hurt}) drop-shadow(0 0 18px rgba(255,255,255,${0.6 * hurt}))` : dim ? `brightness(${1 - 0.4 * dim})` : "";
+    // Alive between moves: it breathes (squash and stretch from its feet,
+    // the transform origin), shifts its weight while it fights, and under the
+    // seal it strains against the runes now and then.
+    const state = this.vm?.bossState;
+    const living = state === "engaged" || state === "sealing";
+    const phase = this.t * (state === "sealing" ? 1.4 : 2.2);
+    const br = living ? Math.sin(phase) : 0;
+    const sy = 1 + br * (state === "sealing" ? 0.012 : 0.022);
+    const sx = 1 - br * (state === "sealing" ? 0.006 : 0.011);
+    const sway = state === "engaged" ? Math.sin(this.t * 0.75) * 1.4 : 0;
+    let strain = 0;
+    if (state === "sealing" && !this.scene.mini) {
+      if (!this.struggleAt) this.struggleAt = now + 2500 + Math.random() * 2500;
+      const k = (now - this.struggleAt) / 650;
+      if (k >= 0 && k <= 1) strain = Math.sin(Math.PI * k);
+      else if (k > 1) this.struggleAt = now + 4000 + Math.random() * 4000;
+    } else this.struggleAt = 0;
+    const jitter = (hurt ? Math.sin(now / 16) * 5 * hurt : 0) + (strain ? Math.sin(now / 22) * 4 * strain : 0);
+    this.boss.style.transform = `translate(${jitter}px, 0px) rotate(${sway}deg) scale(${scale * sx}, ${scale * sy})`;
+    this.boss.style.filter = hurt
+      ? `brightness(${1 + 0.6 * hurt}) drop-shadow(0 0 18px rgba(255,255,255,${0.6 * hurt}))`
+      : strain
+        ? `drop-shadow(0 0 ${10 + 14 * strain}px rgba(185,156,255,${0.85 * strain}))`
+        : dim
+          ? `brightness(${1 - 0.4 * dim})`
+          : "";
     this.draw(active, now, dt);
     return true;
   }

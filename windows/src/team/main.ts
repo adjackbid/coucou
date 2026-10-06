@@ -1615,6 +1615,8 @@ const office = new Office(
   },
   { demo: !IS_TAURI && new URLSearchParams(location.search).get("office") === "mock" },
 );
+// Development only: the office, to drive its scenes from the console.
+if (import.meta.env.DEV && !IS_TAURI) Object.assign(window, { __office: office });
 
 /** What the 協作關係 and 溝通紀錄 screens borrow from the page. */
 const page: Page = { render: () => render(), act, save, said, colorOf, blob, composer, touched };
