@@ -116,7 +116,7 @@ describe("中二模式 — what must never look like a win", () => {
   }
 
   it("a member's error keeps every source list (no undefined taskIds to crash the boss's answer)", () => {
-    const work = { teamId: TEAM, runId: RUN, taskId: "t1", revision: 1, title: "a", status: "in_progress", assigneeMemberId: "ai1", includeInProgress: true, parentTaskId: null } as TaskInput;
+    const work = { teamId: TEAM, runId: RUN, taskId: "t1", revision: 1, title: "a", status: "running", assigneeMemberId: "ai1", includeInProgress: true, parentTaskId: null } as TaskInput;
     const before = { ...observe(input([work], "running", false), 1), members: new Map([["ai1", "working"]]) } as Observation;
     const after = { ...observe(input([work], "running", false), 2), members: new Map([["ai1", "error"]]) } as Observation;
     const d = diff(before, after, { completionOrdinal: 0, observedAt: "" });
