@@ -55,13 +55,16 @@ export interface OfficeHost {
 
 const MAX_INSTRUCTION = 2000;
 
-/** 正向滿版鏡頭 (fullbleed-frontal-v1): on by dev URL `&camera=frontal` or a saved choice. */
+/** 正向滿版鏡頭 (fullbleed-frontal-v1): the default office camera. */
 function frontalCam(): boolean {
+  // The frontal fullbleed camera is the office's own now; `&camera=classic`
+  // (or coucou.office.camera = "classic") brings back the 45° rooms.
   try {
-    if (typeof location !== "undefined" && new URLSearchParams(location.search).get("camera") === "frontal") return true;
-    return localStorage.getItem("coucou.office.camera") === "frontal";
+    const asked = typeof location !== "undefined" ? new URLSearchParams(location.search).get("camera") : null;
+    if (asked) return asked !== "classic";
+    return localStorage.getItem("coucou.office.camera") !== "classic";
   } catch {
-    return false;
+    return true;
   }
 }
 

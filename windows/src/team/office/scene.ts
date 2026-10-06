@@ -684,8 +684,16 @@ export class TeamScene {
     if (!team) return;
     const members = this.store.members(this.teamId);
     const arena = this.layer?.arena?.() ?? null;
-    const base = themeName(this.teamId, team.officeLayoutId, members.length);
-    const front = !arena && this.frontal && !!(art.themes[base] ?? art.themes.warm)?.frontal;
+    let base = themeName(this.teamId, team.officeLayoutId, members.length);
+    const frontDesks = (art.themes[base] ?? art.themes.warm)?.frontal?.desks.length ?? 0;
+    let front = !arena && this.frontal && frontDesks > 0;
+    // More members than the frontal room has desks: the team moves to a
+    // bigger office (the large rooms, whose desks seat twelve) rather than
+    // leaving anyone outside.
+    if (front && members.length > frontDesks) {
+      front = false;
+      base = themeName(this.teamId, undefined, Math.max(members.length, LARGE_FROM));
+    }
     const name = arena ? `world:${arena.id}` : front ? `front:${base}` : base;
     if (this.theme?.name !== name) {
       this.theme = arena ? this.arenaTheme(arena.id, arena.art) : front ? frontalTheme(base) : theme(base);
