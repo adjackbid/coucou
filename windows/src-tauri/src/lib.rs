@@ -1236,7 +1236,9 @@ fn create_team_window(app: &AppHandle) {
     // Windows 10 has no DWM rounding and gets no acrylic: the page is told to
     // paint its own dark sheet with rounded corners.
     if glass::win10() {
-        builder = builder.initialization_script("document.documentElement.classList.add('win10');");
+        // Only a flag: this runs as the document is created, before <html>
+        // exists — the page applies its own classes once it loads.
+        builder = builder.initialization_script("window.__coucouWin10 = true;");
     }
     match builder.build() {
         Ok(win) => {

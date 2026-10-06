@@ -95,7 +95,13 @@ html.win10 body.team-window {
   overflow: hidden;
 }
 
-html.win10 body.team-window {
+/* 視窗背景: glass lets the desktop through (Win11 blurs it); deeper and solid
+   do not. Windows 10 has no blur, so 自動 picks solid there. */
+html.bd-deep body.team-window {
+  background: rgba(19, 20, 25, 0.8);
+}
+
+html.bd-solid body.team-window {
   background: #131419;
 }
 

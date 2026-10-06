@@ -27,6 +27,31 @@ import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPat
 
 const root = document.getElementById("team-root")!;
 
+/**
+ * 視窗背景. Windows 10 gets no acrylic (it fights the move loop), so the
+ * window behind would show through untouched: 自動 makes the sheet solid
+ * there and leaves Windows 11's blurred glass alone. The person may pick.
+ */
+type Backdrop = "auto" | "glass" | "deep" | "solid";
+const WIN10 = !!(window as unknown as { __coucouWin10?: boolean }).__coucouWin10;
+function backdrop(): Backdrop {
+  try {
+    const v = localStorage.getItem("coucou.window.backdrop");
+    return v === "glass" || v === "deep" || v === "solid" ? v : "auto";
+  } catch {
+    return "auto";
+  }
+}
+function applyBackdrop() {
+  const pick = backdrop();
+  const effective = pick === "auto" ? (WIN10 ? "solid" : "glass") : pick;
+  const cl = document.documentElement.classList;
+  cl.toggle("win10", WIN10);
+  cl.toggle("bd-deep", effective === "deep");
+  cl.toggle("bd-solid", effective === "solid");
+}
+applyBackdrop();
+
 let dir = "";
 let files: TeamFile[] = [];
 /** The agents of Settings → Agents: what a member can run as. */
@@ -398,6 +423,25 @@ function sidebar(): HTMLElement {
                     onClick: () => { office.companyFps = n; saveCompanyFps(n); render(); },
                   }, `${n} FPS`))),
               h("p", { class: "hint", text: "公司總覽裡每間辦公室戰鬥動畫的更新頻率。團隊多的時候調低比較省效能,只有一兩個團隊時可以調高。" }),
+              h("label", { text: "視窗背景" }),
+              h("div", { class: "segmented" },
+                ...([["auto", "自動"], ["glass", "玻璃"], ["deep", "加深"], ["solid", "不透明"]] as [Backdrop, string][]).map(([v, label]) =>
+                  h("button", {
+                    type: "button", class: backdrop() === v ? "on" : "",
+                    onClick: () => {
+                      try {
+                        if (v === "auto") localStorage.removeItem("coucou.window.backdrop");
+                        else localStorage.setItem("coucou.window.backdrop", v);
+                      } catch {
+                        /* this session only */
+                      }
+                      applyBackdrop();
+                      render();
+                    },
+                  }, label))),
+              h("p", { class: "hint", text: WIN10
+                ? "Windows 10 沒有毛玻璃,「玻璃」會直接透出後面的視窗;自動 = 不透明。"
+                : "玻璃會模糊透出桌面;背景太花時可以選加深或不透明。自動 = 玻璃。" }),
               h("label", { class: "side-pop-check" },
                 h("input", { type: "checkbox", checked: ambientMotion(), onChange: (e: Event) => { saveAmbientMotion((e.target as HTMLInputElement).checked); render(); } }),
                 "場地微動(中二模式)"),
