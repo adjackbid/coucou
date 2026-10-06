@@ -926,7 +926,6 @@ async fn explain_request(
     asked: State<'_, explain::Asked>,
     request_id: String,
 ) -> Result<String, String> {
-    let payload = asked.0.lock().unwrap().get(&request_id).cloned().ok_or("This request is no longer waiting.")?;
     let provider = {
         let settings = shared.settings.lock().unwrap();
         settings
@@ -937,6 +936,14 @@ async fn explain_request(
             .cloned()
     };
     let provider = provider.ok_or("秘書需要一個聊天模型:請先在 設定 → Chat providers 加入。")?;
+    // A team member's card: `team:<team>:<member>:<request id as JSON>`.
+    if let Some(rest) = request_id.strip_prefix("team:") {
+        let mut parts = rest.splitn(3, ':');
+        let (team, member, req) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or("null"));
+        let snap = teams.snapshots().into_iter().find(|s| s.id == team).ok_or("That team is not running.")?;
+        return explain::explain_team(&provider, &snap, member, req).await;
+    }
+    let payload = asked.0.lock().unwrap().get(&request_id).cloned().ok_or("This request is no longer waiting.")?;
     explain::explain(&provider, &payload, &teams.snapshots()).await
 }
 

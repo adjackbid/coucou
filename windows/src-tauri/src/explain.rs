@@ -133,6 +133,64 @@ pub fn brief(payload: &Value, teams: &[crate::team::state::Snapshot]) -> String 
     b
 }
 
+/// A team member's card, read the same way: the request as the agent sent it,
+/// Coucou's verdict on it, the member's task, and its own live screen as the
+/// account of what it was doing.
+pub fn team_brief(snap: &crate::team::state::Snapshot, member: &str, request_json: &str) -> Option<String> {
+    use crate::team::screen::LineKind;
+    let m = snap.members.iter().find(|m| m.id == member)?;
+    let wanted: Value = serde_json::from_str(request_json).unwrap_or(Value::Null);
+    let perm = m.permission.iter().chain(m.more_permissions.iter()).find(|p| p.request_id == wanted).or(m.permission.as_ref())?;
+    let payload = serde_json::json!({
+        "agent": format!("team member \"{}\" ({}) of the Coucou team \"{}\", running {} {}", m.name, m.role, snap.name, m.agent, m.model),
+        "tool_name": if perm.title.is_empty() { perm.kind.clone() } else { format!("{} — {}", perm.kind, perm.title) },
+        "cwd": snap.work_dir,
+        "tool_input": perm.raw_input,
+        "constitution": perm.rule.as_ref().map(|r| serde_json::json!({ "rule": r })),
+    });
+    let mut b = brief(&payload, std::slice::from_ref(snap));
+    if let Some(d) = &perm.danger {
+        b.push_str(&format!("\nTHE TEAM'S OWN POLICY held this for the person because it {}.\n", danger_word(d)));
+    } else {
+        b.push_str("\nTHE TEAM'S OWN POLICY held this for the person (step-by-step mode, or the constitution asks).\n");
+    }
+    if let Some(task) = m.task.as_ref().and_then(|t| snap.tasks.iter().find(|x| &x.id == t)) {
+        b.push_str(&format!("THE MEMBER'S TASK: {} {} — {}\n", task.id, task.title, clip(&task.detail, 900)));
+    }
+    let lines: Vec<String> = m
+        .screen
+        .iter()
+        .rev()
+        .take(30)
+        .map(|l| {
+            let tag = match l.kind {
+                LineKind::Say => "said",
+                LineKind::Think => "thought",
+                LineKind::Tool => "tool",
+                LineKind::Turn => "turn",
+            };
+            format!("[{tag}] {}", clip(&l.text, 600))
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    if !lines.is_empty() {
+        b.push_str("\nWHAT THE MEMBER WAS DOING (its own live screen, oldest first):\n");
+        b.push_str(&clip(&lines.join("\n"), MAX_TRANSCRIPT));
+        b.push('\n');
+    }
+    Some(b)
+}
+
+/// The team member's card, explained.
+pub async fn explain_team(provider: &crate::llm::Provider, snap: &crate::team::state::Snapshot, member: &str, request_json: &str) -> Result<String, String> {
+    let brief = team_brief(snap, member, request_json).ok_or("This request is no longer waiting.")?;
+    let chat = crate::llm::Chat::default();
+    let reply = crate::llm::send(&chat, provider, format!("{SYSTEM}\n\n=== BRIEF ===\n{brief}"), None, None).await?;
+    Ok(reply.text)
+}
+
 pub const SYSTEM: &str = "You help a person decide whether to allow a coding agent's request on their Windows computer. \
 Answer in Traditional Chinese (繁體中文), plainly, for someone who may not read code. Use exactly these sections:\n\
 【目的】what the agent is trying to achieve and why now (from its transcript and the request).\n\

@@ -447,6 +447,7 @@ function buildApproval(actions: ViewActions): ViewHost {
         // Another request: back to its command; its explanation, if asked for, is one click away.
         explained.style.display = "none";
         State.approvalExplaining = false;
+        el.classList.remove("explaining");
         setAskLabel("Ask");
       }
       // Built once per shape. Rebuilding the buttons between a mouse-down and a
@@ -465,6 +466,7 @@ function buildApproval(actions: ViewActions): ViewHost {
         // A second click goes back to the request itself.
         if (State.approvalExplaining) {
           State.approvalExplaining = false;
+          el.classList.remove("explaining");
           explained.style.display = "none";
           body.style.display = (r.sections ?? []).length ? "" : "none";
           setAskLabel("Ask");
@@ -473,6 +475,7 @@ function buildApproval(actions: ViewActions): ViewHost {
         }
         body.style.display = "none";
         explained.style.display = "";
+        el.classList.add("explaining");
         setAskLabel("指令");
         const cached = answers.get(r.requestId);
         if (cached) {
@@ -483,7 +486,7 @@ function buildApproval(actions: ViewActions): ViewHost {
         }
         const pending = actions.explain(r.requestId);
         if (!pending) {
-          explained.textContent = "這張卡片來自團隊或代理連線,秘書目前只能解讀島上 hook 送來的請求。";
+          explained.textContent = "這張卡片來自島上的代理聊天連線,秘書目前還不能解讀這一種。";
           return;
         }
         explained.textContent = "秘書解讀中…(讀取完整指令、工作資料夾與這個工作階段最近的紀錄)";

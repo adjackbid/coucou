@@ -834,8 +834,15 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  /* Centred while it fits; when it does not, it starts at the top instead of
+     spilling past both edges (and taking the buttons with it). */
+  justify-content: safe center;
   gap: 5px;
+}
+
+/* The decision row never gives up its room: what is above it scrolls. */
+.stack > .actions {
+  flex-shrink: 0;
 }
 
 .actions {
@@ -1668,7 +1675,8 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* 「Ask」: the secretary's reading of a waiting request, under it. */
 .explain {
-  max-height: 168px;
+  flex: 0 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 8px 10px;
   border-radius: 10px;
@@ -1679,4 +1687,13 @@ input[type="range"]::-webkit-slider-thumb {
   line-height: 1.55;
   white-space: pre-wrap;
   user-select: text;
+}
+
+/* While the secretary explains, the request's headline keeps to two lines. */
+.view.explaining .code-head {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex-shrink: 0;
 }

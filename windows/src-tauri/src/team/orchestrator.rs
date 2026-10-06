@@ -1897,6 +1897,11 @@ mod tests {
             let waiting = bench.until("the card shows", |s| s.members[0].status == MemberStatus::WaitingYou).await;
             let card = waiting.members[0].permission.clone().unwrap();
             assert_eq!(card.danger, Some(crate::policy::Danger::DeletesFolder));
+            // 「Ask」 on this card: the brief names the member, carries the request and the policy's reason.
+            let brief = crate::explain::team_brief(&waiting, "ai1", &serde_json::to_string(&card.request_id).unwrap()).expect("a brief for the card");
+            assert!(brief.contains("team member"), "{brief}");
+            assert!(brief.contains("held this for the person because it deletes a folder"), "{brief}");
+            assert!(brief.contains("THE REQUEST, IN FULL"), "{brief}");
             assert_eq!(waiting.members[0].waiting.as_ref().unwrap().on, YOU);
 
             bench.teams.permit("shop", "ai1", Some("no0".into()), false).await.unwrap();

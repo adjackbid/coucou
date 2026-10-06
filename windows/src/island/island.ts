@@ -172,7 +172,8 @@ export class Island {
       explain: (requestId) => {
         State.approvalExplaining = true;
         this.animateGeometry(false);
-        return /^(team|acp):/.test(requestId) ? null : Bridge.explainRequest(requestId);
+        // ACP chat sessions are not kept for explaining; hook and team cards are.
+        return requestId.startsWith("acp:") ? null : Bridge.explainRequest(requestId);
       },
       relayout: () => this.animateGeometry(!State.approvalExplaining),
       decide: (choice) => {
