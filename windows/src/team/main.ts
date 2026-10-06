@@ -28,30 +28,34 @@ import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPat
 const root = document.getElementById("team-root")!;
 
 /**
- * 視窗背景. Windows 10 gets no acrylic (it fights the move loop), so the
- * window behind would show through untouched: 自動 makes the sheet solid
- * there and leaves Windows 11's blurred glass alone. The person may pick.
+ * 玻璃濃度 (0–100): how dark a sheet lies over the system's blur. Windows
+ * draws the blur itself and its radius cannot be set; how much of the
+ * desktop shows through it can. Windows 11's acrylic is tinted already, so
+ * it starts bare; Windows 10's classic blur is not, so it starts at half.
  */
-type Backdrop = "auto" | "glass" | "deep" | "solid";
 const WIN10 = !!(window as unknown as { __coucouWin10?: boolean }).__coucouWin10;
-function backdrop(): Backdrop {
+const SHEET_DEFAULT = WIN10 ? 50 : 0;
+function sheet(): number {
   try {
-    const v = localStorage.getItem("coucou.window.backdrop");
-    return v === "glass" || v === "deep" || v === "solid" ? v : "auto";
+    const v = Number(localStorage.getItem("coucou.window.sheet"));
+    if (localStorage.getItem("coucou.window.sheet") !== null && Number.isFinite(v)) return Math.max(0, Math.min(100, v));
   } catch {
-    return "auto";
+    /* the default */
+  }
+  return SHEET_DEFAULT;
+}
+function applySheet(value = sheet()) {
+  document.documentElement.classList.toggle("win10", WIN10);
+  document.documentElement.style.setProperty("--sheet", String(value / 100));
+}
+function saveSheet(value: number) {
+  try {
+    localStorage.setItem("coucou.window.sheet", String(value));
+  } catch {
+    /* this session only */
   }
 }
-function applyBackdrop() {
-  const pick = backdrop();
-  // Windows 10 blurs too now (the classic blur, which does not lag): glass everywhere.
-  const effective = pick === "auto" ? "glass" : pick;
-  const cl = document.documentElement.classList;
-  cl.toggle("win10", WIN10);
-  cl.toggle("bd-deep", effective === "deep");
-  cl.toggle("bd-solid", effective === "solid");
-}
-applyBackdrop();
+applySheet();
 
 let dir = "";
 let files: TeamFile[] = [];
@@ -424,23 +428,27 @@ function sidebar(): HTMLElement {
                     onClick: () => { office.companyFps = n; saveCompanyFps(n); render(); },
                   }, `${n} FPS`))),
               h("p", { class: "hint", text: "公司總覽裡每間辦公室戰鬥動畫的更新頻率。團隊多的時候調低比較省效能,只有一兩個團隊時可以調高。" }),
-              h("label", { text: "視窗背景" }),
-              h("div", { class: "segmented" },
-                ...([["auto", "自動"], ["glass", "玻璃"], ["deep", "加深"], ["solid", "不透明"]] as [Backdrop, string][]).map(([v, label]) =>
-                  h("button", {
-                    type: "button", class: backdrop() === v ? "on" : "",
-                    onClick: () => {
-                      try {
-                        if (v === "auto") localStorage.removeItem("coucou.window.backdrop");
-                        else localStorage.setItem("coucou.window.backdrop", v);
-                      } catch {
-                        /* this session only */
-                      }
-                      applyBackdrop();
-                      render();
-                    },
-                  }, label))),
-              h("p", { class: "hint", text: "玻璃會模糊透出桌面;背景太花時可以選加深或不透明。自動 = 玻璃。" }),
+              h("label", { text: "玻璃濃度" }),
+              (() => {
+                const shown = h("b", { class: "sheet-value", text: `${sheet()}%` });
+                const slider = h("input", {
+                  type: "range", min: "0", max: "100", step: "1", value: String(sheet()), class: "sheet-slider",
+                  "aria-label": "玻璃濃度",
+                  // Dragging previews at once — the window itself is the preview.
+                  onInput: (e: Event) => {
+                    const v = Number((e.target as HTMLInputElement).value);
+                    applySheet(v);
+                    shown.textContent = `${v}%`;
+                  },
+                  onChange: (e: Event) => saveSheet(Number((e.target as HTMLInputElement).value)),
+                }) as HTMLInputElement;
+                const preset = (label: string, v: number) =>
+                  h("button", { type: "button", onClick: () => { slider.value = String(v); applySheet(v); saveSheet(v); shown.textContent = `${v}%`; } }, label);
+                return h("div", { class: "sheet-row" },
+                  h("div", { class: "sheet-line" }, slider, shown),
+                  h("div", { class: "segmented" }, preset("玻璃", SHEET_DEFAULT), preset("加深", 80), preset("不透明", 100)));
+              })(),
+              h("p", { class: "hint", text: "越低,模糊的桌面透出越多;越高越接近實色。模糊本身的強度由 Windows 決定,無法調整。拖動時視窗會即時變化。" }),
               h("label", { class: "side-pop-check" },
                 h("input", { type: "checkbox", checked: ambientMotion(), onChange: (e: Event) => { saveAmbientMotion((e.target as HTMLInputElement).checked); render(); } }),
                 "場地微動(中二模式)"),

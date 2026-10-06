@@ -86,24 +86,12 @@ html.demo body.team-window {
   box-shadow: var(--edge);
 }
 
-/* Windows 10: no DWM rounding and no acrylic behind the window — the page
-   itself becomes the dark sheet, with the rounded corners cut in CSS (the
-   window is transparent, so the corners show the desktop like Win11's do). */
-/* Windows 10's classic blur carries no tint of its own: the page lays the
-   same dark glaze Windows 11's acrylic does (0x73 of #0B0C0E). The window
-   region rounds the corners. */
-html.win10:not(.bd-deep):not(.bd-solid) body.team-window {
-  background: rgba(11, 12, 14, 0.5);
-}
-
-/* 視窗背景: glass lets the desktop through (Win11 blurs it); deeper and solid
-   do not. Windows 10 has no blur, so 自動 picks solid there. */
-html.bd-deep body.team-window {
-  background: rgba(19, 20, 25, 0.8);
-}
-
-html.bd-solid body.team-window {
-  background: #131419;
+/* 玻璃濃度: a dark sheet laid over the system's blur (Win11 acrylic, Win10's
+   classic blur). The blur's own radius is the system's and cannot be set;
+   how much of the desktop shows through it can — 0 is the bare glass, 1 an
+   opaque sheet. The demo page keeps its own painted desktop. */
+html:not(.demo) body.team-window {
+  background: rgba(19, 20, 25, var(--sheet, 0));
 }
 
 /* Someone who turned transparency off gets the same layout, opaque. */
@@ -2954,4 +2942,30 @@ h2 {
   color: var(--ink);
   font-size: 13px;
   margin-top: 10px;
+}
+
+.side-pop-body .sheet-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.side-pop-body .sheet-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.side-pop-body .sheet-slider {
+  flex: 1;
+  accent-color: #4f8cff;
+  padding: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.side-pop-body .sheet-value {
+  min-width: 40px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
