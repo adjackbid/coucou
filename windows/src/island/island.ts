@@ -168,6 +168,13 @@ export class Island {
       openUrl: (url) => {
         if (url) void Bridge.openUrl(url);
       },
+      // Only the hook's own requests are kept for explaining; team and ACP cards are not (yet).
+      explain: (requestId) => {
+        State.approvalExplaining = true;
+        this.animateGeometry(false);
+        return /^(team|acp):/.test(requestId) ? null : Bridge.explainRequest(requestId);
+      },
+      relayout: () => this.animateGeometry(!State.approvalExplaining),
       decide: (choice) => {
         const req = State.pendingApproval;
         void Bridge.log(`decide ${choice} req=${req?.requestId ?? "none"}`);
@@ -691,6 +698,7 @@ export class Island {
       State.mode, State.view, State.chatHistory.length, State.pendingApproval?.lines ?? 0,
       Math.min(State.pillTasks.length, MAX_PILLS), State.extraCards.length,
       State.focusTask?.question ?? null, !!State.focusTask?.pty,
+      State.approvalExplaining,
     );
     const r = State.mode === "expanded" ? EXPANDED_CORNER : ROUNDED_CORNER;
     return { w, h, r };

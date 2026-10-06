@@ -180,10 +180,15 @@ async fn handle(app: AppHandle, mut pipe: NamedPipeServer) {
     }
     payload["request_id"] = json!(id);
     log::line(format!("hook {agent} PermissionRequest id={id}"));
+    // Kept for 「Ask」 while the card waits: the request in full, as it came.
+    let mut kept = payload.clone();
+    kept["agent"] = json!(agent);
+    app.state::<crate::explain::Asked>().0.lock().unwrap().insert(id.clone(), kept);
     let _ = app.emit_to(WINDOW_LABEL, "hook", payload);
 
     let decision = wait_for_decision(&id, &mut rx).await;
     app.state::<Pending>().0.lock().unwrap().remove(&id);
+    app.state::<crate::explain::Asked>().0.lock().unwrap().remove(&id);
 
     // No decision: say nothing at all. coucou-hook then writes nothing to stdout
     // and Claude Code asks in the terminal, exactly as if Coucou were closed.

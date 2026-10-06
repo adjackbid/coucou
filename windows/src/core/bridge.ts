@@ -73,6 +73,8 @@ export const Bridge = {
   hooksApply: (agent: HookAgent, install: boolean, fingerprint: string) =>
     callOrThrow<string>("hooks_apply", { agentName: agent, install, fingerprint }),
 
+  /** 「Ask」: the secretary's model explains a waiting request (purpose, effect, risk). */
+  explainRequest: (requestId: string) => callOrThrow<string>("explain_request", { requestId }),
   approvalDecision: (requestId: string, decision: "allow" | "deny") =>
     call<void>("approval_decision", { requestId, decision }),
   /** "The card is up" — until this lands the relay only waits a moment. */

@@ -24,6 +24,10 @@ export interface ViewActions {
   /** `terminal` gives the request back unanswered, for Claude Code to ask itself. */
   /** `allow-all`: a team member asked for several steps at once. */
   decide(d: "allow" | "deny" | "terminal" | "allow-all"): void;
+  /** 「Ask」: the secretary explains the waiting request; null when it cannot be explained. */
+  explain(requestId: string): Promise<string> | null;
+  /** The card changed what it shows: size the island to it again. */
+  relayout(): void;
   /** Answers the current field of the focused session's question, in its terminal. */
   answerQuestion(answer: QuestionAnswer): Promise<void>;
   toggleSound(): void;
@@ -394,8 +398,19 @@ function buildApproval(actions: ViewActions): ViewHost {
   const head = h("div", { class: "code-head" });
   const body = h("div", { class: "code" });
   const note = h("div", { class: "sub" });
+  // 「Ask」's answer: the secretary's reading of the request, under it.
+  const explained = h("div", { class: "explain" });
+  explained.style.display = "none";
+  const answers = new Map<string, string>();
+  let askBtn: HTMLElement | null = null;
+  const setAskLabel = (text: string) => {
+    if (!askBtn) return;
+    const label = askBtn.querySelector(".btn-label");
+    if (label) label.textContent = text;
+    else askBtn.textContent = text;
+  };
   const row = h("div", { class: "actions" });
-  const el = h("div", { class: "view" }, card("amber", stack(116, 16, who, head, body, note, row)));
+  const el = h("div", { class: "view" }, card("amber", stack(116, 16, who, head, body, note, explained, row)));
   // Null so the first sync always lays the body out, even with no request.
   let bodyKey: string | null = null;
   let rowKey = "";
@@ -429,6 +444,10 @@ function buildApproval(actions: ViewActions): ViewHost {
           ? "Too long to show in full here. The terminal has all of it."
           : "";
         note.style.display = req?.truncated ? "" : "none";
+        // Another request: back to its command; its explanation, if asked for, is one click away.
+        explained.style.display = "none";
+        State.approvalExplaining = false;
+        setAskLabel("Ask");
       }
       // Built once per shape. Rebuilding the buttons between a mouse-down and a
       // mouse-up would swallow the click, and the shape only changes with the
@@ -440,8 +459,49 @@ function buildApproval(actions: ViewActions): ViewHost {
       if (rowKey === shape) return;
       rowKey = shape;
       clear(row);
+      const ask = () => {
+        const r = State.pendingApproval;
+        if (!r) return;
+        // A second click goes back to the request itself.
+        if (State.approvalExplaining) {
+          State.approvalExplaining = false;
+          explained.style.display = "none";
+          body.style.display = (r.sections ?? []).length ? "" : "none";
+          setAskLabel("Ask");
+          actions.relayout();
+          return;
+        }
+        body.style.display = "none";
+        explained.style.display = "";
+        setAskLabel("指令");
+        const cached = answers.get(r.requestId);
+        if (cached) {
+          explained.textContent = cached;
+          State.approvalExplaining = true;
+          actions.relayout();
+          return;
+        }
+        const pending = actions.explain(r.requestId);
+        if (!pending) {
+          explained.textContent = "這張卡片來自團隊或代理連線,秘書目前只能解讀島上 hook 送來的請求。";
+          return;
+        }
+        explained.textContent = "秘書解讀中…(讀取完整指令、工作資料夾與這個工作階段最近的紀錄)";
+        const id = r.requestId;
+        pending.then(
+          (text) => {
+            answers.set(id, text);
+            if (State.pendingApproval?.requestId === id) explained.textContent = text;
+          },
+          (e) => {
+            if (State.pendingApproval?.requestId === id) explained.textContent = `秘書無法解讀:${String(e).replace(/^Error:\s*/, "")}`;
+          },
+        );
+      };
+      askBtn = btn("Ask", "secondary", ask);
       row.append(
         btn("Deny", "secondary", () => actions.decide("deny"), "N"),
+        askBtn,
         shape === "terminal"
           ? btn("Ask in terminal", "primary", () => actions.decide("terminal"))
           : btn("Allow", "primary", () => actions.decide("allow"), "Y"),

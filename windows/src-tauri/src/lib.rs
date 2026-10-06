@@ -16,6 +16,7 @@ mod meter;
 mod pipe;
 mod policy;
 mod constitution;
+mod explain;
 mod cost;
 mod pricing;
 mod secrets;
@@ -916,6 +917,29 @@ fn secretary_providers(shared: State<Shared>) -> Vec<(String, String, String)> {
     out
 }
 
+/// 「Ask」on a permission card: the secretary's model explains what the
+/// waiting request is for and what it risks. No tools, nothing is decided.
+#[tauri::command]
+async fn explain_request(
+    shared: State<'_, Shared>,
+    teams: State<'_, Arc<Teams>>,
+    asked: State<'_, explain::Asked>,
+    request_id: String,
+) -> Result<String, String> {
+    let payload = asked.0.lock().unwrap().get(&request_id).cloned().ok_or("This request is no longer waiting.")?;
+    let provider = {
+        let settings = shared.settings.lock().unwrap();
+        settings
+            .providers
+            .iter()
+            .find(|p| p.id == settings.active_provider)
+            .or_else(|| settings.providers.first())
+            .cloned()
+    };
+    let provider = provider.ok_or("秘書需要一個聊天模型:請先在 設定 → Chat providers 加入。")?;
+    explain::explain(&provider, &payload, &teams.snapshots()).await
+}
+
 /// The person asks the secretary something. Steps are told to the Teamwork
 /// window as they happen (`secretary-step`).
 #[tauri::command]
@@ -1300,6 +1324,7 @@ pub fn run() {
             hotkey_error: Mutex::new(None),
         })
         .manage(Pending::default())
+        .manage(explain::Asked::default())
         .manage(Chat::default())
         .manage(agents.clone())
         .manage(Arc::new(secretary::Secretary::default()))
@@ -1374,6 +1399,7 @@ pub fn run() {
             constitution_save,
             constitution_try,
             secretary_ask,
+            explain_request,
             secretary_confirm,
             secretary_decline,
             secretary_reset,

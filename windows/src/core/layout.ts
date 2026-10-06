@@ -116,7 +116,10 @@ const CODE_LINE_H = 16;
  * is the familiar 160 pt card, and the cap keeps the island a card rather
  * than a window.
  */
-export function approvalHeight(lines: number): number {
+export function approvalHeight(lines: number, explaining = false): number {
+  // 「Ask」: the secretary's reading takes the request's place, at the card's
+  // full height (the island window is no taller than that).
+  if (explaining) return APPROVAL_MAX_H;
   return Math.min(APPROVAL_MAX_H, APPROVAL_MIN_H + Math.round(Math.max(0, lines - 1) * CODE_LINE_H));
 }
 
@@ -183,6 +186,7 @@ export function islandSize(
   extraCards = 0,
   question: Parameters<typeof questionHeight>[0] = null,
   questionInput = false,
+  explaining = false,
 ): { w: number; h: number } {
   switch (mode) {
     case "hidden":
@@ -194,7 +198,7 @@ export function islandSize(
     case "expanded": {
       const h =
         view === "prompt" ? chatPromptHeight(chatCount)
-        : view === "approval" ? approvalHeight(approvalLines)
+        : view === "approval" ? approvalHeight(approvalLines, explaining)
         : view === "overview" ? overviewHeight(pillCount)
         : view === "question" ? questionHeight(question, questionInput)
         : VIEW_LAYOUTS[view].height;
