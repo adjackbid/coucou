@@ -118,6 +118,17 @@ export function saveCompanyLive(on: boolean) {
 }
 
 /** 場地微動: each world's light weather (embers, snow, leaves…); on unless turned off. */
+/** 戰鬥節奏: how often the fight skirmishes between real events. */
+export type Tempo = "calm" | "normal" | "fierce";
+export function battleTempo(): Tempo {
+  const v = read("coucou.battle.tempo");
+  return v === "calm" || v === "fierce" ? v : "normal";
+}
+
+export function saveBattleTempo(t: Tempo) {
+  write("coucou.battle.tempo", t === "normal" ? null : t);
+}
+
 export function ambientMotion(): boolean {
   return read("coucou.battle.ambient") !== "off";
 }

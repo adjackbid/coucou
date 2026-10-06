@@ -314,6 +314,8 @@ export class Office {
       name: (memberId: string) => store.member(teamId, memberId)?.displayName ?? memberId,
       taskTitle: (taskId: string) => store.task(taskId)?.title ?? "任務",
       members: () => store.members(teamId).map((m) => m.memberId),
+      // Only members really at work skirmish with the boss.
+      busy: () => store.members(teamId).filter((m) => m.workStatus === "working" || m.workStatus === "reviewing" || m.workStatus === "planning").map((m) => m.memberId),
       live: () => this.companyLive,
       world: () => savedWorld(teamId),
       turns: () => {

@@ -23,7 +23,7 @@ import { WORLDS, type WorldId } from "./worlds";
 import { Weather } from "./weather";
 import { vfxReady, whenVfxReady } from "./vfx";
 import { bossTex, ELEMENT_OF, heroTex } from "./vfxPlay";
-import { ambientMotion } from "./session";
+import { ambientMotion, battleTempo } from "./session";
 import { RULES, SKILLS, SkillDirector, type Contribution, type HitPlan, type SkillId } from "./skills";
 
 export const HERO_COLOR: Record<HeroClass, string> = {
@@ -50,6 +50,8 @@ export interface LayerHost {
   taskTitle(taskId: string): string;
   /** The team's members, in their order. */
   members(): string[];
+  /** Members at work right now (working, reviewing, planning): they skirmish. */
+  busy?(): string[];
   /** 減少動態: states and small marks, nothing moving. */
   calm(): boolean;
   /** Someone waiting on the person, for a counter that names no one. */
@@ -218,8 +220,14 @@ const SAYS: Partial<Record<BattleSignal["kind"], string[]>> = {
  */
 export const PACE = {
   /** The boss lashes out on its own: first after this long idle, then every so often. */
-  idleFirst: [10000, 20000] as [number, number],
-  idleEvery: [10000, 30000] as [number, number],
+  idleFirst: [6000, 12000] as [number, number],
+  idleEvery: [8000, 16000] as [number, number],
+  /** 交戰: a working member probes the boss this often (by 戰鬥節奏). */
+  skirmish: { calm: [14000, 26000], normal: [5000, 10000], fierce: [2200, 4500] } as Record<string, [number, number]>,
+  /** …and the boss answers a probe this often. */
+  answer: { calm: 0.25, normal: 0.45, fierce: 0.65 } as Record<string, number>,
+  /** The boss's own lashes, scaled by the tempo. */
+  idleScale: { calm: 1.8, normal: 1, fierce: 0.55 } as Record<string, number>,
   /** Turns burned this fast goad the ultimate… */
   burnTurns: 4,
   burnWindow: 45000,
@@ -243,6 +251,9 @@ export class BattleLayer implements SceneLayer {
   private idleAt = 0;
   /** Under the seal: when it next strains against the runes. */
   private struggleAt = 0;
+  /** 交戰: the probes playing now, and when the next one comes. */
+  private skirmishes: { member: string; skill: SkillId; startedAt: number; landed: boolean }[] = [];
+  private skirmishAt = 0;
   /** 場地微動: the world's own light weather (none in the office world). */
   private weather: Weather | null = null;
   /** Turns seen last update, recent burns, and when the last pressure ultimate played. */
@@ -605,9 +616,72 @@ export class BattleLayer implements SceneLayer {
     this.say(s.kind);
   }
 
+  /**
+   * 交戰: a member at work probes the boss with a light version of its move —
+   * no card, no number, no HP: the record alone moves the bar. Never over a
+   * real move, never on the company map, never under 減少動態.
+   */
+  private skirmishTick(now: number) {
+    const ok = this.frozen === null && !this.scene.mini && !this.host.calm() && vfxReady() && this.vm?.bossState === "engaged" && !this.queue.busy;
+    if (!ok) {
+      this.skirmishAt = 0;
+      return;
+    }
+    const tempo = battleTempo();
+    if (!this.skirmishAt) {
+      this.skirmishAt = now + between(PACE.skirmish[tempo]) * 0.5;
+      return;
+    }
+    if (now < this.skirmishAt) return;
+    this.skirmishAt = now + between(PACE.skirmish[tempo]);
+    const busy = (this.host.busy?.() ?? []).filter((m) => this.scene.mochi(m));
+    if (!busy.length) return;
+    const member = busy[Math.floor(Math.random() * busy.length)];
+    const skill = this.host.skill(member);
+    if (!SKILLS[skill] || SKILLS[skill].family === "support") return;
+    this.skirmishes.push({ member, skill, startedAt: now, landed: false });
+    wake();
+  }
+
+  private drawSkirmishes(ctx: CanvasRenderingContext2D, b: NonNullable<ReturnType<BattleLayer["bossPoints"]>>, now: number) {
+    if (!this.skirmishes.length) return;
+    const tempo = battleTempo();
+    this.skirmishes = this.skirmishes.filter((sk) => {
+      const sp = SKILLS[sk.skill];
+      const [a, c, i, end] = sp.phases;
+      const ms = now - sk.startedAt;
+      if (ms > end) return false;
+      const at = this.origin(sk.member);
+      if (!at) return false;
+      // A lighter hand: smaller, a little dimmer than a real blow.
+      ctx.save();
+      ctx.globalAlpha *= 0.85;
+      heroTex(ctx, {
+        ms, phases: [a, c, i, end], casters: [{ at, element: ELEMENT_OF[sk.skill] ?? "crescent", colour: sp.palette[0] }],
+        target: b.hit, feet: b.feet, palette: sp.palette, scale: b.scale * 0.8, combo: false, trinity: false,
+      });
+      ctx.restore();
+      if (ms >= c && !sk.landed) {
+        sk.landed = true;
+        // The boss flinches, a little; the bar does not move.
+        this.hurtAt = this.now();
+        const d = Math.hypot(b.hit.x - at.x, b.hit.y - at.y) || 1;
+        this.knock = { x: (b.hit.x - at.x) / d, y: (b.hit.y - at.y) / d, at: this.now(), power: 0.45 };
+        this.weather?.stir(b.hit, 0.6);
+        // Now and then the boss answers whoever struck.
+        if (!this.bossCue && Math.random() < (PACE.answer[tempo] ?? 0.4)) {
+          const who = sk.member;
+          window.setTimeout(() => this.idleMenace(this.now(), who), 650);
+        }
+      }
+      return true;
+    });
+  }
+
   /** An unprovoked lash: one of this boss's light attacks at a random member, nothing real behind it. */
-  private idleMenace(now: number) {
-    this.idleAt = now + between(PACE.idleEvery);
+  private idleMenace(now: number, target?: string) {
+    if (target && (this.bossCue || this.vm?.bossState !== "engaged" || !this.boss)) return;
+    this.idleAt = now + between(PACE.idleEvery) * (PACE.idleScale[battleTempo()] ?? 1);
     const world = WORLDS[this.worldId];
     const kit = BOSS_KIT[world.bossId as WorldBossId];
     const vm = this.vm;
@@ -616,7 +690,7 @@ export class BattleLayer implements SceneLayer {
     const moveId = pick < 0.78 ? kit.attacks[Math.floor(Math.random() * 3)] : kit.guard;
     const move = BOSS_MOVES[moveId];
     const members = this.host.members();
-    const at = members[Math.floor(Math.random() * members.length)];
+    const at = target ?? members[Math.floor(Math.random() * members.length)];
     const signal: BattleSignal = {
       teamId: vm.teamId, runId: vm.runId, signalId: `idle|${now}`, kind: "boss_counter",
       source: { teamId: vm.teamId, runId: vm.runId, kind: "manual_replay", streamId: null, domainSeq: null, taskIds: [], memberIds: at ? [at] : [], questionIds: [] },
@@ -878,9 +952,10 @@ export class BattleLayer implements SceneLayer {
     // 平常也要出招: with nothing on, the boss still lashes out now and then —
     // pure temper, no damage, no card, and never while real moves play.
     if (!this.bossCue && !active.length && this.frozen === null && !this.scene.mini && this.worldId !== "office" && this.vm?.bossState === "engaged") {
-      if (!this.idleAt) this.idleAt = now + between(PACE.idleFirst);
+      if (!this.idleAt) this.idleAt = now + between(PACE.idleFirst) * (PACE.idleScale[battleTempo()] ?? 1);
       else if (now >= this.idleAt) this.idleMenace(now);
     }
+    this.skirmishTick(now);
     const hurt = Math.max(0, 1 - (now - this.hurtAt) / 260);
     if (hurt > 0.15 && look !== "defeated") look = "hurt";
     this.setLook(look);
@@ -1014,6 +1089,18 @@ export class BattleLayer implements SceneLayer {
     const b = this.bossPoints();
     if (!b || this.still) return null;
     const now = this.now();
+    // A probe's lunge, smaller than a real blow's.
+    for (const sk of this.skirmishes) {
+      if (sk.member !== memberId) continue;
+      const [a, c] = SKILLS[sk.skill].phases;
+      const m = this.scene.mochi(memberId);
+      if (!m) break;
+      const ms = now - sk.startedAt;
+      const d = Math.hypot(b.hit.x - m.x, b.hit.y - m.y) || 1;
+      const k = bell(span(ms, a * 0.5, c + 120));
+      const reach = SKILLS[sk.skill].family === "weapon" ? 24 : 10;
+      return { x: ((b.hit.x - m.x) / d) * reach * k, y: ((b.hit.y - m.y) / d) * reach * k };
+    }
     for (const e of this.queue.active) {
       const ms = now - (e.startedAt ?? now);
       if (e.plan?.memberIds.includes(memberId) && e.plan.skillId) {
@@ -1074,7 +1161,7 @@ export class BattleLayer implements SceneLayer {
     if (!this.fx) return;
     const weather = this.weatherOn;
     if (!weather && this.weather?.count) this.weather.clear();
-    if (!active.length && !this.particles.length && !this.bossCue && !weather) return this.clearFx();
+    if (!active.length && !this.particles.length && !this.bossCue && !weather && !this.skirmishes.length) return this.clearFx();
     const c = this.scene.cropBox;
     const res = Math.min(2, window.devicePixelRatio || 1) * Math.min(1, Math.max(0.25, this.scene.scale));
     const W = Math.round(c.w * res);
@@ -1093,6 +1180,7 @@ export class BattleLayer implements SceneLayer {
     if (!b) return;
     // Weather first: everything the fight draws goes over it. It gives way when the fight is busy.
     if (weather) this.weather!.tick(ctx, dt, this.scene.cropBox, this.keepOut(), active.length > 0 || !!this.bossCue || this.particles.length > 40);
+    this.drawSkirmishes(ctx, b, now);
     for (const e of active) this.effect(ctx, e, now - e.startedAt!, b);
     this.drawCue(ctx, b, now);
     this.drawParticles(ctx, this.stopped ? 0 : dt);

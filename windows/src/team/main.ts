@@ -19,7 +19,7 @@ import { linksScreen, logScreen, openThread, type Page } from "./screens";
 import { companyName, Office, setCompanyName } from "./office/office";
 import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
-import { ambientMotion, saveAmbientMotion, saveCompanyFps } from "./office/battle/session";
+import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCompanyFps, type Tempo } from "./office/battle/session";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
 import { onStep as secretaryStep, secretaryName, secretaryPage, secretaryTitle, setSecretaryName, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
@@ -449,6 +449,11 @@ function sidebar(): HTMLElement {
                   h("div", { class: "segmented" }, preset("玻璃", SHEET_DEFAULT), preset("加深", 80), preset("不透明", 100)));
               })(),
               h("p", { class: "hint", text: "越低,模糊的桌面透出越多;越高越接近實色。模糊本身的強度由 Windows 決定,無法調整。拖動時視窗會即時變化。" }),
+              h("label", { text: "戰鬥節奏(中二模式)" }),
+              h("div", { class: "segmented" },
+                ...([["calm", "平靜"], ["normal", "一般"], ["fierce", "激烈"]] as [Tempo, string][]).map(([v, label]) =>
+                  h("button", { type: "button", class: battleTempo() === v ? "on" : "", onClick: () => { saveBattleTempo(v); render(); } }, label))),
+              h("p", { class: "hint", text: "AI 在工作時,英雄多久出手試探一次、魔王多常反擊。只是演出:不扣血、不出卡片,HP 只看真實的任務驗收。" }),
               h("label", { class: "side-pop-check" },
                 h("input", { type: "checkbox", checked: ambientMotion(), onChange: (e: Event) => { saveAmbientMotion((e.target as HTMLInputElement).checked); render(); } }),
                 "場地微動(中二模式)"),
