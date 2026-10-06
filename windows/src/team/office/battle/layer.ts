@@ -52,6 +52,8 @@ export interface LayerHost {
   members(): string[];
   /** Members at work right now (working, reviewing, planning): they skirmish. */
   busy?(): string[];
+  /** Draw the office again (the HUD follows the final blow). */
+  rerender?(): void;
   /** 減少動態: states and small marks, nothing moving. */
   calm(): boolean;
   /** Someone waiting on the person, for a counter that names no one. */
@@ -251,6 +253,16 @@ export class BattleLayer implements SceneLayer {
   private idleAt = 0;
   /** Under the seal: when it next strains against the runes. */
   private struggleAt = 0;
+  /**
+   * The Leader's final blow is on its way: until it lands the boss is still
+   * sealed — sealed pose, the sliver of HP, no last words — whatever the
+   * record already says.
+   */
+  finishPending = false;
+  /** The run whose final blow has landed: it never waits for one again. */
+  private blowLanded = "";
+  /** When the wait began: a blow that never comes is not waited for forever. */
+  private pendingSince = 0;
   /** 交戰: the probes playing now, and when the next one comes. */
   private skirmishes: { member: string; skill: SkillId; startedAt: number; landed: boolean }[] = [];
   private skirmishAt = 0;
@@ -456,7 +468,7 @@ export class BattleLayer implements SceneLayer {
   /** The boss's picture as the work stands, before any move plays. */
   private baseLook(): Look {
     const vm = this.vm;
-    if (vm?.bossState === "defeated") return "defeated";
+    if (vm?.bossState === "defeated") return this.finishPending ? "sealed" : "defeated";
     if (vm?.bossState === "sealing") return "sealed";
     if (vm?.bossState === "engaged" && (vm.phase === "rage" || vm.phase === "last_seal")) return "rage";
     return "idle";
@@ -510,6 +522,10 @@ export class BattleLayer implements SceneLayer {
 
   /** Everything playing or waiting is let go: hidden, another run, paused, the mode turned off. What was shown stays shown. */
   stop() {
+    if (this.finishPending) {
+      this.finishPending = false;
+      this.host.rerender?.();
+    }
     this.queue.clear();
     this.director.cancel();
     this.bossCue = null;
@@ -564,6 +580,10 @@ export class BattleLayer implements SceneLayer {
         wake();
         return;
       }
+    }
+    if (s.kind === "victory" && this.vm && this.vm.runId !== this.blowLanded) {
+      this.finishPending = true;
+      this.pendingSince = performance.now();
     }
     this.queue.push(s);
     wake();
@@ -955,6 +975,10 @@ export class BattleLayer implements SceneLayer {
       if (!this.idleAt) this.idleAt = now + between(PACE.idleFirst) * (PACE.idleScale[battleTempo()] ?? 1);
       else if (now >= this.idleAt) this.idleMenace(now);
     }
+    if (this.finishPending && performance.now() - this.pendingSince > 6000) {
+      this.finishPending = false;
+      this.host.rerender?.();
+    }
     this.skirmishTick(now);
     const hurt = Math.max(0, 1 - (now - this.hurtAt) / 260);
     if (hurt > 0.15 && look !== "defeated") look = "hurt";
@@ -1006,11 +1030,11 @@ export class BattleLayer implements SceneLayer {
       scale: b.scale,
     };
     const targets: Pt[] = [];
-    for (const id of ac.signal.source.memberIds.length ? ac.signal.source.memberIds : [this.host.waiting()].filter((m): m is string => !!m)) {
+    for (const id of ac.signal.source.memberIds?.length ? ac.signal.source.memberIds : [this.host.waiting()].filter((m): m is string => !!m)) {
       const m = this.scene.mochi(id);
       if (m) targets.push({ x: m.x, y: m.y + m.size * 0.3 });
     }
-    for (const tid of ac.signal.source.taskIds) {
+    for (const tid of ac.signal.source.taskIds ?? []) {
       const owner = this.taskOwner?.(tid);
       const m = owner ? this.scene.mochi(owner) : null;
       if (m) targets.push({ x: m.x, y: m.y + m.size * 0.3 });
@@ -1298,7 +1322,7 @@ export class BattleLayer implements SceneLayer {
     const label = this.label(e.kind, e.signal);
     // Marks about the boss go on its chest, beside where blows land; its words go over its head.
     const head = { x: b.hit.x + 90 * b.scale, y: b.hit.y - 20 };
-    if (this.once(e, "say")) this.say(e.kind);
+    if (e.kind !== "victory" && this.once(e, "say")) this.say(e.kind);
     switch (e.kind) {
       case "delivery_waiting": {
         // The member's move meets the review shield: a ripple, no number.
@@ -1425,6 +1449,10 @@ export class BattleLayer implements SceneLayer {
           glow(ctx, at.x, at.y, 46, GOLD, 0.5 * (1 - k * 0.4));
         }
         if (ms >= 700 && this.once(e, "impact")) {
+          this.finishPending = false;
+          this.blowLanded = this.vm?.runId ?? this.blowLanded;
+          this.host.rerender?.();
+          this.say("victory");
           this.hurtAt = this.now();
           const sliver = Math.max(1, Math.round((this.vm?.maxHp ?? 100) * 0.02));
           this.float({ text: `-${sliver}`, sub: "Leader・最後一擊", tone: "hit" }, { x: b.hit.x + 70, y: b.hit.y - 40 });

@@ -315,6 +315,7 @@ export class Office {
       taskTitle: (taskId: string) => store.task(taskId)?.title ?? "任務",
       members: () => store.members(teamId).map((m) => m.memberId),
       // Only members really at work skirmish with the boss.
+      rerender: () => this.host.render(),
       busy: () => store.members(teamId).filter((m) => m.workStatus === "working" || m.workStatus === "reviewing" || m.workStatus === "planning").map((m) => m.memberId),
       live: () => this.companyLive,
       world: () => savedWorld(teamId),
@@ -1088,7 +1089,7 @@ export class Office {
       this.trouble(),
       this.notice ? h("div", { class: "office-notice", role: "status", text: this.notice }) : null,
       h("div", { class: "office-body" },
-        h("div", { class: "office-main" }, h("div", { class: `office-frame${battle ? " battle" : ""}` }, scene.el, battle && vm ? bossHud(vm, WORLDS[savedWorld(teamId)]) : null, battle && vm ? teamBar(this.runs.get(teamId) && this.runs.get(teamId)!.maxTurns ? { used: this.runs.get(teamId)!.totalTurns, max: this.runs.get(teamId)!.maxTurns } : null) : null), extra, roster),
+        h("div", { class: "office-main" }, h("div", { class: `office-frame${battle ? " battle" : ""}` }, scene.el, battle && vm ? bossHud(this.blowPending(teamId) ? { ...vm, bossState: "sealing" } : vm, WORLDS[savedWorld(teamId)]) : null, battle && vm ? teamBar(this.runs.get(teamId) && this.runs.get(teamId)!.maxTurns ? { used: this.runs.get(teamId)!.totalTurns, max: this.runs.get(teamId)!.maxTurns } : null) : null), extra, roster),
         side),
     );
   }
@@ -1382,6 +1383,12 @@ export class Office {
   }
 
   /** Development only: a team's battle layer, to hold one move still and look at it. */
+  /** The Leader's final blow has not landed yet in this team's room. */
+  private blowPending(teamId: string): boolean {
+    const l = this.scenes.get(teamId)?.currentLayer;
+    return l instanceof BattleLayer && l.finishPending;
+  }
+
   debugLayer(teamId: string): BattleLayer | null {
     const layer = this.scenes.get(teamId)?.currentLayer;
     return layer instanceof BattleLayer ? layer : null;

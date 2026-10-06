@@ -115,6 +115,21 @@ describe("中二模式 — what must never look like a win", () => {
     });
   }
 
+  it("a member's error keeps every source list (no undefined taskIds to crash the boss's answer)", () => {
+    const work = { teamId: TEAM, runId: RUN, taskId: "t1", revision: 1, title: "a", status: "in_progress", assigneeMemberId: "ai1", includeInProgress: true, parentTaskId: null } as TaskInput;
+    const before = observe(input([work], "running", false), 1);
+    const after = observe(input([work], "running", false), 2);
+    before.members.set("ai1", "working" as never);
+    after.members.set("ai1", "error" as never);
+    const d = diff(before, after, { completionOrdinal: 0, observedAt: "" });
+    const s = d.signals.find((x) => x.kind === "member_interrupted");
+    expect(s).toBeTruthy();
+    expect(s!.source.memberIds).toEqual(["ai1"]);
+    expect(Array.isArray(s!.source.taskIds)).toBe(true);
+    expect(Array.isArray(s!.source.questionIds)).toBe(true);
+    expect(s!.source.kind).toBe("snapshot_diff");
+  });
+
   it("a same-run reopen with no new task keeps the boss sealed, and only a new task wakes it", () => {
     const done = { teamId: TEAM, runId: RUN, taskId: "t1", revision: 2, title: "a", status: "completed", assigneeMemberId: "ai1", includeInProgress: true, parentTaskId: null } as TaskInput;
     const won = observe(input([done], "completed", false), 5);

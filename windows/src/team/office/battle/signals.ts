@@ -26,13 +26,14 @@ const sameScope = (a: Observation, b: Observation) => a.vm.teamId === b.vm.teamI
 export function diff(prev: Observation | null, next: Observation, ctx: { completionOrdinal: number; observedAt: string }): Diff {
   const vm = next.vm;
   const make = (kind: SignalKind, fields: Partial<BattleSignal> & { reasonLabel: string; key: string }): BattleSignal => {
-    const { key, ...rest } = fields;
+    // `source` is merged over the defaults below, never spread back over them.
+    const { key, source, ...rest } = fields;
     return {
       teamId: vm.teamId,
       runId: vm.runId,
       signalId: `${vm.runId}|${kind}|${key}`,
       kind,
-      source: { teamId: vm.teamId, runId: vm.runId, kind: "snapshot_diff", streamId: next.streamId, domainSeq: vm.asOfSeq, taskIds: [], memberIds: [], questionIds: [], ...(rest.source ?? {}) },
+      source: { teamId: vm.teamId, runId: vm.runId, kind: "snapshot_diff", streamId: next.streamId, domainSeq: vm.asOfSeq, taskIds: [], memberIds: [], questionIds: [], ...(source ?? {}) },
       hpBefore: prev?.vm.hp ?? null,
       hpAfter: vm.hp,
       maxHpBefore: prev?.vm.maxHp ?? null,
