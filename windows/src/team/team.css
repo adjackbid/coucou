@@ -89,10 +89,11 @@ html.demo body.team-window {
 /* Windows 10: no DWM rounding and no acrylic behind the window — the page
    itself becomes the dark sheet, with the rounded corners cut in CSS (the
    window is transparent, so the corners show the desktop like Win11's do). */
-html.win10,
-html.win10 body.team-window {
-  border-radius: 14px;
-  overflow: hidden;
+/* Windows 10's classic blur carries no tint of its own: the page lays the
+   same dark glaze Windows 11's acrylic does (0x73 of #0B0C0E). The window
+   region rounds the corners. */
+html.win10:not(.bd-deep):not(.bd-solid) body.team-window {
+  background: rgba(11, 12, 14, 0.5);
 }
 
 /* 視窗背景: glass lets the desktop through (Win11 blurs it); deeper and solid

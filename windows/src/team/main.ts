@@ -44,7 +44,8 @@ function backdrop(): Backdrop {
 }
 function applyBackdrop() {
   const pick = backdrop();
-  const effective = pick === "auto" ? (WIN10 ? "solid" : "glass") : pick;
+  // Windows 10 blurs too now (the classic blur, which does not lag): glass everywhere.
+  const effective = pick === "auto" ? "glass" : pick;
   const cl = document.documentElement.classList;
   cl.toggle("win10", WIN10);
   cl.toggle("bd-deep", effective === "deep");
@@ -439,9 +440,7 @@ function sidebar(): HTMLElement {
                       render();
                     },
                   }, label))),
-              h("p", { class: "hint", text: WIN10
-                ? "Windows 10 沒有毛玻璃,「玻璃」會直接透出後面的視窗;自動 = 不透明。"
-                : "玻璃會模糊透出桌面;背景太花時可以選加深或不透明。自動 = 玻璃。" }),
+              h("p", { class: "hint", text: "玻璃會模糊透出桌面;背景太花時可以選加深或不透明。自動 = 玻璃。" }),
               h("label", { class: "side-pop-check" },
                 h("input", { type: "checkbox", checked: ambientMotion(), onChange: (e: Event) => { saveAmbientMotion((e.target as HTMLInputElement).checked); render(); } }),
                 "場地微動(中二模式)"),

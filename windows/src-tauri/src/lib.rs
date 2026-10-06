@@ -1244,12 +1244,15 @@ fn create_team_window(app: &AppHandle) {
         Ok(win) => {
             // Coucou's black, thin enough for the desktop to show through.
             glass::apply(&win, GLASS_TINT);
+            glass::round_corners(&win);
             let hidden = win.clone();
-            win.on_window_event(move |event| {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            win.on_window_event(move |event| match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     let _ = hidden.hide();
                 }
+                tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => glass::round_corners(&hidden),
+                _ => {}
             });
         }
         Err(err) => log::line(format!("team window failed: {err}")),

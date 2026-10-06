@@ -17,6 +17,7 @@ use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER};
 
 const WCA_ACCENT_POLICY: u32 = 19;
+const ACCENT_ENABLE_BLURBEHIND: u32 = 3;
 const ACCENT_ENABLE_ACRYLICBLURBEHIND: u32 = 4;
 const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
 const DWMWCP_ROUND: u32 = 2;
@@ -107,8 +108,18 @@ pub fn apply(win: &WebviewWindow, tint: u32) {
     let hwnd = HWND(raw.0 as isize as *mut _);
     unsafe {
         if win10() {
-            // The page paints its own dark, rounded sheet instead (html.win10).
-            crate::log::line("glass: Windows 10 — no acrylic (it fights the move loop); the page tints itself");
+            // Windows 10: acrylic resamples every frame of a move and the
+            // window lags behind the mouse. The older blur does not, so it
+            // stands in; the page lays the tint itself (html.win10), and the
+            // corners are cut by a window region (round_corners).
+            let mut policy = AccentPolicy { state: ACCENT_ENABLE_BLURBEHIND, flags: 0, color: 0, animation: 0 };
+            let mut data = CompositionData {
+                attribute: WCA_ACCENT_POLICY,
+                data: (&mut policy as *mut AccentPolicy).cast(),
+                size: std::mem::size_of::<AccentPolicy>(),
+            };
+            let blurred = set_composition().map(|set| set(hwnd, &mut data) != 0).unwrap_or(false);
+            crate::log::line(if blurred { "glass: Windows 10 — classic blur behind" } else { "glass: Windows 10 — blur refused; plainly transparent" });
         } else {
             let mut policy = AccentPolicy { state: ACCENT_ENABLE_ACRYLICBLURBEHIND, flags: 0, color: tint, animation: 0 };
             let mut data = CompositionData {
@@ -128,5 +139,39 @@ pub fn apply(win: &WebviewWindow, tint: u32) {
         // title bar included; asking for it to be measured again is what
         // lets the windowing library take the title bar away.
         let _ = SetWindowPos(hwnd, None, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    }
+}
+
+#[link(name = "gdi32")]
+extern "system" {
+    fn CreateRoundRectRgn(x1: i32, y1: i32, x2: i32, y2: i32, w: i32, h: i32) -> *mut c_void;
+}
+
+#[link(name = "user32")]
+extern "system" {
+    fn SetWindowRgn(hwnd: HWND, rgn: *mut c_void, redraw: i32) -> i32;
+}
+
+/// Windows 10 has no DWM rounding: the window itself is cut to a rounded
+/// rectangle (blur and all). Maximized, it keeps its square edges. Called on
+/// every resize, since a region is in pixels.
+pub fn round_corners(win: &WebviewWindow) {
+    if !win10() {
+        return;
+    }
+    let Ok(raw) = win.hwnd() else { return };
+    let hwnd = HWND(raw.0 as isize as *mut _);
+    let Ok(size) = win.outer_size() else { return };
+    let maximized = win.is_maximized().unwrap_or(false);
+    unsafe {
+        if maximized {
+            SetWindowRgn(hwnd, std::ptr::null_mut(), 1);
+            return;
+        }
+        let scale = win.scale_factor().unwrap_or(1.0);
+        let d = (16.0 * scale).round() as i32; // ellipse size = 2 × an 8 px radius
+        let rgn = CreateRoundRectRgn(0, 0, size.width as i32 + 1, size.height as i32 + 1, d, d);
+        // The window owns the region from here on: it is not deleted.
+        SetWindowRgn(hwnd, rgn, 1);
     }
 }
