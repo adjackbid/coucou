@@ -5081,6 +5081,23 @@
                 2.314
               ],
               "shadow": 0.42
+            },
+            {
+              "id": "plant_front",
+              "file": "frontal/penthouse_large/plant_front.webp",
+              "canvas": [
+                421,
+                867
+              ],
+              "groundPivot": [
+                136.8,
+                868
+              ],
+              "at": [
+                6.664,
+                2.644
+              ],
+              "shadow": 0
             }
           ]
         },
@@ -6083,6 +6100,23 @@
                 2.308
               ],
               "shadow": 0.42
+            },
+            {
+              "id": "plant_front",
+              "file": "frontal/premium_large/plant_front.webp",
+              "canvas": [
+                326,
+                496
+              ],
+              "groundPivot": [
+                126.0,
+                557
+              ],
+              "at": [
+                6.679,
+                2.629
+              ],
+              "shadow": 0
             }
           ]
         },
