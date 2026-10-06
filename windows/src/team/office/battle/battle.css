@@ -1060,3 +1060,109 @@
 .bt-float.t-combo.still {
   animation: none;
 }
+
+/* ── Compact overlays: the fight's middle belongs to the effects ─────────────
+   The boss card, the team's bar, the move card and the numbers keep to the
+   edges and to a smaller size, so the painted moves are not covered. */
+
+.bt-boss {
+  width: min(232px, 36%);
+  gap: 2px;
+  padding: 7px 11px 9px;
+  border-radius: 12px;
+}
+
+.bt-name {
+  font-size: 15px;
+}
+
+.bt-line {
+  font-size: 11px;
+}
+
+.bt-hp b {
+  font-size: 15px;
+}
+
+.bt-hp small,
+.bt-hp-label {
+  font-size: 11px;
+}
+
+.bt-team-hp {
+  top: 104px;
+  left: 12px;
+  gap: 6px;
+  padding: 4px 9px;
+  font-size: 11px;
+}
+
+.bt-team-hp .bt-bar.team {
+  width: 104px;
+  height: 6px;
+}
+
+.bt-team-hp .bt-team-n b {
+  font-size: 12px;
+}
+
+/* The move card: top right, out of the boss's way. */
+.bt-card {
+  top: 12px;
+  left: auto;
+  right: 12px;
+  transform: none;
+  min-width: 0;
+  max-width: 46%;
+  gap: 9px;
+  padding: 7px 14px 7px 9px;
+  border-radius: 12px;
+  animation-name: bt-card-in-right;
+}
+
+.bt-card-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.bt-card-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.bt-card-text b {
+  font-size: 16px;
+  letter-spacing: 0.05em;
+}
+
+.bt-card-text small {
+  font-size: 11px;
+}
+
+.bt-card em {
+  font-size: 20px;
+}
+
+@keyframes bt-card-in-right {
+  0% { opacity: 0; transform: translateX(24px); }
+  10% { opacity: 1; transform: translateX(0); }
+  85% { opacity: 1; transform: translateX(0); }
+  100% { opacity: 0; transform: translateX(10px); }
+}
+
+.bt-float.t-hit b {
+  font-size: 30px;
+}
+
+.bt-float.t-hit.t-big b {
+  font-size: 38px;
+}
+
+.bt-float.t-hit {
+  padding: 1px 10px 3px;
+}
+
+.bt-float.t-combo b {
+  font-size: 20px;
+}
