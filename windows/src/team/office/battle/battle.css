@@ -1166,3 +1166,31 @@
 .bt-float.t-combo b {
   font-size: 20px;
 }
+
+/* The blow's number, smaller still: a compact red tag, not a sign. */
+.bt-float.t-hit {
+  padding: 0 7px 1px;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1.5px rgba(255, 220, 210, 0.8), 0 0 12px rgba(255, 70, 60, 0.5);
+  animation-name: bt-pop-small;
+}
+
+.bt-float.t-hit b {
+  font-size: 21px;
+}
+
+.bt-float.t-hit.t-big b {
+  font-size: 27px;
+}
+
+.bt-float.t-combo b {
+  font-size: 15px;
+}
+
+@keyframes bt-pop-small {
+  0% { opacity: 0; transform: translate(-50%, -60%) scale(0.5); }
+  12% { opacity: 1; transform: translate(-50%, -100%) scale(1.18); }
+  24% { transform: translate(-50%, -100%) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -150%) scale(0.95); }
+}
