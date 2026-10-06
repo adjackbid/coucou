@@ -131,6 +131,20 @@ async fn handle(app: AppHandle, mut pipe: NamedPipeServer) {
         .unwrap_or("claude")
         .to_string();
 
+    // A team member's CLI is the team's to answer, on its own card. The relay
+    // is meant to stay silent for it (COUCOU_TEAM in its environment), but a
+    // CLI that does not hand that environment on — or an old relay — still
+    // calls here. So the folder decides too: anything from the work folder of
+    // a team with live agents gets no card and no pill; saying nothing hands
+    // the request back to the CLI, which asks the team over its own line.
+    if let Some(team) = team_working_in(&app, &payload) {
+        let relay = payload.get("relay").and_then(Value::as_str).unwrap_or("old (no stamp)");
+        let env = payload.get("team_env").and_then(Value::as_bool).map(|b| if b { "set" } else { "missing" }).unwrap_or("unknown");
+        log::line(format!("hook {agent} {event}: from team \"{team}\"'s folder — left to the team (relay {relay}, COUCOU_TEAM {env})"));
+        let _ = pipe.disconnect();
+        return;
+    }
+
     // The constitution, before the tool runs: what it forbids is refused
     // with its rule, what it asks about is put to the person even where the
     // CLI would not ask. coucou-hook turns the word into the CLI's answer.
@@ -269,4 +283,21 @@ pub fn answer(app: &AppHandle, request_id: &str, decision: &str) {
     };
     log::line(format!("decision id={request_id} {word}"));
     send(app, request_id, Reply::Decision(word.to_string()), false);
+}
+
+/// The team whose live agents work in the folder this hook event came from.
+fn team_working_in(app: &AppHandle, payload: &Value) -> Option<String> {
+    let cwd = payload.get("cwd").and_then(Value::as_str).filter(|c| !c.trim().is_empty())?;
+    let norm = |p: &str| p.replace('/', "\\").trim_end_matches('\\').to_lowercase();
+    let cwd = norm(cwd);
+    let teams = app.try_state::<std::sync::Arc<crate::team::orchestrator::Teams>>()?;
+    teams
+        .snapshots()
+        .into_iter()
+        .filter(|s| !s.detached && matches!(s.status, crate::team::state::TeamStatus::Running | crate::team::state::TeamStatus::Paused))
+        .find(|s| {
+            let dir = norm(&s.work_dir);
+            !dir.is_empty() && (cwd == dir || cwd.starts_with(&format!("{dir}\\")))
+        })
+        .map(|s| s.name)
 }

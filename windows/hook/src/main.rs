@@ -431,6 +431,13 @@ fn read_event(agent: &str, arg_event: &str) -> Option<(String, String)> {
         }
     }
 
+    // Which relay sent it, for the log: an old copy left in bin\ shows up at once.
+    if let Some(map) = payload.as_object_mut() {
+        map.insert("relay".into(), serde_json::Value::String("2026-10-06-team-guard".into()));
+        // A team member's CLI should never reach here (main() stays silent for
+        // it); if one does, its CLI did not pass the environment on — say so.
+        map.insert("team_env".into(), serde_json::Value::Bool(std::env::var_os("COUCOU_TEAM").is_some()));
+    }
     cap_payload(&mut payload);
 
     let mut line = payload.to_string();
