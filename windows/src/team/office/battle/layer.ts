@@ -257,7 +257,37 @@ export class BattleLayer implements SceneLayer {
   private vm: BattleViewModel | null = null;
   /** A moment held still (only to look at one move, in development); else the clock. */
   private frozen: number | null = null;
-  private now = () => this.frozen ?? performance.now();
+  /**
+   * The fight's clock. A hit-stop holds it still for a beat — every move,
+   * the boss's flinch and the sparks pause together — then it goes on from
+   * where it stood, so nothing jumps.
+   */
+  private lag = 0;
+  private stopFrom = 0;
+  private stopTo = 0;
+  private now = () => {
+    if (this.frozen !== null) return this.frozen;
+    const t = performance.now();
+    if (t < this.stopTo) return this.stopFrom - this.lag;
+    if (this.stopTo) {
+      this.lag += this.stopTo - this.stopFrom;
+      this.stopTo = 0;
+    }
+    return t - this.lag;
+  };
+  private get stopped(): boolean {
+    return this.frozen === null && performance.now() < this.stopTo;
+  }
+  private hitStop(ms: number) {
+    if (this.frozen !== null || this.host.calm()) return;
+    const t = performance.now();
+    if (t < this.stopTo) return;
+    this.now(); // settle a finished stop first
+    this.stopFrom = t;
+    this.stopTo = t + ms;
+  }
+  /** Where the last blow pushed the boss from, and how hard. */
+  private knock = { x: 0, y: 0, at: -1e9, power: 0 };
   private queue = new EffectQueue(() => this.now());
   private director = new SkillDirector(() => this.now());
   /** The boss's own moves: chosen from real causes, at most one on stage. */
@@ -867,8 +897,12 @@ export class BattleLayer implements SceneLayer {
       if (k >= 0 && k <= 1) strain = Math.sin(Math.PI * k);
       else if (k > 1) this.struggleAt = now + 4000 + Math.random() * 4000;
     } else this.struggleAt = 0;
-    const jitter = (hurt ? Math.sin(now / 16) * 5 * hurt : 0) + (strain ? Math.sin(now / 22) * 4 * strain : 0);
-    this.boss.style.transform = `translate(${jitter}px, 0px) rotate(${sway}deg) scale(${scale * sx}, ${scale * sy})`;
+    const jitter = (hurt ? Math.sin(now / 14) * 9 * hurt * this.knock.power : 0) + (strain ? Math.sin(now / 22) * 4 * strain : 0);
+    // Knocked back fast, eased home: out in 90 ms, back over 420.
+    const kt = now - this.knock.at;
+    const kb = kt < 0 ? 0 : kt < 90 ? kt / 90 : Math.max(0, 1 - (kt - 90) / 420) ** 2;
+    const push = 22 * this.knock.power * kb;
+    this.boss.style.transform = `translate(${jitter + this.knock.x * push}px, ${this.knock.y * push * 0.5}px) rotate(${sway - this.knock.x * 3 * kb}deg) scale(${scale * sx}, ${scale * sy})`;
     this.boss.style.filter = hurt
       ? `brightness(${1 + 0.6 * hurt}) drop-shadow(0 0 18px rgba(255,255,255,${0.6 * hurt}))`
       : strain
@@ -904,6 +938,22 @@ export class BattleLayer implements SceneLayer {
     }
     if (!targets.length) targets.push({ ...this.scene.screen(4.35, 4.5) });
     const cueMs = now - ac.startedAt;
+    if (ac.move.kind === "ultimate" || ac.move.kind === "attack") {
+      const tele = ac.move.phases[0];
+      if (cueMs < tele) {
+        const k = cueMs / tele;
+        const pulse = 0.55 + 0.45 * Math.sin(cueMs / 70);
+        const r = (ac.move.kind === "ultimate" ? 92 : 62) * b.scale;
+        for (const t of targets.slice(0, 3)) {
+          floorRing(ctx, t.x, t.y + 6, r * (0.6 + 0.4 * k), ac.move.warningColor, (0.25 + 0.55 * k) * pulse);
+          floorRing(ctx, t.x, t.y + 6, r * 0.35 * k, ac.move.warningColor, 0.35 * k);
+        }
+        glow(ctx, b.core.x, b.core.y, (60 + 90 * k) * b.scale, ac.move.palette[0], 0.15 + 0.45 * k);
+      } else if (this.once2(ac, "land")) {
+        // The boss's blow lands: a short stop of its own.
+        this.hitStop(ac.move.kind === "ultimate" ? 120 : 50);
+      }
+    }
     {
       // 環境回應: the rim lights up in the move's colour while it casts.
       const [tele, castEnd] = [ac.move.phases[0], ac.move.phases[1]];
@@ -1031,7 +1081,13 @@ export class BattleLayer implements SceneLayer {
     if (weather) this.weather!.tick(ctx, dt, this.scene.cropBox, this.keepOut(), active.length > 0 || !!this.bossCue || this.particles.length > 40);
     for (const e of active) this.effect(ctx, e, now - e.startedAt!, b);
     this.drawCue(ctx, b, now);
-    this.drawParticles(ctx, dt);
+    this.drawParticles(ctx, this.stopped ? 0 : dt);
+  }
+
+  private once2(ac: ActiveCue, key: string): boolean {
+    if (ac.fired.has(key)) return false;
+    ac.fired.add(key);
+    return true;
   }
 
   private once(e: Effect, key: string): boolean {
@@ -1311,12 +1367,23 @@ export class BattleLayer implements SceneLayer {
     }
     // The blow lands once: the boss flinches, the number shows, the sparks fly.
     if (ms >= c && this.once(e, "impact")) {
-      this.hurtAt = this.now();
-      this.float({ text: `-${plan.displayDamage}`, tone: "hit" }, { x: b.hit.x + 80 * b.scale, y: b.hit.y - 10 });
-      this.weather?.stir(b.hit, plan.memberIds.length > 1 ? 1.6 : 1);
       const combo = plan.memberIds.length > 1;
-      this.spark(e, target.x, target.y, combo ? 20 : 14, pal[0], { speed: 260, kind: "streak", size: 4 });
-      this.spark(e, target.x, target.y, 8, pal[1] ?? "#ffffff", { speed: 160, size: 3 });
+      const power = combo ? 1 + 0.35 * (plan.memberIds.length - 1) : 1;
+      this.hurtAt = this.now();
+      // A beat of stillness sells the blow; a combo holds it longer.
+      this.hitStop(combo ? 110 : 70);
+      // Knocked back, away from whoever struck.
+      const fx = from.length ? from.reduce((s2, p) => s2 + p.x, 0) / from.length : target.x - 200;
+      const fy = from.length ? from.reduce((s2, p) => s2 + p.y, 0) / from.length : target.y + 120;
+      const d = Math.hypot(target.x - fx, target.y - fy) || 1;
+      this.knock = { x: (target.x - fx) / d, y: (target.y - fy) / d, at: this.now(), power };
+      this.float({ text: `-${plan.displayDamage}`, tone: combo ? "hit big" : "hit" }, { x: b.hit.x + 80 * b.scale, y: b.hit.y - 10 });
+      if (combo) this.float({ text: `COMBO ×${plan.memberIds.length}`, tone: "combo" }, { x: b.hit.x + 80 * b.scale, y: b.hit.y + 48 });
+      this.weather?.stir(b.hit, combo ? 1.6 : 1);
+      this.spark(e, target.x, target.y, combo ? 22 : 14, pal[0], { speed: 300, kind: "streak", size: 4.5 });
+      this.spark(e, target.x, target.y, 8, pal[1] ?? "#ffffff", { speed: 180, size: 3 });
+      // Debris thrown up off the floor, falling back.
+      this.spark(e, b.feet.x, b.feet.y - 10, combo ? 12 : 8, pal[2] ?? "#C9B79A", { speed: 220, up: 260, gravity: 900, size: 3.4 });
     }
     const id = plan.skillId;
     if (!skill || !id || !from.length) {
@@ -1333,9 +1400,13 @@ export class BattleLayer implements SceneLayer {
       if (at) magicCircle(ctx, { x: at.x, y: at.y + at.size * 0.3 }, 54 * ease(span(ms, 0, a + 60)), pal[k % pal.length], 1 - span(ms, c, end), ms / 700 + k);
     }
     if (ms >= c) {
-      flash(ctx, target, 70 + 60 * (plan.memberIds.length - 1), 1 - span(ms, c, c + 160));
-      ring(ctx, target.x, target.y + 10, lerp(30, 180, ease(after)), "#ffffff", 0.7 * (1 - after), 3);
-      floorRing(ctx, b.feet.x, b.feet.y, lerp(60, 200, ease(after)), pal[0], 0.6 * (1 - after));
+      const big = plan.memberIds.length > 1 ? 1.5 : 1;
+      flash(ctx, target, (90 + 60 * (plan.memberIds.length - 1)) * big, 1 - span(ms, c, c + 180));
+      // Shockwave: a thick bright front racing out, then the floor shudders.
+      const sw = span(ms, c, c + 260);
+      ring(ctx, target.x, target.y + 10, lerp(20, 240 * big, ease(sw)), "#ffffff", 0.95 * (1 - sw), lerp(14, 2, sw));
+      ring(ctx, target.x, target.y + 10, lerp(30, 180 * big, ease(after)), pal[1] ?? "#ffffff", 0.7 * (1 - after), 3);
+      floorRing(ctx, b.feet.x, b.feet.y, lerp(60, 260 * big, ease(after)), pal[0], 0.75 * (1 - after));
     }
     if (skill.family !== "combo") {
       const p = from[0];
