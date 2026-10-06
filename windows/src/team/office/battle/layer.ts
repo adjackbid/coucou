@@ -21,6 +21,8 @@ import { BOSS_KIT, BOSS_MOVES, BossDirector, resolvesWholeCast, type BossBlockCa
 import { drawBossMove, type BossFxPoints } from "./bossFx";
 import { WORLDS, type WorldId } from "./worlds";
 import { Weather } from "./weather";
+import { vfxReady, whenVfxReady } from "./vfx";
+import { bossTex, ELEMENT_OF, heroTex } from "./vfxPlay";
 import { ambientMotion } from "./session";
 import { RULES, SKILLS, SkillDirector, type Contribution, type HitPlan, type SkillId } from "./skills";
 
@@ -357,6 +359,8 @@ export class BattleLayer implements SceneLayer {
     }
     this.idleAt = 0;
     this.weather = this.worldId !== "office" ? new Weather(this.worldId) : null;
+    // The painted effects load with the battlefield; a held pose is drawn again once they are in.
+    whenVfxReady(() => wake());
     const wx = import.meta.env?.DEV && typeof location !== "undefined" ? Number(new URLSearchParams(location.search).get("wx")) : 0;
     if (wx && this.weather) {
       const scratch = document.createElement("canvas").getContext("2d")!;
@@ -978,6 +982,16 @@ export class BattleLayer implements SceneLayer {
         }
       }
     }
+    // The painted version, once its textures are in; the drawn one otherwise.
+    if (vfxReady() && bossTex(ctx, {
+      moveId: ac.move.moveId,
+      ms: cueMs,
+      phases: ac.move.phases,
+      palette: ac.move.palette,
+      origin: pts.origin, core: pts.core, feet: pts.feet, top: pts.top,
+      targets: targets.slice(0, 3),
+      scale: b.scale,
+    })) return;
     drawBossMove(ctx, {
       move: ac.move,
       ms: cueMs,
@@ -1394,6 +1408,23 @@ export class BattleLayer implements SceneLayer {
     }
     const u = easeIn(span(ms, a, c)) * 0.4 + ease(span(ms, a, c)) * 0.6;
     const after = span(ms, c, end);
+    // The painted move, once its textures are in: each striker throws its own element.
+    if (vfxReady()) {
+      const casters = plan.memberIds
+        .map((m) => {
+          const at = this.origin(m);
+          if (!at) return null;
+          const own = skill.family === "combo" ? this.host.skill(m) : id;
+          const element = ELEMENT_OF[own] ?? "crescent";
+          return { at, element, colour: (SKILLS[own as SkillId]?.palette ?? pal)[0] };
+        })
+        .filter((x): x is NonNullable<typeof x> => !!x);
+      heroTex(ctx, {
+        ms, phases: [a, c, i, end], casters, target, feet: b.feet, palette: pal,
+        scale: b.scale, combo: plan.memberIds.length > 1, trinity: id === "combo_trinity",
+      });
+      return;
+    }
     // Under each who strikes, its circle; where the blow lands, a flash and a ring of force.
     for (const [k, m] of plan.memberIds.entries()) {
       const at = this.scene.mochi(m);

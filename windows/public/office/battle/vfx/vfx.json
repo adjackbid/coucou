@@ -1,0 +1,510 @@
+{
+ "note": "中二模式 VFX textures. ADD: drawn with additive blending on black; SOLID: true alpha. pivot in the exported file's pixels.",
+ "source": "OpenAI built-in imagegen from feature2/特效貼圖生成規格; provenance in feature2/特效貼圖生成結果/manifest.json; not CC0",
+ "textures": {
+  "glow_soft": {
+   "file": "battle/vfx/glow_soft.webp",
+   "type": "ADD",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "spark_star": {
+   "file": "battle/vfx/spark_star.webp",
+   "type": "ADD",
+   "size": [
+    256,
+    256
+   ],
+   "pivot": [
+    128.0,
+    128.0
+   ]
+  },
+  "shockwave_ring": {
+   "file": "battle/vfx/shockwave_ring.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    768
+   ],
+   "pivot": [
+    384.0,
+    384.0
+   ]
+  },
+  "impact_burst": {
+   "file": "battle/vfx/impact_burst.webp",
+   "type": "ADD",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "slash_arc": {
+   "file": "battle/vfx/slash_arc.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    384
+   ],
+   "pivot": [
+    384.0,
+    192.0
+   ]
+  },
+  "trail_streak": {
+   "file": "battle/vfx/trail_streak.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    96
+   ],
+   "pivot": [
+    716.2,
+    48.0
+   ]
+  },
+  "magic_circle_base": {
+   "file": "battle/vfx/magic_circle_base.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    768
+   ],
+   "pivot": [
+    384.0,
+    384.0
+   ]
+  },
+  "hex_shield": {
+   "file": "battle/vfx/hex_shield.webp",
+   "type": "ADD",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "smoke_puff": {
+   "file": "battle/vfx/smoke_puff.webp",
+   "type": "SOLID",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "debris_chunks": {
+   "file": "battle/vfx/debris_chunks.webp",
+   "type": "SOLID",
+   "size": [
+    768,
+    192
+   ],
+   "pivot": [
+    384.0,
+    96.0
+   ]
+  },
+  "fire_ball": {
+   "file": "battle/vfx/fire_ball.webp",
+   "type": "ADD",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    255.0
+   ]
+  },
+  "fire_burst": {
+   "file": "battle/vfx/fire_burst.webp",
+   "type": "ADD",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "ice_lance": {
+   "file": "battle/vfx/ice_lance.webp",
+   "type": "SOLID",
+   "size": [
+    768,
+    192
+   ],
+   "pivot": [
+    44.2,
+    96.0
+   ]
+  },
+  "ice_shatter": {
+   "file": "battle/vfx/ice_shatter.webp",
+   "type": "SOLID",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "wind_blade": {
+   "file": "battle/vfx/wind_blade.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    384
+   ],
+   "pivot": [
+    384.0,
+    192.0
+   ]
+  },
+  "wind_swirl": {
+   "file": "battle/vfx/wind_swirl.webp",
+   "type": "ADD",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "lightning_bolt": {
+   "file": "battle/vfx/lightning_bolt.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    192
+   ],
+   "pivot": [
+    27.0,
+    96.0
+   ]
+  },
+  "lightning_hit": {
+   "file": "battle/vfx/lightning_hit.webp",
+   "type": "ADD",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "blade_crescent": {
+   "file": "battle/vfx/blade_crescent.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    384
+   ],
+   "pivot": [
+    384.0,
+    192.0
+   ]
+  },
+  "sword_falling": {
+   "file": "battle/vfx/sword_falling.webp",
+   "type": "ADD",
+   "size": [
+    192,
+    768
+   ],
+   "pivot": [
+    96.0,
+    741.8
+   ]
+  },
+  "heal_motes": {
+   "file": "battle/vfx/heal_motes.webp",
+   "type": "ADD",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "seal_runes": {
+   "file": "battle/vfx/seal_runes.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    768
+   ],
+   "pivot": [
+    384.0,
+    384.8
+   ]
+  },
+  "lava_breath_cone": {
+   "file": "battle/vfx/lava_breath_cone.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    384
+   ],
+   "pivot": [
+    35.2,
+    192.0
+   ]
+  },
+  "lava_fissure": {
+   "file": "battle/vfx/lava_fissure.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    192
+   ],
+   "pivot": [
+    384.0,
+    96.0
+   ]
+  },
+  "lava_pillar": {
+   "file": "battle/vfx/lava_pillar.webp",
+   "type": "ADD",
+   "size": [
+    192,
+    768
+   ],
+   "pivot": [
+    96.0,
+    740.2
+   ]
+  },
+  "obsidian_plate": {
+   "file": "battle/vfx/obsidian_plate.webp",
+   "type": "SOLID",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "frost_mirror_pane": {
+   "file": "battle/vfx/frost_mirror_pane.webp",
+   "type": "SOLID",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "frost_spike": {
+   "file": "battle/vfx/frost_spike.webp",
+   "type": "SOLID",
+   "size": [
+    256,
+    512
+   ],
+   "pivot": [
+    127.0,
+    489.0
+   ]
+  },
+  "frost_ring": {
+   "file": "battle/vfx/frost_ring.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    768
+   ],
+   "pivot": [
+    384.0,
+    384.0
+   ]
+  },
+  "crown_shard": {
+   "file": "battle/vfx/crown_shard.webp",
+   "type": "SOLID",
+   "size": [
+    256,
+    256
+   ],
+   "pivot": [
+    128.0,
+    128.0
+   ]
+  },
+  "vine_whip": {
+   "file": "battle/vfx/vine_whip.webp",
+   "type": "SOLID",
+   "size": [
+    768,
+    192
+   ],
+   "pivot": [
+    20.2,
+    96.0
+   ]
+  },
+  "thorn_spike": {
+   "file": "battle/vfx/thorn_spike.webp",
+   "type": "SOLID",
+   "size": [
+    256,
+    512
+   ],
+   "pivot": [
+    128.0,
+    491.0
+   ]
+  },
+  "root_loop": {
+   "file": "battle/vfx/root_loop.webp",
+   "type": "SOLID",
+   "size": [
+    768,
+    768
+   ],
+   "pivot": [
+    384.0,
+    383.2
+   ]
+  },
+  "bud_glow": {
+   "file": "battle/vfx/bud_glow.webp",
+   "type": "ADD",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "energy_orb": {
+   "file": "battle/vfx/energy_orb.webp",
+   "type": "ADD",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "coil_wave": {
+   "file": "battle/vfx/coil_wave.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    192
+   ],
+   "pivot": [
+    27.8,
+    96.0
+   ]
+  },
+  "grid_scan": {
+   "file": "battle/vfx/grid_scan.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    768
+   ],
+   "pivot": [
+    384.0,
+    383.2
+   ]
+  },
+  "gear_cell": {
+   "file": "battle/vfx/gear_cell.webp",
+   "type": "SOLID",
+   "size": [
+    512,
+    512
+   ],
+   "pivot": [
+    256.0,
+    256.0
+   ]
+  },
+  "gravity_spiral": {
+   "file": "battle/vfx/gravity_spiral.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    768
+   ],
+   "pivot": [
+    384.0,
+    384.0
+   ]
+  },
+  "orbit_arc": {
+   "file": "battle/vfx/orbit_arc.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    384
+   ],
+   "pivot": [
+    384.0,
+    192.0
+   ]
+  },
+  "rift_portal": {
+   "file": "battle/vfx/rift_portal.webp",
+   "type": "ADD",
+   "size": [
+    512,
+    768
+   ],
+   "pivot": [
+    256.0,
+    384.0
+   ]
+  },
+  "eclipse_ring": {
+   "file": "battle/vfx/eclipse_ring.webp",
+   "type": "ADD",
+   "size": [
+    768,
+    768
+   ],
+   "pivot": [
+    384.0,
+    384.0
+   ]
+  }
+ }
+}
