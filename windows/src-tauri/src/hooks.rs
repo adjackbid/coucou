@@ -574,12 +574,29 @@ fn ensure_exe(app: &AppHandle, name: &str, consequence: &str) {
     if same {
         return;
     }
-    // It may be running right now and hold the file open; keeping the old
-    // copy is fine, it is the same program.
-    if let Err(err) = std::fs::copy(&src, &dest) {
-        if !dest.exists() {
-            crate::log::line(format!("could not install {name}: {err}"));
+    // Leftovers of an earlier swap, no longer running.
+    if let Some(dir) = dest.parent() {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for e in entries.flatten() {
+                let n = e.file_name().to_string_lossy().to_string();
+                if n.starts_with(&format!("{name}.old-")) {
+                    let _ = std::fs::remove_file(e.path());
+                }
+            }
         }
+    }
+    if std::fs::copy(&src, &dest).is_ok() {
+        return;
+    }
+    // A CLI is running it right now and holds the file. It is NOT the same
+    // program after an update (an old relay lacks newer guards — the team's
+    // silence, the encoding fixes), so it must not be kept: Windows lets a
+    // running exe be renamed, so the old one steps aside and the new one goes
+    // in; the old file is swept on a later start.
+    let aside = dest.with_file_name(format!("{name}.old-{}", std::process::id()));
+    match std::fs::rename(&dest, &aside).and_then(|_| std::fs::copy(&src, &dest).map(|_| ())) {
+        Ok(()) => crate::log::line(format!("{name}: updated while in use (old copy set aside)")),
+        Err(err) => crate::log::line(format!("could not update {name}: {err} — the old copy stays until Coucou restarts")),
     }
 }
 
