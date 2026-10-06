@@ -68,6 +68,8 @@ interface ThemeJson {
   label: string;
   size: "standard" | "large";
   frontal?: FrontalJson;
+  /** The large rooms' frontal version for 5–12 people (twelve desks). */
+  frontalLarge?: FrontalJson;
   room: RoomArt;
   props: Props;
   /** "standard" uses the shared desks. */
@@ -175,19 +177,24 @@ export function themeName(teamId: string, setting: string | undefined, members: 
   if (THEME_LABELS[named]) return named;
   let h = 0;
   for (const ch of teamId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  if (members >= LARGE_FROM) return LARGE[h % LARGE.length];
+  if (members >= LARGE_FROM) {
+    // Development only: `&large=penthouse` picks the large room, to look at it.
+    const asked = import.meta.env?.DEV && typeof location !== "undefined" ? new URLSearchParams(location.search).get("large") : null;
+    if (asked && LARGE.includes(asked)) return asked;
+    return LARGE[h % LARGE.length];
+  }
   return STANDARD[h % STANDARD.length];
 }
 
 /** The same theme through the frontal fullbleed camera, when its art exists. */
-export function frontalTheme(name: string): Theme | null {
+export function frontalTheme(name: string, large = false): Theme | null {
   if (!art) return null;
   const key = art.themes[name] ? name : "warm";
   const base = art.themes[key];
-  const f = base.frontal;
+  const f = large ? base.frontalLarge : base.frontal;
   if (!f) return null;
   return {
-    name: `front:${key}`,
+    name: `front${large ? "L" : ""}:${key}`,
     label: base.label,
     large: base.size === "large",
     room: f.room,
@@ -687,18 +694,19 @@ export class TeamScene {
     let base = themeName(this.teamId, team.officeLayoutId, members.length);
     const frontDesks = (art.themes[base] ?? art.themes.warm)?.frontal?.desks.length ?? 0;
     let front = !arena && this.frontal && frontDesks > 0;
+    let large = false;
     // More members than the frontal room has desks: the team moves to a
-    // bigger office (the large rooms, whose desks seat twelve) rather than
-    // leaving anyone outside.
+    // bigger office — a large room's frontal version, which seats twelve —
+    // rather than leaving anyone outside. Without one, the classic camera.
     if (front && members.length > frontDesks) {
       base = themeName(this.teamId, undefined, Math.max(members.length, LARGE_FROM));
-      // The large room's own frontal art, once it seats this many (Round 7);
-      // until then its classic camera, which seats twelve.
-      front = ((art.themes[base] ?? art.themes.warm)?.frontal?.desks.length ?? 0) >= members.length;
+      const big = (art.themes[base] ?? art.themes.warm)?.frontalLarge?.desks.length ?? 0;
+      large = big >= members.length;
+      front = large;
     }
-    const name = arena ? `world:${arena.id}` : front ? `front:${base}` : base;
+    const name = arena ? `world:${arena.id}` : front ? `front${large ? "L" : ""}:${base}` : base;
     if (this.theme?.name !== name) {
-      this.theme = arena ? this.arenaTheme(arena.id, arena.art) : front ? frontalTheme(base) : theme(base);
+      this.theme = arena ? this.arenaTheme(arena.id, arena.art) : front ? frontalTheme(base, large) : theme(base);
       this.build();
       // Another room: everyone is put in place, nobody walks over from the old one.
       for (const a of this.actors.values()) a.at = undefined;

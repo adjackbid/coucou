@@ -35,10 +35,10 @@ const config: TeamConfig = {
 // `?theme=library` dresses the demo team's office in one look.
 if (typeof location !== "undefined") config.officeTheme = new URLSearchParams(location.search).get("theme") ?? undefined;
 // `?members=8` adds members to the demo team, to look at a full room.
-const wanted = typeof location === "undefined" ? 4 : Math.min(8, Number(new URLSearchParams(location.search).get("members")) || 4);
-const EXTRA_ROLES = ["文案撰寫", "測試驗收", "資料整理", "營運支援"];
+const wanted = typeof location === "undefined" ? 4 : Math.min(12, Number(new URLSearchParams(location.search).get("members")) || 4);
+const EXTRA_ROLES = ["文案撰寫", "測試驗收", "資料整理", "營運支援", "前端開發", "後端開發", "資料分析", "設計審查"];
 for (let i = config.members.length; i < wanted; i++) {
-  config.members.push({ id: `ai${i + 1}`, name: `AI ${i + 1}`, role: EXTRA_ROLES[i - 4] ?? "支援", duty: "", agent: "copilot", color: ["#F472B6", "#22D3EE", "#F59E0B", "#84CC16"][i - 4] ?? "#94A3B8" });
+  config.members.push({ id: `ai${i + 1}`, name: `AI ${i + 1}`, role: EXTRA_ROLES[i - 4] ?? "支援", duty: "", agent: "copilot", color: ["#F472B6", "#22D3EE", "#F59E0B", "#84CC16", "#FB7185", "#38BDF8", "#A78BFA", "#34D399"][i - 4] ?? "#94A3B8" });
 }
 
 export const demoAgents: import("../core/state").AgentProfile[] = [
