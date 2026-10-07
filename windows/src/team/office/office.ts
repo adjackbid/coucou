@@ -25,6 +25,10 @@ import { HIT_SKILLS, SKILLS, type Contribution, type HitPlan, type SkillId } fro
 import { battleLog, bossCard, bossHud, companyState, roomBadge , teamBar} from "./battle/hud";
 import { inputFrom, project } from "./battle/projector";
 import type { BattleSignal, BattleViewModel, HeroClass, PresentationMode } from "./battle/contracts";
+import "./orbit/orbit.css";
+import { OrbitView } from "./orbit/view";
+import { OrbitFeed, agentStatus, sceneFrom, type TeamLinks } from "./orbit/adapter";
+import { agentKey, splitAgentKey, STATUS_LABEL, type OrbitScene } from "./orbit/contracts";
 
 export interface OfficeHost {
   render(): void;
@@ -156,6 +160,12 @@ export class Office {
   private sideView: "battle" | "raw" = "battle";
   /** Each team's raid as the window has watched it. */
   readonly battle: Battle;
+  /** 星域: one scene at a time — the company's, or one team's — kept across redraws and disposed when left. */
+  private orbit: OrbitView | null = null;
+  private orbitKey = "";
+  private orbitFeed: OrbitFeed | null = null;
+  /** The ring picked in the company's 星域 (a team's own 星域 uses the drawer's selection). */
+  private orbitSel: string | null = null;
 
   constructor(private host: OfficeHost, opts: { demo?: boolean } = {}) {
     this.demo = !!opts.demo;
@@ -187,15 +197,20 @@ export class Office {
     }
     this.main.onChange(() => {
       for (const s of this.scenes.values()) {
-        s.frontal = this.mode === "office" && frontalCam();
+        s.frontal = this.mode !== "battle" && frontalCam();
         s.update();
       }
       for (const s of this.minis.values()) {
-        s.frontal = this.mode === "office" && frontalCam();
+        s.frontal = this.mode !== "battle" && frontalCam();
         s.update();
       }
       // What changed, told as the raid: only once the store has applied it.
       this.battle.observeAll();
+      // …and as the 星域: the scene as it stands, and each new message as a light (never twice).
+      if (this.orbit && this.orbitFeed) {
+        this.orbit.setScene(this.orbitScene());
+        if (!this.viewing) this.orbit.push(this.orbitFeed.pull(this.main));
+      }
       // A member that went away closes its drawer.
       if (this.sel && !this.viewing && !this.main.member(this.sel.teamId, this.sel.memberId)) {
         this.sel = null;
@@ -293,7 +308,7 @@ export class Office {
       }
       s.setLayer(layer);
     } else s.setLayer(null);
-    s.frontal = this.mode === "office" && frontalCam();
+    s.frontal = this.mode !== "battle" && frontalCam();
     s.update();
     return s;
   }
@@ -586,13 +601,14 @@ export class Office {
     return h("span", { class: `bt-hero ${c}`, title: "中二模式的職業外觀:只是外觀,不改變工作", text: HERO_LABELS[c] });
   }
 
-  /** Office or 中二模式: the same work, told two ways. */
+  /** Office, 中二模式 or 星域: the same work, told three ways. */
   private modeSwitch(): HTMLElement {
     const opt = (mode: PresentationMode, label: string, title: string) =>
       h("button", { class: `bt-${mode}${this.mode === mode ? " on" : ""}`, type: "button", "aria-pressed": this.mode === mode ? "true" : "false", title, onClick: () => this.setMode(mode) }, label);
     return h("div", { class: "bt-mode", role: "group", "aria-label": "畫面模式" },
       opt("office", "Office", "一般辦公室畫面"),
-      opt("battle", "中二模式", "同一份工作,看成團隊討伐需求魔王:只改變畫面,不影響工作"));
+      opt("battle", "中二模式", "同一份工作,看成團隊討伐需求魔王:只改變畫面,不影響工作"),
+      opt("orbit", "星域", "同一份工作,看成 Agent 在同一個宇宙裡的光環與協作連線:只改變畫面,不影響工作"));
   }
 
   /** 團隊設定 picked another battlefield: the old one's moves stop where they are. */
@@ -609,8 +625,188 @@ export class Office {
     this.mode = mode;
     saveMode(mode);
     // Off: the boss leaves every room and nothing of it goes on playing.
-    if (mode === "office") for (const s of [...this.scenes.values(), ...this.minis.values()]) s.setLayer(null);
+    if (mode !== "battle") for (const s of [...this.scenes.values(), ...this.minis.values()]) s.setLayer(null);
+    // Leaving the 星域 gives its frames, listeners and GPU back; coming back starts clean.
+    if (mode !== "orbit") this.dropOrbit();
     this.host.render();
+  }
+
+  // ── 星域 ──────────────────────────────────────────────────────────────────────
+
+  private dropOrbit() {
+    this.orbit?.dispose();
+    this.orbit = null;
+    this.orbitFeed = null;
+    this.orbitKey = "";
+  }
+
+  /** Each team's standing links, from its file. */
+  private teamLinks(): TeamLinks {
+    return new Map(this.files.filter((f) => f.config).map((f) => [f.config!.id, f.config!.links]));
+  }
+
+  /** The scene the current 星域 shows: the whole company, or one team of it. */
+  private orbitScene(): OrbitScene {
+    const scene = sceneFrom(this.store, this.teamLinks(), this.demo ? "demo" : "live");
+    if (this.orbitKey === "company" || !this.orbitKey) return scene;
+    const teamId = this.orbitKey;
+    return { ...scene, teams: scene.teams.filter((t) => t.id === teamId), agents: scene.agents.filter((a) => a.teamId === teamId), relations: scene.relations.filter((r) => splitAgentKey(r.fromAgentId).teamId === teamId) };
+  }
+
+  /** The one 星域 view, made for this key; another key's view is disposed first. */
+  private orbitView(key: string): OrbitView {
+    if (this.orbit && this.orbitKey !== key) this.dropOrbit();
+    if (!this.orbit) {
+      this.orbitKey = key;
+      const company = key === "company";
+      this.orbit = new OrbitView(
+        {
+          onSelect: (id) => {
+            if (company) {
+              this.orbitSel = id;
+              this.orbit?.select(id);
+              this.host.render();
+            } else if (id) this.select(key, splitAgentKey(id).memberId);
+            else this.close(key, false);
+          },
+          onPickTeam: (teamId) => {
+            if (!company) return;
+            this.orbitSel = null;
+            this.companyPick = this.companyPick === teamId ? null : teamId;
+            this.host.render();
+          },
+          reduce: () => this.calm,
+        },
+        { demo: this.demo },
+      );
+      // The feed takes note of what is already in the record, so the scene opens quiet.
+      this.orbitFeed = new OrbitFeed();
+      this.orbitFeed.pull(this.main);
+    }
+    this.orbit.setScene(this.orbitScene());
+    return this.orbit;
+  }
+
+  /** 暫停漂浮 and 減少動態, in the window's own controls. */
+  private orbitToolbar(view: OrbitView): HTMLElement {
+    return h("div", { class: "orbit-toolbar" },
+      this.calmToggle(),
+      h("button", {
+        class: "btn plain", type: "button", "aria-pressed": view.paused ? "true" : "false", disabled: this.calm,
+        title: this.calm ? "減少動態已停止所有持續動作" : "只停止畫面的漂浮與背景流動:連線、狀態、選擇和相機照常,也不影響團隊工作",
+        onClick: () => { view.togglePause(); this.host.render(); },
+      }, view.paused ? "繼續漂浮" : "暫停漂浮"),
+      this.demo ? h("button", { class: "btn plain", type: "button", title: "沿場景裡真實存在的連線播三道示範光流(只在示範資料)", onClick: () => { if (!view.demo()) this.notice = "沒有可示範的連線。"; this.host.render(); } }, "示範資料傳送") : null);
+  }
+
+  /** The 減少動態 checkbox the Office and the 星域 share. */
+  private calmToggle(): HTMLElement {
+    return h("label", { title: "只調整畫面動畫,不影響團隊工作" }, h("input", { type: "checkbox", checked: this.calm, onChange: (e: Event) => {
+      this.calm = (e.target as HTMLInputElement).checked;
+      try {
+        localStorage.setItem("coucou.office.calm", this.calm ? "on" : "off");
+      } catch {
+        /* this session only */
+      }
+      this.host.render();
+    } }), "減少動態");
+  }
+
+  /** Under the scene: the last transfer in words, and where the data comes from. */
+  private orbitFoot(view: OrbitView): HTMLElement {
+    const c = this.store.connection;
+    const data = this.demo ? "示意資料,非即時工作狀態" : this.viewing ? "之前的一輪,只看結果" : `即時資料${c.lastServerTime ? ` · 最後更新 ${clock(c.lastServerTime)}` : ""}`;
+    return h("div", { class: "orbit-foot" }, view.eventLine, h("span", { class: "orbit-data", text: data }));
+  }
+
+  /** The company as one universe. */
+  private orbitCompany(teams: Team[], away: number, count: { seats: number }): HTMLElement {
+    const view = this.orbitView("company");
+    if (this.orbitSel && !this.store.member(splitAgentKey(this.orbitSel).teamId, splitAgentKey(this.orbitSel).memberId)) this.orbitSel = null;
+    view.select(this.orbitSel);
+    const pick = teams.find((t) => t.teamId === this.companyPick) ?? null;
+    const side = h(
+      "aside",
+      { class: "office-side" },
+      ...(this.orbitSel ? [this.orbitPickCard(view, this.orbitSel)] : pick ? this.roomSummary(pick) : [this.companySummary(teams)]),
+      this.attentionCard(teams),
+    );
+    return h(
+      "div",
+      { class: "office office-company orbit" },
+      h("div", { class: "office-head" },
+        h("div", {}, editableText("company", companyName(), {
+          tag: "h1",
+          label: "公司名稱",
+          fallback: "我的公司",
+          onSave: (v) => setCompanyName(v),
+          render: () => this.host.render(),
+        }), h("p", { class: "dim", text: `${teams.length} 個團隊 · ${count.seats} 位 Agents${away ? ` · 另有 ${away} 個團隊已封存` : ""}` })),
+        this.demoTag(),
+        h("span", { style: "flex:1" }),
+        this.orbitToolbar(view),
+        this.modeSwitch()),
+      this.connection(),
+      this.trouble(),
+      this.notice ? h("div", { class: "office-notice", role: "status", text: this.notice }) : null,
+      h("div", { class: "office-body" },
+        h("div", { class: "office-map-wrap" }, view.el, this.orbitFoot(view), h("p", { class: "dim office-hint", text: "點光環看它的協作關係,點團隊名稱看摘要 · 拖曳旋轉,滾輪縮放,「全景」回到預設視角" })),
+        side),
+    );
+  }
+
+  /** One team's own cluster, where its rooms would be. */
+  private orbitFrame(teamId: string): HTMLElement[] {
+    const view = this.orbitView(teamId);
+    view.select(this.sel && this.sel.teamId === teamId ? agentKey(teamId, this.sel.memberId) : null);
+    return [view.el, this.orbitFoot(view)];
+  }
+
+  /** The ring picked in the company's 星域: who it is, what it does, who it is tied to. */
+  private orbitPickCard(view: OrbitView, id: string): HTMLElement {
+    const { teamId, memberId } = splitAgentKey(id);
+    const team = this.store.team(teamId)!;
+    const m = this.store.member(teamId, memberId)!;
+    const status = agentStatus(m);
+    const name = (agent: string) => {
+      const k = splitAgentKey(agent);
+      return `${k.teamId === teamId ? "" : `${this.store.team(k.teamId)?.name ?? ""} · `}${this.store.member(k.teamId, k.memberId)?.displayName ?? k.memberId}`;
+    };
+    const rels = view.directRelations(id);
+    const color = this.orbitScene().agents.find((a) => a.id === id)?.color ?? m.color ?? "#65b5f2";
+    return h("div", { class: "office-card orbit-pick" },
+      h("div", { class: "orbit-pick-head" },
+        h("i", { class: "orbit-pick-ring", style: `color:${color}`, "aria-hidden": "true" }),
+        h("div", { class: "grow" },
+          h("h2", { text: `${m.displayName ?? memberId} · ${m.roleLabel}` }),
+          h("small", { class: "dim", text: `${team.name}${memberId === team.leaderMemberId ? " · Leader" : ""}` })),
+        h("button", { class: "icon-btn", type: "button", title: "取消選擇", "aria-label": "取消選擇", onClick: () => { this.orbitSel = null; view.select(null); this.host.render(); } }, "✕")),
+      h("div", { class: "row" }, this.status(m.workStatus), status === "unknown" || status === "offline" ? h("span", { class: "office-pill quiet", text: STATUS_LABEL[status] }) : null, this.demoTag()),
+      m.summary ? h("p", { class: "dim", text: m.summary }) : null,
+      h("h3", { text: `直接關係 · ${rels.length} 條` }),
+      rels.length
+        ? h("ul", { class: "orbit-relations" }, ...rels.map((r) => {
+            const other = r.fromAgentId === id ? r.toAgentId : r.fromAgentId;
+            const word = r.kind === "team_connection" ? "團隊關係" : r.kind === "workflow" ? "工作流程" : "實際傳送";
+            return h("li", {}, h("i", { class: r.kind, style: `color:${color};background:${r.kind === "workflow" ? "" : color}`, "aria-hidden": "true" }), h("span", { class: "grow", text: name(other) }), h("small", { class: "dim", text: word }));
+          }))
+        : h("p", { class: "dim", text: "沒有常駐的協作連線。" }),
+      ...this.asksOf(teamId, memberId),
+      h("button", { class: "btn primary", type: "button", onClick: () => { this.sel = { teamId, memberId }; this.host.openTeam(teamId); } }, "進入辦公室看這位成員 →"));
+  }
+
+  /** Members waiting on the person, across the company. */
+  private attentionCard(teams: Team[]): HTMLElement | null {
+    const attention = teams.flatMap((t) => this.alerts(t.teamId).map((m) => ({ t, m })));
+    if (!attention.length) return null;
+    return h("div", { class: "office-card alert" }, h("h3", { text: "需要你的注意" }),
+      ...attention.map(({ t, m }) =>
+        h("div", { class: "office-attn" },
+          h("button", { class: "office-member-row", type: "button", title: "進入這間辦公室看這位成員", onClick: () => { this.sel = { teamId: t.teamId, memberId: m.memberId }; this.host.openTeam(t.teamId); } },
+            h("i", { class: "office-blob", style: `background:${m.color}` }),
+            h("span", { class: "grow" }, h("b", { text: `${t.name} · ${m.displayName}` }), h("small", { class: "dim", text: ` ${m.waitingFor?.reason ?? STATUS[m.workStatus].label}` })),
+            h("span", { class: "office-pill alert", text: "查看" })),
+          ...this.asksOf(t.teamId, m.memberId))));
   }
 
   /** A line of the 戰鬥紀錄 was clicked: what really happened — the member, else the task. */
@@ -694,6 +890,7 @@ export class Office {
     const away = this.store.teams().length - teams.length;
     const count = this.store.headcount();
     if (!teams.length) return h("div", { class: "office-empty" }, h("p", { text: away ? `${away} 個團隊都已封存。到側欄下方的「已封存」可以取出。` : "還沒有團隊。按左下角的「新增團隊」開始。" }));
+    if (this.mode === "orbit") return this.orbitCompany(teams, away, count);
     // The room picked, if any: a click on the floor where there is no room lets it go.
     const pick = teams.find((t) => t.teamId === this.companyPick) ?? null;
     // Rooms laid out as a floor: as many columns as rows. A large office takes 2 × 2 cells.
@@ -739,21 +936,11 @@ export class Office {
       );
       grid.append(room);
     }
-    const attention = teams.flatMap((t) => this.alerts(t.teamId).map((m) => ({ t, m })));
     const side = h(
       "aside",
       { class: "office-side" },
       ...(pick ? this.roomSummary(pick) : [this.companySummary(teams)]),
-      attention.length
-        ? h("div", { class: "office-card alert" }, h("h3", { text: "需要你的注意" }),
-            ...attention.map(({ t, m }) =>
-              h("div", { class: "office-attn" },
-                h("button", { class: "office-member-row", type: "button", title: "進入這間辦公室看這位成員", onClick: () => { this.sel = { teamId: t.teamId, memberId: m.memberId }; this.host.openTeam(t.teamId); } },
-                  h("i", { class: "office-blob", style: `background:${m.color}` }),
-                  h("span", { class: "grow" }, h("b", { text: `${t.name} · ${m.displayName}` }), h("small", { class: "dim", text: ` ${m.waitingFor?.reason ?? STATUS[m.workStatus].label}` })),
-                  h("span", { class: "office-pill alert", text: "查看" })),
-                ...this.asksOf(t.teamId, m.memberId))))
-        : null,
+      this.attentionCard(teams),
     );
     return h(
       "div",
@@ -1011,27 +1198,23 @@ export class Office {
     if (this.sel && this.sel.teamId !== teamId) this.sel = null;
     const run = this.store.run(team.currentRunId);
     const members = this.store.members(teamId);
-    const scene = this.scene(teamId);
+    const orbit = this.mode === "orbit";
+    // In the 星域 the room is a cluster of rings; the Mochi scene is not built.
+    const scene = orbit ? null : this.scene(teamId);
     const past = !!this.viewing;
     const battle = this.mode === "battle";
     const vm = battle ? this.boss(teamId) : null;
     const caps: Capabilities = past
       ? { canPause: false, canResume: false, canSendInstruction: false, pauseMode: "cooperative", unavailableReasons: { pause: "這是歷史執行", resume: "這是歷史執行", instruction: "這是歷史執行,只能查看" } }
       : this.capabilities(run);
-    const toggles = h(
-      "div",
-      { class: "office-toggles" },
-      h("label", {}, h("input", { type: "checkbox", checked: this.bubbles, onChange: (e: Event) => { this.bubbles = (e.target as HTMLInputElement).checked; this.host.render(); } }), "溝通泡泡"),
-      h("label", { title: "只調整畫面動畫,不影響團隊工作" }, h("input", { type: "checkbox", checked: this.calm, onChange: (e: Event) => {
-        this.calm = (e.target as HTMLInputElement).checked;
-        try {
-          localStorage.setItem("coucou.office.calm", this.calm ? "on" : "off");
-        } catch {
-          /* this session only */
-        }
-        this.host.render();
-      } }), "減少動態"),
-    );
+    const toggles = orbit
+      ? this.orbitToolbar(this.orbitView(teamId))
+      : h(
+          "div",
+          { class: "office-toggles" },
+          h("label", {}, h("input", { type: "checkbox", checked: this.bubbles, onChange: (e: Event) => { this.bubbles = (e.target as HTMLInputElement).checked; this.host.render(); } }), "溝通泡泡"),
+          this.calmToggle(),
+        );
     const pauseBtn = past
       ? null
       : caps.canPause
@@ -1039,7 +1222,7 @@ export class Office {
       : caps.canResume
         ? h("button", { class: "btn primary", type: "button", onClick: () => void this.command(teamId, "resume") }, "繼續")
         : h("button", { class: "btn plain", type: "button", disabled: true, title: caps.unavailableReasons.pause ?? "" }, run?.status === "pausing" ? "暫停中…" : "暫停團隊");
-    const cap = scene.capacity;
+    const cap = scene?.capacity ?? Infinity;
     const extra = members.length > cap ? h("p", { class: "dim", text: `另外 ${members.length - cap} 位成員還沒有工位(這間辦公室最多 ${cap} 張桌子),在下方名單裡。` }) : null;
     const roster = h(
       "div",
@@ -1089,7 +1272,11 @@ export class Office {
       this.trouble(),
       this.notice ? h("div", { class: "office-notice", role: "status", text: this.notice }) : null,
       h("div", { class: "office-body" },
-        h("div", { class: "office-main" }, h("div", { class: `office-frame${battle ? " battle" : ""}` }, scene.el, battle && vm ? bossHud(this.blowPending(teamId) ? { ...vm, bossState: "sealing" } : vm, WORLDS[savedWorld(teamId)]) : null, battle && vm ? teamBar(this.runs.get(teamId) && this.runs.get(teamId)!.maxTurns ? { used: this.runs.get(teamId)!.totalTurns, max: this.runs.get(teamId)!.maxTurns } : null) : null), extra, roster),
+        h("div", { class: "office-main" },
+          ...(scene
+            ? [h("div", { class: `office-frame${battle ? " battle" : ""}` }, scene.el, battle && vm ? bossHud(this.blowPending(teamId) ? { ...vm, bossState: "sealing" } : vm, WORLDS[savedWorld(teamId)]) : null, battle && vm ? teamBar(this.runs.get(teamId) && this.runs.get(teamId)!.maxTurns ? { used: this.runs.get(teamId)!.totalTurns, max: this.runs.get(teamId)!.maxTurns } : null) : null)]
+            : this.orbitFrame(teamId)),
+          extra, roster),
         side),
     );
   }
@@ -1399,6 +1586,11 @@ export class Office {
     for (const sc of this.scenes.values()) {
       const layer = sc.currentLayer;
       if (!sc.el.isConnected && layer instanceof BattleLayer) layer.stop();
+    }
+    // The 星域 draws only while it is on the page; off it, no frame runs.
+    if (this.orbit) {
+      if (this.orbit.el.isConnected) this.orbit.wake();
+      else this.orbit.stop();
     }
     wake();
   }

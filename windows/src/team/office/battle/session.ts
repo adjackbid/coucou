@@ -103,9 +103,11 @@ function write(key: string, value: string | null) {
 }
 
 export function savedMode(): PresentationMode {
-  // A browser opened at `?mode=battle` starts in 中二模式, to look at it.
-  if (import.meta.env?.DEV && typeof location !== "undefined" && new URLSearchParams(location.search).get("mode") === "battle") return "battle";
-  return read("coucou.office.mode") === "battle" ? "battle" : "office";
+  // A browser opened at `?mode=battle` (or `?mode=orbit`) starts in that mode, to look at it.
+  const asked = import.meta.env?.DEV && typeof location !== "undefined" ? new URLSearchParams(location.search).get("mode") : null;
+  if (asked === "battle" || asked === "orbit") return asked;
+  const saved = read("coucou.office.mode");
+  return saved === "battle" || saved === "orbit" ? saved : "office";
 }
 
 /** Whether the company map plays each room's fight too (it costs more to draw); on unless turned off. */

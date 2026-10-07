@@ -1,0 +1,463 @@
+/* 星域: the universe sits in the window's glass like the Office's map does —
+   one rounded frame, nothing around it. The scene itself stays dark whatever
+   the window's theme, so rings and lights read. */
+
+.orbit-world {
+  position: relative;
+  height: calc(100vh - 262px);
+  min-height: 420px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: radial-gradient(ellipse at 42% 42%, #15253a 0, #090f21 52%, #030916 100%);
+  box-shadow: var(--edge);
+  isolation: isolate;
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.orbit-world.orbit-dragging {
+  cursor: grabbing;
+}
+
+.orbit-world:focus-visible {
+  box-shadow: var(--edge), 0 0 0 2px var(--blue);
+}
+
+.orbit-fallback,
+.orbit-webgl,
+.orbit-webgl canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.orbit-labels,
+.orbit-agents {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* A team's title: clickable, never bent by the camera. */
+.orbit-team-title {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #e0edf8;
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0.025em;
+  white-space: nowrap;
+  text-shadow: 0 2px 12px #020816;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.orbit-team-title:hover,
+.orbit-team-title:focus-visible {
+  background: rgba(16, 30, 48, 0.75);
+  outline: none;
+}
+
+.orbit-team-title b {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 7px;
+}
+
+.orbit-team-title .orbit-team-name {
+  display: inline;
+}
+
+.orbit-team-title small {
+  font-size: 11px;
+  letter-spacing: 0;
+  color: #98b0c9;
+}
+
+/* A ring's hit area, exactly over the ring; the name hangs under it. */
+.orbit-agent {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: var(--orbit-size, 44px);
+  height: var(--orbit-size, 44px);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #e5effa;
+  font: inherit;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: pointer;
+  text-shadow: 0 2px 7px #020816;
+}
+
+.orbit-agent:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(213, 238, 255, 0.9);
+}
+
+.orbit-agent.lit {
+  box-shadow: 0 0 0 3px rgba(142, 216, 255, 0.85), 0 0 28px rgba(142, 216, 255, 0.6);
+}
+
+.orbit-state-dot {
+  position: absolute;
+  right: 6%;
+  bottom: 6%;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid #081527;
+  background: #65cfff;
+  color: #081527;
+  line-height: 8px;
+  font-size: 8px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.orbit-agent[data-status="waiting"] .orbit-state-dot { background: #ffd176; }
+.orbit-agent[data-status="done"] .orbit-state-dot { background: #82dfb2; }
+.orbit-agent[data-status="idle"] .orbit-state-dot { background: #6f8296; }
+.orbit-agent[data-status="unknown"] .orbit-state-dot { background: #6f8296; color: #e5effa; }
+.orbit-agent[data-status="offline"] .orbit-state-dot { background: #42505f; color: #c5d2de; }
+.orbit-agent[data-status="error"] .orbit-state-dot { background: #ff7b85; color: #2a0a0e; }
+
+.orbit-agent-text {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
+.orbit-agent-name {
+  font-size: 12px;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+.orbit-agent[aria-pressed="true"] .orbit-agent-name {
+  color: #fff;
+  background: #28425c;
+}
+
+.orbit-agent-role {
+  display: none;
+  font-size: 11px;
+  color: #9cc0dd;
+  line-height: 1.1;
+}
+
+.orbit-agent:hover .orbit-agent-role,
+.orbit-agent:focus-visible .orbit-agent-role,
+.orbit-agent[aria-pressed="true"] .orbit-agent-role {
+  display: block;
+}
+
+.orbit-agent[data-status="error"] .orbit-agent-name::after {
+  content: " · 錯誤";
+  color: #ff9a9f;
+  font-size: 11px;
+}
+
+.orbit-agent[data-status="offline"] .orbit-agent-name::after {
+  content: " · 離線";
+  color: #8ea0b3;
+  font-size: 11px;
+}
+
+.orbit-agent[data-status="unknown"] .orbit-agent-name::after {
+  content: " · 狀態未知";
+  color: #8ea0b3;
+  font-size: 11px;
+}
+
+/* Over the scene: a quiet eyebrow at the top, the camera at the bottom. */
+.orbit-scene-top {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  color: #8ea7be;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  pointer-events: none;
+}
+
+.orbit-motion-state {
+  letter-spacing: 0;
+  color: #c5dce8;
+}
+
+.orbit-controls {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 44px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.orbit-presets,
+.orbit-zoom {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(16, 30, 48, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+  color: #cee0f0;
+  pointer-events: auto;
+  cursor: default;
+  backdrop-filter: blur(8px);
+}
+
+.orbit-controls button {
+  min-height: 30px;
+  padding: 5px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #acbfd0;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.orbit-controls button:hover {
+  color: #e5f6ff;
+}
+
+.orbit-controls button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.orbit-presets button[aria-pressed="true"] {
+  background: #2b455e;
+  color: #e5f6ff;
+}
+
+.orbit-zoom-value {
+  font-size: 11px;
+  min-width: 40px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.orbit-zoom button[aria-label="縮小"],
+.orbit-zoom button[aria-label="放大"] {
+  font-size: 15px;
+  padding: 2px 9px;
+}
+
+.orbit-zoom .orbit-overview {
+  margin-left: 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0 999px 999px 0;
+}
+
+.orbit-scene-bottom {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 13px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  color: #98b0c6;
+  pointer-events: none;
+}
+
+.orbit-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.orbit-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.orbit-legend b {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #6f8296;
+}
+
+.orbit-legend .orbit-dot-busy { background: #65cfff; }
+.orbit-legend .orbit-dot-waiting { background: #ffd176; }
+.orbit-legend .orbit-dot-done { background: #82dfb2; }
+.orbit-legend .orbit-dot-error { background: #ff7b85; }
+.orbit-legend .orbit-dot-offline { background: #42505f; }
+
+/* Around the scene, in the window's own glass. */
+.orbit-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--dim-glass);
+}
+
+.orbit-toolbar label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.orbit-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--dim-glass);
+}
+
+.orbit-foot .orbit-event {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orbit-foot .orbit-data {
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+/* The selected ring, in the side column. */
+.orbit-pick-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.orbit-pick-ring {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  box-shadow: 0 0 14px currentColor, inset 0 0 8px currentColor;
+  flex-shrink: 0;
+}
+
+.orbit-pick-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.orbit-relations {
+  display: grid;
+  gap: 4px;
+}
+
+.orbit-relations li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.orbit-relations i {
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.orbit-relations i.workflow {
+  background-image: linear-gradient(90deg, currentColor 50%, transparent 50%);
+  background-size: 6px 2px;
+}
+
+/* The mode button's own colour, like 中二模式 has one. */
+.bt-mode button.on.bt-orbit {
+  background: linear-gradient(135deg, #2f7fd6, #4fb8e8);
+}
+
+@media (max-width: 1279px) {
+  .orbit-world {
+    height: min(62vh, 720px);
+  }
+}
+
+@media (max-width: 520px) {
+  /* Stacked clusters need height, not width: the page scrolls, the scene does not shrink. */
+  .orbit-world {
+    height: clamp(760px, 110vh, 1080px);
+    min-height: 0;
+  }
+  .orbit-scene-top {
+    left: 14px;
+    right: 14px;
+  }
+  .orbit-scene-top > span:first-child {
+    letter-spacing: 0.03em;
+  }
+  .orbit-controls {
+    left: 10px;
+    right: 10px;
+    bottom: 60px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .orbit-scene-bottom {
+    left: 14px;
+    right: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .orbit-gesture {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+@media (pointer: coarse) {
+  .orbit-controls button {
+    min-height: 40px;
+    min-width: 40px;
+  }
+  .orbit-agent {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
