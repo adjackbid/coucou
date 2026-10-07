@@ -780,7 +780,7 @@ function cliSection(): HTMLElement {
         h("i", { class: "dot", style: `background:${checking && !installed ? "#6b7079" : installed ? "#22c55e" : "#f4505e"}` }),
         h("b", { text: cli.name }),
         h("code", { class: "cli-exe", text: cli.command }),
-        h("span", { class: "hint", text: checking && !installed ? "checking…" : installed ? `installed${cli.version ? ` · ${cli.version}` : ""}` : "not installed" }),
+        h("span", { class: "hint", title: cli.found ?? "", text: checking && !installed ? "checking…" : installed ? `installed${cli.version ? ` · ${cli.version}` : " (no version answer)"}` : "not installed" }),
         h("span", { class: "grow" }),
         h("button", { class: "link", onClick: () => void Bridge.openUrl(cli.docs) }, "Official docs ↗"),
       );

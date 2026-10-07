@@ -55,8 +55,6 @@ export function setSecretaryName(v: string) {
 const doing = new Set<string>();
 /** Proposals waiting on "the folder does not exist, create it?": id → folder. */
 const askFolder = new Map<string, string>();
-/** Proposals whose folder the person chose not to create. */
-const keptOut = new Set<string>();
 
 function stored(key: string): string | null {
   try {
@@ -135,7 +133,6 @@ function replace(updated: SecretaryProposal) {
  */
 async function confirm(host: SecretaryHost, p: SecretaryProposal, createFolder = false) {
   askFolder.delete(p.id);
-  keptOut.delete(p.id);
   if (!createFolder && (p.kind === "team" || p.kind === "action")) {
     const missing = IS_TAURI ? await Bridge.secretaryMissingFolder(p.id) : (/工作資料夾:(.+?)\(還不存在/.exec(p.lines.join("\n"))?.[1] ?? null);
     if (missing) {
@@ -157,16 +154,15 @@ async function confirm(host: SecretaryHost, p: SecretaryProposal, createFolder =
   host.render();
 }
 
-/** 取消 on "create the folder?": nothing is created and the team is not opened; the card stays. */
-function keepOut(host: SecretaryHost, p: SecretaryProposal) {
+/** 取消 on "create the folder?": nothing is created, the team is not opened, and the card is cancelled. */
+async function keepOut(host: SecretaryHost, p: SecretaryProposal) {
   askFolder.delete(p.id);
-  keptOut.add(p.id);
-  host.render();
+  await decline(host, p, "沒有建立資料夾,團隊也沒有開");
 }
 
-async function decline(host: SecretaryHost, p: SecretaryProposal) {
+async function decline(host: SecretaryHost, p: SecretaryProposal, why = "") {
   const done = IS_TAURI ? await Bridge.secretaryDecline(p.id) : { ...p, state: "declined" as const };
-  replace(done ?? { ...p, state: "declined" });
+  replace({ ...(done ?? { ...p, state: "declined" as const }), outcome: why });
   host.render();
 }
 
@@ -226,7 +222,7 @@ function card(host: SecretaryHost, p: SecretaryProposal): HTMLElement {
           "div",
           { class: "sec-card-actions" },
           h("button", { class: "btn primary", type: "button", onClick: () => void confirm(host, p, true) }, "建立"),
-          h("button", { class: "btn plain", type: "button", onClick: () => keepOut(host, p) }, "取消"),
+          h("button", { class: "btn plain", type: "button", onClick: () => void keepOut(host, p) }, "取消"),
           h("span", { class: "hint", text: p.kind === "team" ? "建立資料夾後才會開這個團隊" : "建立資料夾後才會啟動" }),
         ),
       )
@@ -234,7 +230,7 @@ function card(host: SecretaryHost, p: SecretaryProposal): HTMLElement {
     p.state === "done"
       ? h("div", { class: "sec-card-state done" }, h("span", { text: `✓ 已完成${p.outcome ? `:${p.outcome}` : ""}` }))
       : p.state === "declined"
-        ? h("div", { class: "sec-card-state", text: "已取消" })
+        ? h("div", { class: "sec-card-state", text: p.outcome ? `已取消:${p.outcome}` : "已取消" })
         : p.state === "failed"
           ? h("div", { class: "sec-card-state failed", text: `沒有成功:${p.outcome}` })
           : h(
@@ -242,7 +238,7 @@ function card(host: SecretaryHost, p: SecretaryProposal): HTMLElement {
               { class: "sec-card-actions" },
               h("button", { class: "btn primary", type: "button", disabled: busy, onClick: () => void confirm(host, p) }, busy ? "處理中…" : p.confirm),
               h("button", { class: "btn plain", type: "button", disabled: busy, onClick: () => void decline(host, p) }, "不用了"),
-              h("span", { class: "hint", text: keptOut.has(p.id) ? "沒有建立資料夾,團隊也沒開。可以請秘書換一個資料夾。" : "按下才會執行" }),
+              h("span", { class: "hint", text: "按下才會執行" }),
             );
   const team = p.state === "done" ? /\(id ([A-Za-z0-9_-]+)\)/.exec(p.outcome)?.[1] : undefined;
   return h(

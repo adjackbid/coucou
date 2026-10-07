@@ -188,8 +188,23 @@ fn known_dirs() -> Vec<PathBuf> {
         let local = PathBuf::from(local);
         dirs.push(local.join("agy").join("bin"));
         dirs.push(local.join("Antigravity"));
+        dirs.push(local.join("Programs").join("OpenAI").join("Codex").join("bin"));
+        // Git and Node.js installed for this user only.
+        dirs.push(local.join("Programs").join("Git").join("cmd"));
+        dirs.push(local.join("Programs").join("nodejs"));
         dirs.push(local.join("Microsoft").join("WinGet").join("Links"));
         dirs.push(local.join("Microsoft").join("WindowsApps"));
+    }
+    // Git and Node.js installed for everyone, and nvm-windows' active Node.
+    for var in ["ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"] {
+        if let Some(pf) = std::env::var_os(var) {
+            let pf = PathBuf::from(pf);
+            dirs.push(pf.join("Git").join("cmd"));
+            dirs.push(pf.join("nodejs"));
+        }
+    }
+    if let Some(nvm) = std::env::var_os("NVM_SYMLINK") {
+        dirs.push(PathBuf::from(nvm));
     }
     dirs
 }
@@ -401,6 +416,16 @@ mod tests {
             for m in cli.methods {
                 assert!(plain(&m.command), "{}", m.command);
             }
+        }
+    }
+
+    /// Run by hand on a real PC: `cargo test --lib cli_install::tests::what_is_installed_here -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn what_is_installed_here() {
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        for c in rt.block_on(status()) {
+            eprintln!("{:10} {:50} {}", c.id, c.found.unwrap_or_else(|| "-".into()), c.version.unwrap_or_default());
         }
     }
 
