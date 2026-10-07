@@ -183,16 +183,30 @@ impl Secretary {
         open.then(|| self.settle(id, "declined", "")).flatten()
     }
 
+    /// The work folder proposal `id` needs and that is not there yet, if any:
+    /// the card asks the person whether to create it before confirming.
+    pub fn missing_folder(&self, id: &str) -> Option<String> {
+        let p = self.proposal(id).filter(|p| p.state == "open")?;
+        let dir = match (p.kind.as_str(), s(&p.payload, "action")) {
+            ("team", _) => p.payload["config"]["workDir"].as_str().unwrap_or_default().to_string(),
+            ("action", "start") => crate::read_team_file(&format!("{}.json", s(&p.payload, "team"))).ok()?.work_dir,
+            _ => return None,
+        };
+        matches!(folder_state(&dir), Folder::Missing).then_some(dir)
+    }
+
     /// Does what proposal `id` says. Called only from the person's click on its card.
-    pub async fn confirm(&self, id: &str, office: &Office) -> Result<Proposal, String> {
+    /// `create_folder` is the person's answer to "the work folder does not exist,
+    /// create it?": without it a missing folder is never created.
+    pub async fn confirm(&self, id: &str, office: &Office, create_folder: bool) -> Result<Proposal, String> {
         let p = self.proposal(id).ok_or("That proposal is no longer there.")?;
         if p.state != "open" {
             return Err("That proposal was already dealt with.".into());
         }
         let done = match p.kind.as_str() {
-            "team" => create_team(&p.payload, office).await,
+            "team" => create_team(&p.payload, office, create_folder).await,
             "instruction" => instruct(&p.payload, office),
-            "action" => act(&p.payload, office).await,
+            "action" => act(&p.payload, office, create_folder).await,
             _ => Err("Unknown proposal.".into()),
         };
         match done {
@@ -296,8 +310,12 @@ impl Secretary {
         if !scope.is_empty() {
             lines.push(format!("範圍:{}", scope.join("、")));
         }
-        let exists = std::path::Path::new(&work_dir).is_dir();
-        lines.push(format!("工作資料夾:{work_dir}{}", if exists { "" } else { "(會建立)" }));
+        let note = match folder_state(&work_dir) {
+            Folder::Ready => String::new(),
+            Folder::Missing => "(還不存在,按下後會先問你要不要建立)".into(),
+            Folder::Blocked(why) => format!("({why})"),
+        };
+        lines.push(format!("工作資料夾:{work_dir}{note}"));
         for m in &draft.members {
             let model = if m.model.trim().is_empty() { "代理預設".to_string() } else { m.model.clone() };
             lines.push(format!("{}{} · {} · {} / {}{}", m.name, if m.id == draft.leader { "(Leader)" } else { "" }, if m.role.is_empty() { "—" } else { &m.role }, m.agent, model, if m.duty.is_empty() { String::new() } else { format!(" — {}", m.duty) }));
@@ -743,7 +761,56 @@ fn list_agents(office: &Office) -> String {
 
 // ── What the person confirmed ────────────────────────────────────────────────
 
-async fn create_team(payload: &Value, office: &Office) -> Result<String, String> {
+/// How a work folder stands, checked on disk.
+enum Folder {
+    Ready,
+    Missing,
+    /// It is there (or cannot be told) but cannot be used: why, in plain words.
+    Blocked(String),
+}
+
+fn folder_state(dir: &str) -> Folder {
+    match std::fs::metadata(dir) {
+        Ok(m) if m.is_dir() => Folder::Ready,
+        Ok(_) => Folder::Blocked(format!("{dir} 是一個檔案,不是資料夾,請換一個資料夾路徑。")),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Folder::Missing,
+        Err(e) => Folder::Blocked(folder_error(dir, &e, false)),
+    }
+}
+
+/// Makes sure the work folder is there. A missing folder is created only
+/// when the person said so (`create`); a folder Windows will not let us
+/// use is told apart from one that is simply not there.
+fn ensure_folder(dir: &str, create: bool) -> Result<(), String> {
+    match folder_state(dir) {
+        Folder::Ready => Ok(()),
+        Folder::Blocked(why) => Err(why),
+        Folder::Missing if !create => Err(format!("工作資料夾 {dir} 不存在。沒有建立資料夾,團隊也沒有開。")),
+        Folder::Missing => std::fs::create_dir_all(dir).map_err(|e| folder_error(dir, &e, true)),
+    }
+}
+
+/// An error on a work folder, in words a person can act on.
+fn folder_error(dir: &str, e: &std::io::Error, creating: bool) -> String {
+    use std::io::ErrorKind;
+    let path = std::path::Path::new(dir);
+    match e.kind() {
+        ErrorKind::PermissionDenied if creating => {
+            // The deepest folder that is there is the one that refused.
+            let parent = path.ancestors().skip(1).find(|a| a.is_dir()).map(|a| a.display().to_string()).unwrap_or_else(|| dir.to_string());
+            format!("Windows 拒絕存取:你的帳號沒有權限在 {parent} 底下建立資料夾,所以沒有建立 {dir}。請換一個你能寫入的位置(例如 D:\\Code 底下),或先在檔案總管自己建立好再試。")
+        }
+        ErrorKind::PermissionDenied => format!("Windows 拒絕存取 {dir}:這個資料夾存在,但你的帳號沒有權限使用它。請換一個資料夾,或在資料夾的「內容 → 安全性」給自己讀寫權限。"),
+        ErrorKind::NotFound if creating => {
+            let root = path.ancestors().last().map(|a| a.display().to_string()).unwrap_or_default();
+            format!("無法建立 {dir}:{root} 不存在或目前無法使用(例如磁碟沒有接上)。")
+        }
+        _ if creating => format!("無法建立資料夾 {dir}:{e}"),
+        _ => format!("無法使用資料夾 {dir}:{e}"),
+    }
+}
+
+async fn create_team(payload: &Value, office: &Office, create_folder: bool) -> Result<String, String> {
     let dir = settings::team_configs_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let id = (1..1000)
@@ -752,7 +819,7 @@ async fn create_team(payload: &Value, office: &Office) -> Result<String, String>
         .ok_or("There are too many team files.")?;
     let mut config: TeamConfig = serde_json::from_value(payload["config"].clone()).map_err(|e| e.to_string())?;
     config.id = id.clone();
-    std::fs::create_dir_all(&config.work_dir).map_err(|e| format!("Could not create the work folder {}: {e}", config.work_dir))?;
+    ensure_folder(&config.work_dir, create_folder)?;
     let known: Vec<String> = office.agents.iter().map(|a| a.id.clone()).collect();
     let problems = config.problems(&known);
     if !problems.is_empty() {
@@ -787,11 +854,12 @@ fn instruct(payload: &Value, office: &Office) -> Result<String, String> {
     office.teams.instruct(team, to, words, None).map(|_| "the instruction was sent".into())
 }
 
-async fn act(payload: &Value, office: &Office) -> Result<String, String> {
+async fn act(payload: &Value, office: &Office, create_folder: bool) -> Result<String, String> {
     let team = s(payload, "team");
     match s(payload, "action") {
         "start" => {
             let config = crate::read_team_file(&format!("{team}.json"))?;
+            ensure_folder(&config.work_dir, create_folder)?;
             start(&config, office)?;
             Ok("the team was started".into())
         }
@@ -863,7 +931,7 @@ fn describe() -> Vec<Tool> {
                 "name": { "type": "string" },
                 "goal": { "type": "string", "description": "What the team must achieve and deliver, in the user's words and enough detail." },
                 "scope": { "type": "array", "items": { "type": "string" } },
-                "work_dir": { "type": "string", "description": "Full path of the folder the team works in; created if missing." },
+                "work_dir": { "type": "string", "description": "Full path of the folder the team works in. If it does not exist, the user is asked whether to create it when they confirm." },
                 "members": { "type": "array", "items": { "type": "object", "properties": {
                     "name": { "type": "string" }, "role": { "type": "string" }, "duty": { "type": "string" },
                     "agent": { "type": "string", "description": "An agent id from list_agents." },
@@ -923,6 +991,25 @@ fn label(call: &Call, office: &Office) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_missing_work_folder_is_created_only_when_the_person_says_so() {
+        let dir = std::env::temp_dir().join(format!("coucou-folder-test-{}", std::process::id())).join("site");
+        let path = dir.to_string_lossy().to_string();
+        let _ = std::fs::remove_dir_all(dir.parent().unwrap());
+        assert!(matches!(folder_state(&path), Folder::Missing));
+        let refused = ensure_folder(&path, false).unwrap_err();
+        assert!(refused.contains("不存在"), "{refused}");
+        assert!(!dir.exists());
+        ensure_folder(&path, true).unwrap();
+        assert!(dir.is_dir());
+        assert!(matches!(folder_state(&path), Folder::Ready));
+        // A file where the folder should be is told as such, not as missing.
+        let file = dir.join("notes.txt");
+        std::fs::write(&file, "x").unwrap();
+        assert!(matches!(folder_state(&file.to_string_lossy()), Folder::Blocked(_)));
+        let _ = std::fs::remove_dir_all(dir.parent().unwrap());
+    }
 
     #[test]
     fn local_times_read_as_the_person_s_clock() {

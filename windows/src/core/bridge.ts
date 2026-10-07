@@ -29,6 +29,18 @@ export interface BootInfo {
   hookPath: string;
 }
 
+/** One CLI of 安裝 CLI — mirror of cli_install.rs. */
+export interface CliInfo {
+  id: string;
+  name: string;
+  command: string;
+  purpose: string;
+  docs: string;
+  methods: { label: string; command: string; note: string; source: "built-in" | "confirmed" | "updated" | "unconfirmed" }[];
+  found: string | null;
+  version: string | null;
+}
+
 export const Bridge = {
   boot: () => call<BootInfo>("boot"),
 
@@ -172,9 +184,19 @@ export const Bridge = {
   /** The person asks the secretary; its steps arrive as `secretary-step` while it works. */
   secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string) => callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name }),
   /** Carries out one of its proposals — only ever from the click on its card. */
-  secretaryConfirm: (id: string, tzMinutes: number) => callOrThrow<SecretaryProposal>("secretary_confirm", { id, tzMinutes }),
+  secretaryConfirm: (id: string, tzMinutes: number, createFolder = false) => callOrThrow<SecretaryProposal>("secretary_confirm", { id, tzMinutes, createFolder }),
+  /** The work folder a proposal needs that does not exist yet (null when there is none to create). */
+  secretaryMissingFolder: (id: string) => call<string | null>("secretary_missing_folder", { id }),
   secretaryDecline: (id: string) => call<SecretaryProposal | null>("secretary_decline", { id }),
   secretaryReset: () => call<void>("secretary_reset"),
+  /** 安裝 CLI: the built-in table, nothing looked up. */
+  cliList: () => call<CliInfo[]>("cli_list"),
+  /** 安裝 CLI: each one looked up on PATH and asked its version. */
+  cliStatus: () => call<CliInfo[]>("cli_status"),
+  /** 安裝 CLI: checks the commands against the vendors' install pages (on a click only). */
+  cliCheckOfficial: () => callOrThrow<CliInfo[]>("cli_check_official"),
+  /** 安裝 CLI: opens PowerShell running install method `method` of `id`. */
+  cliRunInstall: (id: string, method: number) => callOrThrow<string>("cli_run_install", { id, method }),
   /** What an agent's own endpoint has billed its key (asked only on a click). */
   endpointSpend: (agent: string) => callOrThrow<KeySpend>("endpoint_spend", { agent }),
   /** A deliverable that is a picture in the team's work folder, as bytes. */

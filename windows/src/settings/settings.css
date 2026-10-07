@@ -37,7 +37,8 @@ body.settings-window {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  max-width: 720px;
+  /* One column with room either side, however wide the window is. */
+  max-width: 860px;
   margin: 0 auto;
 }
 
@@ -284,4 +285,79 @@ select option {
 .notice.warn {
   background: rgba(245, 165, 36, 0.13);
   color: #fbc06a;
+}
+
+/* Install CLIs */
+.cli-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cli {
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cli-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cli-head .grow {
+  flex: 1;
+}
+
+.cli-exe {
+  font: 400 11.5px var(--mono);
+  color: var(--dim);
+}
+
+.cli-method {
+  display: grid;
+  grid-template-columns: 84px 1fr auto auto;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.cli-label {
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.cli-command {
+  font: 400 12px var(--mono);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 6px 8px;
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+.cli-note {
+  grid-column: 2 / -1;
+}
+
+.cli-source.confirmed {
+  color: var(--green);
+}
+
+.cli-source.updated,
+.cli-source.unconfirmed {
+  color: var(--amber);
+}
+
+button.link {
+  background: none;
+  padding: 4px 6px;
+  color: #8fb4ff;
+}
+
+button.link:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
 }

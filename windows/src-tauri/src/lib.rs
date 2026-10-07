@@ -1,6 +1,7 @@
 // Coucou for Windows — app wiring and the commands the island calls.
 
 mod acp;
+mod cli_install;
 mod agy;
 mod claude;
 mod codex;
@@ -992,15 +993,47 @@ async fn secretary_confirm(
     secretary: State<'_, Arc<secretary::Secretary>>,
     id: String,
     tz_minutes: i64,
+    create_folder: Option<bool>,
 ) -> Result<secretary::Proposal, String> {
     let profiles = shared.settings.lock().unwrap().agents.clone();
     let office = secretary::Office { teams: teams.inner().clone(), agents: profiles, driver: agents.inner().clone(), tz_minutes, name: String::new() };
-    secretary.confirm(&id, &office).await
+    secretary.confirm(&id, &office, create_folder.unwrap_or(false)).await
+}
+
+/// Before confirming: the work folder proposal `id` needs that does not exist
+/// yet, so the card can ask whether to create it.
+#[tauri::command]
+fn secretary_missing_folder(secretary: State<Arc<secretary::Secretary>>, id: String) -> Option<String> {
+    secretary.missing_folder(&id)
 }
 
 #[tauri::command]
 fn secretary_decline(secretary: State<Arc<secretary::Secretary>>, id: String) -> Option<secretary::Proposal> {
     secretary.decline(&id)
+}
+
+/// 安裝 CLI: the table, without looking anything up.
+#[tauri::command]
+fn cli_list() -> Vec<cli_install::Cli> {
+    cli_install::list()
+}
+
+/// 安裝 CLI: which of them are installed, and their versions.
+#[tauri::command]
+async fn cli_status() -> Vec<cli_install::Cli> {
+    cli_install::status().await
+}
+
+/// 安裝 CLI: 向官方確認 — reads the vendors' install pages, on the person's click.
+#[tauri::command]
+async fn cli_check_official() -> Result<Vec<cli_install::Cli>, String> {
+    cli_install::check_official().await
+}
+
+/// 安裝 CLI: the person clicked 在終端機執行 on one install command.
+#[tauri::command]
+fn cli_run_install(id: String, method: usize) -> Result<String, String> {
+    cli_install::run(&id, method)
 }
 
 /// A new conversation.
@@ -1180,10 +1213,22 @@ fn settings_page_url(app: &AppHandle) -> WebviewUrl {
 /// one that exists before the island's webview does.
 fn create_settings_window(app: &AppHandle) {
     let url = settings_page_url(app);
+    // Wide, like a normal settings page: 1100 × 880 pt (1650 × 1320 px at
+    // 150 %), never more than the display comfortably holds.
+    let (width, height) = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map(|m| {
+            let scale = m.scale_factor().max(1.0);
+            let (w, h) = (m.size().width as f64 / scale, m.size().height as f64 / scale);
+            ((w * 0.9).min(1100.0), (h * 0.88).min(880.0))
+        })
+        .unwrap_or((1000.0, 760.0));
     match WebviewWindowBuilder::new(app, "settings", url)
         .additional_browser_args(BROWSER_ARGS)
         .title("Settings — Coucou")
-        .inner_size(560.0, 680.0)
+        .inner_size(width, height)
         .min_inner_size(460.0, 480.0)
         .resizable(true)
         .visible(false)
@@ -1191,16 +1236,77 @@ fn create_settings_window(app: &AppHandle) {
         .build()
     {
         Ok(win) => {
+            // Where the person left it last time, when that is still on a display.
+            if let Some(place) = settings_place::load() {
+                if settings_place::on_a_display(&win, &place) {
+                    let _ = win.set_size(tauri::PhysicalSize::new(place.width, place.height));
+                    let _ = win.set_position(tauri::PhysicalPosition::new(place.x, place.y));
+                }
+            }
             // Closing it must only hide it, or it could never be reopened.
             let hidden = win.clone();
-            win.on_window_event(move |event| {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            win.on_window_event(move |event| match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
+                    settings_place::save(&hidden);
                     let _ = hidden.hide();
                 }
+                tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => settings_place::save(&hidden),
+                _ => {}
             });
         }
         Err(err) => log::line(format!("settings window failed: {err}")),
+    }
+}
+
+/// The settings window's last size and place, in %APPDATA%\Coucou\settings-window.json,
+/// so it opens again the way the person left it.
+mod settings_place {
+    use serde::{Deserialize, Serialize};
+    use tauri::WebviewWindow;
+
+    #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+    pub struct Place {
+        pub x: i32,
+        pub y: i32,
+        pub width: u32,
+        pub height: u32,
+    }
+
+    fn file() -> std::path::PathBuf {
+        crate::settings::config_dir().join("settings-window.json")
+    }
+
+    pub fn load() -> Option<Place> {
+        let place: Place = serde_json::from_slice(&std::fs::read(file()).ok()?).ok()?;
+        (place.width >= 200 && place.height >= 200).then_some(place)
+    }
+
+    /// Kept only while the window shows normally: a minimized or maximized
+    /// window's numbers are not the size the person chose.
+    pub fn save(win: &WebviewWindow) {
+        if !win.is_visible().unwrap_or(false) || win.is_minimized().unwrap_or(false) || win.is_maximized().unwrap_or(false) {
+            return;
+        }
+        let (Ok(pos), Ok(size)) = (win.outer_position(), win.inner_size()) else { return };
+        let place = Place { x: pos.x, y: pos.y, width: size.width, height: size.height };
+        if load() == Some(place) {
+            return;
+        }
+        let _ = std::fs::create_dir_all(crate::settings::config_dir());
+        if let Ok(bytes) = serde_json::to_vec(&place) {
+            let _ = std::fs::write(file(), bytes);
+        }
+    }
+
+    /// Is the window's title bar on one of today's displays? A monitor that
+    /// was unplugged must not leave the window out of reach.
+    pub fn on_a_display(win: &WebviewWindow, place: &Place) -> bool {
+        let (x, y) = (place.x + 40, place.y + 10);
+        win.available_monitors().unwrap_or_default().iter().any(|m| {
+            let (p, s) = (m.position(), m.size());
+            x >= p.x && y >= p.y && x < p.x + s.width as i32 && y < p.y + s.height as i32
+        })
     }
 }
 
@@ -1408,6 +1514,11 @@ pub fn run() {
             secretary_ask,
             explain_request,
             secretary_confirm,
+            secretary_missing_folder,
+            cli_list,
+            cli_status,
+            cli_check_official,
+            cli_run_install,
             secretary_decline,
             secretary_reset,
             team_past,
