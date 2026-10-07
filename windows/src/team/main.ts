@@ -1581,6 +1581,12 @@ function spend(usage: MemberView["usage"], title: string): HTMLElement | null {
 const office = new Office(
   {
     render: () => render(),
+    dragEnded: () => {
+      if (renderWaiting) {
+        renderWaiting = false;
+        render();
+      }
+    },
     showBoard: () => {
       monitorMode = "board";
       render();
@@ -1644,7 +1650,8 @@ onMenuClosed(() => {
 });
 
 function render() {
-  if (menuOpen()) {
+  // …and while a finger or the mouse is still on the 星域: rebuilding the page would drop the drag.
+  if (menuOpen() || office.dragging()) {
     renderWaiting = true;
     return;
   }
@@ -1659,6 +1666,8 @@ function render() {
 
   const scroller = root.querySelector(".scroll");
   if (scroller) scroller.scrollTop = scroll;
+  // Nodes kept across redraws (the 星域, its rings) were detached and put back: give them their focus back.
+  if (active && active !== document.body && active.isConnected && document.activeElement !== active) active.focus({ preventScroll: true });
   live.afterRender();
   office.afterRender();
   if (key) {

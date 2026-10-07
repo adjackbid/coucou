@@ -71,6 +71,12 @@
   outline: none;
 }
 
+/* Off screen or behind the camera: gone, not parked (the display rule above would otherwise beat [hidden]). */
+.orbit-team-title[hidden],
+.orbit-agent[hidden] {
+  display: none;
+}
+
 .orbit-team-title b {
   display: inline-block;
   width: 5px;
@@ -224,6 +230,8 @@
   align-items: center;
   gap: 10px;
   pointer-events: none;
+  /* Above every ring: a zoomed-in ring never takes a click meant for the camera. */
+  z-index: 1001;
 }
 
 .orbit-presets,
@@ -368,6 +376,21 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+}
+
+/* The team window has no global .grow: these two take the room that is left. */
+.orbit-pick-head .grow,
+.orbit-relations li .grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.orbit-pick-head h2,
+.orbit-pick-head small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .orbit-pick-ring {

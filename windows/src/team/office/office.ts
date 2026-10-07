@@ -55,6 +55,8 @@ export interface OfficeHost {
   asks?(teamId: string, memberId: string): HTMLElement[];
   /** What last went wrong when the person answered, if anything. */
   trouble?(): string;
+  /** The 星域's camera drag ended: a redraw that waited for it may go now. */
+  dragEnded?(): void;
 }
 
 const MAX_INSTRUCTION = 2000;
@@ -645,12 +647,16 @@ export class Office {
     return new Map(this.files.filter((f) => f.config).map((f) => [f.config!.id, f.config!.links]));
   }
 
-  /** The scene the current 星域 shows: the whole company, or one team of it. */
+  /** The scene the current 星域 shows: the whole company, or one team of it (shown even when put away). */
   private orbitScene(): OrbitScene {
-    const scene = sceneFrom(this.store, this.teamLinks(), this.demo ? "demo" : "live");
-    if (this.orbitKey === "company" || !this.orbitKey) return scene;
-    const teamId = this.orbitKey;
-    return { ...scene, teams: scene.teams.filter((t) => t.id === teamId), agents: scene.agents.filter((a) => a.teamId === teamId), relations: scene.relations.filter((r) => splitAgentKey(r.fromAgentId).teamId === teamId) };
+    const mode = this.demo ? "demo" : "live";
+    if (this.orbitKey === "company" || !this.orbitKey) return sceneFrom(this.store, this.teamLinks(), mode);
+    return sceneFrom(this.store, this.teamLinks(), mode, { team: this.orbitKey });
+  }
+
+  /** A pointer is held on the 星域: main.ts waits with its redraw until it is lifted. */
+  dragging(): boolean {
+    return !!this.orbit?.dragging;
   }
 
   /** The one 星域 view, made for this key; another key's view is disposed first. */
@@ -676,6 +682,7 @@ export class Office {
             this.host.render();
           },
           reduce: () => this.calm,
+          onDragEnd: () => this.host.dragEnded?.(),
         },
         { demo: this.demo },
       );
@@ -722,8 +729,9 @@ export class Office {
   /** The company as one universe. */
   private orbitCompany(teams: Team[], away: number, count: { seats: number }): HTMLElement {
     const view = this.orbitView("company");
-    if (this.orbitSel && !this.store.member(splitAgentKey(this.orbitSel).teamId, splitAgentKey(this.orbitSel).memberId)) this.orbitSel = null;
+    // The view resolves the pick against the rings it shows: a member gone, or a team put away, is no longer picked.
     view.select(this.orbitSel);
+    this.orbitSel = view.selected;
     const pick = teams.find((t) => t.teamId === this.companyPick) ?? null;
     const side = h(
       "aside",
@@ -1072,7 +1080,7 @@ export class Office {
                 h("td", { text: s ? fmtTokens(s.tokens) : "0" }),
                 h("td", { text: s?.cost || "—" })))))
         : null,
-      h("p", { class: "dim", text: "點一間辦公室看它的摘要;雙擊直接進去。成本依「成本與用量」的價格表估算。" }),
+      h("p", { class: "dim", text: `${this.mode === "orbit" ? "點團隊名稱看它的摘要,再按「進入辦公室」進去。" : "點一間辦公室看它的摘要;雙擊直接進去。"}成本依「成本與用量」的價格表估算。` }),
     );
   }
 

@@ -40,8 +40,10 @@ function store(snapshot = company()) {
 }
 
 const event = (seq: number, changes: DomainEvent["changes"]): DomainEvent => ({ schemaVersion: 1, streamId: "s", eventId: `e${seq}`, seq, occurredAt: now, type: "entities.changed", changes });
+// As the real adapter builds them: `updatedAt` is the run's start, never when the message was read.
+const runStart = "2026-10-06T20:00:00.000Z";
 const message = (id: string, from: string, to: string[], extra: Partial<Message> = {}): Message => ({
-  ...v, messageId: `t2:${id}`, teamId: "t2", runId: "t2@r", threadId: "t2:general", taskId: null, from: { kind: "member", memberId: from }, toMemberIds: to,
+  ...v, updatedAt: runStart, messageId: `t2:${id}`, teamId: "t2", runId: "t2@r", threadId: "t2:general", taskId: null, from: { kind: "member", memberId: from }, toMemberIds: to,
   kind: "message", text: "功能規格寫好了,請看一下這份很長很長的文字會被截短", deliveryStatus: "sent", artifactIds: [], occurredAt: now, ...extra,
 });
 
@@ -117,9 +119,32 @@ describe("OrbitFeed", () => {
     expect(first.map((e) => (e.type === "message_sent" ? e.toAgentId : ""))).toEqual(["t2/ai2", "t2/ai3"]);
     expect((first[0] as { summary: string }).summary.length).toBeLessThanOrEqual(37);
     expect(feed.pull(s, Date.parse(now))).toEqual([]);
+    // Read an hour later: the reading has no time of its own in the record, so it is "now".
+    const later = Date.parse(now) + 3_600_000;
     s.receive(event(2, [{ entityKind: "message", entityKey: "t2:m1", revision: 3, op: "upsert", value: message("m1", "ai1", ["ai2", "ai3"], { deliveryStatus: "delivered" }) }]));
-    const read = feed.pull(s, Date.parse(now));
+    const read = feed.pull(s, later);
     expect(read.map((e) => e.type)).toEqual(["message_received", "message_received"]);
+    expect(read.every((e) => Date.parse(e.occurredAt) === later)).toBe(true);
+    expect(feed.pull(s, later)).toEqual([]);
+  });
+
+  it("plays the same message id again when the team was started over: a new run numbers from 1", () => {
+    const snap = company();
+    snap.messages.push(message("m1", "ai1", ["ai2"]));
+    const s = store(snap);
+    const feed = new OrbitFeed();
+    feed.pull(s, Date.parse(now));
+    // 重新開始: a new run, the same members, and t2:m1 is a brand-new message.
+    const team = snap.teams.find((t) => t.teamId === "t2")!;
+    const run2 = "t2@r2";
+    s.receive(event(1, [
+      { entityKind: "team", entityKey: "t2", revision: 2, op: "upsert", value: { ...team, revision: 2, currentRunId: run2 } },
+      { entityKind: "run", entityKey: run2, revision: 1, op: "upsert", value: { ...v, runId: run2, teamId: "t2", status: "running", progress: { completed: 0, total: 0, percent: null } } },
+      ...snap.members.filter((m) => m.teamId === "t2").map((m) => ({ entityKind: "member" as const, entityKey: `${run2}/${m.memberId}`, revision: 1, op: "upsert" as const, value: { ...m, runId: run2 } })),
+      { entityKind: "message", entityKey: "t2:m1", revision: 2, op: "upsert", value: message("m1", "ai1", ["ai2"], { runId: run2, text: "新的一輪的第一句" }) },
+    ]));
+    const out = feed.pull(s, Date.parse(now));
+    expect(out).toEqual([expect.objectContaining({ type: "message_sent", fromAgentId: "t2/ai1", toAgentId: "t2/ai2", summary: "新的一輪的第一句" })]);
     expect(feed.pull(s, Date.parse(now))).toEqual([]);
   });
 

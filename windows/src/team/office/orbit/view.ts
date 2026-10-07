@@ -22,6 +22,8 @@ export interface OrbitViewHost {
   onPickTeam(teamId: string): void;
   /** 減少動態, as the Office keeps it. */
   reduce(): boolean;
+  /** The last pointer was lifted: a page redraw that waited for the drag may go now. */
+  onDragEnd?(): void;
 }
 
 interface Projected {
@@ -111,6 +113,9 @@ export class OrbitView {
   private motionState: HTMLElement;
   private legend: HTMLElement;
   private zoomValue: HTMLElement;
+  private controls: HTMLElement;
+  /** Where the camera controls begin, from the top of the scene: rings and titles stay above it. */
+  private controlsTop = 0;
   private presets = new Map<OrbitPreset, HTMLButtonElement>();
 
   private scene: OrbitScene = { schemaVersion: "1.0.0", mode: "live", teams: [], agents: [], relations: [] };
@@ -183,6 +188,7 @@ export class OrbitView {
         h("button", { type: "button", "aria-label": "放大", title: "放大", onClick: () => { this.zoomBy(1.2); this.persist(); } }, "＋"),
         h("button", { class: "orbit-overview", type: "button", title: "相機回到預設角度與 100%;不改變選擇", onClick: () => this.resetView() }, "全景")),
     );
+    this.controls = controls;
     this.el = h(
       "div",
       { class: "orbit-world", role: "group", "aria-label": "可旋轉、縮放的 Agent 協作星域", tabindex: "0", "data-renderer": "none" },
@@ -616,6 +622,11 @@ export class OrbitView {
     });
   }
 
+  /** A pointer is held on the scene: the page must not be rebuilt under it (that would drop the capture). */
+  get dragging(): boolean {
+    return this.pointers.size > 0;
+  }
+
   private endPointer(e: PointerEvent) {
     if (!this.pointers.has(e.pointerId)) return;
     this.pointers.delete(e.pointerId);
@@ -627,17 +638,25 @@ export class OrbitView {
       this.persist();
       // The click that ends a drag is not a click on what it ended over.
       window.setTimeout(() => (this.wasDragging = false), 80);
+      this.host.onDragEnd?.();
     }
     this.pinch = 0;
   }
 
   // ── Frames ────────────────────────────────────────────────────────────────────
 
-  private layoutSize() {
+  /**
+   * Measures the box and sizes both canvases to it. Setting a canvas's size
+   * clears it, and a ResizeObserver fires after this frame's animation
+   * callbacks — so the scene is drawn again right here, not a frame later,
+   * or it would flash empty while the window is being resized.
+   */
+  private layoutSize(drawNow = true) {
     const rect = this.el.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     this.w = rect.width;
     this.h = rect.height;
+    this.controlsTop = this.controls.offsetTop || this.h - PAD_BOTTOM + 30;
     const wasVertical = this.vertical;
     this.vertical = this.w < 490;
     if (wasVertical !== this.vertical) {
@@ -651,6 +670,7 @@ export class OrbitView {
     this.focal = this.h / (2 * Math.tan((42 * Math.PI) / 360));
     this.engine?.resize(this.w, this.h, this.dpr);
     this.dirty = true;
+    if (drawNow && !this.disposed && this.visible && !document.hidden && this.el.isConnected) this.draw(performance.now());
     this.wake();
   }
 
@@ -661,7 +681,9 @@ export class OrbitView {
 
   /**
    * How far the camera stands so that every cluster fits at 100 %: the
-   * reference's 18.5 for four teams, further for more or larger ones.
+   * reference's 18.5 for four teams, further for more or larger ones. Fitted
+   * at the default tilt, so tilting the camera only tilts — a vertical drag
+   * is pitch, never a dolly.
    */
   private fitDistance(): number {
     const centres = this.layout.centres({ vertical: this.vertical });
@@ -676,7 +698,8 @@ export class OrbitView {
         halfZ = Math.max(halfZ, Math.abs(c.p[2]) + c.r * 0.8);
       }
     }
-    const sp = Math.sin(this.state.pitch), cp = Math.cos(this.state.pitch);
+    const tilt = this.defaultPitch();
+    const sp = Math.sin(tilt), cp = Math.cos(tilt);
     const halfV = halfY * cp + halfZ * sp + 0.6;
     const usableH = Math.max(120, this.h - PAD_TOP - PAD_BOTTOM);
     const byWidth = (halfX * this.focal) / (0.97 * (this.w / 2) - 24);
@@ -707,18 +730,18 @@ export class OrbitView {
         }
       }
     }
-    const drift = this.state.paused || reduce ? 0 : 1;
+    // Paused or 減少動態, the clock stands still and so does every member — where it is, not at some rest position.
     for (const n of this.nodes.values()) {
       const c = this.clusters.get(n.agent.teamId);
       if (!c) continue;
-      n.position = memberPosition(c.centre, n.index, c.size, c.slot, { phase: this.phase, drift, vertical: this.vertical });
+      n.position = memberPosition(c.centre, n.index, c.size, c.slot, { phase: this.phase, drift: 1, vertical: this.vertical });
     }
     return gliding && !reduce;
   }
 
   /** Names under their rings, team titles clear of rings, names and each other. */
   private projectLabels() {
-    const w = this.w, h = this.h;
+    const w = this.w;
     const occupied: { left: number; right: number; top: number; bottom: number }[] = [];
     for (const n of this.nodes.values()) {
       const v = this.project(n.position);
@@ -730,7 +753,8 @@ export class OrbitView {
       b.style.setProperty("--orbit-size", `${size}px`);
       b.style.zIndex = String(Math.round(1000 - v.depth * 10));
       b.style.opacity = String(clamp(1 - (v.depth - this.distance) * 0.027, 0.5, 1));
-      const on = v.depth > 1 && v.x > 25 && v.x < w - 25 && v.y > PAD_TOP && v.y < h - PAD_BOTTOM + 40;
+      // Shown while whole ring and name stay above the camera controls.
+      const on = v.depth > 1 && v.x > 25 && v.x < w - 25 && v.y > PAD_TOP && v.y + size / 2 + 20 < this.controlsTop;
       b.hidden = !on;
       if (on) occupied.push({ left: v.x - Math.max(34, size / 2), right: v.x + Math.max(34, size / 2), top: v.y - size / 2 - 4, bottom: v.y + size / 2 + 24 });
     }
@@ -740,12 +764,12 @@ export class OrbitView {
       const cv = this.project(c.centre);
       const label = c.label;
       const lw = Math.max(label.offsetWidth || 0, 148), lh = Math.max(label.offsetHeight || 0, 38);
-      const visible = cv.depth > 1 && cv.x > -60 && cv.x < w + 60 && cv.y > 30 && cv.y < h - PAD_BOTTOM + 40;
+      const visible = cv.depth > 1 && cv.x > -60 && cv.x < w + 60 && cv.y > 30 && cv.y < this.controlsTop;
       label.hidden = !visible;
       if (!visible) continue;
       const top = members.length ? Math.min(...members.map((n) => n.projected.y - clamp(n.projected.scale * 0.96, 25, 150) * 0.55)) - 42 : cv.y - 60;
       const bottom = members.length ? Math.max(...members.map((n) => n.projected.y + clamp(n.projected.scale * 0.96, 25, 150) / 2 + 24)) + lh / 2 + 14 : cv.y + 60;
-      const maxY = h - PAD_BOTTOM + 10;
+      const maxY = this.controlsTop - lh / 2 - 8;
       const candidates: { x: number; y: number; cost: number }[] = [];
       for (const dy of [0, -18, -36, -54, 18, 36, 54, -80, 80]) for (const dx of [0, -60, 60, -110, 110]) candidates.push({ x: clamp(cv.x + dx, lw / 2 + 10, w - lw / 2 - 10), y: clamp(top + dy, 30 + lh / 2, maxY), cost: Math.abs(dx) + Math.abs(dy) * 1.5 });
       for (const dx of [0, -60, 60]) candidates.push({ x: clamp(cv.x + dx, lw / 2 + 10, w - lw / 2 - 10), y: clamp(bottom, 30 + lh / 2, maxY), cost: Math.abs(dx) + Math.abs(bottom - top) * 1.1 });
@@ -967,7 +991,7 @@ export class OrbitView {
       return;
     }
     // The first frame may come before the ResizeObserver has measured the box.
-    if (this.w <= 1) this.layoutSize();
+    if (this.w <= 1) this.layoutSize(false);
     // Coming back after a while is not a jump: at most 80 ms pass per frame.
     const dt = this.last ? Math.min((now - this.last) / 1000, 0.08) : 0;
     this.last = now;

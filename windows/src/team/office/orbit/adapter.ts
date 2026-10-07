@@ -69,13 +69,17 @@ export function hubOf(team: { leaderMemberId: string }, members: readonly { memb
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
-/** The company as it stands, as the scene reads it. */
-export function sceneFrom(store: OfficeStore, links: TeamLinks, mode: OrbitScene["mode"]): OrbitScene {
+/**
+ * The company as it stands, as the scene reads it. Teams put away stay out —
+ * unless `opts.team` names the one team wanted, which is shown archived or not
+ * (its own page can still be opened from 已封存).
+ */
+export function sceneFrom(store: OfficeStore, links: TeamLinks, mode: OrbitScene["mode"], opts: { team?: string } = {}): OrbitScene {
   const teams: OrbitTeam[] = [];
   const agents: OrbitAgent[] = [];
   const relations: OrbitRelation[] = [];
   for (const t of store.teams()) {
-    if (t.archived) continue;
+    if (opts.team ? t.teamId !== opts.team : t.archived) continue;
     const members = store.members(t.teamId);
     const hub = hubOf(t, members);
     teams.push({ id: t.teamId, name: t.name, color: teamColor(t.teamId), leaderAgentId: members.some((m) => m.memberId === t.leaderMemberId) ? agentKey(t.teamId, t.leaderMemberId) : undefined });
@@ -119,7 +123,9 @@ const brief = (text: string) => {
  * (once per recipient), each delivery handed to the team's hub, and each
  * message the recipient has now read. The first look only takes note of what
  * is already there — the scene opens quiet, and nothing is played twice: a
- * message id is remembered for good.
+ * message is remembered for good, by run — Coucou numbers messages and
+ * deliverables from 1 again when a team is started over, so the same id in a
+ * new run is a new message.
  */
 export class OrbitFeed {
   private sent = new Set<string>();
@@ -127,8 +133,11 @@ export class OrbitFeed {
   private primed = false;
 
   /**
-   * `maxAgeMs`: anything older is remembered but not played — coming back to
-   * a hidden window does not replay what happened while it was away.
+   * `maxAgeMs`: a message sent longer ago is remembered but not played —
+   * coming back to a hidden window does not replay what happened while it
+   * was away. A reading has no time of its own in the record (Coucou only
+   * flips `heard`), so it is taken to have happened between the last look
+   * and this one, and is stamped with `now`.
    */
   pull(store: OfficeStore, now = Date.now(), maxAgeMs = 20_000): OrbitEvent[] {
     const out: OrbitEvent[] = [];
@@ -136,6 +145,7 @@ export class OrbitFeed {
       const t = Date.parse(iso);
       return !Number.isFinite(t) || now - t <= maxAgeMs;
     };
+    const nowIso = new Date(now).toISOString();
     for (const team of store.teams()) {
       if (team.archived) continue;
       const members = store.members(team.teamId);
@@ -146,26 +156,28 @@ export class OrbitFeed {
         const to = m.toMemberIds.filter((id) => ids.has(id) && id !== (m.from as { memberId: string }).memberId);
         if (!to.length) continue;
         const from = agentKey(team.teamId, m.from.memberId);
-        if (!this.sent.has(m.messageId)) {
-          this.sent.add(m.messageId);
+        const key = `${m.runId}|${m.messageId}`;
+        if (!this.sent.has(key)) {
+          this.sent.add(key);
           if (this.primed && fresh(m.occurredAt)) {
-            for (const r of to) out.push({ id: `${m.messageId}:sent:${r}`, type: "message_sent", messageId: m.messageId, fromAgentId: from, toAgentId: agentKey(team.teamId, r), summary: brief(m.text), occurredAt: m.occurredAt });
+            for (const r of to) out.push({ id: `${key}:sent:${r}`, type: "message_sent", messageId: key, fromAgentId: from, toAgentId: agentKey(team.teamId, r), summary: brief(m.text), occurredAt: m.occurredAt });
           }
         }
-        if (m.deliveryStatus === "delivered" && !this.received.has(m.messageId)) {
-          this.received.add(m.messageId);
-          if (this.primed && fresh(m.updatedAt || m.occurredAt)) {
-            for (const r of to) out.push({ id: `${m.messageId}:received:${r}`, type: "message_received", messageId: m.messageId, fromAgentId: from, toAgentId: agentKey(team.teamId, r), summary: brief(m.text), occurredAt: m.updatedAt || m.occurredAt });
+        if (m.deliveryStatus === "delivered" && !this.received.has(key)) {
+          this.received.add(key);
+          if (this.primed) {
+            for (const r of to) out.push({ id: `${key}:received:${r}`, type: "message_received", messageId: key, fromAgentId: from, toAgentId: agentKey(team.teamId, r), summary: brief(m.text), occurredAt: nowIso });
           }
         }
       }
       // A deliverable goes to the member the team's lines meet at.
       if (hub) {
         for (const a of store.artifacts(team.teamId, team.currentRunId)) {
-          if (this.sent.has(a.artifactId)) continue;
-          this.sent.add(a.artifactId);
+          const key = `${a.runId}|${a.artifactId}`;
+          if (this.sent.has(key)) continue;
+          this.sent.add(key);
           if (!this.primed || !fresh(a.updatedAt) || a.authorMemberId === hub || !ids.has(a.authorMemberId)) continue;
-          out.push({ id: `${a.artifactId}:delivered`, type: "message_sent", messageId: a.artifactId, fromAgentId: agentKey(team.teamId, a.authorMemberId), toAgentId: agentKey(team.teamId, hub), summary: `交付 · ${brief(a.name)}`, occurredAt: a.updatedAt });
+          out.push({ id: `${key}:delivered`, type: "message_sent", messageId: key, fromAgentId: agentKey(team.teamId, a.authorMemberId), toAgentId: agentKey(team.teamId, hub), summary: `交付 · ${brief(a.name)}`, occurredAt: a.updatedAt });
         }
       }
     }
