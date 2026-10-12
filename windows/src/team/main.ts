@@ -23,7 +23,7 @@ import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCom
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
 import { onStep as secretaryStep, secretaryName, secretaryPage, secretaryTitle, setSecretaryName, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
-import { agentSource, agentsPage, baseOf, loadTeamAgents, sourceSwitch, teamAgents, teamProfiles, type AgentsHost } from "./agents";
+import { agentLabel, agentSource, agentsPage, baseOf, loadTeamAgents, sourceSwitch, teamAgents, teamProfiles, type AgentsHost } from "./agents";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
@@ -1138,7 +1138,7 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
       "footer",
       { class: "desk-foot" },
       task ? h("span", { class: "chip task", title: task.detail || task.title, text: `${task.id} · ${task.title}` }) : h("span", { class: "chip", title: m.duty, text: "沒有進行中的任務" }),
-      h("span", { class: "chip agent", title: `使用的代理與模型 · 已進行的回合數\n${m.agent}${m.model ? ` · ${m.model}` : ""} · ${m.turns} 回合`, text: `${m.agent}${m.model ? ` · ${m.model}` : ""} · ${m.turns} 回合` }),
+      h("span", { class: "chip agent", title: `使用的代理與模型 · 已進行的回合數\n${agentLabel(m.agent)}${m.model ? ` · ${m.model}` : ""} · ${m.turns} 回合`, text: `${agentLabel(m.agent)}${m.model ? ` · ${m.model}` : ""} · ${m.turns} 回合` }),
     ),
   );
   return el;

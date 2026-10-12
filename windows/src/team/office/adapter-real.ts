@@ -12,6 +12,7 @@ import type {
   Message, MemberSnapshot, RunStatus, Task, TaskStatus, Team, TeamRun, WorkStatus, Capabilities, CommandRequest,
 } from "./contracts";
 import { calculateProgress } from "./contracts";
+import { agentLabel } from "../agents";
 import type { MemberView, Snapshot, TeamFile, Task as CTask } from "../types";
 
 const YOU = "you";
@@ -152,7 +153,7 @@ export function teamEntities(file: TeamFile, snap: Snapshot | undefined, revisio
   });
   const team: Team = { ...v, teamId, name: cfg.name || "未命名的團隊", goal: cfg.goal, memberIds: cfg.members.map((m) => m.id), leaderMemberId: cfg.leader, currentRunId: runId, officeLayoutId: file.config!.officeTheme || "auto", archived: !!file.config!.archived };
   const run: TeamRun = { ...v, runId, teamId, status: runStatus(snap), progress: calculateProgress(tasks, runId) };
-  const agents: Agent[] = cfg.members.map((c) => ({ ...v, agentId: c.agent || c.id, name: c.agent || c.id, avatarKey: c.agent || c.id }));
+  const agents: Agent[] = cfg.members.map((c) => ({ ...v, agentId: c.agent || c.id, name: c.agent ? agentLabel(c.agent) : c.id, avatarKey: c.agent || c.id }));
   return { agents, team, run, members, tasks, messages: msgs, artifacts };
 }
 

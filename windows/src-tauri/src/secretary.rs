@@ -531,7 +531,7 @@ fn team_detail(office: &Office, given: &str) -> Result<String, String> {
     let Some(p) = picture(office, &id) else {
         out.push("Never started. Members:".into());
         for m in &c.members {
-            out.push(format!("- {} ({}): {}, agent {} model {}", m.name, m.id, m.role, m.agent, if m.model.is_empty() { "default" } else { &m.model }));
+            out.push(format!("- {} ({}): {}, agent {} model {}", m.name, m.id, m.role, agent_label(office, &m.agent), if m.model.is_empty() { "default" } else { &m.model }));
         }
         return Ok(out.join("\n"));
     };
@@ -549,7 +549,7 @@ fn team_detail(office: &Office, given: &str) -> Result<String, String> {
     out.push("Members:".into());
     for m in p["members"].as_array().into_iter().flatten() {
         let tokens: u64 = m["usage"].as_array().into_iter().flatten().map(|u| n(u, "input") + n(u, "output") + n(u, "cacheRead") + n(u, "cacheWrite")).sum();
-        let mut line = format!("- {} ({}){}: {}, agent {} model {}, status {}, {} turn(s), {} tokens", s(m, "name"), s(m, "id"), if m["isLeader"].as_bool() == Some(true) { " leader" } else { "" }, s(m, "role"), s(m, "agent"), if s(m, "model").is_empty() { "default" } else { s(m, "model") }, s(m, "status"), n(m, "turns"), tokens);
+        let mut line = format!("- {} ({}){}: {}, agent {} model {}, status {}, {} turn(s), {} tokens", s(m, "name"), s(m, "id"), if m["isLeader"].as_bool() == Some(true) { " leader" } else { "" }, s(m, "role"), agent_label(office, s(m, "agent")), if s(m, "model").is_empty() { "default" } else { s(m, "model") }, s(m, "status"), n(m, "turns"), tokens);
         if !s(m, "task").is_empty() {
             line.push_str(&format!(", on {}", s(m, "task")));
         }
@@ -769,6 +769,14 @@ fn usage_summary(office: &Office, period: &str) -> String {
     )
 }
 
+/// A member's agent as the user knows it: a team agent by its name (its id is Coucou's own).
+fn agent_label(office: &Office, id: &str) -> String {
+    match office.agents.iter().find(|p| p.id == id && p.extras.is_some()) {
+        Some(p) => format!("{} (team agent {id})", p.name),
+        None => id.to_string(),
+    }
+}
+
 fn list_agents(office: &Office) -> String {
     if office.choices.is_empty() {
         return if office.team_agents {
@@ -933,7 +941,7 @@ Now: {} (the user's local time).",
             name => format!("Your name is {name}; the user calls you that, and you may call yourself that. "),
         },
         if office.team_agents {
-            " The user builds teams from their own team agents only: list_agents lists them with what each is good for; choose members by those descriptions, and never name an agent that is not listed."
+            " The user builds teams from their own team agents only: list_agents lists them with what each is good for; choose members by those descriptions, and never name an agent that is not listed. When you talk to the user, call a team agent by its name, never by its id (ta-…)."
         } else {
             ""
         },

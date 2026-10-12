@@ -92,6 +92,11 @@ export function teamAgents(): TeamAgent[] {
   return doc?.agents ?? [];
 }
 
+/** How a member's agent is shown: a team agent by its name (its id is Coucou's own), a native one by its id. */
+export function agentLabel(id: string): string {
+  return teamAgents().find((a) => a.id === id)?.name || id;
+}
+
 export function agentSource(): TeamAgentSource {
   return doc?.source ?? "native";
 }
