@@ -1,0 +1,150 @@
+/* Agent 設定 — team agents built on the native ones. */
+
+.ta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 14px;
+}
+
+.ta .panel > p + .row {
+  margin-top: 10px;
+}
+
+.ta .panel .row .segmented {
+  min-width: 280px;
+}
+
+.ta .panel-head {
+  margin-bottom: 10px;
+}
+
+.ta .panel-head h2 {
+  margin-bottom: 0;
+}
+
+.ta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ta-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--solid);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.ta-card.broken {
+  box-shadow: inset 3px 0 0 var(--red), inset 0 0 0 1px rgba(244, 80, 94, 0.25);
+}
+
+.ta-card-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ta-desc {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.ta-card-main .hint {
+  margin: 0;
+}
+
+.ta-card-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.ta-grid {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: start;
+}
+
+.ta-grid > label {
+  margin-top: 9px;
+}
+
+.ta-grid textarea {
+  resize: vertical;
+}
+
+.ta-support {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ta-support.native {
+  color: var(--green-2);
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.ta-support.brief {
+  color: var(--amber);
+  background: rgba(245, 165, 36, 0.12);
+}
+
+.ta-support.no {
+  color: var(--red-text);
+  background: rgba(244, 80, 94, 0.13);
+}
+
+.ta-mcps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ta-mcp {
+  display: grid;
+  grid-template-columns: 140px auto minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.ta-mcp.off {
+  opacity: 0.5;
+}
+
+.ta-mcp .segmented.small button {
+  padding: 5px 9px;
+}
+
+.ta-mcp-main.row {
+  gap: 6px;
+}
+
+.ta-mcp-main.row .field:first-child {
+  flex: 0 0 34%;
+}
+
+.ta-editor .row.end {
+  margin-top: 12px;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .ta-grid,
+  .ta-mcp {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -376,3 +376,53 @@ export interface ConstitutionRule {
 export interface Constitution {
   rules: ConstitutionRule[];
 }
+
+// ── Team agents — mirror of team_agents.rs ───────────────────────────────────
+
+/** Where new teams take their agents from: Settings → Agents, or the team agents only. */
+export type TeamAgentSource = "native" | "team";
+
+export interface TeamAgentMcp {
+  name: string;
+  /** A command to start (stdio)… */
+  command: string;
+  args: string[];
+  /** …or a URL to connect to (streamable HTTP). */
+  url: string;
+}
+
+/** An agent of the person's own making, built on a native agent of Settings → Agents. */
+export interface TeamAgent {
+  id: string;
+  name: string;
+  /** The native agent it runs on: its command, environment and key. */
+  base: string;
+  /** Empty: the base's model. */
+  model: string;
+  systemPrompt: string;
+  mcp: TeamAgentMcp[];
+  /** Skill folders (each with a SKILL.md) or skill names. */
+  skills: string[];
+  /** What it is good for: the secretary picks members by it. */
+  description: string;
+}
+
+export interface TeamAgents {
+  source: TeamAgentSource;
+  agents: TeamAgent[];
+}
+
+/** How a protocol takes one part of a team agent. */
+export type TeamAgentSupport = "native" | "brief" | "no";
+
+export interface TeamAgentSupports {
+  systemPrompt: TeamAgentSupport;
+  mcp: TeamAgentSupport;
+  skills: TeamAgentSupport;
+}
+
+export interface TeamAgentsView {
+  doc: TeamAgents;
+  /** Native agent id → what its protocol can take. */
+  supports: Record<string, TeamAgentSupports>;
+}

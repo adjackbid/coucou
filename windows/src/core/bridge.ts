@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentCheck, AgentProfile, ModelChoice, Provider, Settings } from "./state";
-import type { Constitution, ConstitutionLevel, Found, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
+import type { Constitution, ConstitutionLevel, Found, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -177,6 +177,9 @@ export const Bridge = {
   constitutionSave: (constitution: Constitution) => callOrThrow<void>("constitution_save", { constitution }),
   /** Which rule a command falls under, if any, and at what level. */
   constitutionTry: (command: string) => call<[ConstitutionLevel, string] | null>("constitution_try", { command }),
+  /** The team agents (Teamwork → Agent 設定), the secretary's switch, and what each native agent supports. */
+  teamAgentsLoad: () => callOrThrow<TeamAgentsView>("team_agents_load"),
+  teamAgentsSave: (doc: TeamAgents) => callOrThrow<void>("team_agents_save", { doc }),
   /** Each agent's own folder (agent id, path), for the team setup. */
   teamAgentFolders: () => call<[string, string][]>("team_agent_folders"),
   /** The chat providers the secretary can think with: (id, name, model). */

@@ -23,6 +23,7 @@ import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCom
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
 import { onStep as secretaryStep, secretaryName, secretaryPage, secretaryTitle, setSecretaryName, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
+import { agentSource, agentsPage, baseOf, loadTeamAgents, sourceSwitch, teamAgents, teamProfiles, type AgentsHost } from "./agents";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
@@ -73,7 +74,7 @@ let sidePop: { which: "secretary" | "company"; top: number } | null = null;
 /** The monitor as a board, or as the team's office. */
 let monitorMode: "board" | "office" = "board";
 /** The company map instead of one team; or the office of a team that has no file here (示範資料). */
-let place: "team" | "company" | "office" | "cost" | "secretary" | "law" = "team";
+let place: "team" | "company" | "office" | "cost" | "secretary" | "law" | "agents" = "team";
 let officeTeam: string | null = null;
 /** The form's working copy of the selected team; saved on request. */
 let editing: TeamConfig | null = null;
@@ -180,7 +181,7 @@ function said(text: string): string {
     // Why a team cannot start.
     [/^The work folder (.+) does not exist\.$/, (m) => `工作資料夾 ${m[1]} 不存在`],
     [/^The work folder must be a full path\.$/, () => "還沒有選擇工作資料夾"],
-    [/^(.+) runs as agent '(.*)', which is not in Settings → Agents\.$/, (m) => `${m[1]} 還沒有選擇代理${m[2] ? `(「${m[2]}」不在 設定 → Agents 裡)` : ""}`],
+    [/^(.+) runs as agent '(.*)', which is not in Settings → Agents( or Teamwork → Agent 設定)?\.$/, (m) => `${m[1]} 還沒有選擇代理${m[2] ? `(「${m[2]}」不在 設定 → Agents 或 Agent 設定 裡)` : ""}`],
     [/^The leader '(.+)' is not a member\.$/, (m) => `Leader「${m[1]}」不是團隊成員`],
     [/^The team has no goal\.$/, () => "還沒有填寫任務描述"],
     [/^The team has no members\.$/, () => "團隊沒有成員"],
@@ -413,7 +414,14 @@ function sidebar(): HTMLElement {
                 value: secretaryName(), placeholder: "秘書",
                 onChange: (e: Event) => { setSecretaryName((e.target as HTMLInputElement).value); render(); },
               }),
-              h("p", { class: "hint", text: "想叫它什麼都可以;改完馬上生效。" }))
+              h("p", { class: "hint", text: "想叫它什麼都可以;改完馬上生效。" }),
+              h("label", { text: "開團隊使用的 Agent" }),
+              sourceSwitch(() => render()),
+              h("p", { class: "hint" }, agentSource() === "team"
+                ? "秘書開團隊、你新增團隊成員時,只從 "
+                : "秘書開團隊、你新增團隊成員時,用 設定 → Agents 的原生 Agent。切到「團隊定義的 Agent」就只從 ",
+                h("button", { class: "link", type: "button", onClick: () => { sidePop = null; place = "agents"; render(); } }, "Agent 設定"),
+                " 裡挑,秘書會照每個 Agent 的說明選人。已經設定好的團隊照舊能啟動。"))
           : h("div", { class: "side-pop-body" },
               h("label", { text: "公司名稱" }),
               h("input", {
@@ -518,6 +526,19 @@ function sidebar(): HTMLElement {
       h("span", { class: "team-item-name", text: "憲法" }),
       h("span", { class: "team-item-state", text: "所有成員都要遵守的規則" }),
     ),
+    h(
+      "button",
+      {
+        class: `team-item company${place === "agents" ? " on" : ""}`,
+        type: "button",
+        onClick: () => {
+          place = "agents";
+          render();
+        },
+      },
+      h("span", { class: "team-item-name", text: "Agent 設定" }),
+      h("span", { class: "team-item-state", text: agentSource() === "team" ? `團隊專用的 Agent · 新團隊使用中` : "團隊專用的 Agent" }),
+    ),
     h("div", { class: "side-title", text: "團隊" }),
     list,
     h(
@@ -563,7 +584,7 @@ function trustedFolders(config: TeamConfig): HTMLElement {
   // One line a folder, with every agent of the team that keeps its files there.
   const byPath = new Map<string, string[]>();
   for (const [agent, path] of agentFolders ?? []) {
-    if (used.has(agent)) byPath.set(path, [...(byPath.get(path) ?? []), agents.find((a) => a.id === agent)?.name ?? agent]);
+    if (used.has(agent)) byPath.set(path, [...(byPath.get(path) ?? []), allAgents().find((a) => a.id === agent)?.name ?? agent]);
   }
   const own = [...byPath.entries()].map(([path, who]) => [path, who.join("、")] as const);
   const dirs = config.trustedDirs ?? [];
@@ -710,7 +731,9 @@ function nextMemberId(config: TeamConfig): string {
 /** A new member row in the form, to fill in. */
 function addMember(config: TeamConfig) {
   const id = nextMemberId(config);
-  config.members.push({ id, name: `AI ${id.slice(2)}`, role: "", duty: "", agent: agents[0]?.id ?? "", color: "" });
+  // New members take their agent from where the secretary's switch says.
+  const first = agentSource() === "team" ? teamProfiles(agents)[0] : agents[0];
+  config.members.push({ id, name: `AI ${id.slice(2)}`, role: "", duty: "", agent: first?.id ?? "", color: "" });
   unsaved = true;
 }
 
@@ -805,8 +828,24 @@ function setup(file: TeamFile): HTMLElement {
   const members = h("div", { class: "member-rows" });
   config.members.forEach((m, at) => {
     const kindOf = (a: AgentProfile) => (a.protocol === "codex" ? "Codex" : a.protocol === "claude" ? "Claude Code" : a.protocol === "agy" ? "Antigravity" : a.command);
-    const agentChoices = agents.map((a) => ({ value: a.id, label: a.name, hint: kindOf(a) !== a.name ? kindOf(a) : undefined }));
-    if (m.agent && !agents.some((a) => a.id === m.agent)) agentChoices.unshift({ value: m.agent, label: `${m.agent}(不存在)`, hint: "不在 設定 → Agents 裡" });
+    // The switch (秘書設定 / Agent 設定) says which agents a member is chosen from.
+    const teamMode = agentSource() === "team";
+    const hintOf = (a: AgentProfile) => {
+      const own = teamAgents().find((t) => t.id === a.id);
+      if (own) return `團隊 Agent · 基底 ${agents.find((n) => n.id === own.base)?.name ?? own.base}`;
+      return kindOf(a) !== a.name ? kindOf(a) : undefined;
+    };
+    const pool = teamMode ? teamProfiles(agents) : agents;
+    const agentChoices = pool.map((a) => ({ value: a.id, label: a.name, hint: hintOf(a) }));
+    if (m.agent && !pool.some((a) => a.id === m.agent)) {
+      // Set up before the switch moved: still runs, still shown.
+      const other = allAgents().find((a) => a.id === m.agent);
+      agentChoices.unshift(
+        other
+          ? { value: m.agent, label: other.name, hint: teamMode ? "原生 Agent(既有設定,照樣能啟動)" : "團隊 Agent(既有設定,照樣能啟動)" }
+          : { value: m.agent, label: `${m.agent}(不存在)`, hint: "不在 設定 → Agents 或 Agent 設定 裡" },
+      );
+    }
     const agent = dropdown({
       value: m.agent,
       choices: agentChoices,
@@ -819,26 +858,28 @@ function setup(file: TeamFile): HTMLElement {
       },
     });
     const isLeader = config.leader === m.id;
-    const profile = agents.find((a) => a.id === m.agent);
-    const known = modelLists.get(m.agent);
+    const profile = allAgents().find((a) => a.id === m.agent);
+    // A team agent offers its base's models: asked of the base, with the base's key.
+    const lister = baseOf(m.agent, agents);
+    const known = lister ? modelLists.get(lister.id) : undefined;
     const model = bound("input", `m${at}.model`, m.model ?? "", (v) => (m.model = v.trim()), {
       placeholder: profile?.model ? `模型:${profile.model}(代理預設)` : "模型:代理預設",
       title: typeof known === "string" ? known : "留空就用代理自己的預設模型",
       autocomplete: "off",
     });
     suggest(model, () => {
-      const got = modelLists.get(m.agent);
+      const got = lister ? modelLists.get(lister.id) : "這個代理不在 設定 → Agents 裡";
       if (got === undefined) return "讀取這個代理提供的模型…";
       return Array.isArray(got) ? got.map((c) => ({ value: c.id, label: c.id, hint: c.label !== c.id ? c.label : undefined })) : got;
     });
     // The list is asked for the first time the field is used: a handshake
     // with the agent, nothing spent.
     model.addEventListener("focus", () => {
-      if (!profile || modelLists.has(profile.id)) return;
-      modelLists.set(profile.id, "載入中…");
-      Bridge.agentModels(profile)
-        .then((found) => modelLists.set(profile.id, found))
-        .catch((err) => modelLists.set(profile.id, String(err).replace(/^Error:\s*/, "")))
+      if (!lister || modelLists.has(lister.id)) return;
+      modelLists.set(lister.id, "載入中…");
+      Bridge.agentModels(lister)
+        .then((found) => modelLists.set(lister.id, found))
+        .catch((err) => modelLists.set(lister.id, String(err).replace(/^Error:\s*/, "")))
         .finally(() => refreshSuggestions(model));
     });
     members.append(
@@ -927,7 +968,7 @@ function setup(file: TeamFile): HTMLElement {
       "＋ 加入成員",
     ),
     agents.length
-      ? h("p", { class: "hint" }, "代理在 ", h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsWindow() }, "設定 → Agents"), " 裡新增與修改。 ",
+      ? h("p", { class: "hint" }, "代理在 ", h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsWindow() }, "設定 → Agents"), " 裡新增與修改", agentSource() === "team" ? h("span", {}, ";現在只列 ", h("button", { class: "link", type: "button", onClick: () => { place = "agents"; render(); } }, "Agent 設定"), " 裡的團隊 Agent") : null, "。 ",
           h("button", { class: "link", type: "button", disabled: doctor === "running", title: "逐一確認每個代理的 CLI 找不找得到、能不能回答版本;找得到就等於重新定位成功", onClick: () => {
             doctor = "running";
             render();
@@ -1464,6 +1505,14 @@ function tabs(snap: Snapshot | undefined): HTMLElement {
 }
 
 function main(): HTMLElement {
+  if (place === "agents") {
+    return h(
+      "main",
+      { class: "main pane" },
+      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": "位置" }, h("b", { text: "Agent 設定" })), windowButtons()),
+      h("div", { class: "scroll" }, agentsPage(agentsHost)),
+    );
+  }
   if (place === "law") {
     return h(
       "main",
@@ -1549,10 +1598,23 @@ const secretaryHost: SecretaryHost = {
   },
 };
 
+/** The Agent 設定 page: team agents built on Settings → Agents. */
+const agentsHost: AgentsHost = {
+  render: () => render(),
+  natives: () => agents,
+  usedBy: (id) => files.filter((f) => f.config?.members.some((m) => m.agent === id)).map((f) => f.config!.name || f.file),
+  openSettings: () => void Bridge.openSettingsWindow(),
+};
+
+/** Every agent a member may name, for names and default models: native and team. */
+function allAgents(): AgentProfile[] {
+  return [...agents, ...teamProfiles(agents).filter((t) => !agents.some((a) => a.id === t.id))];
+}
+
 /** The 成本與用量 page draws inside this window, with its agents' names. */
 const costHost: CostHost = {
   render: () => render(),
-  agents: () => agents,
+  agents: () => allAgents(),
   openSecretary: () => {
     place = "secretary";
     render();
@@ -1685,6 +1747,7 @@ async function load() {
     dir = listed?.dir ?? "";
     files = listed?.files ?? [];
     agents = (await Bridge.boot())?.settings.agents ?? [];
+    await loadTeamAgents(() => {}, agents, true);
     for (const snap of (await Bridge.teamSnapshots()) ?? []) {
       runs.set(snap.id, snap);
       live.applySnapshot(snap);
@@ -1697,6 +1760,7 @@ async function load() {
     dir = demo.demoFiles.dir;
     files = demo.demoFiles.files;
     agents = demo.demoAgents;
+    await loadTeamAgents(() => {}, agents);
     if (!runs.has("shop")) {
       const snap = demo.demoSnapshot();
       runs.set("shop", snap);
@@ -1784,6 +1848,12 @@ async function start() {
   await onEvent<SecretaryStep>("secretary-step", (step) => secretaryStep(step, secretaryHost));
   // Each member's screen, as it happens: no redraw, just the lines.
   await onEvent<ScreenPatch>("team-screen", live.applyPatch);
+  // Team agents saved: what teams can start with may have changed.
+  await onEvent("team-agents-changed", () => {
+    void load().then(() => {
+      if (!unsaved) render();
+    });
+  });
   // Agents may have been added in the settings window meanwhile.
   await onEvent<{ agents: AgentProfile[] }>("settings-changed", (s) => {
     agents = s.agents ?? agents;
