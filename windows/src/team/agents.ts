@@ -495,13 +495,22 @@ export function agentsPage(host: AgentsHost): HTMLElement {
       h("p", { class: "hint", text: agentSource() === "team" ? "現在秘書開團隊、你在「團隊設定」新增成員時,Agent 下拉只列這裡的團隊 Agent。已經設定好的團隊照舊能啟動。" : "現在秘書與新增成員用的是原生 Agent;切到「團隊定義的 Agent」後只列這裡的。這個開關也在秘書的設定裡。" }),
       state ? h("p", { class: "hint", role: "status", text: state }) : null,
     ),
-    draft ? editor(host, draft) : null,
-    h(
-      "section",
-      { class: "panel" },
-      h("div", { class: "panel-head" }, h("h2", {}, "團隊 Agent", h("span", { class: "count", text: String(teamAgents().length) })), h("span", { class: "dim", text: "按兩下卡片也可以編輯" })),
-      !draft && problem ? h("p", { class: "problem", text: problem }) : null,
-      h("div", { class: "ta-grid-list" }, ...teamAgents().map((a, i) => card(host, a, i)), addTile(host)),
-    ),
+    // On the native agents the team agents are put away, not deleted: nobody
+    // reading the page should think they are what new teams are made of.
+    agentSource() === "team" && draft ? editor(host, draft) : null,
+    agentSource() === "team"
+      ? h(
+          "section",
+          { class: "panel" },
+          h("div", { class: "panel-head" }, h("h2", {}, "團隊 Agent", h("span", { class: "count", text: String(teamAgents().length) })), h("span", { class: "dim", text: "按兩下卡片也可以編輯" })),
+          !draft && problem ? h("p", { class: "problem", text: problem }) : null,
+          h("div", { class: "ta-grid-list" }, ...teamAgents().map((a, i) => card(host, a, i)), addTile(host)),
+        )
+      : h(
+          "section",
+          { class: "panel ta-away" },
+          h("b", { text: teamAgents().length ? `團隊 Agent 已收起(${teamAgents().length} 個,都還在)` : "團隊 Agent 已收起" }),
+          h("p", { class: "hint", text: "現在用的是原生 Agent,所以這裡不顯示團隊 Agent,免得誤會;資料沒有刪除。切到上方的「團隊定義的 Agent」就會再出現,也能新增與編輯。已經設定好、用到團隊 Agent 的團隊照樣能啟動。" }),
+        ),
   );
 }

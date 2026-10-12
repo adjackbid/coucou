@@ -420,3 +420,14 @@
   color: var(--ink);
   background: var(--lift);
 }
+
+/* On the native agents: the team agents put away, and said so. */
+.ta-away {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ta-away .hint {
+  margin: 0;
+}
