@@ -42,7 +42,7 @@ export function closeMenu() {
   closed?.();
 }
 
-const CHEVRON =
+export const CHEVRON =
   '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 
 /**

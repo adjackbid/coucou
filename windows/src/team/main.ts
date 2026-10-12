@@ -537,7 +537,7 @@ function sidebar(): HTMLElement {
         },
       },
       h("span", { class: "team-item-name", text: "Agent 設定" }),
-      h("span", { class: "team-item-state", text: agentSource() === "team" ? `團隊專用的 Agent · 新團隊使用中` : "團隊專用的 Agent" }),
+      h("span", { class: "team-item-state", text: agentSource() === "team" ? "團隊 Agent · 使用中" : "團隊專用的 Agent" }),
     ),
     h("div", { class: "side-title", text: "團隊" }),
     list,

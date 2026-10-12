@@ -10,9 +10,9 @@
 
 import "./agents.css";
 import { Bridge, IS_TAURI } from "../core/bridge";
-import type { AgentProfile } from "../core/state";
+import type { AgentProfile, ModelChoice } from "../core/state";
 import { h } from "../views/dom";
-import { dropdown } from "./ui";
+import { CHEVRON, dropdown, refreshSuggestions, suggest } from "./ui";
 import type { TeamAgent, TeamAgentMcp, TeamAgents, TeamAgentSource, TeamAgentSupport, TeamAgentSupports } from "./types";
 
 export interface AgentsHost {
@@ -195,6 +195,47 @@ function mcpRow(host: AgentsHost, a: TeamAgent, m: TeamAgentMcp, at: number, off
   );
 }
 
+/** The models each base agent offers, asked once per window: base id → list (or why not). */
+const modelLists = new Map<string, ModelChoice[] | string>();
+
+/**
+ * The model, typed or picked from what the base agent offers. The list is
+ * asked for the first time the field is used: a handshake with the base, with
+ * its own key, nothing spent.
+ */
+function modelField(a: TeamAgent, base: AgentProfile | undefined): HTMLElement {
+  const input = field("ta-model", a.model, (v) => (a.model = v.trim()), {
+    placeholder: base?.model ? `留空用基底的:${base.model}` : "留空用基底 Agent 的預設",
+    autocomplete: "off",
+    class: "field ta-model-input",
+  }) as HTMLInputElement;
+  suggest(input, () => {
+    if (!base) return "先選基底 Agent";
+    const got = modelLists.get(base.id);
+    if (got === undefined) return "讀取這個 Agent 提供的模型…";
+    return Array.isArray(got) ? got.map((c) => ({ value: c.id, label: c.id, hint: c.label !== c.id ? c.label : undefined })) : got;
+  });
+  input.addEventListener("focus", () => {
+    if (!base || modelLists.has(base.id)) return;
+    if (!IS_TAURI) {
+      modelLists.set(base.id, (base.protocol === "codex" ? ["gpt-5.6-sol", "gpt-5.6-luna"] : base.protocol === "claude" ? ["opus", "sonnet", "haiku"] : ["deepseek-v4-flash", "glm-5.3-flash"]).map((id) => ({ id, label: id })));
+      refreshSuggestions(input);
+      return;
+    }
+    modelLists.set(base.id, "載入中…");
+    Bridge.agentModels(base)
+      .then((found) => modelLists.set(base.id, found.length ? found : "這個 Agent 沒有列出模型,直接輸入名稱"))
+      .catch((err) => modelLists.set(base.id, String(err).replace(/^Error:\s*/, "")))
+      .finally(() => refreshSuggestions(input));
+  });
+  return h(
+    "div",
+    { class: "ta-model" },
+    input,
+    h("button", { type: "button", class: "ta-model-open", tabindex: "-1", "aria-label": "列出模型", title: "列出基底 Agent 提供的模型", html: CHEVRON, onMousedown: (e: Event) => e.preventDefault(), onClick: () => (document.activeElement === input ? input.dispatchEvent(new Event("refresh-suggestions")) : input.focus()) }),
+  );
+}
+
 function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
   const natives = host.natives();
   const base = natives.find((n) => n.id === a.base);
@@ -219,7 +260,7 @@ function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
         h("span", { class: "hint" }, "來自 ", h("button", { class: "link", type: "button", onClick: () => host.openSettings() }, "設定 → Agents"), ";金鑰沿用它的,不另外存。"),
       ),
       h("label", { text: "模型" }),
-      field("ta-model", a.model, (v) => (a.model = v.trim()), { placeholder: base?.model ? `留空用基底的:${base.model}` : "留空用基底 Agent 的預設", autocomplete: "off" }),
+      modelField(a, base),
       h("label", { text: "說明(給秘書看)" }),
       field("ta-desc", a.description, (v) => (a.description = v), { rows: "2", placeholder: "適合做什麼、擅長什麼。秘書開團隊時照這段話挑人。" }, "textarea"),
       h("label", {}, "System prompt ", badge(can?.systemPrompt)),

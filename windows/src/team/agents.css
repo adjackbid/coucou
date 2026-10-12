@@ -148,3 +148,36 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* The model: typed, or picked from the base agent's list (the chevron opens it). */
+.ta-model {
+  position: relative;
+}
+
+.ta-model .ta-model-input {
+  width: 100%;
+  padding-right: 34px;
+}
+
+.ta-model-open {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: #9398a1;
+  background: transparent;
+  cursor: default;
+}
+
+.ta-model-open:hover {
+  color: var(--ink);
+  background: var(--lift);
+}
