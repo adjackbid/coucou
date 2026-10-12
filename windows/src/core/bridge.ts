@@ -238,6 +238,8 @@ export const Bridge = {
   teamInterruptMember: (team: string, member: string) => callOrThrow<void>("team_interrupt_member", { team, member }),
   /** Opens something a member handed in: a URL, or a path in Explorer. */
   teamOpen: (team: string, locator: string) => callOrThrow<void>("team_open", { team, locator }),
+  /** A picture in the system's own viewer. */
+  teamOpenImage: (team: string, locator: string) => callOrThrow<void>("team_open_image", { team, locator }),
   teamOpenConfigs: () => call<void>("team_open_configs"),
   /** Writes a team file from the form; the file is named after the team's id. */
   teamSave: (file: string, config: TeamConfig) => callOrThrow<void>("team_save", { file, config }),

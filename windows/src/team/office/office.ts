@@ -15,6 +15,7 @@ import { RealAdapter, fileFromSnapshot } from "./adapter-real";
 import { MockAdapter } from "./adapter-mock";
 import { loadArt, STATUS, TeamScene, themeName, THEME_LABELS, wake } from "./scene";
 import { dropdown, editableText } from "../ui";
+import { thumbsFor } from "../images";
 import type { PastRun, Snapshot, TeamFile, Usage } from "../types";
 import { fmtMoney, fmtTokens, usageSummary } from "../cost";
 import { Battle, companyFps, companyLive, HERO_LABELS, heroOf, savedMode, saveCompanyLive, saveMode, setHero, setSkill, skillOf } from "./battle/session";
@@ -1496,7 +1497,9 @@ export class Office {
       return h("li", {},
         h("div", { class: "meta" }, h("b", { text: `${from}${x.toMemberIds.length ? ` → ${x.toMemberIds.map(name).join("、")}` : ""}` }), h("time", { text: clock(x.occurredAt) }), h("small", { class: "dim", text: x.deliveryStatus === "delivered" ? "已讀取" : x.deliveryStatus === "failed" ? "送達失敗" : "已送出" }), x.taskId ? h("small", { class: "dim", text: this.store.task(x.taskId)?.title ?? "" }) : null),
         body,
-        long ? h("button", { class: "link", type: "button", onClick: (e: Event) => { body.classList.toggle("clip"); (e.target as HTMLElement).textContent = body.classList.contains("clip") ? "展開" : "收合"; } }, "展開") : null);
+        long ? h("button", { class: "link", type: "button", onClick: (e: Event) => { body.classList.toggle("clip"); (e.target as HTMLElement).textContent = body.classList.contains("clip") ? "展開" : "收合"; } }, "展開") : null,
+        // The pictures the message names, to look at here.
+        this.demo ? null : thumbsFor(teamId, x.text));
     }));
   }
 

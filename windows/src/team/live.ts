@@ -13,6 +13,7 @@ import { BotEngine, hexToRGB } from "../mochi/engine";
 import type { BotStateName } from "../core/layout";
 import { h, clear } from "../views/dom";
 import type { FeedItem, Line, MemberView, ScreenPatch, Snapshot } from "./types";
+import { imagePaths, picKey, thumbRow } from "./images";
 
 const YOU = "you";
 const SYSTEM = "system";
@@ -44,6 +45,8 @@ interface Desk {
   touched: number;
   /** The run the lines belong to; a team started again starts a clean screen. */
   run: number;
+  /** Each picture shown on the screen, under the newest line that names it. */
+  pics: Map<string, { n: number; row: HTMLElement }>;
 }
 
 const desks = new Map<string, Desk>();
@@ -231,6 +234,7 @@ function desk(snap: Snapshot, m: MemberView): Desk {
     clear(d.screen);
     d.lines.clear();
     d.rows.clear();
+    d.pics.clear();
     d.run = snap.startedAt;
   }
   if (d) return d;
@@ -261,6 +265,7 @@ function desk(snap: Snapshot, m: MemberView): Desk {
     scrollTop: 0,
     touched: 0,
     run: snap.startedAt,
+    pics: new Map(),
   };
   const me = d;
   const touch = () => (me.touched = performance.now());
@@ -282,6 +287,7 @@ function put(snap: Snapshot | undefined, d: Desk, l: Line) {
   if (was && was.text === l.text && was.status === l.status && was.output === l.output && was.teamTool === l.teamTool) return;
   d.lines.set(l.n, l);
   const el = row(snap, l);
+  if (snap) pictures(snap.id, d, l, el);
   const old = d.rows.get(l.n);
   if (old) old.replaceWith(el);
   else {
@@ -297,6 +303,42 @@ function put(snap: Snapshot | undefined, d: Desk, l: Line) {
     d.rows.delete(first);
     d.lines.delete(first);
   }
+}
+
+/** Every string in a tool's input: where a file went is often only there. */
+function strings(value: unknown, out: string[] = []): string[] {
+  if (typeof value === "string") out.push(value);
+  else if (Array.isArray(value)) for (const v of value) strings(v, out);
+  else if (value && typeof value === "object") for (const v of Object.values(value)) strings(v, out);
+  return out;
+}
+
+/**
+ * The pictures a line names, under it: what the member wrote, a tool that
+ * wrote, copied or read a picture, what it handed in. A picture named again
+ * by a later line moves there, so the screen shows each once, where it was
+ * last spoken of.
+ */
+function pictures(team: string, d: Desk, l: Line, el: HTMLElement) {
+  if (l.kind !== "say" && !(l.kind === "tool" && l.status === "done")) return;
+  const named = imagePaths([l.text, ...(l.kind === "tool" ? strings(l.input) : [])].join("\n"));
+  const mine = named.filter((p) => {
+    const was = d.pics.get(picKey(p));
+    return !was || was.n <= l.n;
+  });
+  if (!mine.length) return;
+  const row = thumbRow(team, mine);
+  if (!row) return;
+  for (const p of mine) {
+    const key = picKey(p);
+    const was = d.pics.get(key);
+    if (was && was.n < l.n) {
+      was.row.querySelector(`[data-pic="${CSS.escape(key)}"]`)?.remove();
+      if (!was.row.querySelector(".pic")) was.row.remove();
+    }
+    d.pics.set(key, { n: l.n, row });
+  }
+  el.append(row);
 }
 
 /** The last thing said is still being written while the member works. */

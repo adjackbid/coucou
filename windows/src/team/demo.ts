@@ -144,8 +144,9 @@ const screens: Record<string, Line[]> = {
   ],
   ai4: [
     turn(2, [{ from: "system", text: "TASK-03 is yours and ready to start: 商品圖片" }]),
-    line("say", "六張商品圖都生成好了,放在 public/images。"),
+    line("say", "六張商品圖都生成好了,放在 public/images:主圖 public/images/hero.png、情境圖 public/images/scene.jpg。"),
     tool("Generate an image", "other", "done"),
+    tool("Read public/images/hero.png", "read", "done", { input: { path: "public/images/hero.png" } }),
     team("deliver", { task: "TASK-03", summary: "6 張商品圖:主圖、情境圖與細節圖", locator: "public/images" }),
     line("turn", "2", { status: "end" }),
   ],

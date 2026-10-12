@@ -689,6 +689,25 @@ fn team_open(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<
     cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// A picture a member made, in the system's own viewer. Only pictures:
+/// a locator comes from an agent, and opening it starts whatever is
+/// registered for its kind of file.
+#[tauri::command]
+fn team_open_image(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<(), String> {
+    let lower = locator.trim().to_ascii_lowercase();
+    if !["png", "jpg", "jpeg", "gif", "webp", "bmp"].iter().any(|ext| lower.ends_with(&format!(".{ext}"))) {
+        return Err("Not a picture.".into());
+    }
+    let work_dir = teams.get(&team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or("There is no such team.")?;
+    let path = std::path::Path::new(locator.trim());
+    let full = if path.is_absolute() { path.to_path_buf() } else { std::path::Path::new(&work_dir).join(path) };
+    if !full.is_file() {
+        return Err(format!("{} is no longer there.", full.display()));
+    }
+    // Explorer hands a file to the program registered for it, as a double-click does.
+    Command::new("explorer").arg(&full).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 /// A team's earlier runs, newest first.
 #[tauri::command]
 fn team_history(teams: State<Arc<Teams>>, team: String) -> Vec<team::orchestrator::PastRun> {
@@ -1538,6 +1557,7 @@ pub fn run() {
             team_interrupt_member,
             team_join,
             team_open,
+            team_open_image,
             team_archive,
             team_preview,
             team_history,

@@ -23,6 +23,7 @@ import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCom
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
 import { onStep as secretaryStep, secretaryName, secretaryPage, secretaryTitle, setSecretaryName, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
+import { isImage, openImage, thumbImg, thumbsFor } from "./images";
 import { agentLabel, agentSource, agentsPage, baseOf, loadTeamAgents, sourceSwitch, teamAgents, teamProfiles, type AgentsHost } from "./agents";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
@@ -1304,6 +1305,8 @@ function feed(snap: Snapshot): HTMLElement {
         h("div", { class: "feed-head" }, who(snap, item.from), item.to ? h("span", { class: "arrow", text: "→" }) : null, item.to ? who(snap, item.to) : null, h("time", { text: clock(item.at) })),
         h("div", { class: "feed-title", text: title }),
         item.text && item.kind !== "task" ? h("div", { class: "feed-text", text: said(item.text) }) : null,
+        // The pictures it is about: named in the words, or handed in for its task.
+        item.kind === "task" ? null : thumbsFor(snap.id, item.text, ...(item.task && /delivered|accepted|rejected/.test(item.kind) ? snap.deliverables.filter((d) => d.task === item.task).slice(-1).map((d) => d.locator) : [])),
       ),
     );
   }
@@ -1314,13 +1317,21 @@ function feed(snap: Snapshot): HTMLElement {
 function deliverables(snap: Snapshot): HTMLElement {
   const row = h("div", { class: "deliverables" });
   const icon = (d: Deliverable) => (d.locator.startsWith("http") ? "↗" : /image|圖/.test(d.kind) ? "▣" : /source|code|原始/.test(d.kind) ? "</>" : "▤");
+  const pictures = [...snap.deliverables].reverse().map((d) => d.locator).filter(isImage);
   for (const d of [...snap.deliverables].reverse()) {
     const task = snap.tasks.find((t) => t.id === d.task);
+    const picture = isImage(d.locator);
     row.append(
       h(
         "button",
-        { class: "deliverable", type: "button", title: `開啟 ${d.locator}`, onClick: () => void act(() => Bridge.teamOpen(snap.id, d.locator)) },
-        h("span", { class: "deliverable-icon", text: icon(d) }),
+        {
+          class: `deliverable${picture ? " picture" : ""}`,
+          type: "button",
+          title: picture ? `看 ${d.locator}` : `開啟 ${d.locator}`,
+          // A picture opens large in the window; anything else in Explorer.
+          onClick: () => (picture ? openImage(snap.id, pictures, pictures.indexOf(d.locator)) : void act(() => Bridge.teamOpen(snap.id, d.locator))),
+        },
+        h("span", { class: "deliverable-icon", text: icon(d) }, picture ? thumbImg(snap.id, d.locator) : null),
         h(
           "span",
           { class: "deliverable-body" },
@@ -1716,7 +1727,7 @@ const office = new Office(
       tab = "log";
       render();
     },
-    openArtifact: (teamId, ref) => void act(() => Bridge.teamOpen(teamId, ref)),
+    openArtifact: (teamId, ref) => (isImage(ref) ? openImage(teamId, ref) : void act(() => Bridge.teamOpen(teamId, ref))),
     preview: IS_TAURI ? (teamId, ref) => Bridge.teamPreview(teamId, ref) : undefined,
     // A plain browser (`npm run dev`) shows one made-up earlier run of the demo team.
     history: IS_TAURI ? (teamId) => Bridge.teamHistory(teamId) : import.meta.env.DEV ? async (teamId) => (teamId === "shop" ? (await import("./demo")).demoHistory() : []) : undefined,

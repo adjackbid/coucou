@@ -11,6 +11,7 @@
 import { Bridge } from "../core/bridge";
 import { h } from "../views/dom";
 import { heardWords } from "./live";
+import { isImage, openImage, thumbImg, thumbsFor } from "./images";
 import { dropdown } from "./ui";
 import type { FeedItem, MemberStatus, Message, Snapshot, Task, TeamConfig } from "./types";
 
@@ -525,6 +526,7 @@ export function logScreen(config: TeamConfig, snap: Snapshot, page: Page): HTMLE
               { class: "convo-bubble-wrap" },
               h("div", { class: "convo-head" }, h("b", { text: nameIn(config, snap, m.from) }), member?.role ? h("span", { text: member.role }) : null, h("span", { text: `→ ${nameIn(config, snap, m.to)}` }), h("time", { text: clock(m.at) })),
               h("div", { class: "convo-bubble", text: m.text }),
+              thumbsFor(snap.id, m.text),
               !m.heard && m.to !== YOU ? h("div", { class: "convo-unread", text: "對方下一輪才會讀到" }) : null,
             ),
           ),
@@ -536,7 +538,7 @@ export function logScreen(config: TeamConfig, snap: Snapshot, page: Page): HTMLE
             "div",
             { class: `convo-event ev-${e.kind}` },
             page.blob(page.colorOf(snap, e.from), 22),
-            h("span", {}, h("b", { text: `${nameIn(config, snap, e.from)} ${EVENT_WORD[e.kind] ?? e.kind}` }), e.text ? ` · ${short(page.said(e.text), 140)}` : ""),
+            h("span", {}, h("b", { text: `${nameIn(config, snap, e.from)} ${EVENT_WORD[e.kind] ?? e.kind}` }), e.text ? ` · ${short(page.said(e.text), 140)}` : "", thumbsFor(snap.id, e.text, ...(e.task && /delivered|accepted|rejected/.test(e.kind) ? snap.deliverables.filter((d) => d.task === e.task).slice(-1).map((d) => d.locator) : []))),
             h("time", { text: clock(e.at) }),
           ),
         );
@@ -607,7 +609,13 @@ function taskPanel(config: TeamConfig, snap: Snapshot, task: Task | null, page: 
           ...handed.map((d) =>
             h(
               "button",
-              { type: "button", class: "deliverable small", title: `開啟 ${d.locator}`, onClick: () => void page.act(() => Bridge.teamOpen(snap.id, d.locator)) },
+              {
+                type: "button",
+                class: "deliverable small",
+                title: isImage(d.locator) ? `看 ${d.locator}` : `開啟 ${d.locator}`,
+                onClick: () => (isImage(d.locator) ? openImage(snap.id, d.locator) : void page.act(() => Bridge.teamOpen(snap.id, d.locator))),
+              },
+              isImage(d.locator) ? thumbImg(snap.id, d.locator, "rel-thumb") : null,
               h("span", { class: "deliverable-body" }, h("span", { class: "deliverable-name", text: d.locator }), h("span", { class: "dim", text: `${nameIn(config, snap, d.by)} · ${clock(d.at)} · ${short(d.summary, 60)}` })),
               h("span", { class: `chip ${d.accepted === true ? "ok" : d.accepted === false ? "warn" : "pending"}`, text: d.accepted === true ? "已驗收" : d.accepted === false ? "已退回" : "待驗收" }),
             ),
