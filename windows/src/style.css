@@ -540,8 +540,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  transform-origin: left center;
-  will-change: transform, opacity;
+  font-size: 13px;
 }
 
 .ticker-row .tick-icon {
@@ -553,7 +552,7 @@ body {
 }
 
 .ticker-row .tick-text {
-  font: 500 13px var(--font);
+  font: 500 1em var(--font);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

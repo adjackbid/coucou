@@ -1016,7 +1016,9 @@ export class Island {
       ? settling
       : settling ||
         !this.botCx.settled || !this.botCy.settled || !this.botSize.settled ||
-        greetingActive || this.engine.busy || UploadSeq.isActive;
+        greetingActive || this.engine.busy || UploadSeq.isActive ||
+        // A ticker step stopped halfway would leave two rows on one line.
+        !!this.views.get(State.view)?.animating?.();
 
     if (busy) {
       requestAnimationFrame(this.frame);

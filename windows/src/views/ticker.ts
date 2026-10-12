@@ -17,7 +17,8 @@ const ROW_H = 22;
 const DURATION = 380;
 /** Beyond this many queued steps we stop trying to show them all. */
 const MAX_QUEUE = 4;
-const COMPLETED_SCALE = 11.5 / 13; // 0.885 — the completed font size
+const FONT = 13;
+const COMPLETED_FONT = 11.5;
 const EASE = cubicBezier(0.4, 0, 0.2, 1);
 
 interface Row {
@@ -58,16 +59,16 @@ function setText(row: Row, text: string) {
 
 /**
  * Places a row. `phase` 0 = current (shimmering, full size), 1 = completed
- * (dim, shifted up-left and scaled down) — same crossfades as the Swift view.
+ * (dim, shifted up-left and smaller) — same crossfades as the Swift view.
  */
 function place(row: Row, y: number, phase: number, opacity: number) {
-  const scale = 1 - phase * (1 - COMPLETED_SCALE);
-  // Offsets go through top/left, not translate: under the root zoom that
-  // compensates Windows text scaling, WebView2 scaled translate() lengths a
-  // second time, and the completed row landed on top of the current one.
+  // No transform at all, and no layer of its own: under the root zoom that
+  // compensates Windows text scaling, WebView2 placed transformed rows (first
+  // translate(), then scale()) off their line, and the completed row landed
+  // on the current one. Plain top/left and a font size stay in layout.
   row.el.style.top = `${y}px`;
   row.el.style.left = `${-phase * 10}px`;
-  row.el.style.transform = `scale(${scale})`;
+  row.el.style.fontSize = `${FONT - phase * (FONT - COMPLETED_FONT)}px`;
   row.el.style.opacity = String(opacity);
   row.chevron.style.opacity = String(clamp(1 - phase * 2, 0, 1));
   row.check.style.opacity = String(clamp(phase * 2 - 1, 0, 1));
@@ -98,6 +99,7 @@ export class Ticker {
     place(this.c, ROW_H * 2, 0, 0);
   }
 
+  /** A step is scrolling in, or waiting to: the island keeps drawing until it has landed. */
   get animating(): boolean {
     return this.startMs != null || this.queue.length > 0;
   }
