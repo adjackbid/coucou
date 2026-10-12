@@ -62,7 +62,7 @@ pub enum Protocol {
 }
 
 /// A coding agent the island can start and talk to.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentProfile {
     pub id: String,
@@ -85,6 +85,33 @@ pub struct AgentProfile {
     /// agent's own default.
     #[serde(default)]
     pub model: String,
+    /// A team agent (team_agents.rs) runs on another profile's key: that
+    /// profile's id. Never saved; set when a team agent is made a profile.
+    #[serde(skip)]
+    pub key_of: Option<String>,
+    /// What a team agent adds to the profile it is built on. Never saved here.
+    #[serde(skip)]
+    pub extras: Option<Extras>,
+}
+
+/// What a team agent (Teamwork → Agent 設定) adds to the native agent it is
+/// built on: words for its system prompt, MCP servers, skills, and the
+/// description the secretary picks it by.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Extras {
+    pub system_prompt: String,
+    pub mcp_servers: Vec<McpServer>,
+    /// Skill folders (each with a SKILL.md), or names the agent may already know.
+    pub skills: Vec<String>,
+    pub description: String,
+    /// The native agent it is built on.
+    pub base: String,
+}
+
+impl Extras {
+    pub fn system_prompt(&self) -> Option<&str> {
+        Some(self.system_prompt.trim()).filter(|s| !s.is_empty())
+    }
 }
 
 impl AgentProfile {
@@ -99,11 +126,13 @@ impl AgentProfile {
             cwd: String::new(),
             protocol: Protocol::Acp,
             model: String::new(),
+            key_of: None,
+            extras: None,
         }
     }
 
     pub fn secret_key(&self) -> String {
-        format!("agent:{}", self.id)
+        format!("agent:{}", self.key_of.as_deref().unwrap_or(&self.id))
     }
 
     fn working_dir(&self) -> std::path::PathBuf {
@@ -117,17 +146,26 @@ impl AgentProfile {
     }
 }
 
-/// An MCP server handed to the agent with its session (stdio transport).
+/// An MCP server handed to the agent with its session: a command it starts
+/// (stdio), or a URL it connects to (streamable HTTP) when `url` is set.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct McpServer {
     pub name: String,
     pub command: String,
     pub args: Vec<String>,
     pub env: BTreeMap<String, String>,
+    pub url: String,
 }
 
 impl McpServer {
+    pub fn is_remote(&self) -> bool {
+        !self.url.trim().is_empty()
+    }
+
     fn to_json(&self) -> Value {
+        if self.is_remote() {
+            return json!({ "type": "http", "name": self.name, "url": self.url.trim(), "headers": [] });
+        }
         let env: Vec<Value> = self.env.iter().map(|(k, v)| json!({ "name": k, "value": v })).collect();
         json!({ "name": self.name, "command": self.command, "args": self.args, "env": env })
     }
@@ -266,7 +304,7 @@ pub struct Transport {
 pub type Opener = Arc<dyn Fn(&AgentProfile, &Launch) -> Result<Transport, String> + Send + Sync>;
 
 pub(crate) struct Running {
-    profile: AgentProfile,
+    pub(crate) profile: AgentProfile,
     launch: Launch,
     child: AsyncMutex<Option<Child>>,
     pub(crate) writer: Writer,
@@ -433,10 +471,12 @@ fn is_copilot(exe: &std::path::Path) -> bool {
 fn copilot_mcp_file(servers: &[McpServer]) -> Result<std::path::PathBuf, String> {
     let mut map = serde_json::Map::new();
     for s in servers {
-        map.insert(
-            s.name.clone(),
-            json!({ "type": "local", "command": s.command, "args": s.args, "env": s.env, "tools": ["*"] }),
-        );
+        let entry = if s.is_remote() {
+            json!({ "type": "http", "url": s.url.trim(), "tools": ["*"] })
+        } else {
+            json!({ "type": "local", "command": s.command, "args": s.args, "env": s.env, "tools": ["*"] })
+        };
+        map.insert(s.name.clone(), entry);
     }
     let text = json!({ "mcpServers": map }).to_string();
     let dir = std::env::temp_dir().join("coucou-mcp");
@@ -455,6 +495,20 @@ fn copilot_mcp_file(servers: &[McpServer]) -> Result<std::path::PathBuf, String>
     text.hash(&mut h);
     let file = dir.join(format!("{:016x}.json", h.finish()));
     std::fs::write(&file, text).map_err(|e| format!("Could not prepare the agent's MCP servers: {e}"))?;
+    Ok(file)
+}
+
+/// A team agent's system prompt as a file, for Claude Code's
+/// `--append-system-prompt-file`: many lines and quotes do not survive a
+/// command line that goes through cmd.exe. Named after what is in it.
+fn prompt_file(words: &str) -> Result<std::path::PathBuf, String> {
+    let dir = std::env::temp_dir().join("coucou-prompts");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not prepare the agent's system prompt: {e}"))?;
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    words.hash(&mut h);
+    let file = dir.join(format!("{:016x}.md", h.finish()));
+    std::fs::write(&file, words).map_err(|e| format!("Could not prepare the agent's system prompt: {e}"))?;
     Ok(file)
 }
 
@@ -495,6 +549,9 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
         }
         Protocol::Claude => {
             cmd.args(crate::claude::args(model.as_deref(), &launch.mcp_servers));
+            if let Some(words) = profile.extras.as_ref().and_then(|x| x.system_prompt()) {
+                cmd.arg("--append-system-prompt-file").arg(prompt_file(words)?);
+            }
         }
         // A team member: agy's checks off, the team's gate in their place
         // (agy.rs), and who it is in the environment its hook and its MCP
@@ -514,7 +571,9 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
                 cmd.env("COPILOT_MODEL", m);
             }
             if runs_copilot(profile) && !launch.mcp_servers.is_empty() {
-                cmd.args(launch.mcp_servers.iter().map(|s| format!("--allow-tool={}", s.name)));
+                // Only the team's own tools go without a card; a server the
+                // person added asks like any other tool.
+                cmd.args(launch.mcp_servers.iter().filter(|s| s.name == TEAM_SERVER).map(|s| format!("--allow-tool={}", s.name)));
                 cmd.arg("--additional-mcp-config").arg(format!("@{}", copilot_mcp_file(&launch.mcp_servers)?.display()));
             }
         }
@@ -1392,6 +1451,7 @@ mod tests {
                     command: r"C:\bin\coucou-team-mcp.exe".into(),
                     args: vec!["--member".into(), "ai3".into()],
                     env: BTreeMap::from([("COUCOU_TEAM".to_string(), "shop".to_string())]),
+                    url: String::new(),
                 }],
                 ..Launch::default()
             };
@@ -1415,6 +1475,7 @@ mod tests {
             command: r"C:\bin\coucou-team-mcp.exe".into(),
             args: vec!["--member".into(), "ai3".into()],
             env: BTreeMap::from([("COUCOU_TEAM".to_string(), "shop".to_string())]),
+            url: String::new(),
         };
         let file = copilot_mcp_file(std::slice::from_ref(&server)).unwrap();
         let config: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
@@ -1566,6 +1627,7 @@ for line in sys.stdin:
             command: "python".into(),
             args: vec![script.to_string_lossy().to_string(), marker.to_string_lossy().to_string()],
             env: BTreeMap::new(),
+            url: String::new(),
         };
         (dir, marker, server)
     }

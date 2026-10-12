@@ -75,6 +75,11 @@ pub fn mcp_args(servers: &[McpServer]) -> Vec<String> {
     let mut out = Vec::new();
     for s in servers {
         let key = format!("mcp_servers.{}", s.name);
+        if s.is_remote() {
+            out.push("-c".into());
+            out.push(format!("{key}.url={}", toml_str(s.url.trim())));
+            continue;
+        }
         out.push("-c".into());
         out.push(format!("{key}.command={}", toml_str(&s.command)));
         out.push("-c".into());
@@ -84,8 +89,12 @@ pub fn mcp_args(servers: &[McpServer]) -> Vec<String> {
             out.push("-c".into());
             out.push(format!("{key}.env={{{}}}", env.join(", ")));
         }
-        out.push("-c".into());
-        out.push(format!("{key}.default_tools_approval_mode=\"approve\""));
+        // Coucou's own team tools run without asking; a server the person
+        // added asks like any other tool.
+        if s.name == crate::acp::TEAM_SERVER {
+            out.push("-c".into());
+            out.push(format!("{key}.default_tools_approval_mode=\"approve\""));
+        }
     }
     out
 }
@@ -115,6 +124,10 @@ pub async fn setup(
     let mut params = json!({ "cwd": cwd.to_string_lossy(), "approvalPolicy": "untrusted", "sandbox": "workspace-write" });
     if let Some(m) = model {
         params["model"] = json!(m);
+    }
+    // A team agent's system prompt: Codex adds it to the thread's instructions.
+    if let Some(words) = running.profile.extras.as_ref().and_then(|x| x.system_prompt()) {
+        params["developerInstructions"] = json!(words);
     }
     let started = acp::request(running, "thread/start", params, timeout)
     .await
@@ -494,6 +507,7 @@ mod tests {
             command: r"C:\Users\x\AppData\Local\Coucou\bin\coucou-team-mcp.exe".into(),
             args: vec![],
             env: BTreeMap::from([("COUCOU_TEAM".to_string(), "shop".to_string()), ("COUCOU_MEMBER".to_string(), "ai3".to_string())]),
+            url: String::new(),
         }]);
         assert_eq!(
             args,
@@ -509,6 +523,12 @@ mod tests {
             ]
         );
         assert_eq!(toml_str("a\"b\nc"), r#""a\"b\nc""#);
+        // A team agent's own servers: a URL is one line, and their tools ask.
+        let own = mcp_args(&[
+            McpServer { name: "docs".into(), url: "https://example.test/mcp".into(), ..Default::default() },
+            McpServer { name: "fs".into(), command: "npx".into(), args: vec!["-y".into(), "fs-mcp".into()], ..Default::default() },
+        ]);
+        assert_eq!(own, vec!["-c", r#"mcp_servers.docs.url="https://example.test/mcp""#, "-c", r#"mcp_servers.fs.command="npx""#, "-c", r#"mcp_servers.fs.args=["-y", "fs-mcp"]"#]);
     }
 
     #[test]
@@ -535,6 +555,7 @@ mod tests {
             cwd: String::new(),
             protocol: Protocol::Codex,
             model: String::new(),
+            ..Default::default()
         }
     }
 

@@ -290,6 +290,7 @@ mod tests {
             cwd: String::new(),
             protocol: crate::acp::Protocol::Agy,
             model: String::new(),
+            ..Default::default()
         }
     }
 
@@ -360,7 +361,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".agents")).unwrap();
         std::fs::write(dir.join(".agents").join("hooks.json"), r#"{"mine":{"Stop":[{"command":"echo"}]}}"#).unwrap();
-        let relay = McpServer { name: "coucou-team".into(), command: r"C:\bin\coucou-team-mcp.exe".into(), args: vec![], env: Default::default() };
+        let relay = McpServer { name: "coucou-team".into(), command: r"C:\bin\coucou-team-mcp.exe".into(), args: vec![], env: Default::default(), url: String::new() };
         prepare_folder(&dir, &relay).unwrap();
         let hooks: Value = serde_json::from_str(&std::fs::read_to_string(dir.join(".agents").join("hooks.json")).unwrap()).unwrap();
         assert!(hooks.get("mine").is_some());

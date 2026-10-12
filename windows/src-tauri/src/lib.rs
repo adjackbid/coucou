@@ -24,6 +24,7 @@ mod secrets;
 mod secretary;
 mod settings;
 mod team;
+mod team_agents;
 mod tray;
 mod usage;
 mod win_user;
@@ -500,7 +501,7 @@ fn team_files(shared: State<Shared>) -> TeamFiles {
         names.push("example-shop.json".into());
     }
     names.sort();
-    let agents: Vec<String> = shared.settings.lock().unwrap().agents.iter().map(|a| a.id.clone()).collect();
+    let agents: Vec<String> = runnable(&shared).iter().map(|a| a.id.clone()).collect();
     let files = names
         .into_iter()
         .map(|file| match read_team_file(&file) {
@@ -532,7 +533,7 @@ fn team_snapshots(teams: State<Arc<Teams>>) -> Vec<Snapshot> {
 #[tauri::command]
 async fn team_start(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, file: String) -> Result<Snapshot, String> {
     let config = read_team_file(&file)?;
-    let profiles = shared.settings.lock().unwrap().agents.clone();
+    let profiles = runnable(&shared);
     if !settings::team_mcp_exe_path().is_file() {
         return Err("coucou-team-mcp.exe is missing from Coucou's bin folder, so members could not report. Reinstall or rebuild Coucou.".into());
     }
@@ -544,7 +545,7 @@ async fn team_start(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, fil
 async fn team_instruct(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, team: String, to: String, text: String, request: Option<String>) -> Result<String, String> {
     // A finished team is not closed: the person's next words start it again.
     if teams.is_finished(&team) {
-        let profiles = shared.settings.lock().unwrap().agents.clone();
+        let profiles = runnable(&shared);
         return teams.reopen(&team, &to, &text, request.as_deref(), &profiles);
     }
     teams.instruct(&team, &to, &text, request.as_deref())
@@ -569,7 +570,7 @@ fn team_pause(teams: State<Arc<Teams>>, team: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn team_resume(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, team: String) -> Result<(), String> {
-    let profiles = shared.settings.lock().unwrap().agents.clone();
+    let profiles = runnable(&shared);
     teams.resume(&team, &profiles)
 }
 
@@ -584,7 +585,7 @@ async fn team_interrupt(teams: State<'_, Arc<Teams>>, team: String) -> Result<()
 #[tauri::command]
 fn team_join(shared: State<Shared>, teams: State<Arc<Teams>>, file: String) -> Result<Vec<String>, String> {
     let config = read_team_file(&file)?;
-    let profiles = shared.settings.lock().unwrap().agents.clone();
+    let profiles = runnable(&shared);
     teams.join(file.trim_end_matches(".json"), &config, &profiles)
 }
 
@@ -732,7 +733,8 @@ fn team_new(shared: State<Shared>) -> Result<String, String> {
         .map(|n| if n == 1 { "team".to_string() } else { format!("team-{n}") })
         .find(|id| !dir.join(format!("{id}.json")).exists())
         .ok_or("There are too many team files.")?;
-    let agent = shared.settings.lock().unwrap().agents.first().map(|a| a.id.clone()).unwrap_or_default();
+    let natives = shared.settings.lock().unwrap().agents.clone();
+    let agent = team_agents::current().choices(&natives).first().map(|a| a.id.clone()).unwrap_or_default();
     let config = serde_json::json!({
         "id": id, "name": "", "goal": "", "workDir": "", "leader": "ai1", "autoApprove": true,
         "members": [{ "id": "ai1", "name": "AI 1", "role": "", "duty": "", "agent": agent, "color": "" }],
@@ -975,7 +977,7 @@ async fn secretary_ask(
         (found, settings.agents.clone())
     };
     let provider = provider.ok_or("The secretary needs a chat model: add one in Settings → Chat providers.")?;
-    let office = secretary::Office { teams: teams.inner().clone(), agents: profiles, driver: agents.inner().clone(), tz_minutes, name: name.unwrap_or_default() };
+    let office = secretary::Office::new(teams.inner().clone(), &profiles, agents.inner().clone(), tz_minutes, name.unwrap_or_default());
     let window = app.clone();
     secretary
         .ask(&provider, &office, &text, &move |step| {
@@ -996,7 +998,7 @@ async fn secretary_confirm(
     create_folder: Option<bool>,
 ) -> Result<secretary::Proposal, String> {
     let profiles = shared.settings.lock().unwrap().agents.clone();
-    let office = secretary::Office { teams: teams.inner().clone(), agents: profiles, driver: agents.inner().clone(), tz_minutes, name: String::new() };
+    let office = secretary::Office::new(teams.inner().clone(), &profiles, agents.inner().clone(), tz_minutes, String::new());
     secretary.confirm(&id, &office, create_folder.unwrap_or(false)).await
 }
 
@@ -1063,10 +1065,42 @@ fn constitution_try(command: String) -> Option<(constitution::Level, String)> {
     constitution::current().judge(&request, &home).map(|(level, rule)| (level, rule.text))
 }
 
+/// Every agent a team may run as: Settings → Agents, and the team agents built on them.
+fn runnable(shared: &Shared) -> Vec<AgentProfile> {
+    let natives = shared.settings.lock().unwrap().agents.clone();
+    team_agents::current().runnable(&natives)
+}
+
+/// The team agents (Teamwork → Agent 設定), the secretary's switch, and what
+/// each native agent's protocol can take of a team agent.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TeamAgentsView {
+    doc: team_agents::TeamAgents,
+    /// Native agent id → what its protocol supports.
+    supports: std::collections::BTreeMap<String, team_agents::Supports>,
+}
+
+#[tauri::command]
+fn team_agents_load(shared: State<Shared>) -> TeamAgentsView {
+    let natives = shared.settings.lock().unwrap().agents.clone();
+    let supports = natives.iter().map(|a| (a.id.clone(), team_agents::supports(a.protocol))).collect();
+    TeamAgentsView { doc: team_agents::current(), supports }
+}
+
+#[tauri::command]
+fn team_agents_save(app: AppHandle, shared: State<Shared>, doc: team_agents::TeamAgents) -> Result<(), String> {
+    let natives = shared.settings.lock().unwrap().agents.clone();
+    team_agents::save(doc, &natives)?;
+    log::line("team agents saved");
+    let _ = app.emit_to("team", "team-agents-changed", ());
+    Ok(())
+}
+
 /// Each agent's own folder (agent id, path), for the team setup's "trust it" choice.
 #[tauri::command]
 fn team_agent_folders(shared: State<Shared>) -> Vec<(String, String)> {
-    shared.settings.lock().unwrap().agents.iter().filter_map(|a| Some((a.id.clone(), acp::agent_folder(a)?.to_string_lossy().to_string()))).collect()
+    runnable(&shared).iter().filter_map(|a| Some((a.id.clone(), acp::agent_folder(a)?.to_string_lossy().to_string()))).collect()
 }
 
 /// The models an agent offers, for the drop-downs in Settings and Teamwork.
@@ -1509,6 +1543,8 @@ pub fn run() {
             secretary_providers,
             team_agent_folders,
             constitution_load,
+            team_agents_load,
+            team_agents_save,
             constitution_save,
             constitution_try,
             secretary_ask,

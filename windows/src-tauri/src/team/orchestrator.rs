@@ -371,7 +371,13 @@ impl Team {
             }
             // A session that has not heard its role yet hears it first.
             let first = self.briefed.lock().unwrap().insert(member.id.clone());
-            let mut text = if first { format!("{}\n\n", brief::role(&config, &member.id)) } else { String::new() };
+            let mut text = if first {
+                // A team agent's words that have no other way in (team_agents.rs).
+                let own = self.seat(&member.id).map(|s| crate::team_agents::brief_text(&s.profile)).unwrap_or_default();
+                format!("{}{own}\n\n", brief::role(&config, &member.id))
+            } else {
+                String::new()
+            };
             text.push_str(&brief::turn(&config, &unheard));
             let ids: Vec<String> = unheard.iter().map(|m| m.id.clone()).collect();
             let heard: Vec<(String, String)> = unheard.iter().map(|m| (m.from.clone(), m.text.clone())).collect();
@@ -666,6 +672,7 @@ impl Teams {
                         ("COUCOU_MEMBER".to_string(), member.id.clone()),
                         ("COUCOU_TEAM_TOKEN".to_string(), secret.clone()),
                     ]),
+                    url: String::new(),
                 }],
                 // The work folder, and what the person chose to trust like it.
                 auto: config.auto_approve.then(|| {
@@ -678,6 +685,10 @@ impl Teams {
                 model: Some(member.model.trim().to_string()).filter(|m| !m.is_empty()),
             };
             let mut launch = launch;
+            // A team agent's own MCP servers, after the team's (which stays first).
+            if let Some(x) = &profile.extras {
+                launch.mcp_servers.extend(x.mcp_servers.iter().cloned());
+            }
             let mut metered = false;
             // Copilot on an endpoint of its own: its calls go through
             // Coucou's meter, which reads each one's tokens and the model it
@@ -836,7 +847,7 @@ impl Teams {
                 return Err(format!("'{}' cannot be a member id.", m.id));
             }
             if !profiles.iter().any(|p| p.id == m.agent) {
-                return Err(format!("{} runs as agent '{}', which is not in Settings → Agents.", m.name, m.agent));
+                return Err(format!("{} runs as agent '{}', which is not in Settings → Agents or Teamwork → Agent 設定.", m.name, m.agent));
             }
         }
         // Their seats are made exactly as at the start, from the running setup.
@@ -1936,6 +1947,39 @@ mod tests {
             assert_eq!(answered, vec![Some("yes0".to_string()), Some("no1".to_string()), Some("no2".to_string())]);
             assert_eq!(bench.member("ai1").status, MemberStatus::Working);
             bench.drive.hold.notify_one();
+        });
+    }
+
+    #[test]
+    fn a_member_on_a_team_agent_gets_its_servers_after_the_team_s_and_its_words_in_the_brief() {
+        run(async {
+            let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));
+            let doc = crate::team_agents::TeamAgents {
+                source: crate::team_agents::Source::Team,
+                agents: vec![crate::team_agents::TeamAgent {
+                    id: "planner".into(),
+                    name: "規劃師".into(),
+                    base: "copilot".into(),
+                    model: "gpt-5.6".into(),
+                    system_prompt: "Always write the plan in a table.".into(),
+                    mcp: vec![crate::team_agents::Mcp { name: "docs".into(), url: "https://example.test/mcp".into(), ..Default::default() }],
+                    skills: vec![],
+                    description: String::new(),
+                }],
+            };
+            let profiles = doc.runnable(&[AgentProfile::copilot()]);
+            let mut config = shop(&work_dir());
+            config.members.iter_mut().find(|m| m.id == "ai1").unwrap().agent = "planner".into();
+            bench.teams.start(config, &profiles).expect("start");
+            let seat = bench.teams.get("shop").unwrap().seat("ai1").unwrap();
+            let names: Vec<&str> = seat.launch.mcp_servers.iter().map(|s| s.name.as_str()).collect();
+            assert_eq!(names, [crate::acp::TEAM_SERVER, "docs"]);
+            assert_eq!(seat.profile.secret_key(), "agent:copilot");
+            assert_eq!(crate::acp::running_model(&seat.profile, &seat.launch), "gpt-5.6");
+            // The others, on the native agent, have only the team's server.
+            assert_eq!(bench.teams.get("shop").unwrap().seat("ai2").unwrap().launch.mcp_servers.len(), 1);
+            bench.until("the leader's first turn", |_| !bench.turns_of("ai1").is_empty()).await;
+            assert!(bench.turns_of("ai1")[0].contains("Always write the plan in a table."));
         });
     }
 

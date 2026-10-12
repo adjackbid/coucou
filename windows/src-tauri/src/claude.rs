@@ -87,7 +87,12 @@ pub fn args(model: Option<&str>, servers: &[McpServer]) -> Vec<String> {
     if !servers.is_empty() {
         let mut map = serde_json::Map::new();
         for s in servers {
-            map.insert(s.name.clone(), json!({ "type": "stdio", "command": s.command, "args": s.args, "env": s.env }));
+            let entry = if s.is_remote() {
+                json!({ "type": "http", "url": s.url.trim() })
+            } else {
+                json!({ "type": "stdio", "command": s.command, "args": s.args, "env": s.env })
+            };
+            map.insert(s.name.clone(), entry);
         }
         out.push("--mcp-config".into());
         out.push(json!({ "mcpServers": map }).to_string());
@@ -396,6 +401,7 @@ mod tests {
             cwd: String::new(),
             protocol: Protocol::Claude,
             model: String::new(),
+            ..Default::default()
         }
     }
 
@@ -403,7 +409,7 @@ mod tests {
     fn the_driver_asks_for_the_sdk_protocol_the_model_and_the_team_tools() {
         let args = args(
             Some("sonnet"),
-            &[McpServer { name: "coucou-team".into(), command: r"C:\bin\coucou-team-mcp.exe".into(), args: vec![], env: BTreeMap::from([("COUCOU_TEAM".to_string(), "shop".to_string())]) }],
+            &[McpServer { name: "coucou-team".into(), command: r"C:\bin\coucou-team-mcp.exe".into(), args: vec![], env: BTreeMap::from([("COUCOU_TEAM".to_string(), "shop".to_string())]), url: String::new() }],
         );
         let joined = args.join(" ");
         assert!(joined.starts_with("-p --input-format stream-json --output-format stream-json --verbose --permission-prompt-tool stdio"));

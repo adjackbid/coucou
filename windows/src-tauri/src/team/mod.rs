@@ -225,7 +225,7 @@ impl TeamConfig {
                 out.push(format!("Two members are called '{}'.", m.id));
             }
             if !agents.iter().any(|a| *a == m.agent) {
-                out.push(format!("{} runs as agent '{}', which is not in Settings → Agents.", m.name, m.agent));
+                out.push(format!("{} runs as agent '{}', which is not in Settings → Agents or Teamwork → Agent 設定.", m.name, m.agent));
             }
         }
         if !self.has_member(&self.leader) {

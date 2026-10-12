@@ -66,12 +66,35 @@ pub struct Reply {
 /// What the secretary can see and act on.
 pub struct Office {
     pub teams: Arc<Teams>,
+    /// Every agent a team may run as: the native ones and the team agents.
     pub agents: Vec<AgentProfile>,
+    /// What a new team is built from: the native agents, or — when the
+    /// person switched to them — the team agents only (team_agents.rs).
+    pub choices: Vec<AgentProfile>,
+    /// The switch is on the team agents.
+    pub team_agents: bool,
     pub driver: Arc<Agents>,
     /// The person's clock: minutes to add to UTC for local time.
     pub tz_minutes: i64,
     /// What the person calls the secretary; empty for no name.
     pub name: String,
+}
+
+impl Office {
+    /// The office as the person set it up: `natives` from Settings → Agents,
+    /// the team agents and the switch from Teamwork.
+    pub fn new(teams: Arc<Teams>, natives: &[AgentProfile], driver: Arc<Agents>, tz_minutes: i64, name: String) -> Self {
+        let doc = crate::team_agents::current();
+        Self {
+            teams,
+            agents: doc.runnable(natives),
+            choices: doc.choices(natives),
+            team_agents: doc.source == crate::team_agents::Source::Team,
+            driver,
+            tz_minutes,
+            name,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -229,7 +252,7 @@ impl Secretary {
             "list_agents" => Ok(Called::Text(list_agents(office))),
             "agent_models" => {
                 let id = need(a, "agent")?;
-                let profile = office.agents.iter().find(|p| p.id == id || p.name == id).ok_or_else(|| format!("No agent '{id}'. Use list_agents."))?;
+                let profile = office.choices.iter().find(|p| p.id == id || p.name == id).ok_or_else(|| format!("No agent '{id}'. Use list_agents."))?;
                 let models = office.driver.models(profile).await?;
                 Ok(Called::Text(models.iter().map(|m| m.id.clone()).collect::<Vec<_>>().join("\n")))
             }
@@ -271,10 +294,10 @@ impl Secretary {
         for (i, m) in members.iter().enumerate() {
             let agent_given = need(m, "agent")?;
             let agent = office
-                .agents
+                .choices
                 .iter()
                 .find(|p| p.id.eq_ignore_ascii_case(&agent_given) || p.name.eq_ignore_ascii_case(&agent_given))
-                .ok_or_else(|| format!("Member {}: there is no agent '{agent_given}'. Agents: {}.", i + 1, office.agents.iter().map(|p| p.id.as_str()).collect::<Vec<_>>().join(", ")))?;
+                .ok_or_else(|| format!("Member {}: there is no agent '{agent_given}'. Agents: {}.", i + 1, office.choices.iter().map(|p| p.id.as_str()).collect::<Vec<_>>().join(", ")))?;
             list.push(json!({
                 "id": format!("ai{}", i + 1),
                 "name": text(m, "name").unwrap_or_else(|| format!("AI {}", i + 1)),
@@ -747,16 +770,25 @@ fn usage_summary(office: &Office, period: &str) -> String {
 }
 
 fn list_agents(office: &Office) -> String {
-    office
-        .agents
+    if office.choices.is_empty() {
+        return if office.team_agents {
+            "There are no team agents yet. The user builds teams from team agents only: ask them to add some in Teamwork → Agent 設定, or to switch the secretary back to native agents.".into()
+        } else {
+            "There are no agents. The user adds them in Settings → Agents.".into()
+        };
+    }
+    let lines: Vec<String> = office
+        .choices
         .iter()
         .map(|p| {
             let endpoint = p.env.get("COPILOT_PROVIDER_BASE_URL").filter(|b| b.starts_with("http")).map(|b| format!(", own endpoint {b}")).unwrap_or_default();
             let model = crate::acp::running_model(p, &crate::acp::Launch::default());
-            format!("- {} (id {}): {:?}, default model {}{}", p.name, p.id, p.protocol, if model.is_empty() { "the agent's own" } else { &model }, endpoint)
+            let own = crate::team_agents::describe(p).map(|d| format!(" — {d}")).unwrap_or_default();
+            format!("- {} (id {}): {:?}, default model {}{}{own}", p.name, p.id, p.protocol, if model.is_empty() { "the agent's own" } else { &model }, endpoint)
         })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect();
+    let head = if office.team_agents { "The user's team agents (build new teams only from these; pick each member by what its description says it is good for):\n" } else { "" };
+    format!("{head}{}", lines.join("\n"))
 }
 
 // ── What the person confirmed ────────────────────────────────────────────────
@@ -892,13 +924,18 @@ How you work:\n\
 - Look things up with your tools before you answer; never guess a team's state. Quote names, numbers and times as the tools give them.\n\
 - You cannot change anything yourself. To get something done (a new team, an instruction to a team, starting, pausing, resuming, stopping or archiving a team) you prepare it with a propose_* tool: it appears on the user's screen as a card, and it happens only if they click it. Never say something was done unless a [Coucou] note says the user confirmed it.\n\
 - Prefer one proposal that does what was asked. Ask a short question first only when something essential is missing, such as the work folder for a new team.\n\
-- For a new team: pick agents and models from list_agents (agent_models lists what an agent offers); give the leader the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.\n\
+- For a new team: pick agents and models from list_agents (agent_models lists what an agent offers); give the leader the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
 - Answer in the user's language (Traditional Chinese when they write Chinese), short and concrete: a few lines or a short list. Point out anything waiting for the user (permission cards, questions) first.\n\
 \n\
 Now: {} (the user's local time).",
         match office.name.trim() {
             "" | "秘書" => String::new(),
             name => format!("Your name is {name}; the user calls you that, and you may call yourself that. "),
+        },
+        if office.team_agents {
+            " The user builds teams from their own team agents only: list_agents lists them with what each is good for; choose members by those descriptions, and never name an agent that is not listed."
+        } else {
+            ""
         },
         when(crate::team::store::now_ms(), office.tz_minutes)
     )
@@ -1063,7 +1100,7 @@ mod tests {
         runtime.block_on(async {
             let driver = Arc::new(Agents::default());
             let teams = Arc::new(Teams::new(Arc::new(AcpDrive(driver.clone())), Arc::new(|_| {}), Some(logs.clone()), settings::team_mcp_exe_path()));
-            let office = Office { teams, agents: settings.agents.clone(), driver, tz_minutes: 480, name: String::new() };
+            let office = Office::new(teams, &settings.agents, driver, 480, String::new());
             let secretary = Secretary::default();
             let step = |s: &Step| eprintln!("  step: {} ({})", s.label, s.tool);
             let reply = secretary.ask(&provider, &office, "幫我分析「購物網站 DEMO」這 30 天的成本:為什麼這麼高?怎麼優化?", &step).await.expect("an answer");
@@ -1086,7 +1123,7 @@ mod tests {
         runtime.block_on(async {
             let driver = Arc::new(Agents::default());
             let teams = Arc::new(Teams::new(Arc::new(AcpDrive(driver.clone())), Arc::new(|_| {}), Some(logs.clone()), settings::team_mcp_exe_path()));
-            let office = Office { teams, agents: settings.agents.clone(), driver, tz_minutes: 480, name: String::new() };
+            let office = Office::new(teams, &settings.agents, driver, 480, String::new());
             let secretary = Secretary::default();
             let step = |s: &Step| eprintln!("  step: {} ({})", s.label, s.tool);
 
