@@ -23,49 +23,288 @@
   margin-bottom: 0;
 }
 
-.ta-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
+/* The team agents: a grid of small cards, each with its own Mochi. */
+.ta-grid-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 10px;
 }
 
 .ta-card {
+  position: relative;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: var(--solid);
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 12px 10px;
+  border-radius: 16px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--c) 16%, transparent), transparent 60%),
+    var(--solid);
   box-shadow: inset 0 0 0 1px var(--hairline);
+  transition: box-shadow 0.15s ease-out, transform 0.15s ease-out;
+  outline: none;
+}
+
+.ta-card:hover,
+.ta-card:focus-visible {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent), 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+.ta-card.editing {
+  box-shadow: inset 0 0 0 1.5px var(--c), 0 0 18px color-mix(in srgb, var(--c) 25%, transparent);
 }
 
 .ta-card.broken {
-  box-shadow: inset 3px 0 0 var(--red), inset 0 0 0 1px rgba(244, 80, 94, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(244, 80, 94, 0.45);
 }
 
-.ta-card-main {
+.ta-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
+}
+
+.ta-card-title {
+  min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
+}
+
+.ta-card-title b {
+  font-size: 14.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ta-card-title small {
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.ta-card-kind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11.5px;
+}
+
+/* The base agent's kind, by colour: which vendor's CLI runs it. */
+.ta-kind {
+  --k: #9398a1;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 55%;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--k) 70%, white);
+  background: color-mix(in srgb, var(--k) 16%, transparent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ta-kind > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ta-kind::before {
+  flex: none;
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--k);
+}
+
+.ta-kind.claude {
+  --k: #e0875d;
+}
+
+.ta-kind.codex {
+  --k: #2fbf8f;
+}
+
+.ta-kind.acp {
+  --k: #6f93ff;
+}
+
+.ta-kind.agy {
+  --k: #a78bfa;
+}
+
+.ta-kind.gone {
+  --k: #f4505e;
+}
+
+.ta-model-name {
+  min-width: 0;
+  color: var(--dim);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ta-card-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  align-self: flex-start;
+  opacity: 0.35;
+  transition: opacity 0.15s ease-out;
+}
+
+.ta-card:hover .ta-card-actions,
+.ta-card:focus-within .ta-card-actions,
+.ta-card-actions:has(.armed) {
+  opacity: 1;
+}
+
+.ta-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink-2);
+  background: transparent;
+  font: 600 11.5px var(--font);
+  cursor: default;
+}
+
+.ta-icon:hover {
+  background: var(--lift);
+}
+
+.ta-icon.danger:hover {
+  color: var(--red-text);
+  background: rgba(244, 80, 94, 0.13);
+}
+
+.ta-icon.armed {
+  color: #fff;
+  background: var(--red);
 }
 
 .ta-desc {
   margin: 0;
-  line-height: 1.5;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: calc(1.55em * 2);
 }
 
-.ta-card-main .hint {
-  margin: 0;
+.ta-desc.empty {
+  color: var(--dim);
+  font-style: italic;
 }
 
-.ta-card-side {
+.ta-card-foot {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+  min-width: 0;
+}
+
+.ta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ta-tag {
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--c) 65%, white);
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+  white-space: nowrap;
+}
+
+.ta-plain {
+  font-size: 11px;
+  color: var(--dim-3);
+}
+
+.ta-used {
   flex: none;
+  max-width: 50%;
+  font-size: 11px;
+  color: var(--dim-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ta-used.on {
+  color: var(--green-2);
+}
+
+.ta-used.on::before {
+  content: "● ";
+  font-size: 8px;
+  vertical-align: 1px;
+}
+
+/* The last tile: a new one. */
+.ta-add {
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+  gap: 8px;
+  min-height: 120px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.22);
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-2);
+  font: 500 13px var(--font);
+  cursor: default;
+}
+
+.ta-add:hover:not(:disabled) {
+  background: var(--lift);
+  box-shadow: none;
+}
+
+.ta-add:disabled {
+  opacity: 0.45;
+}
+
+.ta-add-plus {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 17px;
+  background: var(--lift);
 }
 
 .ta-grid {

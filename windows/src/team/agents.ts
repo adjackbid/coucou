@@ -58,6 +58,26 @@ const DEMO: TeamAgents = {
       skills: [],
       description: "畫介面、做圖片與排版。",
     },
+    {
+      id: "ta-joker",
+      name: "笑話專家",
+      base: "cg",
+      model: "deepseek-v4-flash",
+      systemPrompt: "",
+      mcp: [],
+      skills: [],
+      description: "專門用來講笑話的,不適合規劃,但要省錢寫 Code 時可以用",
+    },
+    {
+      id: "ta-painter",
+      name: "畫圖專家",
+      base: "codex",
+      model: "gpt-6.1-sol",
+      systemPrompt: "畫圖前先確認尺寸與風格。",
+      mcp: [],
+      skills: [],
+      description: "適合拿來畫圖、生成 UI SVG,也可以寫 Code,但品質高的代價是很貴",
+    },
   ],
 };
 
@@ -340,58 +360,130 @@ function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
   );
 }
 
-function card(host: AgentsHost, a: TeamAgent): HTMLElement {
+/** Each team agent's Mochi, by its place in the list: neighbours never share a colour. */
+const FACES = ["#6F93FF", "#34D399", "#A78BFA", "#F5A524", "#F472B6", "#22D3EE", "#84CC16", "#FB7185"];
+
+/** What kind of agent a base is, in a word and a colour. */
+function kindOf(base: AgentProfile | undefined): { label: string; tone: string } {
+  if (!base) return { label: "不存在", tone: "gone" };
+  if (base.protocol === "claude") return { label: "Claude Code", tone: "claude" };
+  if (base.protocol === "codex") return { label: "Codex", tone: "codex" };
+  if (base.protocol === "agy") return { label: "Antigravity", tone: "agy" };
+  return { label: /copilot/i.test(base.command) ? "Copilot" : "ACP", tone: "acp" };
+}
+
+const ICON_EDIT = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>';
+const ICON_DELETE = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+
+/** Opens the form for `a`, scrolled into view: the list may be far below it. */
+function edit(host: AgentsHost, a: TeamAgent) {
+  draft = structuredClone(a);
+  draftIsNew = false;
+  problem = "";
+  deleting = null;
+  host.render();
+  requestAnimationFrame(() => document.querySelector(".ta-editor")?.scrollIntoView({ block: "start", behavior: "smooth" }));
+}
+
+function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
+  const face = FACES[at % FACES.length];
   const natives = host.natives();
   const base = natives.find((n) => n.id === a.base);
+  const kind = kindOf(base);
   const used = host.usedBy(a.id);
-  const facts = [
-    base ? `基底:${base.name}` : `基底「${a.base}」不在 設定 → Agents 裡`,
-    `模型:${a.model || (base?.model ? `${base.model}(基底)` : "基底預設")}`,
-    a.systemPrompt.trim() ? "有 system prompt" : "",
-    a.mcp.length ? `MCP:${a.mcp.map((m) => m.name).join("、")}` : "",
-    a.skills.length ? `Skill:${a.skills.length} 個` : "",
-  ].filter(Boolean);
+  const model = a.model || base?.model || "";
+  const arming = deleting === a.id;
+  const tags = [
+    a.systemPrompt.trim() ? h("span", { class: "ta-tag", title: a.systemPrompt.trim().slice(0, 300) }, "System prompt") : null,
+    a.mcp.length ? h("span", { class: "ta-tag", title: a.mcp.map((m) => m.name).join("、") }, `MCP ${a.mcp.length}`) : null,
+    a.skills.length ? h("span", { class: "ta-tag", title: a.skills.join("\n") }, `Skill ${a.skills.length}`) : null,
+  ].filter(Boolean) as HTMLElement[];
   return h(
-    "div",
-    { class: `ta-card${base ? "" : " broken"}` },
+    "article",
+    {
+      class: `ta-card${base ? "" : " broken"}${draft?.id === a.id ? " editing" : ""}`,
+      style: `--c:${face}`,
+      tabindex: "0",
+      title: "按兩下編輯",
+      onDblclick: () => edit(host, a),
+    },
     h(
-      "div",
-      { class: "ta-card-main" },
-      h("b", { text: a.name || a.id }),
-      h("p", { class: "ta-desc", text: a.description || "(沒有說明:秘書不知道它適合做什麼)" }),
-      h("p", { class: "hint", text: facts.join(" · ") }),
-      used.length ? h("p", { class: "hint", text: `使用中:${used.join("、")}` }) : null,
-    ),
-    h(
-      "div",
-      { class: "ta-card-side" },
-      h("button", { type: "button", class: "btn plain", onClick: () => { draft = structuredClone(a); draftIsNew = false; problem = ""; deleting = null; host.render(); } }, "編輯"),
+      "header",
+      { class: "ta-card-head" },
+      h("i", { class: "blob", style: `--c:${face};--s:34px`, "aria-hidden": "true" }),
+      h("div", { class: "ta-card-title" }, h("b", { text: a.name || a.id, title: a.name || a.id }), h("small", { text: base ? kind.label : "基底不存在" })),
       h(
-        "button",
-        {
-          type: "button",
-          class: "link quiet-danger",
-          title: used.length ? `${used.join("、")} 用到它:刪掉後這些團隊要改選別的 Agent 才能啟動` : "",
-          onClick: () => {
-            if (deleting !== a.id) {
-              deleting = a.id;
-              host.render();
-              return;
-            }
-            deleting = null;
-            void persist({ source: agentSource(), agents: teamAgents().filter((x) => x.id !== a.id) }, host.render);
+        "div",
+        { class: "ta-card-actions" },
+        h("button", { type: "button", class: "ta-icon", title: "編輯", "aria-label": `編輯 ${a.name}`, html: ICON_EDIT, onClick: () => edit(host, a) }),
+        h(
+          "button",
+          {
+            type: "button",
+            class: `ta-icon danger${arming ? " armed" : ""}`,
+            title: arming ? "再按一次刪除" : used.length ? `刪除(${used.join("、")} 用到它,刪掉後要改選別的 Agent)` : "刪除",
+            "aria-label": arming ? "確定刪除" : `刪除 ${a.name}`,
+            html: arming ? "" : ICON_DELETE,
+            onClick: () => {
+              if (!arming) {
+                deleting = a.id;
+                host.render();
+                return;
+              }
+              deleting = null;
+              void persist({ source: agentSource(), agents: teamAgents().filter((x) => x.id !== a.id) }, host.render);
+            },
           },
-        },
-        deleting === a.id ? (used.length ? `確定刪除?${used.length} 個團隊用到它` : "確定刪除?") : "刪除",
+          arming ? "確定刪除?" : null,
+        ),
       ),
     ),
+    h(
+      "div",
+      { class: "ta-card-kind" },
+      h("span", { class: `ta-kind ${kind.tone}`, title: base ? `基底 Agent:${base.name}(${kind.label})` : `基底「${a.base}」不在 設定 → Agents 裡` }, h("span", { text: base ? base.name : `${a.base}(不存在)` })),
+      h("span", { class: "ta-model-name", title: a.model ? `模型:${a.model}` : "沒有指定,用基底的模型" }, model ? `${model}${a.model ? "" : "(基底)"}` : "基底預設模型"),
+    ),
+    h("p", { class: `ta-desc${a.description ? "" : " empty"}`, text: a.description || "還沒有說明:秘書不知道它適合做什麼" }),
+    h(
+      "footer",
+      { class: "ta-card-foot" },
+      tags.length ? h("div", { class: "ta-tags" }, ...tags) : h("span", { class: "ta-plain", text: "只換名稱與模型" }),
+      h(
+        "span",
+        { class: `ta-used${used.length ? " on" : ""}`, title: used.length ? used.join("\n") : "" },
+        used.length ? (used.length === 1 ? used[0] : `${used.length} 個團隊`) : "還沒有團隊使用",
+      ),
+    ),
+  );
+}
+
+/** The tile that starts a new team agent, at the end of the grid. */
+function addTile(host: AgentsHost): HTMLElement {
+  const natives = host.natives();
+  return h(
+    "button",
+    {
+      type: "button",
+      class: "ta-card ta-add",
+      disabled: !natives.length,
+      title: natives.length ? "" : "先到 設定 → Agents 建立原生 Agent",
+      onClick: () => {
+        draft = { id: `ta-${Date.now().toString(36)}`, name: "", base: natives[0]?.id ?? "", model: "", systemPrompt: "", mcp: [], skills: [], description: "" };
+        draftIsNew = true;
+        problem = "";
+        host.render();
+        requestAnimationFrame(() => document.querySelector(".ta-editor")?.scrollIntoView({ block: "start", behavior: "smooth" }));
+      },
+    },
+    h("span", { class: "ta-add-plus", text: "+" }),
+    h("span", { text: "新增團隊 Agent" }),
   );
 }
 
 export function agentsPage(host: AgentsHost): HTMLElement {
   void loadTeamAgents(host.render, host.natives());
   if (!doc) return h("div", { class: "ta" }, h("p", { class: "dim", text: "讀取中…" }));
-  const natives = host.natives();
   return h(
     "div",
     { class: "ta" },
@@ -407,25 +499,9 @@ export function agentsPage(host: AgentsHost): HTMLElement {
     h(
       "section",
       { class: "panel" },
-      h("div", { class: "panel-head" }, h("h2", {}, "團隊 Agent", h("span", { class: "count", text: String(teamAgents().length) }))),
-      teamAgents().length ? h("div", { class: "ta-list" }, ...teamAgents().map((a) => card(host, a))) : h("p", { class: "dim", text: "還沒有。按下面新增第一個。" }),
+      h("div", { class: "panel-head" }, h("h2", {}, "團隊 Agent", h("span", { class: "count", text: String(teamAgents().length) })), h("span", { class: "dim", text: "按兩下卡片也可以編輯" })),
       !draft && problem ? h("p", { class: "problem", text: problem }) : null,
-      h(
-        "button",
-        {
-          type: "button",
-          class: "add",
-          disabled: !natives.length,
-          title: natives.length ? "" : "先到 設定 → Agents 建立原生 Agent",
-          onClick: () => {
-            draft = { id: `ta-${Date.now().toString(36)}`, name: "", base: natives[0]?.id ?? "", model: "", systemPrompt: "", mcp: [], skills: [], description: "" };
-            draftIsNew = true;
-            problem = "";
-            host.render();
-          },
-        },
-        "＋ 新增團隊 Agent",
-      ),
+      h("div", { class: "ta-grid-list" }, ...teamAgents().map((a, i) => card(host, a, i)), addTile(host)),
     ),
   );
 }
