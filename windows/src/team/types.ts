@@ -193,6 +193,7 @@ export interface FeedItem {
     | "lost"
     | "paused"
     | "finished"
+    | "ended"
     | "joined"
     | "reopened";
   from: string;
@@ -222,6 +223,8 @@ export interface Snapshot {
   workDir: string;
   status: TeamStatus;
   pausedWhy: string;
+  /** Finished because the person ended it (結束團隊), not because the work was done. */
+  ended?: boolean;
   done: number;
   total: number;
   totalTurns: number;

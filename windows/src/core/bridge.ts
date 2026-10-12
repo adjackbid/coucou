@@ -226,6 +226,8 @@ export const Bridge = {
   teamPermit: (team: string, member: string, optionId: string | null, all = false) =>
     callOrThrow<void>("team_permit", { team, member, optionId, all }),
   teamPause: (team: string) => callOrThrow<void>("team_pause", { team }),
+  /** Ends the team now, done or not: every member's agent stops. */
+  teamEnd: (team: string) => callOrThrow<void>("team_end", { team }),
   teamResume: (team: string) => callOrThrow<void>("team_resume", { team }),
   /** Pause, and interrupt every turn under way. */
   teamInterrupt: (team: string) => callOrThrow<void>("team_interrupt", { team }),

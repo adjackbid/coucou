@@ -97,6 +97,9 @@ pub enum Event {
     Usage { member: String, usage: crate::usage::Usage },
     /// The person changed the team's turn limit while it ran (or paused on it).
     TurnsLimit { max: u32 },
+    /// The person ended the team before its work was done: it closes now,
+    /// whatever is still open. Writing to it again starts it again.
+    Ended { why: String },
 }
 
 /// An event with its place in the log and its time (ms since 1970).
@@ -213,6 +216,8 @@ pub struct State {
     pub config: Option<TeamConfig>,
     pub status: TeamStatus,
     pub paused_why: String,
+    /// Closed by the person (`Ended`), not by the leader's report.
+    pub ended: bool,
     pub wrapping: bool,
     pub started_at: u64,
     pub finished_at: u64,
@@ -358,6 +363,13 @@ impl State {
                 self.status = TeamStatus::Finished;
                 self.finished_at = at;
                 self.say(at, "finished", SYSTEM, YOU, "", None);
+            }
+            Event::Ended { why } => {
+                self.status = TeamStatus::Finished;
+                self.finished_at = at;
+                self.ended = true;
+                self.paused_why.clear();
+                self.say(at, "ended", YOU, "", why, None);
             }
             Event::TaskCreated { id, title, detail, owner, priority, criteria, depends_on, deliver_to, by } => {
                 self.tasks.push(Task {
@@ -567,6 +579,7 @@ impl State {
             Event::Reopened => {
                 self.status = TeamStatus::Running;
                 self.finished_at = 0;
+                self.ended = false;
                 self.finish_asked = false;
                 self.finish_reminded = false;
                 self.paused_why.clear();
@@ -690,6 +703,8 @@ pub struct Snapshot {
     pub work_dir: String,
     pub status: TeamStatus,
     pub paused_why: String,
+    /// Finished because the person ended it, not because the work was done.
+    pub ended: bool,
     pub done: usize,
     pub total: usize,
     pub total_turns: u32,
@@ -716,6 +731,18 @@ impl State {
 
         if self.lost.contains_key(member) {
             return (MemberStatus::Lost, current, None);
+        }
+        // Ended by the person: nobody waits on anyone any more, the user included.
+        if self.ended {
+            let working = self.turns.get(member).map(|t| t.active).unwrap_or(false);
+            let status = if working {
+                MemberStatus::Working
+            } else if !mine.is_empty() && open.is_empty() {
+                MemberStatus::Done
+            } else {
+                MemberStatus::Idle
+            };
+            return (status, current, None);
         }
         if let Some(p) = live.and_then(|l| l.permissions.first()) {
             let waiting = Waiting { on: YOU.into(), what: p.title.clone(), task: current.clone() };
@@ -800,6 +827,7 @@ impl State {
             work_dir: config.work_dir.clone(),
             status: self.status,
             paused_why: self.paused_why.clone(),
+            ended: self.ended,
             done: self.tasks.iter().filter(|t| t.status == TaskStatus::Done).count(),
             total: self.tasks.len(),
             total_turns: self.total_turns,

@@ -574,6 +574,12 @@ async fn team_resume(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, te
     teams.resume(&team, &profiles)
 }
 
+/// The person ends the team now, done or not: every member's agent stops.
+#[tauri::command]
+async fn team_end(teams: State<'_, Arc<Teams>>, team: String) -> Result<(), String> {
+    teams.end(&team).await
+}
+
 /// Pause, and interrupt every turn under way.
 #[tauri::command]
 async fn team_interrupt(teams: State<'_, Arc<Teams>>, team: String) -> Result<(), String> {
@@ -1525,6 +1531,7 @@ pub fn run() {
             team_answer,
             team_permit,
             team_pause,
+            team_end,
             team_resume,
             team_interrupt,
             team_recover,

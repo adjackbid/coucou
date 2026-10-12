@@ -149,6 +149,43 @@ const TEAM_STATUS: Record<Snapshot["status"], string> = {
   finished: "已完成",
 };
 
+/** A team's state in words: one the person ended reads as such, not as done. */
+function teamStatus(snap: Snapshot): string {
+  return snap.status === "finished" && snap.ended ? "已結束" : TEAM_STATUS[snap.status];
+}
+
+/** The team whose 結束團隊 has been pressed once, and until when it waits for the second press. */
+let ending: { team: string; until: number } | null = null;
+
+/** 結束團隊: pressed twice, since what is under way is cut short. */
+function endButton(snap: Snapshot): HTMLElement {
+  const armed = ending?.team === snap.id && ending.until > Date.now();
+  return h(
+    "button",
+    {
+      class: `btn ${armed ? "danger" : "plain"} end-team`,
+      type: "button",
+      title: "結束這個團隊:正在做的這一輪會被打斷,所有成員的代理都會停掉,未完成的任務就停在現在的樣子。做好的檔案都留著;之後再傳指示,團隊會重新開工。",
+      onClick: () => {
+        if (!armed) {
+          ending = { team: snap.id, until: Date.now() + 5000 };
+          render();
+          window.setTimeout(() => {
+            if (ending?.team === snap.id && ending.until <= Date.now()) {
+              ending = null;
+              render();
+            }
+          }, 5100);
+          return;
+        }
+        ending = null;
+        void act(() => Bridge.teamEnd(snap.id));
+      },
+    },
+    armed ? "確定結束?再按一次" : "結束團隊",
+  );
+}
+
 const DANGER: Record<Danger, string> = {
   "deletes-folder": "會刪除資料夾",
   "deletes-many": "會一次刪除多個檔案",
@@ -173,6 +210,7 @@ function said(text: string): string {
   const rules: [RegExp, (m: RegExpMatchArray) => string][] = [
     [/^It ended two turns in a row without a word about its open work\.$/, () => "連續兩輪結束時都沒有回報手上的工作"],
     [/^Paused by the user\.$/, () => "由你暫停"],
+    [/^Ended by the user\.$/, () => "由你結束,未完成的任務停在原處"],
     [/^(.+) reached its limit: (.+?)\.( Raise the limit in the team's setup and save, then resume\.)?$/, (m) => `${m[1]} 已達用量上限(${m[2]}),團隊先暫停。${m[3] ? "請先到團隊設定提高上限並儲存,再按繼續。" : "到團隊設定提高上限並儲存後,可以按繼續。"}`],
     [/^The team has used its (\d+) turns\.$/, (m) => `已用完 ${m[1]} 回合的上限`],
     [/^(TASK-\d+) was sent back (\d+) times\.$/, (m) => `${m[1]} 已被退回 ${m[2]} 次`],
@@ -284,7 +322,7 @@ function sidebar(): HTMLElement {
   const row = (file: TeamFile, away: boolean): HTMLElement => {
     const run = file.config ? runs.get(file.config.id) : undefined;
     const busy = !!run && run.status !== "finished" && !run.detached;
-    const state = run ? TEAM_STATUS[run.status] : file.problems.length ? "尚未設定完成" : "可以啟動";
+    const state = run ? teamStatus(run) : file.problems.length ? "尚未設定完成" : "可以啟動";
     const needsYou = run?.members.some((m) => m.status === "waitingYou" || m.status === "lost") ?? false;
     return (
       h(
@@ -1248,6 +1286,7 @@ const FEED_TITLE: Record<FeedItem["kind"], string> = {
   lost: "失聯",
   paused: "團隊暫停",
   finished: "團隊完成",
+  ended: "由你結束",
   joined: "加入團隊",
   reopened: "再次開工",
 };
@@ -1331,7 +1370,9 @@ function composer(snap: Snapshot): HTMLElement {
     );
   };
   // A finished team is not closed: new words start it again, the leader first.
-  const hint = snap.status === "finished"
+  const hint = snap.status === "finished" && snap.ended
+    ? "團隊已由你結束。要接著做,寫在這裡送出,Leader 會從現在的進度繼續,團隊會重新開工"
+    : snap.status === "finished"
     ? "團隊已完成。對成果不滿意或有新需求,寫在這裡送出,Leader 會接著處理,團隊會繼續工作"
     : "傳送新指示…可貼上、拖進或附上圖片(對方這一輪結束後才會讀到)";
   const input = field(`instruct:${snap.id}`, hint, (t) => send(t));
@@ -1434,6 +1475,7 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
     actions.append(
       h("button", { class: "btn plain", type: "button", title: "不再開始新的回合;正在做的這一輪會做完", onClick: () => void act(() => Bridge.teamPause(snap.id)) }, "暫停"),
       button("全部中斷", "danger", () => void act(() => Bridge.teamInterrupt(snap.id))),
+      endButton(snap),
     );
   } else if (snap?.status === "paused") {
     // A team from an earlier run gets its agents back, and its members
@@ -1445,6 +1487,7 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
     if (busy && !snap.detached) {
       actions.append(button(`立刻停下(${busy} 位還在做)`, "danger", () => void act(() => Bridge.teamInterrupt(snap.id))));
     }
+    actions.append(endButton(snap));
   }
   return h(
     "header",
@@ -1452,7 +1495,7 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
     h(
       "div",
       { class: "top-title", "data-drag": "" },
-      h("h1", { "data-drag": "" }, name, snap ? h("span", { class: `state ${snap.status}`, text: TEAM_STATUS[snap.status] }) : null),
+      h("h1", { "data-drag": "" }, name, snap ? h("span", { class: `state ${snap.status}${snap.ended ? " ended" : ""}`, text: teamStatus(snap) }) : null),
       h("p", { class: "dim", "data-drag": "", text: goal ? `${goal} · ${count} 位 AI 成員` : `${count} 位 AI 成員` }),
       snap?.status === "paused" && snap.pausedWhy
         ? h("p", {

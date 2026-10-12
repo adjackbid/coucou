@@ -532,7 +532,10 @@ impl Team {
                 Err(err) => {
                     log::line(format!("team {}: {member} failed: {err}", self.id));
                     store.append(Event::TurnEnded { member: member.clone(), ok: false, outcome: err.clone() });
-                    store.append(Event::Lost { member: member.clone(), why: err.clone() });
+                    // A team the person ended stops its agents: that is not a member lost.
+                    if store.state().status != TeamStatus::Finished {
+                        store.append(Event::Lost { member: member.clone(), why: err.clone() });
+                    }
                 }
             }
             // What the turn left behind decides what happens next.
@@ -1199,6 +1202,26 @@ impl Teams {
         Ok(())
     }
 
+    /// The person ends the team now, done or not: no new turns, the turns
+    /// under way are cancelled and every member's agent is stopped (the
+    /// scheduler does that once the team is finished). What was made stays;
+    /// writing to the team again starts it again, like a finished one.
+    pub async fn end(&self, team: &str) -> Result<(), String> {
+        let team = self.team(team)?;
+        if team.with_state(|s| s.status == TeamStatus::Finished) {
+            return Ok(());
+        }
+        let active: Vec<String> = team.with_state(|s| s.turns.iter().filter(|(_, t)| t.active).map(|(m, _)| m.clone()).collect());
+        team.record(vec![Event::Ended { why: "Ended by the user.".into() }]);
+        for member in active {
+            if let Some(seat) = team.seat(&member) {
+                let _ = team.drive.cancel(seat.key).await;
+            }
+        }
+        log::line(format!("team {}: ended by the user", team.id));
+        Ok(())
+    }
+
     /// Interrupts one member's turn — one that has gone quiet, say. The team
     /// carries on: the member is reminded of its open work in its next turn.
     pub async fn interrupt_member(&self, team: &str, member: &str) -> Result<(), String> {
@@ -1557,6 +1580,35 @@ mod tests {
             bench.teams.answer("shop", "Q-1", "要").unwrap();
             bench.until("the leader plans", |s| s.tasks.len() == 1).await;
             assert!(bench.teams.answer("shop", "Q-1", "again").is_err());
+        });
+    }
+
+    #[test]
+    fn the_person_can_end_a_team_mid_work_and_every_agent_stops() {
+        run(async {
+            let bench = bench(diligent());
+            bench.drive.held.lock().unwrap().push("ai1".into());
+            bench.start(shop(&work_dir()));
+            bench.until("the leader is working", |s| s.members[0].status == MemberStatus::Working).await;
+            bench.teams.end("shop").await.unwrap();
+            let snap = bench.snap();
+            assert_eq!(snap.status, TeamStatus::Finished);
+            assert!(snap.ended);
+            assert!(snap.feed.iter().any(|f| f.kind == "ended"));
+            bench.until("the agents stop", |_| bench.drive.stopped.lock().unwrap().len() == 4).await;
+            // The leader's turn comes back cut short: that is not a member lost, and nothing new starts.
+            bench.drive.held.lock().unwrap().clear();
+            bench.drive.hold.notify_one();
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            let after = bench.snap();
+            // Nobody is lost, and nobody waits on anyone (the user included) any more.
+            assert!(after.members.iter().all(|m| matches!(m.status, MemberStatus::Idle | MemberStatus::Done)), "{:?}", after.members.iter().map(|m| m.status).collect::<Vec<_>>());
+            assert_eq!(bench.turns_of("ai1").len(), 1);
+            // Once is enough; and writing to it starts it again.
+            bench.teams.end("shop").await.unwrap();
+            assert_eq!(bench.snap().feed.iter().filter(|f| f.kind == "ended").count(), 1);
+            bench.teams.reopen("shop", "", "還是做完吧", None, &[AgentProfile::copilot()]).unwrap();
+            assert!(!bench.snap().ended);
         });
     }
 

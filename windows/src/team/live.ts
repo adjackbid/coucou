@@ -358,7 +358,7 @@ function bubbleText(snap: Snapshot, m: MemberView, d: Desk): string {
     case "done":
       return snap.status === "finished" ? "收工!" : "我的工作都交付了";
     case "idle":
-      return snap.status === "finished" ? "收工!" : snap.status === "paused" ? "團隊暫停中" : "待命中,等下一個任務";
+      return snap.status === "finished" ? (snap.ended ? "團隊已結束" : "收工!") : snap.status === "paused" ? "團隊暫停中" : "待命中,等下一個任務";
     case "working": {
       const last = d.lines.get(Math.max(0, ...d.lines.keys()));
       if (!last) return "開工了…";
