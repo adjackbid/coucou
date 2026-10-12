@@ -236,6 +236,24 @@ function modelField(a: TeamAgent, base: AgentProfile | undefined): HTMLElement {
   );
 }
 
+/** What keeps a team agent from being saved, in the person's words (team_agents.rs checks the same). */
+function problemsOf(a: TeamAgent, natives: AgentProfile[]): string[] {
+  const out: string[] = [];
+  if (!a.name.trim()) out.push("請填名稱。");
+  if (!a.base) out.push("請選基底 Agent。");
+  else if (!natives.some((n) => n.id === a.base)) out.push(`基底「${a.base}」不在 設定 → Agents 裡,請改選一個。`);
+  const seen = new Set<string>();
+  for (const m of a.mcp.filter((m) => m.name || m.command || m.url)) {
+    const label = m.name || "(未命名)";
+    if (!/^[A-Za-z0-9_-]{1,40}$/.test(m.name) || m.name === "coucou-team") out.push(`MCP「${label}」的名稱只能用英數字、- 與 _。`);
+    else if (seen.has(m.name)) out.push(`有兩個 MCP 都叫「${m.name}」。`);
+    seen.add(m.name);
+    if (!m.url && !m.command) out.push(`MCP「${label}」要填啟動指令或網址。`);
+    if (m.url && !/^https?:\/\/\S+/.test(m.url)) out.push(`MCP「${label}」的網址要以 http:// 或 https:// 開頭。`);
+  }
+  return out;
+}
+
 function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
   const natives = host.natives();
   const base = natives.find((n) => n.id === a.base);
@@ -292,8 +310,14 @@ function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
         {
           type: "button",
           class: "btn primary",
-          disabled: !a.name.trim() || !a.base,
+          // Checked when pressed, not when drawn: the fields change without a redraw.
           onClick: () => {
+            const why = problemsOf(a, host.natives());
+            if (why.length) {
+              problem = why.join("\n");
+              host.render();
+              return;
+            }
             const all = teamAgents().filter((x) => x.id !== a.id);
             const at = teamAgents().findIndex((x) => x.id === a.id);
             const clean: TeamAgent = { ...a, name: a.name.trim(), mcp: a.mcp.filter((m) => m.name || m.command || m.url) };
