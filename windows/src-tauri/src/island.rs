@@ -738,7 +738,7 @@ fn finish_drag(app: &AppHandle, gate: &PollGate, win: &WebviewWindow, drag: Drag
             .outer_position()
             .map(|p| (p.x as f64, p.y as f64))
             .unwrap_or((nx as f64, ny as f64));
-        let (dw, dh) = drag.size;
+        let (dw, dh) = win.outer_size().map(|s| (s.width, s.height)).unwrap_or(drag.size);
         let (mx, my) = (ox + dw as f64 / 2.0, oy + dh as f64 / 2.0);
         let (w, h) = capsule_size(dock.is_vertical());
         let from = LRect { x: (mx - nx as f64) / t.scale - w / 2.0, y: (my - ny as f64) / t.scale - h / 2.0, w, h };
@@ -754,16 +754,13 @@ fn finish_drag(app: &AppHandle, gate: &PollGate, win: &WebviewWindow, drag: Drag
 /// The front end has drawn the capsule where it was let go: move the window.
 pub fn commit_drop(app: &AppHandle, gate: &PollGate) {
     let Some((settings, _)) = gate.pending.lock().unwrap().take() else { return };
-    let scale_before = window(app).and_then(|w| w.scale_factor().ok());
     apply_geometry(app, &settings, gate.collapsed.load(Ordering::Relaxed));
-    // Click-through starts afresh from the island's new shape.
+    // Click-through starts afresh from the island's new shape. Landing on a
+    // display with another scale is noticed by the poll's display check,
+    // whose `screen-changed` makes the page fit itself to the window again.
     if let Some(win) = window(app) {
         gate.ignoring.store(false, Ordering::Relaxed);
         let _ = win.set_ignore_cursor_events(false);
-        // Another scale: the page has to fit itself to the window again.
-        if win.scale_factor().ok() != scale_before {
-            let _ = app.emit_to(WINDOW_LABEL, "screen-changed", ());
-        }
     }
 }
 

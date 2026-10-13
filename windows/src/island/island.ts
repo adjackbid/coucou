@@ -119,7 +119,7 @@ export class Island {
    * A press on the island that may still become a click or a drag, in
    * window-logical px. `header` = pressed on the open island's title bar.
    */
-  private press: { x: number; y: number; timer: number; header: boolean } | null = null;
+  private press: { x: number; y: number; timer: number; header: boolean; starting: boolean } | null = null;
   /** The island is being dragged; `preview` is where it would dock now. */
   private drag: { preview: Pick<Dock, "edge" | "anchor"> } | null = null;
   /** A side wake strip only wakes the island after the mouse rests on it (D5). */
@@ -908,6 +908,8 @@ export class Island {
     window.addEventListener("mousemove", (e) => this.pressMoved(e.clientX / State.zoom, e.clientY / State.zoom));
     window.addEventListener("mouseup", (e) => {
       if (e.button !== 0 || !this.press) return;
+      // Rust is being asked to take the drag: its answer decides click or drag.
+      if (this.press.starting) return;
       const header = this.press.header;
       this.endPress();
       if (!header) this.fsm.click();
@@ -975,7 +977,7 @@ export class Island {
     const x = e.clientX / State.zoom;
     const y = e.clientY / State.zoom;
     const timer = window.setTimeout(() => void this.startDrag(true), LONG_PRESS_MS);
-    this.press = { x, y, timer, header };
+    this.press = { x, y, timer, header, starting: false };
   }
 
   private endPress() {
@@ -987,13 +989,14 @@ export class Island {
   /** The cursor moved while pressed (DOM or Rust's poll): past the threshold it is a drag. */
   private pressMoved(x: number, y: number) {
     const p = this.press;
-    if (!p) return;
+    if (!p || p.starting) return;
     if (Math.hypot(x - p.x, y - p.y) > DRAG_THRESHOLD) void this.startDrag(false);
   }
 
   private async startDrag(longPress: boolean) {
     const p = this.press;
-    if (!p) return;
+    if (!p || p.starting) return;
+    p.starting = true;
     window.clearTimeout(p.timer);
     if (longPress && !p.header) this.islandEl.classList.add("lifted");
     const rect = this.islandRect();
@@ -1014,6 +1017,8 @@ export class Island {
     this.cancelBotHover();
     this.engine.triggerEmote("surprised");
     this.islandEl.classList.add("dragging");
+    // Picked up without moving: it stays a little larger while carried.
+    if (longPress && !p.header) this.islandEl.classList.add("lifted");
     this.syncDockClasses();
     this.animateGeometry(false);
     this.dirty = true;
