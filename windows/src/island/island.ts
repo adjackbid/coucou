@@ -2,7 +2,8 @@
 // Mirrors IslandRootView.swift + IslandWindowController.swift.
 
 import { Tracked, Spring, clamp } from "../core/anim";
-import { Bridge, IS_TAURI, onDragDrop, type AcpPermission, type DroppedFile } from "../core/bridge";
+import { Bridge, IS_TAURI, onDragDrop, type AcpPermission, type DockPlacement, type DroppedFile } from "../core/bridge";
+import { cornerRadii, dockedRect, isVertical, wakeStripRect, type Dock, type Rect } from "../core/dock";
 import {
   EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
   ROUNDED_CORNER, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition, chatPromptHeight,
@@ -82,6 +83,13 @@ export class Island {
   private width = new Tracked(NOTCH_W);
   private height = new Tracked(0);
   private radius = new Tracked(ROUNDED_CORNER);
+  /**
+   * Added to the docked position: zero at rest, the gap between where the
+   * capsule was let go and where it docks right after a drop, springing back
+   * to zero so the capsule slides into its edge.
+   */
+  private slideX = new Spring(0, 0.22, 0.86);
+  private slideY = new Spring(0, 0.22, 0.86);
   private botCx = new Spring(46);
   private botCy = new Spring(16);
   private botSize = new Spring(10);
@@ -98,6 +106,8 @@ export class Island {
   private collapsed = false;
   private collapseTimer: number | null = null;
   private wasInIsland = false;
+  /** A side wake strip only wakes the island after the mouse rests on it (D5). */
+  private wakeTimer: number | null = null;
   /** Last shape handed to Rust for the click-through test. */
   private pushedRect = { x: -1, y: -1, w: -1, h: -1 };
   private homeCollapseAt: number | null = null;
@@ -334,6 +344,7 @@ export class Island {
     this.greetingCanvas.style.height = "150px";
 
     this.root.append(this.wakeStrip, this.islandEl);
+    this.placeWakeStrip();
     this.applyGeometry();
   }
 
@@ -699,7 +710,7 @@ export class Island {
       State.mode, State.view, State.chatHistory.length, State.pendingApproval?.lines ?? 0,
       Math.min(State.pillTasks.length, MAX_PILLS), State.extraCards.length,
       State.focusTask?.question ?? null, !!State.focusTask?.pty,
-      State.approvalExplaining,
+      State.approvalExplaining, this.vertical,
     );
     const r = State.mode === "expanded" ? EXPANDED_CORNER : ROUNDED_CORNER;
     return { w, h, r };
@@ -719,34 +730,86 @@ export class Island {
     this.ensureRunning();
   }
 
+  /** The dock the island is drawn for right now. */
+  private get dock(): Dock {
+    return State.dock;
+  }
+
+  /** Docked left or right: the capsule stands on end (the panel never turns). */
+  private get vertical(): boolean {
+    return isVertical(this.dock);
+  }
+
+  /** Rust placed the window for a dock (boot, `dock-changed`). */
+  setPlacement(p: DockPlacement) {
+    State.dock = p.dock;
+    State.anchorInWindow = p.anchorInWindow;
+    this.syncDockClasses();
+    this.placeWakeStrip();
+    this.animateGeometry(false);
+    this.dirty = true;
+    this.ensureRunning();
+  }
+
+  private syncDockClasses() {
+    this.islandEl.classList.toggle("vertical", this.vertical);
+    this.islandEl.classList.toggle("dock-right", this.dock.edge === "right");
+  }
+
   private applyGeometry() {
-    const w = this.width.value;
-    const hh = this.height.value;
+    const rect = this.islandRect();
+    const { w, h: hh } = rect;
     const r = this.radius.value;
     this.islandEl.style.width = `${w}px`;
     this.islandEl.style.height = `${hh}px`;
-    this.islandEl.style.borderRadius = `0 0 ${r}px ${r}px`;
-    this.islandEl.style.transform = `translateX(-50%)`;
+    this.islandEl.style.borderRadius = cornerRadii(this.dock, r);
+    this.islandEl.style.transform = `translate(${rect.x}px, ${rect.y}px)`;
     // These follow the island as it resizes, so they belong here rather than in
-    // the state-driven DOM sync.
-    this.miniGrid.style.left = `${w - 40 - 14.5}px`;
-    this.miniGrid.style.top = `${hh / 2 - 14.5}px`;
+    // the state-driven DOM sync. On its side the mini grid goes under Mochi.
+    if (this.vertical) {
+      this.miniGrid.style.left = `${w / 2 - 14.5}px`;
+      this.miniGrid.style.top = `${hh - 40 - 14.5}px`;
+    } else {
+      this.miniGrid.style.left = `${w - 40 - 14.5}px`;
+      this.miniGrid.style.top = `${hh / 2 - 14.5}px`;
+    }
     this.greetingCanvas.style.left = `${(w - EXPANDED_W) / 2}px`;
     this.uploadCanvas.el.style.left = `${(w - EXPANDED_W) / 2}px`;
 
-    const rect = { x: (PANEL_W - w) / 2, y: 0, w, h: hh };
     const p = this.pushedRect;
-    if (Math.abs(p.x - rect.x) > 0.5 || Math.abs(p.w - rect.w) > 0.5 || Math.abs(p.h - rect.h) > 0.5) {
+    if (
+      Math.abs(p.x - rect.x) > 0.5 || Math.abs(p.y - rect.y) > 0.5 ||
+      Math.abs(p.w - rect.w) > 0.5 || Math.abs(p.h - rect.h) > 0.5
+    ) {
       this.pushedRect = rect;
       void Bridge.setIslandRect(rect.x, rect.y, rect.w, rect.h);
     }
   }
 
-  /** Island rect in window coordinates (origin top-left of the 720×320 window). */
-  private islandRect(): { x: number; y: number; w: number; h: number } {
-    const w = this.width.value;
-    const hh = this.height.value;
-    return { x: (PANEL_W - w) / 2, y: 0, w, h: hh };
+  /** Island rect in window coordinates (origin top-left of the 1320x320 window). */
+  private islandRect(): Rect {
+    const r = dockedRect(this.dock, this.width.value, this.height.value, State.anchorInWindow);
+    return { ...r, x: r.x + this.slideX.value, y: r.y + this.slideY.value };
+  }
+
+  /**
+   * The wake strip: once the window has shrunk to it, the whole window; before
+   * that, the same strip along the docked edge of the full window.
+   */
+  private placeWakeStrip() {
+    const st = this.wakeStrip.style;
+    if (this.collapsed) {
+      st.left = "0px";
+      st.top = "0px";
+      st.width = "100%";
+      st.height = "100%";
+      return;
+    }
+    const r = wakeStripRect(this.dock, State.anchorInWindow);
+    st.left = `${r.x}px`;
+    st.top = `${r.y}px`;
+    st.width = `${r.w}px`;
+    st.height = `${r.h}px`;
   }
 
   // ── Window collapse (hidden → tiny wake strip, zero polling) ────────────────
@@ -763,11 +826,13 @@ export class Island {
         this.collapseTimer = null;
         if (State.mode !== "hidden") return;
         this.collapsed = true;
+        this.placeWakeStrip();
         void Bridge.setCollapsed(true);
       }, 420);
     } else if (this.collapsed) {
       // Grow the window back before the island animates open.
       this.collapsed = false;
+      this.placeWakeStrip();
       void Bridge.setCollapsed(false);
     }
   }
@@ -776,9 +841,22 @@ export class Island {
 
   private wireInput() {
     // The wake strip is the only thing the OS can hit while the island is hidden.
+    // On a side it lies over the edge of whatever window is maximised there,
+    // its scroll bar say, so a cursor merely passing by must not wake it.
     this.wakeStrip.addEventListener("mouseenter", () => {
       Sound.resume();
-      if (State.mode === "hidden") this.fsm.mouseEntered();
+      if (this.wakeTimer != null) window.clearTimeout(this.wakeTimer);
+      this.wakeTimer = null;
+      const wake = () => {
+        this.wakeTimer = null;
+        if (State.mode === "hidden") this.fsm.mouseEntered();
+      };
+      if (this.vertical) this.wakeTimer = window.setTimeout(wake, 250);
+      else wake();
+    });
+    this.wakeStrip.addEventListener("mouseleave", () => {
+      if (this.wakeTimer != null) window.clearTimeout(this.wakeTimer);
+      this.wakeTimer = null;
     });
 
     this.islandEl.addEventListener("mousedown", (e) => {
@@ -879,6 +957,8 @@ export class Island {
         this.homeCollapseAt = performance.now() + State.settings.autoCloseInterval * 1000;
       }
     }
+    // The status label of a capsule on its side shows on hover.
+    if (inIsland !== this.wasInIsland) this.dirty = true;
     this.wasInIsland = inIsland;
 
     // Bot hover → love
@@ -968,6 +1048,8 @@ export class Island {
     this.width.step(dt, nowMs);
     this.height.step(dt, nowMs);
     this.radius.step(dt, nowMs);
+    this.slideX.step(dt);
+    this.slideY.step(dt);
     this.applyGeometry();
 
     if (this.dirty) {
@@ -1011,7 +1093,8 @@ export class Island {
     // sweep — so a hidden island went on burning frames in exactly the states it
     // spends most of its life in. Geometry still has to finish retracting.
     const settling =
-      this.width.animating || this.height.animating || this.radius.animating;
+      this.width.animating || this.height.animating || this.radius.animating ||
+      !this.slideX.settled || !this.slideY.settled;
     const busy = State.mode === "hidden"
       ? settling
       : settling ||
@@ -1029,7 +1112,7 @@ export class Island {
   };
 
   private updateBotTargets() {
-    const p = botPosition(State.mode, State.view, this.height.value, State.uploadProgress);
+    const p = botPosition(State.mode, State.view, this.height.value, State.uploadProgress, this.vertical);
     this.botCx.target = p.cx;
     this.botCy.target = p.cy;
     this.botSize.target = p.diameter / 0.6;
@@ -1100,7 +1183,8 @@ export class Island {
   }
 
   private lookY(): number {
-    return -Math.tanh((State.mouse.y - this.botCy.value) / 200);
+    const botScreenY = this.islandRect().y + this.botCy.value;
+    return -Math.tanh((State.mouse.y - botScreenY) / 200);
   }
 
   private updateCountdown(nowMs: number) {
@@ -1172,7 +1256,8 @@ export class Island {
     // without it a shut island showed nothing of a session at work.
     const showGrid = State.mode === "compact";
     this.miniGrid.style.opacity = showGrid ? "1" : "0";
-    this.compactStatus.style.opacity = showGrid ? "1" : "0";
+    // On its side the line is a label beside the capsule, shown on hover.
+    this.compactStatus.style.opacity = showGrid && (!this.vertical || this.wasInIsland) ? "1" : "0";
     if (showGrid) {
       const t = State.focusTask;
       const words: Partial<Record<BotStateName, string>> = {

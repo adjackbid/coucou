@@ -1,7 +1,7 @@
 // Entry point: boot the bridge, wire the island, start the greeting.
 
 import "./style.css";
-import { Bridge, IS_TAURI, onEvent, type AcpPermission, type AcpUpdate } from "./core/bridge";
+import { Bridge, IS_TAURI, onEvent, type AcpPermission, type AcpUpdate, type DockPlacement } from "./core/bridge";
 import { Sound } from "./core/sound";
 import { State, type Settings } from "./core/state";
 import { Island } from "./island/island";
@@ -47,6 +47,7 @@ async function main() {
     State.settings = { ...State.settings, ...boot.settings };
   }
   fitToWindow(boot?.screen.scale ?? null);
+  if (boot) island.setPlacement(boot.screen);
   island.applySettings();
   State.loadIntegrationTasks();
 
@@ -104,8 +105,14 @@ async function main() {
   await onEvent<null>("screen-changed", () => {
     void Bridge.reposition();
     // A display with another scale, or a changed text size, lands here too.
-    void Bridge.boot().then((b) => fitToWindow(b?.screen.scale ?? null));
+    void Bridge.boot().then((b) => {
+      fitToWindow(b?.screen.scale ?? null);
+      if (b) island.setPlacement(b.screen);
+    });
   });
+
+  // The window moved to another edge (a drag, Reset position, another display).
+  await onEvent<DockPlacement>("dock-changed", (p) => island.setPlacement(p));
 
   // The settings window writes preferences; apply them here without a restart.
   await onEvent<Settings>("settings-changed", (s) => {

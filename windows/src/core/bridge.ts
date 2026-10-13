@@ -22,10 +22,16 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T |
   }
 }
 
+/** Where the island is drawn: the dock, and a side capsule's centre in the window. */
+export interface DockPlacement {
+  dock: Dock;
+  anchorInWindow: number;
+}
+
 export interface BootInfo {
   settings: Settings;
-  /** Logical screen rect of the monitor the island lives on. */
-  screen: { x: number; y: number; width: number; height: number; scale: number };
+  /** Logical screen rect of the monitor the island lives on, and where on it the island sits. */
+  screen: DockPlacement & { x: number; y: number; width: number; height: number; scale: number };
   version: string;
   hookPath: string;
 }

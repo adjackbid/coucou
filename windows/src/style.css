@@ -52,23 +52,22 @@ body {
   inset: 0;
 }
 
-/* Invisible strip that wakes the island when it is hidden. */
+/* Invisible strip that wakes the island when it is hidden. Placed by
+   island.ts: along the docked edge, or the whole window once it has shrunk
+   down to the strip. */
 #wake-strip {
   position: fixed;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 240px;
-  height: 6px;
   background: transparent;
 }
 
 /* ── Island ─────────────────────────────────────────────────────────────── */
 
+/* Placed and rounded by island.ts (src/core/dock.ts): against the docked
+   edge, flat on that side. */
 #island {
   position: absolute;
   top: 0;
-  left: 50%;
+  left: 0;
   background: #000;
   border-radius: 0 0 14px 14px;
   overflow: visible;
@@ -1138,6 +1137,25 @@ input[type="range"]::-webkit-slider-thumb {
   text-overflow: ellipsis;
   pointer-events: none;
   transition: opacity 0.25s ease-in-out;
+}
+
+/* Docked left or right the capsule is 32 px wide: no room for a line of text.
+   It shows beside the capsule, towards the screen, while the mouse is on it. */
+#island.vertical #compact-status {
+  left: 40px;
+  right: auto;
+  top: calc(50% - 13px);
+  height: 26px;
+  max-width: 260px;
+  padding: 0 11px;
+  border-radius: 13px;
+  background: rgba(0, 0, 0, 0.88);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+#island.vertical.dock-right #compact-status {
+  left: auto;
+  right: 40px;
 }
 
 #compact-status .n {

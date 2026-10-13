@@ -361,6 +361,14 @@ class AppState {
   /** Cursor relative to the island's top-left corner. */
   mouseInIsland = { x: 0, y: 0 };
 
+  /**
+   * The dock the island is drawn for, from Rust (boot, `dock-changed`): the
+   * saved one, or top centre on a display too short for a capsule on its side.
+   */
+  dock: Dock = { ...DEFAULT_DOCK };
+  /** Where a side capsule's centre wants to be in the window, logical px (Rust). */
+  anchorInWindow = 16;
+
   isPinned = false;
   paused = false;
 
