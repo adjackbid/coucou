@@ -41,6 +41,9 @@ pub const CAPSULE_THICK: f64 = 32.0;
 pub const TOP_INSET: f64 = 24.0;
 /// Room kept above and below a capsule on its side.
 pub const SIDE_MARGIN: f64 = 12.0;
+/// The open island's length when docked on a side: the landscape panel's
+/// width (layout.ts EXPANDED_W), turned.
+pub const EXPANDED_LEN: f64 = 640.0;
 /// How much nearer another edge (or third of the top) must be before the
 /// preview flips — keeps it from flickering around a corner.
 pub const SNAP_HYSTERESIS: f64 = 24.0;
@@ -73,21 +76,25 @@ pub struct ScreenInfo {
     pub width: f64,
     pub height: f64,
     pub scale: f64,
+    #[serde(flatten)]
+    pub place: DockPlacement,
+}
+
+/// Where the island is drawn: told at boot and by `dock-changed` after the
+/// window moved.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DockPlacement {
     /// The dock the island is drawn for — the saved one, unless this display
-    /// is too short for a capsule on its side (then top centre).
+    /// is too short for the island on its side (then top centre).
     pub dock: Dock,
     /// Where the capsule's centre wants to be in the full window, logical px
     /// from its top. The window is clamped to the work area, so the front end
     /// cannot work this out from the offset alone.
     pub anchor_in_window: f64,
-}
-
-/// What `dock-changed` tells the front end after the window moved.
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct DockPlacement {
-    pub dock: Dock,
-    pub anchor_in_window: f64,
+    /// The window's length along its edge, logical px (shorter than 1320 on
+    /// a side of a short display).
+    pub window_len: f64,
 }
 
 /// A rectangle in physical pixels (a monitor's work area, a window).
@@ -256,11 +263,12 @@ pub fn resolve_monitor(app: &AppHandle, settings: &Settings) -> Option<Monitor> 
     monitors.into_iter().nth(i)
 }
 
-/// The dock as it can be drawn on this work area: a capsule on its side needs
-/// its whole length plus a margin above and below, or it goes top centre for
-/// now (the saved dock is left alone).
+/// The dock as it can be drawn on this work area. Docked left or right the
+/// open island is the landscape panel turned on its side, `EXPANDED_LEN` long;
+/// a display too short for that gets top centre for now (the saved dock is
+/// left alone).
 pub fn effective_dock(dock: &Dock, wa: Area, scale: f64) -> Dock {
-    if dock.is_vertical() && (wa.h as f64 / scale) < CAPSULE_LEN + 2.0 * SIDE_MARGIN {
+    if dock.is_vertical() && (wa.h as f64 / scale) < EXPANDED_LEN + 2.0 * SIDE_MARGIN {
         return Dock { edge: "top".into(), anchor: "center".into(), ..dock.clone() };
     }
     dock.clone()
@@ -270,10 +278,28 @@ fn px(logical: f64, scale: f64) -> i32 {
     (logical * scale).round() as i32
 }
 
+/// Logical size of the full window: the landscape panel along the top, the
+/// same turned on its side along a side — as long as the work area allows.
+pub fn panel_size(dock: &Dock, wa: Area, scale: f64) -> (f64, f64) {
+    if dock.is_vertical() {
+        (PANEL_H, PANEL_W.min((wa.h as f64 / scale).floor()))
+    } else {
+        (PANEL_W, PANEL_H)
+    }
+}
+
+/// How long the window is along its edge, logical px: what the front end
+/// needs to keep a side panel inside it.
+pub fn window_len(dock: &Dock, wa: Area, scale: f64) -> f64 {
+    let (w, h) = panel_size(dock, wa, scale);
+    if dock.is_vertical() { h } else { w }
+}
+
 /// Top-left corner of the full panel window, physical px.
 fn panel_origin(dock: &Dock, wa: Area, scale: f64) -> (i32, i32) {
-    let pw = px(PANEL_W, scale);
-    let ph = px(PANEL_H, scale);
+    let (lw, lh) = panel_size(dock, wa, scale);
+    let pw = px(lw, scale);
+    let ph = px(lh, scale);
     let (waw, wah) = (wa.w as i32, wa.h as i32);
     match dock.edge.as_str() {
         "left" | "right" => {
@@ -306,12 +332,12 @@ pub fn anchor_in_window(dock: &Dock, wa: Area, scale: f64) -> f64 {
 }
 
 /// The compact capsule inside the panel window, logical px — the same numbers
-/// as `dockedRect` in src/core/dock.ts.
-pub fn capsule_in_window(dock: &Dock, anchor: f64) -> (f64, f64, f64, f64) {
+/// as `dockedRect` in src/core/dock.ts. `len` is the window's length along a side.
+pub fn capsule_in_window(dock: &Dock, anchor: f64, len: f64) -> (f64, f64, f64, f64) {
     match dock.edge.as_str() {
         "left" | "right" => {
-            let y = (anchor - CAPSULE_LEN / 2.0).clamp(0.0, PANEL_H - CAPSULE_LEN);
-            let x = if dock.edge == "left" { 0.0 } else { PANEL_W - CAPSULE_THICK };
+            let y = (anchor - CAPSULE_LEN / 2.0).clamp(0.0, (len - CAPSULE_LEN).max(0.0));
+            let x = if dock.edge == "left" { 0.0 } else { PANEL_H - CAPSULE_THICK };
             (x, y, CAPSULE_THICK, CAPSULE_LEN)
         }
         _ => {
@@ -330,17 +356,29 @@ pub fn capsule_in_window(dock: &Dock, anchor: f64) -> (f64, f64, f64, f64) {
 pub fn window_rect(dock: &Dock, wa: Area, scale: f64, collapsed: bool) -> (i32, i32, u32, u32) {
     let (ox, oy) = panel_origin(dock, wa, scale);
     if !collapsed {
-        return (ox, oy, px(PANEL_W, scale).max(1) as u32, px(PANEL_H, scale).max(1) as u32);
+        let (lw, lh) = panel_size(dock, wa, scale);
+        return (ox, oy, px(lw, scale).max(1) as u32, px(lh, scale).max(1) as u32);
     }
     let len = px(STRIP_LEN, scale).max(1);
     let thick = px(STRIP_THICK, scale).max(1);
-    let (cx, cy, cw, ch) = capsule_in_window(dock, anchor_in_window(dock, wa, scale));
+    let (cx, cy, cw, ch) =
+        capsule_in_window(dock, anchor_in_window(dock, wa, scale), window_len(dock, wa, scale));
     let mid_x = ox + px(cx + cw / 2.0, scale);
     let mid_y = oy + px(cy + ch / 2.0, scale);
     match dock.edge.as_str() {
         "left" => (wa.x, mid_y - len / 2, thick as u32, len as u32),
         "right" => (wa.x + wa.w as i32 - thick, mid_y - len / 2, thick as u32, len as u32),
         _ => (mid_x - len / 2, wa.y, len as u32, thick as u32),
+    }
+}
+
+/// Everything the front end needs to draw the island for a dock on a display.
+pub fn placement(dock: &Dock, wa: Area, scale: f64) -> DockPlacement {
+    let dock = effective_dock(dock, wa, scale);
+    DockPlacement {
+        anchor_in_window: anchor_in_window(&dock, wa, scale),
+        window_len: window_len(&dock, wa, scale),
+        dock,
     }
 }
 
@@ -355,8 +393,7 @@ pub fn screen_info(app: &AppHandle, settings: &Settings) -> ScreenInfo {
         .as_ref()
         .map(|m| (Area::of(m), m.scale_factor()))
         .unwrap_or((fallback_area(), 1.0));
-    let dock = effective_dock(&settings.dock, wa, scale);
-    let anchor_in_window = anchor_in_window(&dock, wa, scale);
+    let place = placement(&settings.dock, wa, scale);
     let (x, y, width, height) = match &monitor {
         Some(m) => {
             let p = m.position();
@@ -365,7 +402,7 @@ pub fn screen_info(app: &AppHandle, settings: &Settings) -> ScreenInfo {
         }
         None => (0.0, 0.0, 1920.0, 1080.0),
     };
-    ScreenInfo { x, y, width, height, scale, dock, anchor_in_window }
+    ScreenInfo { x, y, width, height, scale, place }
 }
 
 /// Places and sizes the window for the settings' dock. `collapsed` picks the
@@ -375,8 +412,8 @@ pub fn apply_geometry(app: &AppHandle, settings: &Settings, collapsed: bool) {
     let Some(m) = resolve_monitor(app, settings) else { return };
     let scale = m.scale_factor();
     let wa = Area::of(&m);
-    let dock = effective_dock(&settings.dock, wa, scale);
-    let (x, y, w, h) = window_rect(&dock, wa, scale, collapsed);
+    let place = placement(&settings.dock, wa, scale);
+    let (x, y, w, h) = window_rect(&place.dock, wa, scale, collapsed);
 
     let _ = win.set_size(PhysicalSize::new(w, h));
     let _ = win.set_position(PhysicalPosition::new(x, y));
@@ -384,8 +421,7 @@ pub fn apply_geometry(app: &AppHandle, settings: &Settings, collapsed: bool) {
     let _ = win.set_size(PhysicalSize::new(w, h));
     let _ = win.set_always_on_top(true);
 
-    let anchor_in_window = anchor_in_window(&dock, wa, scale);
-    let _ = app.emit_to(WINDOW_LABEL, "dock-changed", DockPlacement { dock, anchor_in_window });
+    let _ = app.emit_to(WINDOW_LABEL, "dock-changed", place);
 }
 
 // ── Snapping ──────────────────────────────────────────────────────────────────
@@ -521,8 +557,8 @@ struct PreviewPayload {
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct DropPayload {
-    dock: Dock,
-    anchor_in_window: f64,
+    #[serde(flatten)]
+    place: DockPlacement,
     /// The capsule where it was let go, in the coordinates of the window
     /// at its new place.
     from: LRect,
@@ -641,7 +677,11 @@ fn drag_tick(app: &AppHandle, gate: &PollGate, win: &WebviewWindow) {
     let near = edge_distance(cx / scale, cy / scale, wa, &next.edge) <= HINT_DISTANCE;
     let hint = if near {
         let (ox, oy, _, _) = window_rect(&next, screen.wa, scale, false);
-        let (kx, ky, kw, kh) = capsule_in_window(&next, anchor_in_window(&next, screen.wa, scale));
+        let (kx, ky, kw, kh) = capsule_in_window(
+            &next,
+            anchor_in_window(&next, screen.wa, scale),
+            window_len(&next, screen.wa, scale),
+        );
         // In physical px on the screen, then in the dragged window's logical px.
         let (lx, ly) = (ox as f64 + kx * scale, oy as f64 + ky * scale);
         let line = match next.edge.as_str() {
@@ -730,9 +770,8 @@ fn finish_drag(app: &AppHandle, gate: &PollGate, win: &WebviewWindow, drag: Drag
         .or_else(|| drag.screens.first())
         .cloned();
     let payload = target.as_ref().map(|t| {
-        let dock = effective_dock(&settings.dock, t.wa, t.scale);
-        let (nx, ny, _, _) = window_rect(&dock, t.wa, t.scale, false);
-        let anchor = anchor_in_window(&dock, t.wa, t.scale);
+        let place = placement(&settings.dock, t.wa, t.scale);
+        let (nx, ny, _, _) = window_rect(&place.dock, t.wa, t.scale, false);
         // The capsule now: the middle of the dragged window.
         let (ox, oy) = win
             .outer_position()
@@ -740,9 +779,9 @@ fn finish_drag(app: &AppHandle, gate: &PollGate, win: &WebviewWindow, drag: Drag
             .unwrap_or((nx as f64, ny as f64));
         let (dw, dh) = win.outer_size().map(|s| (s.width, s.height)).unwrap_or(drag.size);
         let (mx, my) = (ox + dw as f64 / 2.0, oy + dh as f64 / 2.0);
-        let (w, h) = capsule_size(dock.is_vertical());
+        let (w, h) = capsule_size(place.dock.is_vertical());
         let from = LRect { x: (mx - nx as f64) / t.scale - w / 2.0, y: (my - ny as f64) / t.scale - h / 2.0, w, h };
-        DropPayload { dock, anchor_in_window: anchor, from, cancelled }
+        DropPayload { place, from, cancelled }
     });
 
     *gate.pending.lock().unwrap() = Some((settings, Instant::now() + COMMIT_GRACE));
@@ -977,21 +1016,34 @@ mod tests {
         assert_eq!(window_rect(&dock("top", "end", 0.5), small, 1.0, false).0, 1280 - 1320);
     }
 
+    /// A tall display: 2560x1400 logical at 100 %.
+    const TALL: Area = Area { x: 0, y: 0, w: 2560, h: 1400 };
+
     #[test]
-    fn side_docks_follow_the_offset_and_stay_on_screen() {
-        let (x, y, w, h) = window_rect(&dock("left", "center", 0.5), WA, 1.0, false);
-        assert_eq!((x, w, h), (0, 1320, 320));
-        assert_eq!(y, 516 - 160);
-        assert_eq!(anchor_in_window(&dock("left", "center", 0.5), WA, 1.0), 160.0);
-        let (x, ..) = window_rect(&dock("right", "center", 0.5), WA, 1.0, false);
-        assert_eq!(x, 1920 - 1320);
-        // Near the top the window is clamped, and the anchor says where the capsule goes.
+    fn a_side_window_is_the_panel_turned_on_its_side() {
+        let (x, y, w, h) = window_rect(&dock("left", "center", 0.5), TALL, 1.0, false);
+        assert_eq!((x, y, w, h), (0, 700 - 660, 320, 1320));
+        assert_eq!(anchor_in_window(&dock("left", "center", 0.5), TALL, 1.0), 660.0);
+        assert_eq!(window_rect(&dock("right", "center", 0.5), TALL, 1.0, false).0, 2560 - 320);
+        assert_eq!(window_len(&dock("right", "center", 0.5), TALL, 1.0), 1320.0);
+        assert_eq!(window_len(&Dock::default(), TALL, 1.0), 1320.0);
+        // Near the ends the window is clamped, and the anchor says where the capsule goes.
         let d = dock("left", "center", 0.0);
-        assert_eq!(window_rect(&d, WA, 1.0, false).1, 0);
-        assert_eq!(anchor_in_window(&d, WA, 1.0), 0.0);
+        assert_eq!(window_rect(&d, TALL, 1.0, false).1, 0);
+        assert_eq!(anchor_in_window(&d, TALL, 1.0), 0.0);
         let d = dock("right", "center", 1.0);
-        assert_eq!(window_rect(&d, WA, 1.0, false).1, 1032 - 320);
-        assert_eq!(anchor_in_window(&d, WA, 1.0), 320.0);
+        assert_eq!(window_rect(&d, TALL, 1.0, false).1, 1400 - 1320);
+        assert_eq!(anchor_in_window(&d, TALL, 1.0), 1320.0);
+    }
+
+    #[test]
+    fn a_side_window_is_no_longer_than_the_work_area() {
+        let (x, y, w, h) = window_rect(&dock("left", "center", 0.3), WA, 1.0, false);
+        assert_eq!((x, y, w, h), (0, 0, 320, 1032));
+        assert_eq!(window_len(&dock("left", "center", 0.3), WA, 1.0), 1032.0);
+        assert!((anchor_in_window(&dock("left", "center", 0.3), WA, 1.0) - 309.6).abs() < 1e-9);
+        let p = placement(&dock("right", "center", 0.5), WA, 1.0);
+        assert_eq!((p.dock.edge.as_str(), p.anchor_in_window, p.window_len), ("right", 516.0, 1032.0));
     }
 
     #[test]
@@ -1010,6 +1062,9 @@ mod tests {
         let (x, y, w, h) = window_rect(&Dock::default(), wa, 1.5, false);
         assert_eq!((w, h), (1980, 480));
         assert_eq!((x, y), (-2880 + (2880 - 1980) / 2, -200));
+        // 1040 logical tall: the side window is that long.
+        let (x, y, w, h) = window_rect(&dock("right", "center", 0.5), wa, 1.5, false);
+        assert_eq!((x, y, w, h), (-480, -200, 480, 1560));
         let (x, y, w, h) = window_rect(&dock("right", "center", 0.5), wa, 1.5, true);
         assert_eq!((x, w, h), (-9, 9, 360));
         assert_eq!(y, -200 + 780 - 180);
@@ -1020,12 +1075,14 @@ mod tests {
 
     #[test]
     fn a_short_display_puts_a_side_dock_on_top_for_now() {
-        let short = Area { x: 0, y: 0, w: 1920, h: 300 };
+        let short = Area { x: 0, y: 0, w: 1920, h: 650 };
         let d = effective_dock(&dock("left", "center", 0.3), short, 1.0);
         assert_eq!((d.edge.as_str(), d.anchor.as_str()), ("top", "center"));
         assert_eq!(d.offset, 0.3);
         let d = effective_dock(&dock("left", "center", 0.3), WA, 1.0);
         assert_eq!(d.edge, "left");
+        let p = placement(&dock("left", "center", 0.3), short, 1.0);
+        assert_eq!((p.dock.edge.as_str(), p.window_len), ("top", 1320.0));
     }
 
     // The same cases as snapDock in src/core/dock.test.ts.
@@ -1092,10 +1149,11 @@ mod tests {
 
     #[test]
     fn the_capsule_lands_where_dock_ts_draws_it() {
-        assert_eq!(capsule_in_window(&Dock::default(), 16.0), (516.0, 0.0, 288.0, 32.0));
-        assert_eq!(capsule_in_window(&dock("top", "end", 0.5), 16.0).0, 1320.0 - 288.0 - 24.0);
-        assert_eq!(capsule_in_window(&dock("left", "center", 0.5), 160.0), (0.0, 16.0, 32.0, 288.0));
-        assert_eq!(capsule_in_window(&dock("right", "center", 0.5), 310.0), (1288.0, 32.0, 32.0, 288.0));
+        assert_eq!(capsule_in_window(&Dock::default(), 16.0, 1320.0), (516.0, 0.0, 288.0, 32.0));
+        assert_eq!(capsule_in_window(&dock("top", "end", 0.5), 16.0, 1320.0).0, 1320.0 - 288.0 - 24.0);
+        assert_eq!(capsule_in_window(&dock("left", "center", 0.5), 660.0, 1320.0), (0.0, 516.0, 32.0, 288.0));
+        assert_eq!(capsule_in_window(&dock("left", "center", 0.5), 100.0, 1320.0).1, 0.0);
+        assert_eq!(capsule_in_window(&dock("right", "center", 0.5), 1310.0, 1320.0), (288.0, 1032.0, 32.0, 288.0));
     }
 
     #[test]

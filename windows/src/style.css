@@ -1746,3 +1746,132 @@ input[type="range"]::-webkit-slider-thumb {
   overflow: hidden;
   flex-shrink: 0;
 }
+
+/* ── Docked left or right: the open island on its side ─────────────────────
+   The landscape island turned: as wide as it would be tall, as long as it
+   would be wide (layout.ts). The header takes two rows, Mochi sits on top of
+   each card (layout.ts botPosition, VERTICAL_*), and what stood side by side
+   stands in a column. The views set their own left padding for Mochi inline;
+   on a side that room goes on top instead. */
+
+#island.vertical #header {
+  height: 60px;
+  flex: 0 0 60px;
+  flex-wrap: wrap;
+  align-content: center;
+  row-gap: 6px;
+}
+
+#island.vertical .tabs {
+  padding-left: 10px;
+  gap: 2px;
+}
+
+#island.vertical .team-launch {
+  margin-left: 4px;
+}
+
+#island.vertical .header-actions {
+  flex: 1 0 100%;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-right: 12px;
+}
+
+#island.vertical .stack {
+  padding: 72px 12px 12px !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+#island.vertical .actions,
+#island.vertical .settings-row,
+#island.vertical .who-row {
+  flex-wrap: wrap;
+}
+
+#island.vertical .actions {
+  gap: 6px;
+}
+
+#island.vertical .btn {
+  padding: 6px 11px;
+  font-size: 12px;
+}
+
+#island.vertical .session-name {
+  width: auto;
+  max-width: 100%;
+}
+
+#island.vertical .chat-body {
+  padding: 72px 10px 12px;
+}
+
+#island.vertical .drop-body {
+  padding: 72px 12px 0;
+  justify-content: flex-start;
+}
+
+/* Overview: the focused card, then the unread session cards, then the pills. */
+#island.vertical .overview {
+  flex-direction: column;
+}
+
+#island.vertical .overview > .left,
+#island.vertical .overview.narrow > .left,
+#island.vertical .overview.solo > .left {
+  flex: 1 1 auto;
+  width: auto;
+  min-height: 150px;
+}
+
+#island.vertical .overview > .right,
+#island.vertical .overview.narrow > .right {
+  flex: 0 0 auto;
+}
+
+#island.vertical .pills {
+  height: auto;
+  grid-template-columns: 1fr;
+  padding: 8px;
+}
+
+#island.vertical .overview > .extras {
+  flex-direction: column;
+}
+
+#island.vertical .session-card-shell {
+  flex: 0 0 270px;
+  width: auto;
+}
+
+#island.vertical .session-card {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 14px 12px;
+}
+
+#island.vertical .session-reply {
+  -webkit-line-clamp: 9;
+}
+
+#island.vertical .card-body {
+  padding-top: 72px;
+}
+
+#island.vertical .who {
+  padding: 0 10px;
+  flex-wrap: wrap;
+}
+
+#island.vertical .ticker {
+  margin: 6px 10px 0;
+}
+
+#island.vertical .int-card {
+  padding: 72px 10px 0;
+}

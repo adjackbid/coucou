@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_DOCK, cornerRadii, dockedRect, edgeDistance, isVertical, sideOffset, snapDock, wakeStripRect,
+  DEFAULT_DOCK, cornerRadii, dockedRect, edgeDistance, isVertical, sideOffset, snapDock, wakeStripRect, windowSize,
   type Dock, type Rect,
 } from "./dock";
 import { botPosition, islandSize } from "./layout";
@@ -95,17 +95,24 @@ describe("dockedRect", () => {
   });
 
   it("hugs a side, centred on the anchor and inside the window", () => {
-    expect(dockedRect(dock("left"), 32, 288, 160)).toEqual({ x: 0, y: 16, w: 32, h: 288 });
-    expect(dockedRect(dock("right"), 32, 288, 160)).toEqual({ x: 1288, y: 16, w: 32, h: 288 });
-    // The panel does not turn: it grows inwards from the side.
-    expect(dockedRect(dock("left"), 640, 160, 160)).toEqual({ x: 0, y: 80, w: 640, h: 160 });
-    expect(dockedRect(dock("right"), 640, 160, 160)).toEqual({ x: 680, y: 80, w: 640, h: 160 });
-    // A window clamped at the top of the screen: the anchor is high, the shapes stay in.
-    expect(dockedRect(dock("left"), 32, 288, 12).y).toBe(0);
-    expect(dockedRect(dock("left"), 640, 300, 12).y).toBe(0);
-    expect(dockedRect(dock("right"), 640, 300, 310).y).toBe(20);
-    expect(dockedRect(dock("right"), 32, 288, 310).y).toBe(32);
-    expect(dockedRect(dock("left"), 0, 184, 160)).toEqual({ x: 0, y: 68, w: 0, h: 184 });
+    // The side window is 320 wide and `len` long.
+    expect(dockedRect(dock("left"), 32, 288, 660, false, 1320)).toEqual({ x: 0, y: 516, w: 32, h: 288 });
+    expect(dockedRect(dock("right"), 32, 288, 660, false, 1320)).toEqual({ x: 288, y: 516, w: 32, h: 288 });
+    // The panel turned on its side grows inwards from the side, centred on the anchor.
+    expect(dockedRect(dock("left"), 160, 640, 660, false, 1320)).toEqual({ x: 0, y: 340, w: 160, h: 640 });
+    expect(dockedRect(dock("right"), 160, 640, 660, false, 1320)).toEqual({ x: 160, y: 340, w: 160, h: 640 });
+    // A window clamped at an end of the screen: the anchor is near that end, the shapes stay in.
+    expect(dockedRect(dock("left"), 32, 288, 12, false, 1320).y).toBe(0);
+    expect(dockedRect(dock("left"), 160, 640, 12, false, 1320).y).toBe(0);
+    expect(dockedRect(dock("right"), 160, 640, 1300, false, 1320).y).toBe(680);
+    expect(dockedRect(dock("right"), 32, 288, 1310, false, 1032).y).toBe(744);
+    expect(dockedRect(dock("left"), 0, 184, 660, false, 1320)).toEqual({ x: 0, y: 568, w: 0, h: 184 });
+  });
+
+  it("knows the window's shape", () => {
+    expect(windowSize(DEFAULT_DOCK, 1320)).toEqual({ w: 1320, h: 320 });
+    expect(windowSize(dock("left"), 1032)).toEqual({ w: 320, h: 1032 });
+    expect(windowSize(dock("left"), 1032, true)).toEqual({ w: 1320, h: 320 });
   });
 
   it("floats in the middle while dragged", () => {
@@ -127,21 +134,29 @@ describe("wakeStripRect", () => {
   it("lies along the edge across from the capsule", () => {
     expect(wakeStripRect(DEFAULT_DOCK, 16)).toEqual({ x: 540, y: 0, w: 240, h: 6 });
     expect(wakeStripRect(dock("top", "start"), 16)).toEqual({ x: 24 + 144 - 120, y: 0, w: 240, h: 6 });
-    expect(wakeStripRect(dock("left"), 160)).toEqual({ x: 0, y: 40, w: 6, h: 240 });
-    expect(wakeStripRect(dock("right"), 160)).toEqual({ x: 1314, y: 40, w: 6, h: 240 });
+    expect(wakeStripRect(dock("left"), 660, 1320)).toEqual({ x: 0, y: 540, w: 6, h: 240 });
+    expect(wakeStripRect(dock("right"), 660, 1320)).toEqual({ x: 314, y: 540, w: 6, h: 240 });
   });
 });
 
 describe("vertical sizes", () => {
-  it("stands the capsule on end and leaves the panel alone", () => {
+  it("stands the capsule on end and turns the panel on its side", () => {
     expect(isVertical(dock("left"))).toBe(true);
     expect(isVertical(DEFAULT_DOCK)).toBe(false);
     expect(islandSize("compact", "overview")).toEqual({ w: 288, h: 32 });
     expect(islandSize("compact", "overview", 0, 0, 0, 0, null, false, false, true)).toEqual({ w: 32, h: 288 });
     expect(islandSize("hidden", "overview", 0, 0, 0, 0, null, false, false, true)).toEqual({ w: 0, h: 184 });
-    expect(islandSize("expanded", "overview", 0, 0, 0, 0, null, false, false, true)).toEqual(
-      islandSize("expanded", "overview"),
-    );
+    const v = (view: Parameters<typeof islandSize>[1], extra = 0) =>
+      islandSize("expanded", view, 0, 0, 0, extra, null, false, false, true);
+    expect(islandSize("expanded", "overview")).toEqual({ w: 640, h: 160 });
+    expect(v("overview")).toEqual({ w: 160, h: 640 });
+    expect(v("overview", 1)).toEqual({ w: 160, h: 920 });
+    expect(v("session")).toEqual({ w: 300, h: 640 });
+    // The canvases keep a width they can be shrunk into.
+    expect(v("greeting")).toEqual({ w: 300, h: 640 });
+    expect(v("uploading")).toEqual({ w: 300, h: 640 });
+    // Mochi sits on top of a side card, centred.
+    expect(botPosition("expanded", "approval", 640, 0, true, 160)).toEqual({ cx: 80, cy: 68 + 14 + 23, diameter: 46, opacity: 1 });
     expect(botPosition("compact", "overview", 288, 0, true)).toEqual({ cx: 16, cy: 40, diameter: 20, opacity: 1 });
     expect(botPosition("compact", "overview", 32)).toEqual({ cx: 40, cy: 16, diameter: 20, opacity: 1 });
   });

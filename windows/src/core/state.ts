@@ -368,6 +368,13 @@ class AppState {
   dock: Dock = { ...DEFAULT_DOCK };
   /** Where a side capsule's centre wants to be in the window, logical px (Rust). */
   anchorInWindow = 16;
+  /** The window's length along its edge, logical px (Rust). */
+  windowLen = 1320;
+  /**
+   * How many session cards fit beside the focused one: the setting, and on a
+   * side also the window's length (each card makes the island 280 px longer).
+   */
+  maxExtraCards = Infinity;
 
   isPinned = false;
   paused = false;
@@ -459,7 +466,8 @@ class AppState {
    * newest first, as many as the setting allows. The rest stay pills.
    */
   get extraCards(): AgentTask[] {
-    const room = Math.max(1, Math.min(3, Math.round(this.settings.maxSessionCards || 2))) - 1;
+    const wanted = Math.max(1, Math.min(3, Math.round(this.settings.maxSessionCards || 2))) - 1;
+    const room = Math.max(0, Math.min(wanted, this.maxExtraCards));
     return this.unreadTasks
       .filter((t) => t.id !== this.focusId)
       .sort((a, b) => (b.lastEvent ?? 0) - (a.lastEvent ?? 0))

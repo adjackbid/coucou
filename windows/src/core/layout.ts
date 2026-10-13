@@ -63,6 +63,23 @@ export const COMPACT_W = 288; // NOTCH_W + 104
 export const EXPANDED_W = 640;
 
 export const ROUNDED_CORNER = 14; // hidden / compact
+
+/**
+ * Docked left or right the open island is the landscape one turned on its
+ * side: as wide as it would be tall, as long as it would be wide. Only the
+ * drop sequence and the greeting, drawn on a fixed 640-wide canvas, get a
+ * fixed width, and their canvas is scaled down into it.
+ */
+export const VERTICAL_CANVAS_W = 300;
+/** Top of a side panel's cards: the content inset plus the two-row header. */
+export const VERTICAL_HEADER_H = 68;
+/** Mochi on a side panel: centred on top of the card, at most this big. */
+export const VERTICAL_BOT_D = 46;
+/** The gap above Mochi inside the card; the card's text starts below it. */
+export const VERTICAL_BOT_GAP = 14;
+
+/** The views drawn on a fixed 640-wide canvas. */
+export const CANVAS_VIEWS: ReadonlySet<IslandViewName> = new Set(["greeting", "upload", "uploading", "choose"]);
 export const EXPANDED_CORNER = 22;
 
 export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
@@ -202,7 +219,10 @@ export function islandSize(
         : view === "question" ? questionHeight(question, questionInput)
         : VIEW_LAYOUTS[view].height;
       const w = view === "overview" ? overviewWidth(extraCards) : EXPANDED_W;
-      return { w, h };
+      if (!vertical) return { w, h };
+      // On its side: turned, landscape height becoming width.
+      if (CANVAS_VIEWS.has(view)) return { w: VERTICAL_CANVAS_W, h: w };
+      return { w: h, h: w };
     }
   }
 }
@@ -221,6 +241,7 @@ export function botPosition(
   islandH: number,
   uploadProgress = 0,
   vertical = false,
+  islandW = EXPANDED_W,
 ): BotPlacement {
   switch (mode) {
     case "hidden":
@@ -229,6 +250,11 @@ export function botPosition(
       return vertical ? { cx: 16, cy: 40, diameter: 20, opacity: 1 } : { cx: 40, cy: 16, diameter: 20, opacity: 1 };
     case "expanded": {
       const layout = VIEW_LAYOUTS[view];
+      // On its side Mochi sits on top of the card, centred; the text goes below.
+      if (vertical && !CANVAS_VIEWS.has(view)) {
+        const d = Math.min(layout.botDiameter, VERTICAL_BOT_D);
+        return { cx: islandW / 2, cy: VERTICAL_HEADER_H + VERTICAL_BOT_GAP + d / 2, diameter: d, opacity: 1 };
+      }
       if (view === "uploading") {
         return {
           cx: 36 + uploadProgress * 526,

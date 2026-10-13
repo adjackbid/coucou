@@ -26,6 +26,8 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T |
 export interface DockPlacement {
   dock: Dock;
   anchorInWindow: number;
+  /** The window's length along its edge (shorter than 1320 on the side of a short display). */
+  windowLen: number;
 }
 
 /** A drag's preview: the edge the capsule would dock to, and a landing line. */

@@ -107,16 +107,29 @@ export function edgeDistance(p: { x: number; y: number }, wa: Rect, edge: DockEd
 }
 
 /**
+ * The full window, logical px: the landscape panel along the top, the same
+ * turned on its side along a side (`len` long, shorter on a short display).
+ * A dragged island always gets the landscape one.
+ */
+export function windowSize(dock: { edge: DockEdge }, len: number, dragging = false): { w: number; h: number } {
+  if (!dragging && isVertical(dock)) return { w: PANEL_H, h: len };
+  return { w: PANEL_W, h: PANEL_H };
+}
+
+/**
  * The island in the full window (logical px), `w`×`h` being its current size.
  * Against the edge it is docked to; while being dragged, floating in the
  * middle of the window, which Rust keeps centred under the cursor.
- * `anchorInWindow` is where a side capsule's centre wants to be (from Rust).
+ * `anchorInWindow` is where a side island's centre wants to be and `len` the
+ * window's length along that side (both from Rust).
  */
-export function dockedRect(dock: Dock, w: number, h: number, anchorInWindow: number, dragging = false): Rect {
+export function dockedRect(
+  dock: Dock, w: number, h: number, anchorInWindow: number, dragging = false, len = PANEL_W,
+): Rect {
   if (dragging) return { x: (PANEL_W - w) / 2, y: (PANEL_H - h) / 2, w, h };
   if (isVertical(dock)) {
-    const y = Math.min(Math.max(0, anchorInWindow - h / 2), Math.max(0, PANEL_H - h));
-    return { x: dock.edge === "left" ? 0 : PANEL_W - w, y, w, h };
+    const y = Math.min(Math.max(0, anchorInWindow - h / 2), Math.max(0, len - h));
+    return { x: dock.edge === "left" ? 0 : PANEL_H - w, y, w, h };
   }
   const x =
     dock.anchor === "start" ? TOP_INSET
@@ -148,11 +161,11 @@ export const WAKE_STRIP_LEN = 240;
 export const WAKE_STRIP_THICK = 6;
 
 /** Where the wake strip lies in the full window: along the edge, across from the capsule's centre. */
-export function wakeStripRect(dock: Dock, anchorInWindow: number): Rect {
+export function wakeStripRect(dock: Dock, anchorInWindow: number, len = PANEL_W): Rect {
   if (isVertical(dock)) {
-    const c = dockedRect(dock, NOTCH_H, COMPACT_W, anchorInWindow);
+    const c = dockedRect(dock, NOTCH_H, COMPACT_W, anchorInWindow, false, len);
     return {
-      x: dock.edge === "left" ? 0 : PANEL_W - WAKE_STRIP_THICK,
+      x: dock.edge === "left" ? 0 : PANEL_H - WAKE_STRIP_THICK,
       y: c.y + c.h / 2 - WAKE_STRIP_LEN / 2,
       w: WAKE_STRIP_THICK,
       h: WAKE_STRIP_LEN,

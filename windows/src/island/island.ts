@@ -9,8 +9,8 @@ import {
 import { cornerRadii, dockedRect, isVertical, wakeStripRect, type Dock, type Rect } from "../core/dock";
 import {
   EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
-  ROUNDED_CORNER, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition, chatPromptHeight,
-  islandSize,
+  ROUNDED_CORNER, SESSION_CARD_W, VERTICAL_CANVAS_W, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition,
+  chatPromptHeight, islandSize,
   type BotStateName, type IslandMode, type IslandViewName,
 } from "../core/layout";
 import { Sound } from "../core/sound";
@@ -122,6 +122,11 @@ export class Island {
   private press: { x: number; y: number; timer: number; header: boolean; starting: boolean } | null = null;
   /** The island is being dragged; `preview` is where it would dock now. */
   private drag: { preview: Pick<Dock, "edge" | "anchor"> } | null = null;
+  /**
+   * Where the 640-wide canvases (drop sequence, greeting) sit and how much
+   * they are shrunk: a side panel is narrower than they are.
+   */
+  private canvasAt = { x: 0, y: 0, s: 1 };
   /** A side wake strip only wakes the island after the mouse rests on it (D5). */
   private wakeTimer: number | null = null;
   /** Last shape handed to Rust for the click-through test. */
@@ -730,6 +735,8 @@ export class Island {
       State.focusTask?.question ?? null, !!State.focusTask?.pty,
       State.approvalExplaining, this.vertical,
     );
+    // A side window can be shorter than the island would like to be.
+    if (this.vertical && State.mode === "expanded") return { w, h: Math.min(h, State.windowLen), r: EXPANDED_CORNER };
     const r = State.mode === "expanded" ? EXPANDED_CORNER : ROUNDED_CORNER;
     return { w, h, r };
   }
@@ -763,6 +770,7 @@ export class Island {
     if (this.drag) return;
     State.dock = p.dock;
     State.anchorInWindow = p.anchorInWindow;
+    State.windowLen = p.windowLen;
     this.syncDockClasses();
     this.placeWakeStrip();
     this.animateGeometry(false);
@@ -773,6 +781,10 @@ export class Island {
   private syncDockClasses() {
     this.islandEl.classList.toggle("vertical", this.vertical);
     this.islandEl.classList.toggle("dock-right", this.dock.edge === "right");
+    // Every session card makes a side island 280 px longer; only what fits.
+    State.maxExtraCards = this.vertical
+      ? Math.max(0, Math.floor((State.windowLen - EXPANDED_W) / SESSION_CARD_W))
+      : Infinity;
   }
 
   private applyGeometry() {
@@ -792,8 +804,17 @@ export class Island {
       this.miniGrid.style.left = `${w - 40 - 14.5}px`;
       this.miniGrid.style.top = `${hh / 2 - 14.5}px`;
     }
-    this.greetingCanvas.style.left = `${(w - EXPANDED_W) / 2}px`;
-    this.uploadCanvas.el.style.left = `${(w - EXPANDED_W) / 2}px`;
+    // The 640-wide canvases: centred above a landscape island; on a side,
+    // shrunk to the panel's width and centred down its length.
+    const s = this.vertical ? VERTICAL_CANVAS_W / EXPANDED_W : 1;
+    const cx = (w - EXPANDED_W * s) / 2;
+    this.canvasAt = { x: cx, y: this.vertical ? (hh - 176 * s) / 2 : 0, s };
+    for (const [el, ch] of [[this.greetingCanvas, 150], [this.uploadCanvas.el, 176]] as const) {
+      el.style.left = `${cx}px`;
+      el.style.top = this.vertical ? `${(hh - ch * s) / 2}px` : "0px";
+      el.style.transformOrigin = "0 0";
+      el.style.scale = s === 1 ? "" : String(s);
+    }
 
     const p = this.pushedRect;
     if (
@@ -807,7 +828,9 @@ export class Island {
 
   /** Island rect in window coordinates (origin top-left of the 1320x320 window). */
   private islandRect(): Rect {
-    const r = dockedRect(this.dock, this.width.value, this.height.value, State.anchorInWindow, !!this.drag);
+    const r = dockedRect(
+      this.dock, this.width.value, this.height.value, State.anchorInWindow, !!this.drag, State.windowLen,
+    );
     return { ...r, x: r.x + this.slideX.value, y: r.y + this.slideY.value };
   }
 
@@ -824,7 +847,7 @@ export class Island {
       st.height = "100%";
       return;
     }
-    const r = wakeStripRect(this.dock, State.anchorInWindow);
+    const r = wakeStripRect(this.dock, State.anchorInWindow, State.windowLen);
     st.left = `${r.x}px`;
     st.top = `${r.y}px`;
     st.width = `${r.w}px`;
@@ -1060,6 +1083,7 @@ export class Island {
     this.islandEl.classList.remove("dragging", "lifted");
     State.dock = d.dock;
     State.anchorInWindow = d.anchorInWindow;
+    State.windowLen = d.windowLen;
     this.syncDockClasses();
     this.placeWakeStrip();
     this.islandEl.style.visibility = "hidden";
@@ -1068,7 +1092,7 @@ export class Island {
     this.height.jump(d.from.h);
     this.width.springTo(w);
     this.height.springTo(h);
-    const at = dockedRect(d.dock, d.from.w, d.from.h, d.anchorInWindow);
+    const at = dockedRect(d.dock, d.from.w, d.from.h, d.anchorInWindow, false, d.windowLen);
     this.slideX.set(d.from.x - at.x);
     this.slideY.set(d.from.y - at.y);
     this.slideX.target = 0;
@@ -1089,7 +1113,9 @@ export class Island {
     this.pressMoved(x, y);
     State.mouse = { x, y };
     const rect = this.islandRect();
-    State.mouseInIsland = { x: x - rect.x, y: y - rect.y };
+    // In the drop sequence's own coordinates, which a side panel shrinks.
+    const c = this.canvasAt;
+    State.mouseInIsland = { x: (x - rect.x - c.x) / c.s, y: (y - rect.y - c.y) / c.s };
 
     // Windows sends no cursor position with an OLE drag, so the drop sequence is
     // fed from the Win32 cursor poll instead — it runs throughout the drag.
@@ -1272,7 +1298,9 @@ export class Island {
   };
 
   private updateBotTargets() {
-    const p = botPosition(State.mode, State.view, this.height.value, State.uploadProgress, this.vertical);
+    const p = botPosition(
+      State.mode, State.view, this.height.value, State.uploadProgress, this.vertical, this.width.value,
+    );
     this.botCx.target = p.cx;
     this.botCy.target = p.cy;
     this.botSize.target = p.diameter / 0.6;
