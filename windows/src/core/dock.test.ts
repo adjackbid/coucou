@@ -23,13 +23,18 @@ describe("snapDock", () => {
     expect(snapDock({ x: 3, y: 100 }, WA, null).offset).toBeCloseTo(156 / 1032, 9);
   });
 
-  it("never docks to the bottom", () => {
-    expect(snapDock({ x: 960, y: 1000 }, WA, null).edge).not.toBe("bottom");
-    expect(snapDock({ x: 900, y: 1000 }, WA, null).edge).toBe("left");
-    const corner = snapDock({ x: 1910, y: 1030 }, WA, null);
-    expect(corner.edge).toBe("right");
-    expect(corner.offset).toBeCloseTo((1032 - 156) / 1032);
-    expect(snapDock({ x: 10, y: 1030 }, WA, null).edge).toBe("left");
+  it("docks to the bottom in thirds, on the taskbar", () => {
+    expect(snapDock({ x: 900, y: 1000 }, WA, null)).toMatchObject({ edge: "bottom", anchor: "center" });
+    expect(snapDock({ x: 1910, y: 1030 }, WA, null)).toMatchObject({ edge: "bottom", anchor: "end" });
+    expect(snapDock({ x: 10, y: 1030 }, WA, null)).toMatchObject({ edge: "bottom", anchor: "start" });
+    // Low on a side is still that side.
+    expect(snapDock({ x: 3, y: 900 }, WA, null).edge).toBe("left");
+    // The bottom is kept near a corner until a side is clearly nearer.
+    const bottom = { edge: "bottom", anchor: "start" } as const;
+    expect(snapDock({ x: 20, y: 1000 }, WA, bottom).edge).toBe("bottom");
+    expect(snapDock({ x: 5, y: 1000 }, WA, bottom).edge).toBe("left");
+    expect(snapDock({ x: 650, y: 1020 }, WA, bottom).anchor).toBe("start");
+    expect(snapDock({ x: 670, y: 1020 }, WA, bottom).anchor).toBe("center");
   });
 
   it("keeps the top until a side is clearly nearer", () => {
@@ -78,6 +83,7 @@ describe("edgeDistance", () => {
     expect(edgeDistance({ x: 50, y: 30 }, WA, "top")).toBe(30);
     expect(edgeDistance({ x: 50, y: 30 }, WA, "left")).toBe(50);
     expect(edgeDistance({ x: 1900, y: 30 }, WA, "right")).toBe(20);
+    expect(edgeDistance({ x: 1900, y: 1000 }, WA, "bottom")).toBe(32);
   });
 });
 
@@ -115,6 +121,13 @@ describe("dockedRect", () => {
     expect(windowSize(dock("left"), 1032, true)).toEqual({ w: 1320, h: 320 });
   });
 
+  it("stands on the floor of the window along the bottom and grows upwards", () => {
+    expect(dockedRect(dock("bottom"), 288, 32, 304)).toEqual({ x: 516, y: 288, w: 288, h: 32 });
+    expect(dockedRect(dock("bottom", "start"), 640, 160, 304)).toEqual({ x: 24, y: 160, w: 640, h: 160 });
+    expect(dockedRect(dock("bottom", "end"), 184, 0, 304)).toEqual({ x: 1320 - 184 - 24, y: 320, w: 184, h: 0 });
+    expect(windowSize(dock("bottom"), 1320)).toEqual({ w: 1320, h: 320 });
+  });
+
   it("floats in the middle while dragged", () => {
     expect(dockedRect(dock("left"), 32, 288, 12, true)).toEqual({ x: 644, y: 16, w: 32, h: 288 });
     expect(dockedRect(DEFAULT_DOCK, 288, 32, 16, true)).toEqual({ x: 516, y: 144, w: 288, h: 32 });
@@ -126,6 +139,7 @@ describe("cornerRadii", () => {
     expect(cornerRadii(dock("top"), 14)).toBe("0 0 14.00px 14.00px");
     expect(cornerRadii(dock("left"), 14)).toBe("0 14.00px 14.00px 0");
     expect(cornerRadii(dock("right"), 14)).toBe("14.00px 0 0 14.00px");
+    expect(cornerRadii(dock("bottom"), 14)).toBe("14.00px 14.00px 0 0");
     expect(cornerRadii(dock("right"), 14, true)).toBe("14.00px 14.00px 14.00px 14.00px");
   });
 });
@@ -134,6 +148,7 @@ describe("wakeStripRect", () => {
   it("lies along the edge across from the capsule", () => {
     expect(wakeStripRect(DEFAULT_DOCK, 16)).toEqual({ x: 540, y: 0, w: 240, h: 6 });
     expect(wakeStripRect(dock("top", "start"), 16)).toEqual({ x: 24 + 144 - 120, y: 0, w: 240, h: 6 });
+    expect(wakeStripRect(dock("bottom"), 304)).toEqual({ x: 540, y: 314, w: 240, h: 6 });
     expect(wakeStripRect(dock("left"), 660, 1320)).toEqual({ x: 0, y: 540, w: 6, h: 240 });
     expect(wakeStripRect(dock("right"), 660, 1320)).toEqual({ x: 314, y: 540, w: 6, h: 240 });
   });

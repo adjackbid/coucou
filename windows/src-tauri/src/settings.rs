@@ -64,13 +64,14 @@ pub struct Settings {
     pub dock: Dock,
 }
 
-/// The edge the island is docked to. There is no "bottom".
+/// The edge the island is docked to. The bottom one is the work area's: the
+/// island sits on the taskbar, never over it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Dock {
-    /// "top" | "left" | "right".
+    /// "top" | "bottom" | "left" | "right".
     pub edge: String,
-    /// Top only: "start" | "center" | "end" (left / middle / right).
+    /// Top and bottom only: "start" | "center" | "end" (left / middle / right).
     pub anchor: String,
     /// Left/right only: the capsule's centre as a fraction of the work area's height.
     pub offset: f64,
@@ -89,7 +90,7 @@ impl Default for Dock {
 impl Dock {
     /// Whatever a hand-edited or older file says, a dock the island can use.
     pub fn normalized(mut self) -> Self {
-        if !matches!(self.edge.as_str(), "top" | "left" | "right") {
+        if !matches!(self.edge.as_str(), "top" | "bottom" | "left" | "right") {
             self.edge = "top".into();
         }
         if !matches!(self.anchor.as_str(), "start" | "center" | "end") {
@@ -308,13 +309,14 @@ mod tests {
 
     #[test]
     fn a_nonsense_dock_is_normalized() {
-        let d = Dock { edge: "bottom".into(), anchor: "middle".into(), offset: f64::NAN, monitor: "x".into() }
+        let d = Dock { edge: "diagonal".into(), anchor: "middle".into(), offset: f64::NAN, monitor: "x".into() }
             .normalized();
         assert_eq!(d.edge, "top");
         assert_eq!(d.anchor, "center");
         assert_eq!(d.offset, 0.5);
         assert_eq!(d.monitor, "x");
         assert_eq!(Dock { offset: 3.0, ..Dock::default() }.normalized().offset, 1.0);
+        assert_eq!(Dock { edge: "bottom".into(), ..Dock::default() }.normalized().edge, "bottom");
         assert_eq!(Dock { offset: -1.0, ..Dock::default() }.normalized().offset, 0.0);
         let s: Settings = serde_json::from_str(
             r#"{"soundEnabled":true,"soundVolume":0.1,"autoCloseInterval":15,"absenceInterval":180,

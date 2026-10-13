@@ -315,14 +315,18 @@ fn panel_origin(dock: &Dock, wa: Area, scale: f64) -> (i32, i32) {
                 "end" => wa.x + waw - pw,
                 _ => wa.x + (waw - pw) / 2,
             };
-            (x, wa.y)
+            // Along the bottom it stands on the work area's floor: the taskbar's top.
+            (x, if dock.edge == "bottom" { wa.y + wah - ph } else { wa.y })
         }
     }
 }
 
 /// Where the capsule's centre wants to be in the panel window, logical px
-/// from its top (side docks; top docks get the capsule's own centre).
+/// from its top (side docks; top and bottom docks get the capsule's own centre).
 pub fn anchor_in_window(dock: &Dock, wa: Area, scale: f64) -> f64 {
+    if dock.edge == "bottom" {
+        return PANEL_H - CAPSULE_THICK / 2.0;
+    }
     if !dock.is_vertical() {
         return CAPSULE_THICK / 2.0;
     }
@@ -346,7 +350,8 @@ pub fn capsule_in_window(dock: &Dock, anchor: f64, len: f64) -> (f64, f64, f64, 
                 "end" => PANEL_W - CAPSULE_LEN - TOP_INSET,
                 _ => (PANEL_W - CAPSULE_LEN) / 2.0,
             };
-            (x, 0.0, CAPSULE_LEN, CAPSULE_THICK)
+            let y = if dock.edge == "bottom" { PANEL_H - CAPSULE_THICK } else { 0.0 };
+            (x, y, CAPSULE_LEN, CAPSULE_THICK)
         }
     }
 }
@@ -368,6 +373,7 @@ pub fn window_rect(dock: &Dock, wa: Area, scale: f64, collapsed: bool) -> (i32, 
     match dock.edge.as_str() {
         "left" => (wa.x, mid_y - len / 2, thick as u32, len as u32),
         "right" => (wa.x + wa.w as i32 - thick, mid_y - len / 2, thick as u32, len as u32),
+        "bottom" => (mid_x - len / 2, wa.y + wa.h as i32 - thick, len as u32, thick as u32),
         _ => (mid_x - len / 2, wa.y, len as u32, thick as u32),
     }
 }
@@ -451,29 +457,31 @@ pub fn side_offset(oy: f64, height: f64) -> f64 {
 }
 
 /// Where a capsule let go at `(x, y)` docks, in the logical coordinates of its
-/// display's work area. There is no bottom edge: the nearest of the other
-/// three wins. `prev` (edge, anchor) is the preview so far; nearly-equal
-/// choices keep it.
+/// display's work area: the nearest edge — on ties top, then left, right,
+/// bottom. `prev` (edge, anchor) is the preview so far; it is kept until
+/// another edge is clearly nearer.
 pub fn snap_dock(x: f64, y: f64, wa: LRect, prev: Option<(&str, &str)>) -> Dock {
-    let d_top = y - wa.y;
-    let d_left = x - wa.x;
-    let d_right = wa.x + wa.w - x;
-    let side = if d_left <= d_right { "left" } else { "right" };
-    let d_side = d_left.min(d_right);
+    let edges = ["top", "left", "right", "bottom"];
+    let mut edge = edges[0];
+    for e in edges {
+        if edge_distance(x, y, wa, e) < edge_distance(x, y, wa, edge) {
+            edge = e;
+        }
+    }
+    if let Some((pe, _)) = prev {
+        if edges.contains(&pe)
+            && edge_distance(x, y, wa, edge) >= edge_distance(x, y, wa, pe) - SNAP_HYSTERESIS
+        {
+            edge = pe;
+        }
+    }
 
-    let prev_edge = prev.map(|p| p.0);
-    let edge = match prev_edge {
-        Some("top") => if d_side < d_top - SNAP_HYSTERESIS { side } else { "top" },
-        Some("left") | Some("right") => if d_top < d_side - SNAP_HYSTERESIS { "top" } else { side },
-        _ => if d_side < d_top { side } else { "top" },
-    };
-
-    if edge == "top" {
+    if edge == "top" || edge == "bottom" {
         let rx = x - wa.x;
         let b1 = wa.w / 3.0;
         let b2 = wa.w * 2.0 / 3.0;
         let mut anchor = if rx < b1 { "start" } else if rx > b2 { "end" } else { "center" };
-        if let Some(("top", pa)) = prev {
+        if let Some((_, pa)) = prev.filter(|p| p.0 == edge) {
             let h = SNAP_HYSTERESIS;
             if pa == "start" && rx < b1 + h {
                 anchor = "start";
@@ -483,7 +491,7 @@ pub fn snap_dock(x: f64, y: f64, wa: LRect, prev: Option<(&str, &str)>) -> Dock 
                 anchor = "center";
             }
         }
-        return Dock { edge: "top".into(), anchor: anchor.into(), offset: 0.5, monitor: String::new() };
+        return Dock { edge: edge.into(), anchor: anchor.into(), offset: 0.5, monitor: String::new() };
     }
     Dock {
         edge: edge.into(),
@@ -497,6 +505,7 @@ fn edge_distance(x: f64, y: f64, wa: LRect, edge: &str) -> f64 {
     match edge {
         "left" => x - wa.x,
         "right" => wa.x + wa.w - x,
+        "bottom" => wa.y + wa.h - y,
         _ => y - wa.y,
     }
 }
@@ -687,6 +696,7 @@ fn drag_tick(app: &AppHandle, gate: &PollGate, win: &WebviewWindow) {
         let line = match next.edge.as_str() {
             "left" => LRect { x: lx, y: ly, w: 3.0 * scale, h: kh * scale },
             "right" => LRect { x: lx + (kw - 3.0) * scale, y: ly, w: 3.0 * scale, h: kh * scale },
+            "bottom" => LRect { x: lx, y: ly + (kh - 3.0) * scale, w: kw * scale, h: 3.0 * scale },
             _ => LRect { x: lx, y: ly, w: kw * scale, h: 3.0 * scale },
         };
         let r = LRect {
@@ -1109,12 +1119,35 @@ mod tests {
     }
 
     #[test]
-    fn snap_never_docks_to_the_bottom() {
-        assert_eq!(snap(900.0, 1000.0, None).edge, "left");
+    fn snap_docks_to_the_bottom_in_thirds() {
+        let d = snap(900.0, 1000.0, None);
+        assert_eq!((d.edge.as_str(), d.anchor.as_str()), ("bottom", "center"));
         let d = snap(1910.0, 1030.0, None);
-        assert_eq!(d.edge, "right");
-        assert!((d.offset - 876.0 / 1032.0).abs() < 1e-9);
-        assert_eq!(snap(10.0, 1030.0, None).edge, "left");
+        assert_eq!((d.edge.as_str(), d.anchor.as_str()), ("bottom", "end"));
+        let d = snap(10.0, 1030.0, None);
+        assert_eq!((d.edge.as_str(), d.anchor.as_str()), ("bottom", "start"));
+        // Low on a side is still that side.
+        assert_eq!(snap(3.0, 900.0, None).edge, "left");
+        // The bottom is kept near a corner until a side is clearly nearer.
+        assert_eq!(snap(20.0, 1000.0, Some(("bottom", "start"))).edge, "bottom");
+        assert_eq!(snap(5.0, 1000.0, Some(("bottom", "start"))).edge, "left");
+        assert_eq!(snap(650.0, 1020.0, Some(("bottom", "start"))).anchor, "start");
+        assert_eq!(snap(670.0, 1020.0, Some(("bottom", "start"))).anchor, "center");
+    }
+
+    #[test]
+    fn the_bottom_dock_stands_on_the_taskbar() {
+        let b = dock("bottom", "center", 0.5);
+        // The work area ends where the taskbar starts (1032 of 1080).
+        assert_eq!(window_rect(&b, WA, 1.0, false), (300, 1032 - 320, 1320, 320));
+        assert_eq!(window_rect(&b, WA, 1.0, true), (840, 1032 - 6, 240, 6));
+        assert_eq!(window_rect(&dock("bottom", "end", 0.5), WA, 1.0, false).0, 600);
+        assert_eq!(anchor_in_window(&b, WA, 1.0), 304.0);
+        assert_eq!(capsule_in_window(&b, 304.0, 1320.0), (516.0, 288.0, 288.0, 32.0));
+        assert_eq!(window_len(&b, WA, 1.0), 1320.0);
+        // Scaled, on a display above the primary one.
+        let wa = Area { x: 0, y: -1560, w: 2880, h: 1500 };
+        assert_eq!(window_rect(&b, wa, 1.5, false).1, -1560 + 1500 - 480);
     }
 
     #[test]

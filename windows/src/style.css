@@ -195,6 +195,13 @@ body {
   width: 0;
 }
 
+/* Docked along the bottom the island's lower edge is the taskbar's: the
+   countdown runs along its top instead. */
+#island.dock-bottom #countdown {
+  bottom: auto;
+  top: 0;
+}
+
 /* Compact 2×2 mini grid, to the right of the notch. */
 #mini-grid {
   position: absolute;

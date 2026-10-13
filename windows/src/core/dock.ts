@@ -1,5 +1,6 @@
-// Where the island sits on its display: the top edge (left / centre / right)
-// or the left or right edge, where the compact capsule stands on end.
+// Where the island sits on its display: the top or bottom edge (left /
+// centre / right) or the left or right edge, where it stands on end. The
+// bottom is the work area's: the island sits on the taskbar, never over it.
 // Mirror of `Dock` in src-tauri/src/settings.rs.
 //
 // The numbers below are shared with src-tauri/src/island.rs (snap_dock,
@@ -8,12 +9,12 @@
 
 import { COMPACT_W, NOTCH_H, PANEL_H, PANEL_W } from "./layout";
 
-export type DockEdge = "top" | "left" | "right";
+export type DockEdge = "top" | "bottom" | "left" | "right";
 export type DockAnchor = "start" | "center" | "end";
 
 export interface Dock {
   edge: DockEdge;
-  /** Top only: left / middle / right. */
+  /** Top and bottom only: left / middle / right. */
   anchor: DockAnchor;
   /** Left/right only: the capsule's centre as a fraction of the work area's height. */
   offset: number;
@@ -30,7 +31,7 @@ export interface Rect {
   h: number;
 }
 
-/** Gap between the capsule and the screen corner when docked top left / top right. */
+/** Gap between the capsule and the screen corner when docked in a top or bottom corner. */
 export const TOP_INSET = 24;
 /** Room kept above and below a capsule on its side. */
 export const SIDE_MARGIN = 12;
@@ -45,35 +46,35 @@ export function isVertical(dock: { edge: DockEdge }): boolean {
   return dock.edge === "left" || dock.edge === "right";
 }
 
+/** Docked along the top or the bottom: the island lies flat. */
+export function isHorizontal(dock: { edge: DockEdge }): boolean {
+  return !isVertical(dock);
+}
+
+/** The order ties are settled in. */
+const EDGES: readonly DockEdge[] = ["top", "left", "right", "bottom"];
+
 /**
  * Where a capsule let go at `p` docks, in the logical coordinates of its
- * display's work area. There is no bottom edge: the nearest of the other
- * three wins, so a drop low on the screen springs back to a side or the top.
- * `prev` is the preview so far — nearly-equal choices keep it, which stops the
- * capsule flipping back and forth around a corner.
+ * display's work area: the nearest edge. `prev` is the preview so far — it is
+ * kept until another edge is clearly nearer, which stops the capsule flipping
+ * back and forth around a corner.
  */
 export function snapDock(
   p: { x: number; y: number },
   wa: Rect,
   prev: { edge: DockEdge; anchor: DockAnchor } | null,
 ): Dock {
-  const dTop = p.y - wa.y;
-  const dLeft = p.x - wa.x;
-  const dRight = wa.x + wa.w - p.x;
-  const side: DockEdge = dLeft <= dRight ? "left" : "right";
-  const dSide = Math.min(dLeft, dRight);
+  let edge = EDGES[0];
+  for (const e of EDGES) if (edgeDistance(p, wa, e) < edgeDistance(p, wa, edge)) edge = e;
+  if (prev && edgeDistance(p, wa, edge) >= edgeDistance(p, wa, prev.edge) - SNAP_HYSTERESIS) edge = prev.edge;
 
-  let edge: DockEdge;
-  if (prev?.edge === "top") edge = dSide < dTop - SNAP_HYSTERESIS ? side : "top";
-  else if (prev && isVertical(prev)) edge = dTop < dSide - SNAP_HYSTERESIS ? "top" : side;
-  else edge = dSide < dTop ? side : "top";
-
-  if (edge === "top") {
+  if (isHorizontal({ edge })) {
     const rx = p.x - wa.x;
     const b1 = wa.w / 3;
     const b2 = (wa.w * 2) / 3;
     let anchor: DockAnchor = rx < b1 ? "start" : rx > b2 ? "end" : "center";
-    if (prev?.edge === "top") {
+    if (prev?.edge === edge) {
       const h = SNAP_HYSTERESIS;
       if (prev.anchor === "start" && rx < b1 + h) anchor = "start";
       else if (prev.anchor === "end" && rx > b2 - h) anchor = "end";
@@ -103,6 +104,8 @@ export function edgeDistance(p: { x: number; y: number }, wa: Rect, edge: DockEd
       return p.x - wa.x;
     case "right":
       return wa.x + wa.w - p.x;
+    case "bottom":
+      return wa.y + wa.h - p.y;
   }
 }
 
@@ -135,7 +138,8 @@ export function dockedRect(
     dock.anchor === "start" ? TOP_INSET
     : dock.anchor === "end" ? PANEL_W - w - TOP_INSET
     : (PANEL_W - w) / 2;
-  return { x, y: 0, w, h };
+  // Along the bottom it stands on the window's floor and grows upwards.
+  return { x, y: dock.edge === "bottom" ? PANEL_H - h : 0, w, h };
 }
 
 /**
@@ -151,6 +155,8 @@ export function cornerRadii(dock: { edge: DockEdge }, r: number, dragging = fals
       return `0 ${v} ${v} 0`;
     case "right":
       return `${v} 0 0 ${v}`;
+    case "bottom":
+      return `${v} ${v} 0 0`;
     default:
       return `0 0 ${v} ${v}`;
   }
@@ -172,5 +178,6 @@ export function wakeStripRect(dock: Dock, anchorInWindow: number, len = PANEL_W)
     };
   }
   const c = dockedRect(dock, COMPACT_W, NOTCH_H, anchorInWindow);
-  return { x: c.x + c.w / 2 - WAKE_STRIP_LEN / 2, y: 0, w: WAKE_STRIP_LEN, h: WAKE_STRIP_THICK };
+  const y = dock.edge === "bottom" ? PANEL_H - WAKE_STRIP_THICK : 0;
+  return { x: c.x + c.w / 2 - WAKE_STRIP_LEN / 2, y, w: WAKE_STRIP_LEN, h: WAKE_STRIP_THICK };
 }

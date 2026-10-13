@@ -781,6 +781,7 @@ export class Island {
   private syncDockClasses() {
     this.islandEl.classList.toggle("vertical", this.vertical);
     this.islandEl.classList.toggle("dock-right", this.dock.edge === "right");
+    this.islandEl.classList.toggle("dock-bottom", this.dock.edge === "bottom");
     // Every session card makes a side island 280 px longer; only what fits.
     State.maxExtraCards = this.vertical
       ? Math.max(0, Math.floor((State.windowLen - EXPANDED_W) / SESSION_CARD_W))
@@ -893,7 +894,8 @@ export class Island {
         this.wakeTimer = null;
         if (State.mode === "hidden") this.fsm.mouseEntered();
       };
-      if (this.vertical) this.wakeTimer = window.setTimeout(wake, 250);
+      // Along the bottom it lies on the taskbar's edge, crossed on every trip to it.
+      if (this.vertical || this.dock.edge === "bottom") this.wakeTimer = window.setTimeout(wake, 250);
       else wake();
     });
     this.wakeStrip.addEventListener("mouseleave", () => {

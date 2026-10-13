@@ -1097,7 +1097,7 @@ function generalSection(): HTMLElement {
     h("div", { class: "row" },
       h("label", { text: "Position" }),
       resetPosition,
-      h("span", { class: "hint", text: "drag the island to move it: the top, or the left or right side" }),
+      h("span", { class: "hint", text: "drag the island to move it to any edge of the screen" }),
     ),
     h("div", { class: "row" },
       h("label", { text: "Hide after" }),
