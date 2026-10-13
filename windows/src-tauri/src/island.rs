@@ -1,15 +1,18 @@
 // Island window: placement on the chosen display, the two window sizes
 // (full panel / invisible wake strip), click-through and the cursor poll.
 //
-// There is no notch on a PC, so the island is a black shape drawn at the top
-// centre of the main display inside a borderless, transparent, always-on-top
-// window that never takes focus.
+// There is no notch on a PC, so the island is a black shape drawn inside a
+// borderless, transparent, always-on-top window that never takes focus. The
+// window sits against the edge the person docked the island to (settings.rs,
+// `Dock`): the top (left, centre or right) or the left or right side.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
 use serde::Serialize;
+
+use crate::settings::{Dock, Settings};
 use tauri::{AppHandle, Emitter, Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewWindow};
 
 use windows::Win32::Foundation::{HWND, POINT};
@@ -25,9 +28,19 @@ use windows::Win32::UI::WindowsAndMessaging::{
 /// transparent and click-through, so the width costs nothing.
 pub const PANEL_W: f64 = 1320.0;
 pub const PANEL_H: f64 = 320.0;
-/// Logical size of the invisible strip that wakes the island when it is hidden.
-pub const STRIP_W: f64 = 240.0;
-pub const STRIP_H: f64 = 6.0;
+/// Logical size of the invisible strip that wakes the island when it is hidden:
+/// its length along the edge and its thickness.
+pub const STRIP_LEN: f64 = 240.0;
+pub const STRIP_THICK: f64 = 6.0;
+
+/// The compact capsule (layout.ts COMPACT_W x NOTCH_H), on its side when docked
+/// to the left or right.
+pub const CAPSULE_LEN: f64 = 288.0;
+pub const CAPSULE_THICK: f64 = 32.0;
+/// Gap between the capsule and the screen corner when docked top left / top right.
+pub const TOP_INSET: f64 = 24.0;
+/// Room kept above and below a capsule on its side.
+pub const SIDE_MARGIN: f64 = 12.0;
 
 pub const WINDOW_LABEL: &str = "island";
 
@@ -42,12 +55,44 @@ pub struct CursorPayload {
 }
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ScreenInfo {
     pub x: f64,
     pub y: f64,
     pub width: f64,
     pub height: f64,
     pub scale: f64,
+    /// The dock the island is drawn for — the saved one, unless this display
+    /// is too short for a capsule on its side (then top centre).
+    pub dock: Dock,
+    /// Where the capsule's centre wants to be in the full window, logical px
+    /// from its top. The window is clamped to the work area, so the front end
+    /// cannot work this out from the offset alone.
+    pub anchor_in_window: f64,
+}
+
+/// What `dock-changed` tells the front end after the window moved.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DockPlacement {
+    pub dock: Dock,
+    pub anchor_in_window: f64,
+}
+
+/// A rectangle in physical pixels (a monitor's work area, a window).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Area {
+    pub x: i32,
+    pub y: i32,
+    pub w: u32,
+    pub h: u32,
+}
+
+impl Area {
+    fn of(m: &Monitor) -> Self {
+        let wa = m.work_area();
+        Area { x: wa.position.x, y: wa.position.y, w: wa.size.width, h: wa.size.height }
+    }
 }
 
 /// The island shape in window-logical coordinates, pushed by the front end.
@@ -141,60 +186,179 @@ fn monitor_contains(m: &Monitor, x: f64, y: f64) -> bool {
         && y < (p.y + s.height as i32) as f64
 }
 
-/// The display the island lives on: the primary one, or the one under the cursor.
-fn target_monitor(app: &AppHandle, pref: &str) -> Option<Monitor> {
-    let monitors = app.available_monitors().ok()?;
-    if pref == "cursor" {
-        if let Some((cx, cy)) = cursor_physical() {
-            if let Some(m) = monitors.iter().find(|m| monitor_contains(m, cx, cy)) {
-                return Some(m.clone());
-            }
+/// Which display the island lives on, by index into `names`: the one it was
+/// dropped on while `screen` is "docked" and that display is still there, the
+/// one under the cursor for "cursor", else the primary, else the first.
+/// An unplugged display is not forgotten — plugged back in, it wins again.
+pub fn pick_monitor(
+    names: &[String],
+    primary: Option<usize>,
+    under_cursor: Option<usize>,
+    screen: &str,
+    docked: &str,
+) -> Option<usize> {
+    if screen == "docked" && !docked.is_empty() {
+        if let Some(i) = names.iter().position(|n| n == docked) {
+            return Some(i);
         }
     }
-    app.primary_monitor()
-        .ok()
-        .flatten()
-        .or_else(|| monitors.into_iter().next())
+    if screen == "cursor" {
+        if let Some(i) = under_cursor {
+            return Some(i);
+        }
+    }
+    primary.or(if names.is_empty() { None } else { Some(0) })
 }
 
-pub fn screen_info(app: &AppHandle, pref: &str) -> ScreenInfo {
-    match target_monitor(app, pref) {
+pub fn monitor_name(m: &Monitor) -> String {
+    m.name().cloned().unwrap_or_default()
+}
+
+/// The display the island lives on (see `pick_monitor`).
+pub fn resolve_monitor(app: &AppHandle, settings: &Settings) -> Option<Monitor> {
+    let monitors = app.available_monitors().ok()?;
+    let names: Vec<String> = monitors.iter().map(monitor_name).collect();
+    let primary = app.primary_monitor().ok().flatten().and_then(|p| {
+        monitors
+            .iter()
+            .position(|m| m.position() == p.position() && m.size() == p.size())
+    });
+    let under_cursor = cursor_physical()
+        .and_then(|(cx, cy)| monitors.iter().position(|m| monitor_contains(m, cx, cy)));
+    let i = pick_monitor(&names, primary, under_cursor, &settings.screen, &settings.dock.monitor)?;
+    monitors.into_iter().nth(i)
+}
+
+/// The dock as it can be drawn on this work area: a capsule on its side needs
+/// its whole length plus a margin above and below, or it goes top centre for
+/// now (the saved dock is left alone).
+pub fn effective_dock(dock: &Dock, wa: Area, scale: f64) -> Dock {
+    if dock.is_vertical() && (wa.h as f64 / scale) < CAPSULE_LEN + 2.0 * SIDE_MARGIN {
+        return Dock { edge: "top".into(), anchor: "center".into(), ..dock.clone() };
+    }
+    dock.clone()
+}
+
+fn px(logical: f64, scale: f64) -> i32 {
+    (logical * scale).round() as i32
+}
+
+/// Top-left corner of the full panel window, physical px.
+fn panel_origin(dock: &Dock, wa: Area, scale: f64) -> (i32, i32) {
+    let pw = px(PANEL_W, scale);
+    let ph = px(PANEL_H, scale);
+    let (waw, wah) = (wa.w as i32, wa.h as i32);
+    match dock.edge.as_str() {
+        "left" | "right" => {
+            let x = if dock.edge == "left" { wa.x } else { wa.x + waw - pw };
+            let want = wa.y as f64 + dock.offset * wah as f64 - ph as f64 / 2.0;
+            let lo = wa.y;
+            let hi = (wa.y + wah - ph).max(lo);
+            (x, (want.round() as i32).clamp(lo, hi))
+        }
+        _ => {
+            let x = match dock.anchor.as_str() {
+                "start" => wa.x,
+                "end" => wa.x + waw - pw,
+                _ => wa.x + (waw - pw) / 2,
+            };
+            (x, wa.y)
+        }
+    }
+}
+
+/// Where the capsule's centre wants to be in the panel window, logical px
+/// from its top (side docks; top docks get the capsule's own centre).
+pub fn anchor_in_window(dock: &Dock, wa: Area, scale: f64) -> f64 {
+    if !dock.is_vertical() {
+        return CAPSULE_THICK / 2.0;
+    }
+    let (_, y) = panel_origin(dock, wa, scale);
+    let want = wa.y as f64 + dock.offset * wa.h as f64;
+    (want - y as f64) / scale
+}
+
+/// The compact capsule inside the panel window, logical px — the same numbers
+/// as `dockedRect` in src/core/dock.ts.
+pub fn capsule_in_window(dock: &Dock, anchor: f64) -> (f64, f64, f64, f64) {
+    match dock.edge.as_str() {
+        "left" | "right" => {
+            let y = (anchor - CAPSULE_LEN / 2.0).clamp(0.0, PANEL_H - CAPSULE_LEN);
+            let x = if dock.edge == "left" { 0.0 } else { PANEL_W - CAPSULE_THICK };
+            (x, y, CAPSULE_THICK, CAPSULE_LEN)
+        }
+        _ => {
+            let x = match dock.anchor.as_str() {
+                "start" => TOP_INSET,
+                "end" => PANEL_W - CAPSULE_LEN - TOP_INSET,
+                _ => (PANEL_W - CAPSULE_LEN) / 2.0,
+            };
+            (x, 0.0, CAPSULE_LEN, CAPSULE_THICK)
+        }
+    }
+}
+
+/// The window for a dock, physical px: the full panel, or the wake strip
+/// (`collapsed`) lying along the edge, centred on where the capsule comes out.
+pub fn window_rect(dock: &Dock, wa: Area, scale: f64, collapsed: bool) -> (i32, i32, u32, u32) {
+    let (ox, oy) = panel_origin(dock, wa, scale);
+    if !collapsed {
+        return (ox, oy, px(PANEL_W, scale).max(1) as u32, px(PANEL_H, scale).max(1) as u32);
+    }
+    let len = px(STRIP_LEN, scale).max(1);
+    let thick = px(STRIP_THICK, scale).max(1);
+    let (cx, cy, cw, ch) = capsule_in_window(dock, anchor_in_window(dock, wa, scale));
+    let mid_x = ox + px(cx + cw / 2.0, scale);
+    let mid_y = oy + px(cy + ch / 2.0, scale);
+    match dock.edge.as_str() {
+        "left" => (wa.x, mid_y - len / 2, thick as u32, len as u32),
+        "right" => (wa.x + wa.w as i32 - thick, mid_y - len / 2, thick as u32, len as u32),
+        _ => (mid_x - len / 2, wa.y, len as u32, thick as u32),
+    }
+}
+
+/// The stand-in the island always used when no display could be read.
+fn fallback_area() -> Area {
+    Area { x: 0, y: 0, w: 1920, h: 1080 }
+}
+
+pub fn screen_info(app: &AppHandle, settings: &Settings) -> ScreenInfo {
+    let monitor = resolve_monitor(app, settings);
+    let (wa, scale) = monitor
+        .as_ref()
+        .map(|m| (Area::of(m), m.scale_factor()))
+        .unwrap_or((fallback_area(), 1.0));
+    let dock = effective_dock(&settings.dock, wa, scale);
+    let anchor_in_window = anchor_in_window(&dock, wa, scale);
+    let (x, y, width, height) = match &monitor {
         Some(m) => {
-            let scale = m.scale_factor();
             let p = m.position();
             let s = m.size();
-            ScreenInfo {
-                x: p.x as f64 / scale,
-                y: p.y as f64 / scale,
-                width: s.width as f64 / scale,
-                height: s.height as f64 / scale,
-                scale,
-            }
+            (p.x as f64 / scale, p.y as f64 / scale, s.width as f64 / scale, s.height as f64 / scale)
         }
-        None => ScreenInfo { x: 0.0, y: 0.0, width: 1920.0, height: 1080.0, scale: 1.0 },
-    }
+        None => (0.0, 0.0, 1920.0, 1080.0),
+    };
+    ScreenInfo { x, y, width, height, scale, dock, anchor_in_window }
 }
 
-/// Places and sizes the window. `collapsed` picks the wake strip instead of the panel.
-pub fn apply_geometry(app: &AppHandle, pref: &str, collapsed: bool) {
+/// Places and sizes the window for the settings' dock. `collapsed` picks the
+/// wake strip instead of the panel. Tells the front end where the capsule goes.
+pub fn apply_geometry(app: &AppHandle, settings: &Settings, collapsed: bool) {
     let Some(win) = window(app) else { return };
-    let Some(m) = target_monitor(app, pref) else { return };
-
+    let Some(m) = resolve_monitor(app, settings) else { return };
     let scale = m.scale_factor();
-    let mp = *m.position();
-    let ms = *m.size();
+    let wa = Area::of(&m);
+    let dock = effective_dock(&settings.dock, wa, scale);
+    let (x, y, w, h) = window_rect(&dock, wa, scale, collapsed);
 
-    let (lw, lh) = if collapsed { (STRIP_W, STRIP_H) } else { (PANEL_W, PANEL_H) };
-    let pw = (lw * scale).round().max(1.0) as u32;
-    let ph = (lh * scale).round().max(1.0) as u32;
-    let x = mp.x + (ms.width as i32 - pw as i32) / 2;
-    let y = mp.y;
-
-    let _ = win.set_size(PhysicalSize::new(pw, ph));
+    let _ = win.set_size(PhysicalSize::new(w, h));
     let _ = win.set_position(PhysicalPosition::new(x, y));
     // Moving across displays can rescale the window: re-assert the physical size.
-    let _ = win.set_size(PhysicalSize::new(pw, ph));
+    let _ = win.set_size(PhysicalSize::new(w, h));
     let _ = win.set_always_on_top(true);
+
+    let anchor_in_window = anchor_in_window(&dock, wa, scale);
+    let _ = app.emit_to(WINDOW_LABEL, "dock-changed", DockPlacement { dock, anchor_in_window });
 }
 
 fn hwnd_of(win: &WebviewWindow) -> Option<HWND> {
@@ -230,17 +394,24 @@ pub fn set_activating(win: &WebviewWindow, activating: bool) {
     }
 }
 
-/// Position, size and scale of the monitor the island lives on. Any change here
-/// means the island has to be placed again.
-fn current_screen_key(app: &AppHandle) -> Option<(i32, i32, u32, u32, u64)> {
-    let pref = app
-        .try_state::<crate::Shared>()
-        .map(|s| s.settings.lock().unwrap().screen.clone())
-        .unwrap_or_else(|| "primary".into());
-    let m = target_monitor(app, &pref)?;
+/// The display the island lives on — which one, where, its work area and
+/// scale. Any change here (a display unplugged, the taskbar moved, a new
+/// scale) means the island has to be placed again.
+fn current_screen_key(app: &AppHandle) -> Option<String> {
+    let settings = app.try_state::<crate::Shared>()?.settings.lock().unwrap().clone();
+    let m = resolve_monitor(app, &settings)?;
     let p = m.position();
     let size = m.size();
-    Some((p.x, p.y, size.width, size.height, m.scale_factor().to_bits()))
+    Some(format!(
+        "{}|{},{}|{}x{}|{:?}|{}",
+        monitor_name(&m),
+        p.x,
+        p.y,
+        size.width,
+        size.height,
+        Area::of(&m),
+        m.scale_factor().to_bits()
+    ))
 }
 
 /// Emits `cursor` (window-logical coordinates) at ~60 Hz while the island is
@@ -250,7 +421,7 @@ pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
         let mut was_down = false;
         // Remembered across wakes so a display change while hidden is noticed the
         // moment the island comes back.
-        let mut last_screen: Option<(i32, i32, u32, u32, u64)> = None;
+        let mut last_screen: Option<String> = None;
         loop {
             gate.wait_until_active();
             let mut last = (f64::MIN, f64::MIN);
@@ -345,5 +516,103 @@ pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
 pub fn set_ignore_cursor(app: &AppHandle, ignore: bool) {
     if let Some(win) = window(app) {
         let _ = win.set_ignore_cursor_events(ignore);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dock(edge: &str, anchor: &str, offset: f64) -> Dock {
+        Dock { edge: edge.into(), anchor: anchor.into(), offset, monitor: String::new() }
+    }
+
+    /// 1920×1080 with a 48 px taskbar at the bottom.
+    const WA: Area = Area { x: 0, y: 0, w: 1920, h: 1032 };
+
+    #[test]
+    fn top_centre_is_where_the_island_always_was() {
+        assert_eq!(window_rect(&Dock::default(), WA, 1.0, false), (300, 0, 1320, 320));
+        assert_eq!(window_rect(&Dock::default(), WA, 1.0, true), (840, 0, 240, 6));
+    }
+
+    #[test]
+    fn top_left_and_right_hug_the_work_area() {
+        assert_eq!(window_rect(&dock("top", "start", 0.5), WA, 1.0, false), (0, 0, 1320, 320));
+        assert_eq!(window_rect(&dock("top", "end", 0.5), WA, 1.0, false), (600, 0, 1320, 320));
+        // The strip sits over the capsule's centre: 24 + 144 in, or out.
+        assert_eq!(window_rect(&dock("top", "start", 0.5), WA, 1.0, true), (168 - 120, 0, 240, 6));
+        assert_eq!(window_rect(&dock("top", "end", 0.5), WA, 1.0, true), (1920 - 168 - 120, 0, 240, 6));
+    }
+
+    #[test]
+    fn a_window_wider_than_the_screen_still_starts_at_its_edge() {
+        let small = Area { x: 0, y: 0, w: 1280, h: 680 };
+        assert_eq!(window_rect(&dock("top", "start", 0.5), small, 1.0, false).0, 0);
+        assert_eq!(window_rect(&dock("top", "end", 0.5), small, 1.0, false).0, 1280 - 1320);
+    }
+
+    #[test]
+    fn side_docks_follow_the_offset_and_stay_on_screen() {
+        let (x, y, w, h) = window_rect(&dock("left", "center", 0.5), WA, 1.0, false);
+        assert_eq!((x, w, h), (0, 1320, 320));
+        assert_eq!(y, 516 - 160);
+        assert_eq!(anchor_in_window(&dock("left", "center", 0.5), WA, 1.0), 160.0);
+        let (x, ..) = window_rect(&dock("right", "center", 0.5), WA, 1.0, false);
+        assert_eq!(x, 1920 - 1320);
+        // Near the top the window is clamped, and the anchor says where the capsule goes.
+        let d = dock("left", "center", 0.0);
+        assert_eq!(window_rect(&d, WA, 1.0, false).1, 0);
+        assert_eq!(anchor_in_window(&d, WA, 1.0), 0.0);
+        let d = dock("right", "center", 1.0);
+        assert_eq!(window_rect(&d, WA, 1.0, false).1, 1032 - 320);
+        assert_eq!(anchor_in_window(&d, WA, 1.0), 320.0);
+    }
+
+    #[test]
+    fn a_side_wake_strip_stands_on_end() {
+        let (x, y, w, h) = window_rect(&dock("left", "center", 0.5), WA, 1.0, true);
+        assert_eq!((x, w, h), (0, 6, 240));
+        assert_eq!(y, 516 - 120);
+        let (x, _, w, h) = window_rect(&dock("right", "center", 0.5), WA, 1.0, true);
+        assert_eq!((x, w, h), (1920 - 6, 6, 240));
+    }
+
+    #[test]
+    fn scale_and_negative_coordinates() {
+        // A 150 % display left of the primary one.
+        let wa = Area { x: -2880, y: -200, w: 2880, h: 1560 };
+        let (x, y, w, h) = window_rect(&Dock::default(), wa, 1.5, false);
+        assert_eq!((w, h), (1980, 480));
+        assert_eq!((x, y), (-2880 + (2880 - 1980) / 2, -200));
+        let (x, y, w, h) = window_rect(&dock("right", "center", 0.5), wa, 1.5, true);
+        assert_eq!((x, w, h), (-9, 9, 360));
+        assert_eq!(y, -200 + 780 - 180);
+        // Taskbar on top: the island sits under it.
+        let wa = Area { x: 0, y: 48, w: 1920, h: 1032 };
+        assert_eq!(window_rect(&Dock::default(), wa, 1.0, false).1, 48);
+    }
+
+    #[test]
+    fn a_short_display_puts_a_side_dock_on_top_for_now() {
+        let short = Area { x: 0, y: 0, w: 1920, h: 300 };
+        let d = effective_dock(&dock("left", "center", 0.3), short, 1.0);
+        assert_eq!((d.edge.as_str(), d.anchor.as_str()), ("top", "center"));
+        assert_eq!(d.offset, 0.3);
+        let d = effective_dock(&dock("left", "center", 0.3), WA, 1.0);
+        assert_eq!(d.edge, "left");
+    }
+
+    #[test]
+    fn the_island_finds_its_display() {
+        let names: Vec<String> = ["A", "B", "C"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(pick_monitor(&names, Some(1), Some(2), "primary", "C"), Some(1));
+        assert_eq!(pick_monitor(&names, Some(1), Some(2), "cursor", ""), Some(2));
+        assert_eq!(pick_monitor(&names, Some(1), None, "cursor", ""), Some(1));
+        assert_eq!(pick_monitor(&names, Some(1), Some(0), "docked", "C"), Some(2));
+        // Unplugged: the primary, until it comes back.
+        assert_eq!(pick_monitor(&names[..2], Some(1), Some(0), "docked", "C"), Some(1));
+        assert_eq!(pick_monitor(&names, None, None, "primary", ""), Some(0));
+        assert_eq!(pick_monitor(&[], None, None, "primary", ""), None);
     }
 }

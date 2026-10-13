@@ -76,7 +76,7 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
     settings.hooks_installed = hooks::status(Agent::Claude).installed;
     settings.copilot_hooks_installed = hooks::status(Agent::Copilot).installed;
     settings.antigravity_hooks_installed = hooks::status(Agent::Antigravity).installed;
-    let screen = island::screen_info(&app, &settings.screen);
+    let screen = island::screen_info(&app, &settings);
     BootInfo {
         settings,
         screen,
@@ -153,7 +153,7 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
     }
     if screen_changed {
         let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
-        island::apply_geometry(&app, &settings.screen, collapsed);
+        island::apply_geometry(&app, &settings, collapsed);
     }
     // Keep the other window in step (island ⇄ settings window).
     let _ = app.emit("settings-changed", settings);
@@ -198,7 +198,7 @@ pub fn store_dock(app: &AppHandle, dock: settings::Dock, screen: Option<String>)
         current.clone()
     };
     let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
-    island::apply_geometry(app, &updated.screen, collapsed);
+    island::apply_geometry(app, &updated, collapsed);
     let _ = app.emit("settings-changed", updated);
 }
 
@@ -206,9 +206,9 @@ pub fn store_dock(app: &AppHandle, dock: settings::Dock, screen: Option<String>)
 /// cursor poll; anything else → full panel and 60 Hz polling.
 #[tauri::command]
 fn set_collapsed(app: AppHandle, shared: State<Shared>, collapsed: bool) {
-    let pref = shared.settings.lock().unwrap().screen.clone();
+    let settings = shared.settings.lock().unwrap().clone();
     shared.gate.collapsed.store(collapsed, Ordering::Relaxed);
-    island::apply_geometry(&app, &pref, collapsed);
+    island::apply_geometry(&app, &settings, collapsed);
     // The wake strip must always take the mouse, and a resize invalidates the flag.
     island::set_ignore_cursor(&app, false);
     shared.gate.forget_ignore_state();
@@ -232,9 +232,9 @@ fn focus_window(app: AppHandle, focused: bool) {
 
 #[tauri::command]
 fn reposition(app: AppHandle, shared: State<Shared>) {
-    let pref = shared.settings.lock().unwrap().screen.clone();
+    let settings = shared.settings.lock().unwrap().clone();
     let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
-    island::apply_geometry(&app, &pref, collapsed);
+    island::apply_geometry(&app, &settings, collapsed);
 }
 
 #[tauri::command]
@@ -1679,7 +1679,7 @@ pub fn run() {
 
             if let Some(win) = island::window(&handle) {
                 island::make_non_activating(&win);
-                island::apply_geometry(&handle, &loaded.screen, false);
+                island::apply_geometry(&handle, &loaded, false);
                 let _ = win.show();
             }
             gate.collapsed.store(false, Ordering::Relaxed);
