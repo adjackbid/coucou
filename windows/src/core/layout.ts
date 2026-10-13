@@ -50,7 +50,7 @@ export interface ViewLayout {
 }
 
 // The window is a fixed 1320×320 (largest view); the island is drawn inside it,
-// glued to the top edge and horizontally centred. Wider than the macOS panel
+// against the edge it is docked to (src/core/dock.ts). Wider than the macOS panel
 // because the overview grows a card per unread session (src-tauri/src/island.rs
 // must agree).
 export const PANEL_W = 1320;
@@ -64,10 +64,6 @@ export const EXPANDED_W = 640;
 
 export const ROUNDED_CORNER = 14; // hidden / compact
 export const EXPANDED_CORNER = 22;
-
-/** Invisible hover strip that wakes the island when hidden. */
-export const WAKE_STRIP_W = 240;
-export const WAKE_STRIP_H = 6;
 
 export const VIEW_LAYOUTS: Record<IslandViewName, ViewLayout> = {
   overview: { height: 160, botX: 68, botY: null, botDiameter: 58, agentMode: "pills" },
@@ -187,14 +183,17 @@ export function islandSize(
   question: Parameters<typeof questionHeight>[0] = null,
   questionInput = false,
   explaining = false,
+  vertical = false,
 ): { w: number; h: number } {
   switch (mode) {
     case "hidden":
       // No notch to hide inside on a PC: the island retracts to zero height and
-      // slides into the top edge of the screen instead of sitting there as a bar.
-      return { w: NOTCH_W, h: 0 };
+      // slides into the top edge of the screen instead of sitting there as a bar
+      // (to zero width, into the side, when docked left or right).
+      return vertical ? { w: 0, h: NOTCH_W } : { w: NOTCH_W, h: 0 };
     case "compact":
-      return { w: COMPACT_W, h: NOTCH_H };
+      // Docked left or right the capsule stands on end, Mochi on top.
+      return vertical ? { w: NOTCH_H, h: COMPACT_W } : { w: COMPACT_W, h: NOTCH_H };
     case "expanded": {
       const h =
         view === "prompt" ? chatPromptHeight(chatCount)
@@ -221,12 +220,13 @@ export function botPosition(
   view: IslandViewName,
   islandH: number,
   uploadProgress = 0,
+  vertical = false,
 ): BotPlacement {
   switch (mode) {
     case "hidden":
-      return { cx: 46, cy: 16, diameter: 6, opacity: 0 };
+      return vertical ? { cx: 16, cy: 46, diameter: 6, opacity: 0 } : { cx: 46, cy: 16, diameter: 6, opacity: 0 };
     case "compact":
-      return { cx: 40, cy: 16, diameter: 20, opacity: 1 };
+      return vertical ? { cx: 16, cy: 40, diameter: 20, opacity: 1 } : { cx: 40, cy: 16, diameter: 20, opacity: 1 };
     case "expanded": {
       const layout = VIEW_LAYOUTS[view];
       if (view === "uploading") {
