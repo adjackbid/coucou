@@ -1416,8 +1416,10 @@ export class Island {
     // without it a shut island showed nothing of a session at work.
     const showGrid = State.mode === "compact";
     this.miniGrid.style.opacity = showGrid ? "1" : "0";
-    // On its side the line is a label beside the capsule, shown on hover.
-    this.compactStatus.style.opacity = showGrid && (!this.vertical || this.wasInIsland) ? "1" : "0";
+    // On its side the line is a label beside the capsule, shown on hover — not
+    // while the capsule is carried around, and never as an empty black pill.
+    const label = !this.vertical || (this.wasInIsland && !this.drag);
+    this.compactStatus.style.opacity = showGrid && label ? "1" : "0";
     if (showGrid) {
       const t = State.focusTask;
       const words: Partial<Record<BotStateName, string>> = {

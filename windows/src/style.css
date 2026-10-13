@@ -1185,6 +1185,11 @@ input[type="range"]::-webkit-slider-thumb {
   right: 40px;
 }
 
+/* Nothing to say (no session at work): no pill either. */
+#island.vertical #compact-status:empty {
+  display: none;
+}
+
 #compact-status .n {
   color: var(--ink-2);
   margin-right: 4px;
