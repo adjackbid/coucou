@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentCheck, AgentProfile, ModelChoice, Provider, Settings } from "./state";
+import type { Dock } from "./dock";
 import type { Constitution, ConstitutionLevel, Found, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
 
 export const IS_TAURI =
@@ -60,6 +61,12 @@ export const Bridge = {
   focusWindow: (focused: boolean) => call<void>("focus_window", { focused }),
 
   reposition: () => call<void>("reposition"),
+
+  /** Puts the island on another edge; Rust saves it and moves the window. */
+  setDock: (dock: Dock) => call<void>("set_dock", { dock }),
+
+  /** Back to the top centre (the tray's "Reset island position"). */
+  resetDock: () => call<void>("reset_dock"),
 
   openUrl: (url: string) => call<void>("open_url", { url }),
 

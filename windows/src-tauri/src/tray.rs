@@ -1,4 +1,4 @@
-// Notification-area icon: Open, Teamwork, Settings, Pause, Quit.
+// Notification-area icon: Open, Teamwork, Settings, Pause, Reset island position, Quit.
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
@@ -11,11 +11,12 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let team = MenuItem::with_id(app, "team", "Teamwork…", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
     let pause = MenuItem::with_id(app, "pause", "Pause", true, None::<&str>)?;
+    let reset = MenuItem::with_id(app, "reset-dock", "Reset island position", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
 
-    let menu = Menu::with_items(app, &[&open, &team, &sep1, &settings, &pause, &sep2, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &team, &sep1, &settings, &pause, &reset, &sep2, &quit])?;
 
     let mut builder = TrayIconBuilder::with_id("coucou")
         .tooltip("Coucou")
@@ -24,6 +25,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
             "quit" => app.exit(0),
             "settings" => crate::show_settings_window(app),
             "team" => crate::show_team_window(app),
+            "reset-dock" => crate::reset_island_position(app),
             id => {
                 let _ = app.emit_to(WINDOW_LABEL, "tray", id.to_string());
             }

@@ -2,6 +2,7 @@
 
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
+import { DEFAULT_DOCK, type Dock } from "./dock";
 
 export type AgentSource = "claudeCode" | "copilot" | "antigravity" | "team" | "n8n";
 
@@ -273,7 +274,8 @@ export interface Settings {
   autoCloseInterval: number;
   absenceInterval: number;
   activeIntegrations: string[];
-  screen: "primary" | "cursor";
+  /** "docked" = the display the island was last dragged onto (`dock.monitor`). */
+  screen: "primary" | "cursor" | "docked";
   autostart: boolean;
   hooksInstalled: boolean;
   copilotHooksInstalled: boolean;
@@ -296,6 +298,8 @@ export interface Settings {
   agents: AgentProfile[];
   /** Names the person gave to project folders, by `sessionKey(cwd)`. */
   sessionNames: Record<string, string>;
+  /** Where the island sits. Rust alone writes it (a drag, Reset position). */
+  dock: Dock;
 }
 
 /** A folder as a key: no trailing slash, and case-blind like Windows paths. */
@@ -338,6 +342,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hideAfter: 60,
   agents: [DEFAULT_AGENT],
   sessionNames: {},
+  dock: { ...DEFAULT_DOCK },
 };
 
 type Listener = () => void;

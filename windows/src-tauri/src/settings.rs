@@ -15,7 +15,9 @@ pub struct Settings {
     pub auto_close_interval: f64,
     pub absence_interval: f64,
     pub active_integrations: Vec<String>,
-    /// "primary" = the main display, "cursor" = whichever display the mouse is on.
+    /// "primary" = the main display, "cursor" = whichever display the mouse is
+    /// on, "docked" = the display the island was last dragged onto
+    /// (`dock.monitor`).
     pub screen: String,
     pub autostart: bool,
     pub hooks_installed: bool,
@@ -56,6 +58,50 @@ pub struct Settings {
     /// Names the person gave to project folders, by lower-cased path.
     #[serde(default)]
     pub session_names: std::collections::BTreeMap<String, String>,
+    /// Where the island sits on its display. Only Rust writes it (a drag, the
+    /// tray's reset): see `from_page`.
+    #[serde(default)]
+    pub dock: Dock,
+}
+
+/// The edge the island is docked to. There is no "bottom".
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Dock {
+    /// "top" | "left" | "right".
+    pub edge: String,
+    /// Top only: "start" | "center" | "end" (left / middle / right).
+    pub anchor: String,
+    /// Left/right only: the capsule's centre as a fraction of the work area's height.
+    pub offset: f64,
+    /// The display it was dropped on, `Monitor::name()` (e.g. `\\.\DISPLAY2`).
+    /// Only used while `screen` is "docked"; empty otherwise.
+    #[serde(default)]
+    pub monitor: String,
+}
+
+impl Default for Dock {
+    fn default() -> Self {
+        Self { edge: "top".into(), anchor: "center".into(), offset: 0.5, monitor: String::new() }
+    }
+}
+
+impl Dock {
+    /// Whatever a hand-edited or older file says, a dock the island can use.
+    pub fn normalized(mut self) -> Self {
+        if !matches!(self.edge.as_str(), "top" | "left" | "right") {
+            self.edge = "top".into();
+        }
+        if !matches!(self.anchor.as_str(), "start" | "center" | "end") {
+            self.anchor = "center".into();
+        }
+        self.offset = if self.offset.is_finite() { self.offset.clamp(0.0, 1.0) } else { 0.5 };
+        self
+    }
+
+    pub fn is_vertical(&self) -> bool {
+        self.edge == "left" || self.edge == "right"
+    }
 }
 
 fn default_true() -> bool {
@@ -97,6 +143,7 @@ impl Settings {
     /// Brings a settings.json from before providers existed up to date: the
     /// one Claude endpoint it implied becomes a real provider entry.
     fn migrate(&mut self) {
+        self.dock = std::mem::take(&mut self.dock).normalized();
         if self.providers.is_empty() {
             self.providers.push(Provider::anthropic(&self.model));
         }
@@ -107,6 +154,23 @@ impl Settings {
         if !is_agent && !self.providers.iter().any(|p| p.id == self.active_provider) {
             self.active_provider = self.providers[0].id.clone();
         }
+    }
+}
+
+impl Settings {
+    /// What the settings window or the island sent, applied over `self`. Both
+    /// windows hold their own copy, so the page's `dock` is always stale next to
+    /// a drag that just happened: it is ignored, and Rust's kept. Going back to
+    /// "primary" or "cursor" forgets the display the island was dropped on.
+    pub fn from_page(&self, mut incoming: Settings) -> Settings {
+        incoming.dock = self.dock.clone();
+        if incoming.screen == "docked" && incoming.dock.monitor.is_empty() {
+            incoming.screen = "primary".into();
+        }
+        if incoming.screen != "docked" {
+            incoming.dock.monitor.clear();
+        }
+        incoming
     }
 }
 
@@ -146,6 +210,7 @@ impl Default for Settings {
             hide_after: default_hide_after(),
             agents: vec![AgentProfile::copilot()],
             session_names: Default::default(),
+            dock: Dock::default(),
         }
     }
 }
@@ -228,5 +293,64 @@ mod tests {
         s.active_provider = "gone".into();
         s.migrate();
         assert_eq!(s.active_provider, "anthropic");
+    }
+
+    #[test]
+    fn an_old_settings_file_docks_top_centre() {
+        let old = r#"{"soundEnabled":true,"soundVolume":0.1,"autoCloseInterval":15,"absenceInterval":180,
+            "activeIntegrations":[],"screen":"primary","autostart":false,"hooksInstalled":false}"#;
+        let mut s: Settings = serde_json::from_str(old).unwrap();
+        s.migrate();
+        assert_eq!(s.dock, Dock::default());
+        assert_eq!(s.dock.edge, "top");
+        assert_eq!(s.dock.anchor, "center");
+    }
+
+    #[test]
+    fn a_nonsense_dock_is_normalized() {
+        let d = Dock { edge: "bottom".into(), anchor: "middle".into(), offset: f64::NAN, monitor: "x".into() }
+            .normalized();
+        assert_eq!(d.edge, "top");
+        assert_eq!(d.anchor, "center");
+        assert_eq!(d.offset, 0.5);
+        assert_eq!(d.monitor, "x");
+        assert_eq!(Dock { offset: 3.0, ..Dock::default() }.normalized().offset, 1.0);
+        assert_eq!(Dock { offset: -1.0, ..Dock::default() }.normalized().offset, 0.0);
+        let s: Settings = serde_json::from_str(
+            r#"{"soundEnabled":true,"soundVolume":0.1,"autoCloseInterval":15,"absenceInterval":180,
+            "activeIntegrations":[],"screen":"primary","autostart":false,"hooksInstalled":false,
+            "dock":{"edge":"left","anchor":"start","offset":0.3}}"#,
+        )
+        .unwrap();
+        assert_eq!(s.dock.edge, "left");
+        assert_eq!(s.dock.monitor, "");
+    }
+
+    #[test]
+    fn saving_from_a_page_keeps_the_dragged_dock() {
+        let mut current = Settings::default();
+        current.dock = Dock { edge: "right".into(), anchor: "center".into(), offset: 0.3, monitor: "D2".into() };
+        current.screen = "docked".into();
+        // The settings window still holds the dock from before the drag.
+        let mut page = Settings::default();
+        page.screen = "docked".into();
+        page.sound_volume = 0.5;
+        let saved = current.from_page(page);
+        assert_eq!(saved.dock, current.dock);
+        assert_eq!(saved.sound_volume, 0.5);
+        assert_eq!(saved.screen, "docked");
+    }
+
+    #[test]
+    fn going_back_to_primary_forgets_the_docked_display() {
+        let mut current = Settings::default();
+        current.dock = Dock { edge: "left".into(), anchor: "center".into(), offset: 0.4, monitor: "D2".into() };
+        current.screen = "docked".into();
+        let mut page = Settings::default();
+        page.screen = "cursor".into();
+        let saved = current.from_page(page);
+        assert_eq!(saved.dock.monitor, "");
+        assert_eq!(saved.dock.edge, "left");
+        assert_eq!(saved.screen, "cursor");
     }
 }

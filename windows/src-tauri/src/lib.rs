@@ -128,13 +128,15 @@ fn hotkey_status(shared: State<Shared>) -> Option<String> {
 
 #[tauri::command]
 fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
-    let (screen_changed, autostart_changed, hotkey_changed) = {
+    let (settings, screen_changed, autostart_changed, hotkey_changed) = {
         let mut current = shared.settings.lock().unwrap();
+        // The page's copy of the dock is stale next to a drag: Rust's is kept.
+        let settings = current.from_page(settings);
         let screen_changed = current.screen != settings.screen;
         let autostart_changed = current.autostart != settings.autostart;
         let hotkey_changed = current.hotkey != settings.hotkey;
         *current = settings.clone();
-        (screen_changed, autostart_changed, hotkey_changed)
+        (settings, screen_changed, autostart_changed, hotkey_changed)
     };
     if hotkey_changed {
         apply_hotkey(&app, &settings.hotkey);
@@ -155,6 +157,49 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
     }
     // Keep the other window in step (island ⇄ settings window).
     let _ = app.emit("settings-changed", settings);
+}
+
+/// Puts the island on another edge. A drag writes the dock itself (island.rs);
+/// this is for everything else that moves it.
+#[tauri::command]
+fn set_dock(app: AppHandle, dock: settings::Dock) {
+    store_dock(&app, dock.normalized(), None);
+}
+
+/// Back to the top centre of the screen the "Island lives on" setting picks.
+#[tauri::command]
+fn reset_dock(app: AppHandle) {
+    reset_island_position(&app);
+}
+
+pub fn reset_island_position(app: &AppHandle) {
+    let screen = app
+        .try_state::<Shared>()
+        .map(|s| s.settings.lock().unwrap().screen.clone())
+        .unwrap_or_default();
+    // The display the island was dropped on goes with the position.
+    let screen = if screen == "docked" { Some("primary".to_string()) } else { None };
+    store_dock(app, settings::Dock::default(), screen);
+}
+
+/// Writes the dock (and, when it changed, the screen), saves, tells both
+/// windows and puts the window where the dock says.
+pub fn store_dock(app: &AppHandle, dock: settings::Dock, screen: Option<String>) {
+    let Some(shared) = app.try_state::<Shared>() else { return };
+    let updated = {
+        let mut current = shared.settings.lock().unwrap();
+        current.dock = dock;
+        if let Some(screen) = screen {
+            current.screen = screen;
+        }
+        if let Err(err) = settings::save(&current) {
+            eprintln!("[coucou] could not save settings: {err}");
+        }
+        current.clone()
+    };
+    let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
+    island::apply_geometry(app, &updated.screen, collapsed);
+    let _ = app.emit("settings-changed", updated);
 }
 
 /// Hidden island → shrink the window to the invisible wake strip and park the
@@ -1505,6 +1550,8 @@ pub fn run() {
             save_settings,
             set_collapsed,
             set_island_rect,
+            set_dock,
+            reset_dock,
             focus_window,
             reposition,
             open_url,
