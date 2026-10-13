@@ -1,0 +1,170 @@
+{
+  "renderer": "webgl",
+  "errors": [],
+  "failed": [],
+  "layout": [
+    {
+      "width": 1100,
+      "world": {
+        "width": 920,
+        "height": 668
+      },
+      "overflow": false,
+      "visibleAgents": 13,
+      "visibleTeams": 4,
+      "clashes": [],
+      "names": []
+    },
+    {
+      "width": 800,
+      "world": {
+        "width": 620,
+        "height": 668
+      },
+      "overflow": false,
+      "visibleAgents": 13,
+      "visibleTeams": 4,
+      "clashes": [],
+      "names": []
+    },
+    {
+      "width": 600,
+      "world": {
+        "width": 568,
+        "height": 668
+      },
+      "overflow": false,
+      "visibleAgents": 13,
+      "visibleTeams": 4,
+      "clashes": [],
+      "names": []
+    },
+    {
+      "width": 360,
+      "world": {
+        "width": 328,
+        "height": 1080
+      },
+      "overflow": false,
+      "visibleAgents": 13,
+      "visibleTeams": 4,
+      "clashes": [],
+      "names": []
+    },
+    {
+      "width": 320,
+      "world": {
+        "width": 288,
+        "height": 1080
+      },
+      "overflow": false,
+      "visibleAgents": 13,
+      "visibleTeams": 4,
+      "clashes": [],
+      "names": []
+    }
+  ],
+  "connections": {
+    "graph": [
+      {
+        "from": "t0a0",
+        "to": "t0a1",
+        "kind": "collaboration"
+      },
+      {
+        "from": "t1a0",
+        "to": "t1a1",
+        "kind": "collaboration"
+      },
+      {
+        "from": "t1a0",
+        "to": "t1a2",
+        "kind": "collaboration"
+      },
+      {
+        "from": "t1a0",
+        "to": "t1a3",
+        "kind": "collaboration"
+      },
+      {
+        "from": "t1a0",
+        "to": "t1a4",
+        "kind": "collaboration"
+      },
+      {
+        "from": "t2a0",
+        "to": "t2a1",
+        "kind": "collaboration"
+      },
+      {
+        "from": "t2a0",
+        "to": "t2a2",
+        "kind": "collaboration"
+      },
+      {
+        "from": "t3a0",
+        "to": "t3a1",
+        "kind": "collaboration"
+      },
+      {
+        "from": "t3a0",
+        "to": "t3a2",
+        "kind": "collaboration"
+      },
+      {
+        "from": "t1a2",
+        "to": "t1a3",
+        "kind": "workflow"
+      },
+      {
+        "from": "t2a1",
+        "to": "t2a2",
+        "kind": "workflow"
+      },
+      {
+        "from": "t3a1",
+        "to": "t3a2",
+        "kind": "workflow"
+      }
+    ],
+    "visible": 12
+  },
+  "backgroundChangedPixels": 1000,
+  "movement": 12.203687967167944,
+  "initialDebug": {
+    "dataset": {
+      "nodeStyle": "light-ring",
+      "backgroundMotion": "slow-star-drift",
+      "connectionGraph": "[{\"from\":\"t0a0\",\"to\":\"t0a1\",\"kind\":\"collaboration\"},{\"from\":\"t1a0\",\"to\":\"t1a1\",\"kind\":\"collaboration\"},{\"from\":\"t1a0\",\"to\":\"t1a2\",\"kind\":\"collaboration\"},{\"from\":\"t1a0\",\"to\":\"t1a3\",\"kind\":\"collaboration\"},{\"from\":\"t1a0\",\"to\":\"t1a4\",\"kind\":\"collaboration\"},{\"from\":\"t2a0\",\"to\":\"t2a1\",\"kind\":\"collaboration\"},{\"from\":\"t2a0\",\"to\":\"t2a2\",\"kind\":\"collaboration\"},{\"from\":\"t3a0\",\"to\":\"t3a1\",\"kind\":\"collaboration\"},{\"from\":\"t3a0\",\"to\":\"t3a2\",\"kind\":\"collaboration\"},{\"from\":\"t1a2\",\"to\":\"t1a3\",\"kind\":\"workflow\"},{\"from\":\"t2a1\",\"to\":\"t2a2\",\"kind\":\"workflow\"},{\"from\":\"t3a1\",\"to\":\"t3a2\",\"kind\":\"workflow\"}]",
+      "connectionCount": "12",
+      "zoom": "1.000",
+      "yaw": "0.1400",
+      "pitch": "0.5500",
+      "renderer": "webgl",
+      "frameState": "active",
+      "visibleConnections": "12",
+      "motionPhase": "5.565",
+      "visibility": "true"
+    },
+    "hidden": false,
+    "reduce": false,
+    "pause": "暫停漂浮"
+  },
+  "pausedBackgroundChangedPixels": 0,
+  "pauseMovement": 0,
+  "rotation": {
+    "before": "0.1400",
+    "after": "-0.3350",
+    "displacement": 153.7101132001405
+  },
+  "zoomAfterButton": "120%",
+  "zoomAfterWheel": "148%",
+  "topPitch": "1.1800",
+  "selection": "測試2 / AI 1 · 規劃 · 工作中",
+  "finishedDemo": true,
+  "reducedDemo": "測試2 · AI 3 → AI 4 · 測試版本 · 已收到（靜態示意）",
+  "remoteRequests": [],
+  "offline": true,
+  "scope": "exported-reference",
+  "date": "2026-10-06"
+}

@@ -1,0 +1,222 @@
+{
+  "schemaVersion": "1.0.0",
+  "mode": "demo",
+  "teams": [
+    {
+      "id": "t0",
+      "name": "測試用",
+      "color": "#82d7f8",
+      "leaderAgentId": "t0a0"
+    },
+    {
+      "id": "t1",
+      "name": "測試2",
+      "color": "#b69cec",
+      "leaderAgentId": "t1a0"
+    },
+    {
+      "id": "t2",
+      "name": "購物網站 DEMO",
+      "color": "#83dec1",
+      "leaderAgentId": "t2a0"
+    },
+    {
+      "id": "t3",
+      "name": "Taiwan景點",
+      "color": "#e9c48d",
+      "leaderAgentId": "t3a0"
+    }
+  ],
+  "agents": [
+    {
+      "id": "t0a0",
+      "teamId": "t0",
+      "name": "AI 1",
+      "role": "規劃",
+      "status": "busy",
+      "color": "#65b5f2"
+    },
+    {
+      "id": "t0a1",
+      "teamId": "t0",
+      "name": "AI 2",
+      "role": "整合",
+      "status": "done",
+      "color": "#53d5ae"
+    },
+    {
+      "id": "t1a0",
+      "teamId": "t1",
+      "name": "AI 1",
+      "role": "規劃",
+      "status": "busy",
+      "color": "#65b5f2"
+    },
+    {
+      "id": "t1a1",
+      "teamId": "t1",
+      "name": "AI 2",
+      "role": "設計",
+      "status": "busy",
+      "color": "#53d5ae"
+    },
+    {
+      "id": "t1a2",
+      "teamId": "t1",
+      "name": "AI 3",
+      "role": "開發",
+      "status": "waiting",
+      "color": "#aa8ae9"
+    },
+    {
+      "id": "t1a3",
+      "teamId": "t1",
+      "name": "AI 4",
+      "role": "測試",
+      "status": "done",
+      "color": "#fac455"
+    },
+    {
+      "id": "t1a4",
+      "teamId": "t1",
+      "name": "AI 5",
+      "role": "研究",
+      "status": "busy",
+      "color": "#ed96c6"
+    },
+    {
+      "id": "t2a0",
+      "teamId": "t2",
+      "name": "AI 1",
+      "role": "規劃",
+      "status": "busy",
+      "color": "#65b5f2"
+    },
+    {
+      "id": "t2a1",
+      "teamId": "t2",
+      "name": "AI 2",
+      "role": "設計",
+      "status": "done",
+      "color": "#53d5ae"
+    },
+    {
+      "id": "t2a2",
+      "teamId": "t2",
+      "name": "AI 3",
+      "role": "開發",
+      "status": "busy",
+      "color": "#aa8ae9"
+    },
+    {
+      "id": "t3a0",
+      "teamId": "t3",
+      "name": "AI 1",
+      "role": "規劃",
+      "status": "done",
+      "color": "#65b5f2"
+    },
+    {
+      "id": "t3a1",
+      "teamId": "t3",
+      "name": "AI 2",
+      "role": "查資料",
+      "status": "waiting",
+      "color": "#53d5ae"
+    },
+    {
+      "id": "t3a2",
+      "teamId": "t3",
+      "name": "AI 3",
+      "role": "整理",
+      "status": "done",
+      "color": "#aa8ae9"
+    }
+  ],
+  "relations": [
+    {
+      "id": "team_connection:t0a0:t0a1",
+      "fromAgentId": "t0a0",
+      "toAgentId": "t0a1",
+      "kind": "team_connection",
+      "directed": false
+    },
+    {
+      "id": "team_connection:t1a0:t1a1",
+      "fromAgentId": "t1a0",
+      "toAgentId": "t1a1",
+      "kind": "team_connection",
+      "directed": false
+    },
+    {
+      "id": "team_connection:t1a0:t1a2",
+      "fromAgentId": "t1a0",
+      "toAgentId": "t1a2",
+      "kind": "team_connection",
+      "directed": false
+    },
+    {
+      "id": "team_connection:t1a0:t1a3",
+      "fromAgentId": "t1a0",
+      "toAgentId": "t1a3",
+      "kind": "team_connection",
+      "directed": false
+    },
+    {
+      "id": "team_connection:t1a0:t1a4",
+      "fromAgentId": "t1a0",
+      "toAgentId": "t1a4",
+      "kind": "team_connection",
+      "directed": false
+    },
+    {
+      "id": "team_connection:t2a0:t2a1",
+      "fromAgentId": "t2a0",
+      "toAgentId": "t2a1",
+      "kind": "team_connection",
+      "directed": false
+    },
+    {
+      "id": "team_connection:t2a0:t2a2",
+      "fromAgentId": "t2a0",
+      "toAgentId": "t2a2",
+      "kind": "team_connection",
+      "directed": false
+    },
+    {
+      "id": "team_connection:t3a0:t3a1",
+      "fromAgentId": "t3a0",
+      "toAgentId": "t3a1",
+      "kind": "team_connection",
+      "directed": false
+    },
+    {
+      "id": "team_connection:t3a0:t3a2",
+      "fromAgentId": "t3a0",
+      "toAgentId": "t3a2",
+      "kind": "team_connection",
+      "directed": false
+    },
+    {
+      "id": "workflow:t1a2:t1a3",
+      "fromAgentId": "t1a2",
+      "toAgentId": "t1a3",
+      "kind": "workflow",
+      "directed": false
+    },
+    {
+      "id": "workflow:t2a1:t2a2",
+      "fromAgentId": "t2a1",
+      "toAgentId": "t2a2",
+      "kind": "workflow",
+      "directed": false
+    },
+    {
+      "id": "workflow:t3a1:t3a2",
+      "fromAgentId": "t3a1",
+      "toAgentId": "t3a2",
+      "kind": "workflow",
+      "directed": false
+    }
+  ]
+}

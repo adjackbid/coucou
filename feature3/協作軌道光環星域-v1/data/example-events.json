@@ -1,0 +1,162 @@
+{
+  "schemaVersion": "1.0.0",
+  "mode": "demo",
+  "source": "synthetic",
+  "note": "合成事件格式參考。參考頁的示範按鈕仍使用來源中的 routes，沒有讀取本 JSON。",
+  "timeline": [
+    {
+      "offsetMs": 0,
+      "event": {
+        "id": "demo-message-01:message_sent",
+        "type": "message_sent",
+        "messageId": "demo-message-01",
+        "fromAgentId": "t0a0",
+        "toAgentId": "t0a1",
+        "summary": "任務摘要",
+        "occurredAt": "2026-10-06T12:00:00.000+08:00"
+      }
+    },
+    {
+      "offsetMs": 900,
+      "event": {
+        "id": "demo-message-02:message_sent",
+        "type": "message_sent",
+        "messageId": "demo-message-02",
+        "fromAgentId": "t1a0",
+        "toAgentId": "t1a2",
+        "summary": "功能規格",
+        "occurredAt": "2026-10-06T12:00:00.900+08:00"
+      }
+    },
+    {
+      "offsetMs": 1700,
+      "event": {
+        "id": "demo-message-01:message_received",
+        "type": "message_received",
+        "messageId": "demo-message-01",
+        "fromAgentId": "t0a0",
+        "toAgentId": "t0a1",
+        "summary": "任務摘要",
+        "occurredAt": "2026-10-06T12:00:01.700+08:00"
+      }
+    },
+    {
+      "offsetMs": 1800,
+      "event": {
+        "id": "demo-message-03:message_sent",
+        "type": "message_sent",
+        "messageId": "demo-message-03",
+        "fromAgentId": "t1a2",
+        "toAgentId": "t1a3",
+        "summary": "測試版本",
+        "occurredAt": "2026-10-06T12:00:01.800+08:00"
+      }
+    },
+    {
+      "offsetMs": 2600,
+      "event": {
+        "id": "demo-message-02:message_received",
+        "type": "message_received",
+        "messageId": "demo-message-02",
+        "fromAgentId": "t1a0",
+        "toAgentId": "t1a2",
+        "summary": "功能規格",
+        "occurredAt": "2026-10-06T12:00:02.600+08:00"
+      }
+    },
+    {
+      "offsetMs": 2700,
+      "event": {
+        "id": "demo-message-04:message_sent",
+        "type": "message_sent",
+        "messageId": "demo-message-04",
+        "fromAgentId": "t2a1",
+        "toAgentId": "t2a2",
+        "summary": "商品頁設計",
+        "occurredAt": "2026-10-06T12:00:02.700+08:00"
+      }
+    },
+    {
+      "offsetMs": 3500,
+      "event": {
+        "id": "demo-message-03:message_received",
+        "type": "message_received",
+        "messageId": "demo-message-03",
+        "fromAgentId": "t1a2",
+        "toAgentId": "t1a3",
+        "summary": "測試版本",
+        "occurredAt": "2026-10-06T12:00:03.500+08:00"
+      }
+    },
+    {
+      "offsetMs": 3600,
+      "event": {
+        "id": "demo-message-05:message_sent",
+        "type": "message_sent",
+        "messageId": "demo-message-05",
+        "fromAgentId": "t3a0",
+        "toAgentId": "t3a1",
+        "summary": "景點查詢",
+        "occurredAt": "2026-10-06T12:00:03.600+08:00"
+      }
+    },
+    {
+      "offsetMs": 4400,
+      "event": {
+        "id": "demo-message-04:message_received",
+        "type": "message_received",
+        "messageId": "demo-message-04",
+        "fromAgentId": "t2a1",
+        "toAgentId": "t2a2",
+        "summary": "商品頁設計",
+        "occurredAt": "2026-10-06T12:00:04.400+08:00"
+      }
+    },
+    {
+      "offsetMs": 4500,
+      "event": {
+        "id": "demo-message-06:message_sent",
+        "type": "message_sent",
+        "messageId": "demo-message-06",
+        "fromAgentId": "t3a1",
+        "toAgentId": "t3a2",
+        "summary": "景點資料",
+        "occurredAt": "2026-10-06T12:00:04.500+08:00"
+      }
+    },
+    {
+      "offsetMs": 5300,
+      "event": {
+        "id": "demo-message-05:message_received",
+        "type": "message_received",
+        "messageId": "demo-message-05",
+        "fromAgentId": "t3a0",
+        "toAgentId": "t3a1",
+        "summary": "景點查詢",
+        "occurredAt": "2026-10-06T12:00:05.300+08:00"
+      }
+    },
+    {
+      "offsetMs": 6200,
+      "event": {
+        "id": "demo-message-06:message_received",
+        "type": "message_received",
+        "messageId": "demo-message-06",
+        "fromAgentId": "t3a1",
+        "toAgentId": "t3a2",
+        "summary": "景點資料",
+        "occurredAt": "2026-10-06T12:00:06.200+08:00"
+      }
+    },
+    {
+      "offsetMs": 7500,
+      "event": {
+        "id": "demo-status-01",
+        "type": "agent_status_changed",
+        "agentId": "t1a2",
+        "status": "busy",
+        "occurredAt": "2026-10-06T12:00:07.500+08:00"
+      }
+    }
+  ]
+}

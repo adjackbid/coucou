@@ -1,0 +1,22 @@
+{
+  "touchRotation": {
+    "before": 0.14,
+    "after": -0.085
+  },
+  "pinchZoom": {
+    "before": 1,
+    "after": 1.7
+  },
+  "pause": {
+    "before": 0.973,
+    "after": 0.973
+  },
+  "buttonYaw": -0.06,
+  "restored": {
+    "yaw": "0.4200",
+    "zoom": "1.100",
+    "selection": "購物網站 DEMO / AI 2 · 設計 · 已完成"
+  },
+  "fallback": "perspective-canvas",
+  "errors": []
+}

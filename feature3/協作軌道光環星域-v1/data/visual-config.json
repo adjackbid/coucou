@@ -1,0 +1,199 @@
+{
+  "schemaVersion": "1.0.0",
+  "basis": "examples/agent-orbit.fragment.html",
+  "note": "定稿參數參考，並非已接入的 runtime 配置。場景單位不是公尺；角速度與角頻率均以 rad/s 表示。",
+  "rendering": {
+    "primary": "native-webgl",
+    "fallback": "perspective-canvas",
+    "targetFrameIntervalMs": 32,
+    "maxDevicePixelRatio": 1.7,
+    "alpha": true,
+    "premultipliedAlpha": true,
+    "nodeTexturePx": [
+      256,
+      256
+    ]
+  },
+  "node": {
+    "logicalTextureSize": 128,
+    "mainRingRadius": 38,
+    "outerArcRadius": 49,
+    "dottedInnerRadius": 27,
+    "coreGlowRadius": 17,
+    "whiteCoreRadius": 2,
+    "worldQuadSize": 1.5,
+    "breathSizeAmplitudeRatio": 0.024,
+    "breathAngularFrequency": 0.64,
+    "arcRotationSpeed": 0.13,
+    "colorPalette": [
+      "#65b5f2",
+      "#53d5ae",
+      "#aa8ae9",
+      "#fac455",
+      "#ed96c6"
+    ],
+    "defaultGlow": 0.8
+  },
+  "motion": {
+    "bobAmplitude": 0.22,
+    "bobAngularFrequency": 0.78,
+    "memberOrbitSpeed": 0.022,
+    "leaderRoamAmplitude": 0.17,
+    "leaderRoamAngularFrequency": 0.12,
+    "defaultDrift": 1
+  },
+  "background": {
+    "starCount": 780,
+    "seed": 92,
+    "starShellRadius": [
+      21,
+      48
+    ],
+    "starRotationSpeed": 0.0025,
+    "verticalAmplitude": 0.7,
+    "verticalAngularFrequency": 0.025,
+    "nebulaHorizontalAmplitude": 1.2,
+    "nebulaVerticalAmplitude": 0.8,
+    "nebulaHorizontalAngularFrequency": 0.018,
+    "nebulaVerticalAngularFrequency": 0.014,
+    "nebulaTurnAmplitude": 0.08,
+    "nebulaTurnAngularFrequency": 0.012,
+    "nebulae": [
+      {
+        "position": [
+          -8,
+          4,
+          -13
+        ],
+        "color": "#507cae",
+        "radius": 10,
+        "alpha": 0.085,
+        "angle": -0.35
+      },
+      {
+        "position": [
+          9,
+          -5,
+          -17
+        ],
+        "color": "#8270b6",
+        "radius": 12,
+        "alpha": 0.065,
+        "angle": 0.4
+      },
+      {
+        "position": [
+          -5,
+          -8,
+          -9
+        ],
+        "color": "#3c9e99",
+        "radius": 9,
+        "alpha": 0.035,
+        "angle": -0.6
+      }
+    ]
+  },
+  "connections": {
+    "curveLift": 0.8,
+    "staticRange": [
+      0.09,
+      0.91
+    ],
+    "staticSamples": 33,
+    "coreWidthPx": 1.15,
+    "selectedWidthPx": 1.7,
+    "glowWidthPx": 3.8,
+    "selectedGlowWidthPx": 5,
+    "primaryOpacity": 0.48,
+    "workflowOpacity": 0.29,
+    "directSelectedOpacity": 0.84
+  },
+  "transmission": {
+    "travelMs": 1700,
+    "tailPointCount": 8,
+    "tailSpacingRatio": 0.016,
+    "arrivalMsApprox": 290,
+    "demoBatchCount": 3,
+    "demoBatchDelayMs": 900,
+    "demoFinishMs": 4300
+  },
+  "camera": {
+    "fovDegrees": 42,
+    "defaultYaw": 0.14,
+    "defaultPitchDesktop": 0.55,
+    "defaultPitchSmallScene": 0.25,
+    "topPitch": 1.18,
+    "sideYaw": 0.78,
+    "sidePitch": 0.14,
+    "yawRange": [
+      -1.35,
+      1.35
+    ],
+    "pitchRange": [
+      0.08,
+      1.35
+    ],
+    "zoomRange": [
+      0.65,
+      2.2
+    ],
+    "defaultZoom": 1,
+    "dragThresholdPx": 5,
+    "desktopDistanceFormula": "max(18.5, 16.7 * focal / sceneWidth) / zoom",
+    "smallSceneDistanceFormula": "max(22, 8.1 * focal / sceneWidth) / zoom"
+  },
+  "responsive": {
+    "sidebarHideBelowViewportPx": 760,
+    "verticalGroupsBelowScenePx": 490,
+    "referenceDesktopSceneHeightPx": 668,
+    "referenceSmallSceneHeightPx": 1080,
+    "minimumTextPx": 11
+  },
+  "sampleLayoutOnly": {
+    "desktopCenters": [
+      [
+        -4.6,
+        1.3,
+        -3.6
+      ],
+      [
+        3.2,
+        1.7,
+        -3
+      ],
+      [
+        -3.7,
+        -0.8,
+        3.4
+      ],
+      [
+        4.7,
+        -0.4,
+        3.3
+      ]
+    ],
+    "smallSceneCenters": [
+      [
+        -0.5,
+        8.4,
+        -0.8
+      ],
+      [
+        0.3,
+        2.8,
+        -0.4
+      ],
+      [
+        -0.4,
+        -2.8,
+        1
+      ],
+      [
+        0.4,
+        -8.4,
+        0.5
+      ]
+    ]
+  }
+}

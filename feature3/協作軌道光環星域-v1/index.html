@@ -1,0 +1,2590 @@
+<!doctype html>
+<html lang="zh-Hant" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>協作軌道光環星域參考</title>
+<style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
+</head>
+<body>
+<iframe id="codex-visualization" sandbox="allow-scripts" referrerpolicy="no-referrer" title="協作軌道光環星域參考" data-srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;zh-Hant&quot; data-visualize-standalone&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;協作軌道光環星域參考&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, &quot;Segoe UI&quot;, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 10px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+.widget {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  box-shadow: 0 0 0 0.5px var(--border-strong, var(--border));
+  color: var(--foreground);
+  background: var(--background);
+}
+
+#widget &gt; :not(.card, .widget, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn,
+.nav-link {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover,
+.nav-link:not(:disabled):not([aria-disabled=&quot;true&quot;]):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+/* Shared preview chrome; product styles stay inside each variant. */
+.viz-dotted-background {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--foreground) 14%, transparent) 0.8px,
+    transparent 0.8px
+  );
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+.viz-carousel {
+  position: relative;
+  min-width: 0;
+}
+
+.viz-carousel:has(&gt; .viz-carousel-controls) {
+  min-height: calc(60px + var(--viz-carousel-picker-height, 0px));
+  padding-bottom: 60px;
+}
+
+.viz-carousel &gt; [data-variant][hidden] {
+  display: none !important;
+}
+
+.viz-carousel &gt; [data-variant] {
+  isolation: isolate;
+}
+
+.viz-carousel-controls {
+  --viz-carousel-hover: light-dark(
+    color-mix(in srgb, var(--foreground) 5.4%, transparent),
+    color-mix(in srgb, var(--foreground) 7.8%, transparent)
+  );
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  /* Leave room for the host&#x27;s design-controls launcher at the trailing edge. */
+  max-width: calc(100% - 96px);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+  /* Match the settings dropdown chrome independently of the content font size. */
+  font-size: 13px;
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+/* Keep authored mockup button styles out of the shared carousel chrome. */
+.viz-carousel-controls button,
+.viz-carousel-picker &gt; summary {
+  display: flex !important;
+  height: auto !important;
+  min-height: 30px;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px;
+  padding: 0 6px !important;
+  -webkit-app-region: no-drag;
+  border: 0 !important;
+  border-radius: 14px !important;
+  color: inherit !important;
+  background: transparent !important;
+  font: inherit !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viz-carousel-controls &gt; button,
+.viz-carousel-picker &gt; summary {
+  position: relative;
+  isolation: isolate;
+}
+
+.viz-carousel-controls &gt; button {
+  --icon-size: 16px;
+  width: 30px !important;
+  padding: 0 !important;
+}
+
+.viz-carousel-picker &gt; summary {
+  padding-inline: 12px !important;
+}
+
+.viz-carousel-controls .viz-carousel-caret {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin: 0;
+  color: inherit;
+  transform: rotate(180deg);
+}
+
+.viz-carousel-controls &gt; button &gt; svg,
+.viz-carousel-controls .viz-carousel-caret,
+.viz-carousel-count {
+  opacity: 0.5;
+}
+
+.viz-carousel-controls &gt; button::before,
+.viz-carousel-picker &gt; summary::before {
+  position: absolute;
+  z-index: -1;
+  inset: 3px;
+  border-radius: 12px;
+  content: &quot;&quot;;
+  pointer-events: none;
+}
+
+.viz-carousel-controls &gt; button:hover::before,
+.viz-carousel-picker &gt; summary:hover::before {
+  background: var(--viz-carousel-hover);
+}
+
+.viz-carousel-controls &gt; button,
+.viz-carousel-controls [data-lucide],
+.viz-carousel-controls .lucide {
+  flex-shrink: 0;
+}
+
+.viz-carousel-picker {
+  min-width: 0;
+}
+
+.viz-carousel-picker &gt; summary {
+  min-width: 0;
+  list-style: none;
+}
+
+.viz-carousel-picker &gt; summary::-webkit-details-marker {
+  display: none;
+}
+
+.viz-carousel-count {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.viz-carousel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-carousel-options {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: 0 4px 12px light-dark(rgb(0 0 0 / 6%), rgb(0 0 0 / 25%));
+}
+
+.viz-carousel-options &gt; button {
+  border-radius: max(0px, calc(var(--radius-lg) - 5px)) !important;
+  width: 100% !important;
+  min-height: 28px;
+  justify-content: flex-start !important;
+  padding: 4px 8px !important;
+  font-size: var(--font-size-small) !important;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.viz-carousel-options &gt; [aria-current=&quot;true&quot;],
+.viz-carousel-options &gt; button:hover {
+  background: var(--viz-carousel-hover) !important;
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled=&quot;true&quot;] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed=&quot;true&quot;],
+  [aria-selected=&quot;true&quot;],
+  .is-selected
+) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.viz-carousel-controls :is(button, summary):focus-visible {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+@media (pointer: coarse) {
+  .viz-carousel:has(&gt; .viz-carousel-controls) {
+    min-height: calc(76px + var(--viz-carousel-picker-height, 0px));
+    padding-bottom: 76px;
+  }
+
+  .btn,
+  .nav-link,
+  .viz-carousel-controls button,
+  .viz-carousel-picker &gt; summary,
+  .form-control,
+  .form-select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, var(--font-size-normal));
+  }
+
+  .form-control[type=&quot;file&quot;]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type=&quot;color&quot;] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type=&quot;date&quot;],
+    [type=&quot;datetime-local&quot;],
+    [type=&quot;month&quot;],
+    [type=&quot;time&quot;],
+    [type=&quot;week&quot;]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: &quot;&quot;;
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+
+  .form-range::-webkit-slider-runnable-track {
+    height: 44px;
+  }
+
+  .form-range::-moz-range-track {
+    height: 44px;
+  }
+
+  .form-range::-webkit-slider-thumb {
+    margin-top: 12px;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;script type=&quot;application/json&quot; id=&quot;codex-visualization-widget-state&quot;&gt;__CODEX_VISUALIZATION_WIDGET_STATE__&lt;/script&gt;
+&lt;script&gt;(() =&gt; {
+  const root = document.documentElement;
+  const mediaQuery = globalThis.matchMedia(&quot;(prefers-color-scheme: dark)&quot;);
+  const apply = Reflect.apply;
+  const isArray = Array.isArray;
+  const hasOwn = Object.hasOwn;
+  const parentWindow = globalThis.parent;
+  const stringify = JSON.stringify;
+  const parse = JSON.parse;
+  const encode = TextEncoder.prototype.encode.bind(new TextEncoder());
+  const initialStateElement = document.getElementById(
+    &quot;codex-visualization-widget-state&quot;,
+  );
+  const initialGlobals = parse(initialStateElement?.textContent ?? &quot;{}&quot;);
+  initialStateElement?.remove();
+  /** @type {Record&lt;string, unknown&gt; | null} */
+  let state = initialGlobals.widgetState ?? null;
+  const statePersistence = initialGlobals.statePersistence ?? &quot;none&quot;;
+  let nextStateRequestId = 0;
+  /** @type {Map&lt;number, { resolve: () =&gt; void; reject: (error: Error) =&gt; void; timeout: ReturnType&lt;typeof globalThis.setTimeout&gt;; serializedState: string }&gt;} */
+  const pendingStateWrites = new Map();
+  const persistenceError = () =&gt;
+    Object.assign(
+      new Error(&quot;The host could not persist the widget state update&quot;),
+      {
+        code: -32000,
+        data: { code: &quot;widget_state_persistence_failed&quot;, retryable: false },
+      },
+    );
+  /**
+   * @param {object} prototype
+   * @param {string} property
+   */
+  const getPrototypeGetter = (prototype, property) =&gt; {
+    // oxlint-disable-next-line typescript/unbound-method -- invoked through captured Reflect.apply
+    const getter = Object.getOwnPropertyDescriptor(prototype, property)?.get;
+    if (getter == null) {
+      throw new Error(`Missing ${property} getter`);
+    }
+    return getter;
+  };
+  const getMessageData = getPrototypeGetter(MessageEvent.prototype, &quot;data&quot;);
+  const getMessagePorts = getPrototypeGetter(MessageEvent.prototype, &quot;ports&quot;);
+  const getMessageSource = getPrototypeGetter(MessageEvent.prototype, &quot;source&quot;);
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const addHostMessageListener = MessagePort.prototype.addEventListener;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const postHostMessage = MessagePort.prototype.postMessage;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const startHostPort = MessagePort.prototype.start;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const stopMessagePropagation = Event.prototype.stopImmediatePropagation;
+  /** @type {MessagePort | null} */
+  let hostPort = null;
+  const postToHost = (type, payload) =&gt; {
+    if (hostPort != null) {
+      apply(postHostMessage, hostPort, [{ type, ...payload }]);
+    }
+  };
+  const openExternal = ({ href }) =&gt; {
+    if (globalThis.navigator.userActivation?.isActive === true) {
+      postToHost(&quot;open-external&quot;, { href });
+    }
+  };
+  const sendFollowUpMessage = ({ context, prompt, title }) =&gt; {
+    if (globalThis.navigator.userActivation?.isActive === true) {
+      postToHost(&quot;follow-up&quot;, { context, prompt, title });
+    }
+    return Promise.resolve();
+  };
+  /**
+   * @param {Record&lt;string, unknown&gt; | ((previous: Record&lt;string, unknown&gt; | null) =&gt; Record&lt;string, unknown&gt;)} next
+   * @returns {Promise&lt;void&gt;}
+   */
+  const setWidgetState = async (next) =&gt; {
+    const nextState = typeof next === &quot;function&quot; ? next(state) : next;
+    if (
+      nextState == null ||
+      typeof nextState !== &quot;object&quot; ||
+      isArray(nextState)
+    ) {
+      throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+    }
+    const inputState = stringify(
+      nextState,
+      (_key, /** @type {unknown} */ value) =&gt; {
+        if (
+          typeof value === &quot;undefined&quot; ||
+          typeof value === &quot;function&quot; ||
+          typeof value === &quot;symbol&quot; ||
+          (typeof value === &quot;number&quot; &amp;&amp; !Number.isFinite(value))
+        ) {
+          throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+        }
+        return value;
+      },
+    );
+    const parsedState = parse(inputState);
+    if (
+      parsedState == null ||
+      typeof parsedState !== &quot;object&quot; ||
+      isArray(parsedState)
+    ) {
+      throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+    }
+    const storedState = {
+      modelContent: null,
+      privateContent: null,
+      ...parsedState,
+    };
+    const serializedState = stringify(storedState);
+    if (encode(serializedState).length &gt; 16 * 1024) {
+      throw new TypeError(
+        &quot;Widget state must be a JSON object of at most 16 KiB&quot;,
+      );
+    }
+    if (
+      hasOwn(storedState, &quot;imageIds&quot;) &amp;&amp;
+      (!isArray(storedState.imageIds) ||
+        storedState.imageIds.some(
+          (/** @type {unknown} */ id) =&gt; typeof id !== &quot;string&quot;,
+        ))
+    ) {
+      throw new TypeError(&quot;Widget state imageIds must be an array of strings&quot;);
+    }
+    if (storedState.imageIds?.length &gt; 0) {
+      throw Object.assign(
+        new TypeError(&quot;Visualization state does not support image attachments&quot;),
+        { code: -32602, data: { code: &quot;images_unsupported&quot; } },
+      );
+    }
+    state = storedState;
+    globalThis.openai.widgetState = state;
+    globalThis.dispatchEvent(
+      new CustomEvent(&quot;openai:set_globals&quot;, {
+        detail: { globals: { widgetState: state } },
+      }),
+    );
+    if (statePersistence === &quot;none&quot;) {
+      throw persistenceError();
+    }
+    const id = ++nextStateRequestId;
+    return new Promise((resolve, reject) =&gt; {
+      const timeout = globalThis.setTimeout(() =&gt; {
+        pendingStateWrites.delete(id);
+        reject(persistenceError());
+      }, 30_000);
+      pendingStateWrites.set(id, { resolve, reject, timeout, serializedState });
+      postToHost(&quot;widget-state-write&quot;, { id, state: serializedState });
+    });
+  };
+  const syncTheme = () =&gt; {
+    const theme = mediaQuery.matches ? &quot;dark&quot; : &quot;light&quot;;
+    root.dataset.theme = theme;
+    globalThis.openai = {
+      ...globalThis.openai,
+      openExternal,
+      sendFollowUpMessage,
+      setWidgetState,
+      theme,
+      visualizationStyleVariables: {},
+      visualizationTheme: theme,
+      widgetState: state,
+      statePersistence,
+      stateModelContext: &quot;none&quot;,
+    };
+    globalThis.dispatchEvent(
+      new CustomEvent(&quot;openai:set_globals&quot;, {
+        detail: { globals: globalThis.openai },
+      }),
+    );
+  };
+  const sendHeight = () =&gt; {
+    postToHost(&quot;height&quot;, {
+      height: Math.ceil(
+        Math.max(
+          document.body.scrollHeight,
+          document.body.getBoundingClientRect().height,
+        ),
+      ),
+    });
+  };
+
+  globalThis.addEventListener(
+    &quot;message&quot;,
+    (event) =&gt; {
+      const data = apply(getMessageData, event, []);
+      const ports = apply(getMessagePorts, event, []);
+      const source = apply(getMessageSource, event, []);
+      if (
+        hostPort != null ||
+        source !== parentWindow ||
+        typeof data !== &quot;object&quot; ||
+        data?.type !== &quot;codex-visualization-initialize&quot; ||
+        !isArray(ports) ||
+        ports.length !== 1
+      ) {
+        return;
+      }
+      apply(stopMessagePropagation, event, []);
+      const nextHostPort = ports[0];
+      try {
+        apply(addHostMessageListener, nextHostPort, [
+          &quot;message&quot;,
+          (event) =&gt; {
+            const data = apply(getMessageData, event, []);
+            if (typeof data === &quot;object&quot; &amp;&amp; data?.type === &quot;measure&quot;) {
+              sendHeight();
+            } else if (
+              typeof data === &quot;object&quot; &amp;&amp;
+              data?.type === &quot;widget-state-result&quot;
+            ) {
+              /** @type {unknown} */
+              const id = data.id;
+              if (typeof id !== &quot;number&quot;) {
+                return;
+              }
+              const pending = pendingStateWrites.get(id);
+              if (pending != null) {
+                pendingStateWrites.delete(id);
+                globalThis.clearTimeout(pending.timeout);
+                if (data.ok === true) {
+                  pending.resolve();
+                } else {
+                  pending.reject(persistenceError());
+                }
+              }
+            }
+          },
+        ]);
+        apply(startHostPort, nextHostPort, []);
+      } catch {
+        return;
+      }
+      hostPort = nextHostPort;
+      for (const [id, { serializedState }] of pendingStateWrites) {
+        postToHost(&quot;widget-state-write&quot;, { id, state: serializedState });
+      }
+      sendHeight();
+    },
+    { capture: true },
+  );
+  document.currentScript?.remove();
+  mediaQuery.addEventListener(&quot;change&quot;, syncTheme);
+  globalThis.addEventListener(&quot;click&quot;, (event) =&gt; {
+    if (event.defaultPrevented) {
+      return;
+    }
+    let element = null;
+    if (event.target instanceof globalThis.Element) {
+      element = event.target;
+    } else if (event.target instanceof globalThis.Node) {
+      element = event.target.parentElement;
+    }
+    const link = element?.closest(&quot;a[href]&quot;);
+    const href = link?.getAttribute(&quot;href&quot;);
+    if (href == null) {
+      return;
+    }
+    if (href.startsWith(&quot;#&quot;)) {
+      let id;
+      try {
+        id = decodeURIComponent(href.slice(1));
+      } catch {
+        return;
+      }
+      const target = id.length === 0 ? root : document.getElementById(id);
+      if (
+        target == null ||
+        globalThis.navigator.userActivation?.isActive !== true
+      ) {
+        return;
+      }
+      event.preventDefault();
+      postToHost(&quot;scroll-to&quot;, {
+        top: target.getBoundingClientRect().top + globalThis.scrollY,
+      });
+      return;
+    }
+    event.preventDefault();
+    openExternal({ href });
+  });
+  new ResizeObserver(sendHeight).observe(document.body);
+  syncTheme();
+})();
+&lt;/script&gt;
+&lt;div id=&quot;agent-orbit-3d&quot;&gt;
+  &lt;div class=&quot;orb-product&quot;&gt;
+    &lt;aside class=&quot;orb-sidebar&quot;&gt;
+      &lt;div class=&quot;orb-brand&quot;&gt;&lt;span class=&quot;orb-brand-faces&quot; aria-hidden=&quot;true&quot;&gt;&lt;b&gt;&lt;/b&gt;&lt;b&gt;&lt;/b&gt;&lt;b&gt;&lt;/b&gt;&lt;/span&gt;&lt;strong&gt;Teamwork&lt;/strong&gt;&lt;/div&gt;
+      &lt;div class=&quot;orb-secretary&quot;&gt;&lt;strong&gt;CouCou&lt;/strong&gt;&lt;small&gt;需要時叫我，查現況、開團隊&lt;/small&gt;&lt;/div&gt;
+      &lt;nav aria-label=&quot;主要導覽&quot;&gt;&lt;div class=&quot;orb-nav-active&quot;&gt;&lt;i data-lucide=&quot;orbit&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;span&gt;公司總覽&lt;small&gt;所有 Agent 的協作空間&lt;/small&gt;&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;orb-nav&quot;&gt;&lt;i data-lucide=&quot;chart-no-axes-combined&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;成本與用量&lt;/div&gt;&lt;div class=&quot;orb-nav&quot;&gt;&lt;i data-lucide=&quot;book-open&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;憲法&lt;/div&gt;&lt;/nav&gt;
+      &lt;div class=&quot;orb-side-label&quot;&gt;團隊&lt;/div&gt;&lt;div class=&quot;orb-team-nav&quot;&gt;&lt;/div&gt;
+      &lt;div class=&quot;orb-sidebar-bottom&quot;&gt;&lt;span&gt;已封存 1&lt;/span&gt;&lt;span&gt;＋ 新增團隊&lt;/span&gt;&lt;/div&gt;
+    &lt;/aside&gt;
+    &lt;main class=&quot;orb-main&quot;&gt;
+      &lt;header class=&quot;orb-header&quot;&gt;&lt;div&gt;&lt;div class=&quot;orb-eyebrow&quot;&gt;公司總覽 / 協作空間&lt;/div&gt;&lt;h2&gt;我的 Agent 星域&lt;/h2&gt;&lt;p&gt;4 個團隊 · 13 位 Agents &lt;span&gt;概念示意&lt;/span&gt;&lt;/p&gt;&lt;/div&gt;&lt;div class=&quot;orb-modes&quot; aria-label=&quot;顯示模式&quot;&gt;&lt;span&gt;Office&lt;/span&gt;&lt;span&gt;中二模式&lt;/span&gt;&lt;strong&gt;星域&lt;/strong&gt;&lt;/div&gt;&lt;/header&gt;
+      &lt;div class=&quot;orb-toolbar&quot;&gt;&lt;span class=&quot;orb-design-name&quot;&gt;&lt;i data-lucide=&quot;orbit&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;協作軌道 · 光環節點&lt;/span&gt;&lt;div class=&quot;orb-actions&quot;&gt;&lt;label class=&quot;orb-reduce cursor-interaction&quot;&gt;&lt;input class=&quot;orb-reduce-input&quot; type=&quot;checkbox&quot;&gt;減少動態&lt;/label&gt;&lt;button class=&quot;orb-pause cursor-interaction&quot; type=&quot;button&quot; aria-pressed=&quot;false&quot;&gt;暫停漂浮&lt;/button&gt;&lt;button class=&quot;orb-play cursor-interaction&quot; type=&quot;button&quot;&gt;&lt;i data-lucide=&quot;send&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;示範資料傳送&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;
+      &lt;div class=&quot;orb-world&quot; role=&quot;group&quot; aria-label=&quot;可旋轉、縮放的 Agent 協作星域&quot;&gt;
+        &lt;canvas class=&quot;orb-fallback&quot; role=&quot;img&quot; aria-label=&quot;十三位 Agent 以彩色光環和光芯呈現，在星塵和柔光緩慢流動的宇宙中漂浮；同團隊以常駐光線連結，傳送資料時沿連線出現更亮的光流。&quot;&gt;&lt;/canvas&gt;
+        &lt;div class=&quot;orb-webgl&quot; aria-hidden=&quot;true&quot;&gt;&lt;/div&gt;&lt;div class=&quot;orb-labels&quot;&gt;&lt;/div&gt;&lt;div class=&quot;orb-agents&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;orb-scene-top&quot;&gt;&lt;span&gt;COLLABORATION ORBITS&lt;/span&gt;&lt;span class=&quot;orb-motion-state&quot;&gt;緩慢漂浮中&lt;/span&gt;&lt;/div&gt;
+        &lt;div class=&quot;orb-view-controls&quot;&gt;&lt;div class=&quot;orb-presets&quot; aria-label=&quot;視角&quot;&gt;&lt;button class=&quot;cursor-interaction&quot; data-turn=&quot;left&quot; type=&quot;button&quot; aria-label=&quot;向左轉動視角&quot;&gt;↶&lt;/button&gt;&lt;button class=&quot;cursor-interaction&quot; data-view=&quot;oblique&quot; type=&quot;button&quot; aria-pressed=&quot;true&quot;&gt;斜視&lt;/button&gt;&lt;button class=&quot;cursor-interaction&quot; data-view=&quot;top&quot; type=&quot;button&quot; aria-pressed=&quot;false&quot;&gt;俯視&lt;/button&gt;&lt;button class=&quot;cursor-interaction&quot; data-view=&quot;side&quot; type=&quot;button&quot; aria-pressed=&quot;false&quot;&gt;側視&lt;/button&gt;&lt;button class=&quot;cursor-interaction&quot; data-turn=&quot;right&quot; type=&quot;button&quot; aria-label=&quot;向右轉動視角&quot;&gt;↷&lt;/button&gt;&lt;/div&gt;&lt;div class=&quot;orb-zoom&quot;&gt;&lt;button class=&quot;cursor-interaction&quot; data-zoom=&quot;out&quot; type=&quot;button&quot; aria-label=&quot;縮小&quot;&gt;−&lt;/button&gt;&lt;span class=&quot;orb-zoom-value&quot;&gt;100%&lt;/span&gt;&lt;button class=&quot;cursor-interaction&quot; data-zoom=&quot;in&quot; type=&quot;button&quot; aria-label=&quot;放大&quot;&gt;＋&lt;/button&gt;&lt;button class=&quot;cursor-interaction orb-overview&quot; type=&quot;button&quot;&gt;全景&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;
+        &lt;div class=&quot;orb-scene-bottom&quot;&gt;&lt;div class=&quot;orb-legend&quot;&gt;&lt;span&gt;&lt;b class=&quot;orb-busy&quot;&gt;&lt;/b&gt;工作中&lt;/span&gt;&lt;span&gt;&lt;b class=&quot;orb-waiting&quot;&gt;&lt;/b&gt;等待&lt;/span&gt;&lt;span&gt;&lt;b class=&quot;orb-done&quot;&gt;&lt;/b&gt;已完成&lt;/span&gt;&lt;/div&gt;&lt;span class=&quot;orb-gesture&quot;&gt;拖曳旋轉 · 滾輪縮放&lt;/span&gt;&lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div class=&quot;orb-inspector&quot; aria-live=&quot;polite&quot;&gt;&lt;span class=&quot;orb-selection&quot;&gt;選擇 Agent 查看協作關係&lt;/span&gt;&lt;span class=&quot;orb-detail&quot;&gt;同團隊靠近 · 光線持續連結&lt;/span&gt;&lt;/div&gt;
+      &lt;footer class=&quot;orb-footer&quot;&gt;&lt;span class=&quot;orb-event-copy&quot;&gt;協作連線常亮 · 資料傳送時光流加亮&lt;/span&gt;&lt;span&gt;示意資料，非即時工作狀態&lt;/span&gt;&lt;/footer&gt;
+    &lt;/main&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+&lt;style&gt;
+#agent-orbit-3d .orb-product{--orb-window:light-dark(#eef3f9,#0d1825);--orb-chrome:light-dark(#f8fafd,#111f2e);--orb-ink:light-dark(#1b2e42,#edf5fb);--orb-muted:light-dark(#5c7085,#9bafc4);--orb-active:light-dark(#dbe9f8,#21394e);--orb-border:light-dark(#d5e1ed,#263c4e);--orb-blue:#69c4ff;display:grid;grid-template-columns:148px minmax(0,1fr);background:var(--orb-window);color:var(--orb-ink);font-family:&quot;Segoe UI&quot;,&quot;Microsoft JhengHei&quot;,system-ui,sans-serif;font-size:14px;line-height:1.5;overflow:hidden;border-radius:14px}
+#agent-orbit-3d .orb-product *{box-sizing:border-box}
+#agent-orbit-3d .orb-product button,#agent-orbit-3d .orb-product input{font:inherit}
+#agent-orbit-3d .orb-sidebar{background:var(--orb-chrome);padding:23px 13px 18px;border-right:1px solid var(--orb-border);display:flex;flex-direction:column;gap:24px}
+#agent-orbit-3d .orb-brand{display:flex;align-items:center;gap:9px;font-size:16px;white-space:nowrap}
+#agent-orbit-3d .orb-brand strong{font-weight:600}
+#agent-orbit-3d .orb-brand-faces{display:flex;padding-left:2px}
+#agent-orbit-3d .orb-brand-faces b{display:block;width:17px;height:17px;background:#62dcc0;border-radius:7px;position:relative;margin-left:-3px}
+#agent-orbit-3d .orb-brand-faces b:nth-child(2){background:#aa8cef;width:21px;height:22px;z-index:1}
+#agent-orbit-3d .orb-brand-faces b:nth-child(3){background:#ffc45a}
+#agent-orbit-3d .orb-brand-faces b:before,#agent-orbit-3d .orb-brand-faces b:after{content:&quot;&quot;;width:2px;height:4px;position:absolute;top:7px;background:#10202d;border-radius:50%}
+#agent-orbit-3d .orb-brand-faces b:before{left:5px}#agent-orbit-3d .orb-brand-faces b:after{right:5px}
+#agent-orbit-3d .orb-secretary{display:grid;gap:5px;padding:0 6px}
+#agent-orbit-3d .orb-secretary strong{font-weight:500}#agent-orbit-3d .orb-secretary small{font-size:11px;color:var(--orb-muted)}
+#agent-orbit-3d .orb-nav-active,#agent-orbit-3d .orb-nav{display:flex;align-items:flex-start;gap:8px;padding:12px 8px;font-size:12px}
+#agent-orbit-3d .orb-nav-active{background:var(--orb-active);border-radius:10px}
+#agent-orbit-3d .orb-nav-active small{display:block;font-size:11px;color:var(--orb-muted);margin-top:3px}
+#agent-orbit-3d .orb-sidebar svg{width:15px;height:15px;flex-shrink:0;margin-top:2px}
+#agent-orbit-3d .orb-side-label{color:var(--orb-muted);font-size:11px;padding:0 8px;margin-bottom:-14px}
+#agent-orbit-3d .orb-team-nav{display:grid;gap:14px;padding:0 6px}
+#agent-orbit-3d .orb-team-nav span{font-size:12px}#agent-orbit-3d .orb-team-nav small{display:block;font-size:11px;color:var(--orb-muted);margin-top:3px}
+#agent-orbit-3d .orb-team-nav b{display:inline-block;width:5px;height:5px;border-radius:50%;margin:0 6px 2px 0}
+#agent-orbit-3d .orb-sidebar-bottom{margin-top:auto;display:grid;gap:16px;font-size:11px;color:var(--orb-muted);padding:0 6px}
+#agent-orbit-3d .orb-main{min-width:0}
+#agent-orbit-3d .orb-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:22px 24px 13px;flex-wrap:wrap}
+#agent-orbit-3d .orb-eyebrow{font-size:11px;color:var(--orb-muted);margin-bottom:7px}
+#agent-orbit-3d .orb-header h2{font-size:22px;line-height:1.3;letter-spacing:.015em;margin:0;font-weight:600}
+#agent-orbit-3d .orb-header p{margin:8px 0 0;color:var(--orb-muted);font-size:12px}
+#agent-orbit-3d .orb-header p span{font-size:11px;margin-left:7px;white-space:nowrap}
+#agent-orbit-3d .orb-modes{display:flex;gap:13px;font-size:11px;color:var(--orb-muted);align-items:center}
+#agent-orbit-3d .orb-modes strong{font-weight:500;padding:6px 12px;background:var(--orb-blue);color:#061b2c;border-radius:20px}
+#agent-orbit-3d .orb-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 24px 15px;flex-wrap:wrap}
+#agent-orbit-3d .orb-design-name{font-size:12px;color:var(--orb-muted);display:flex;align-items:center;gap:7px}
+#agent-orbit-3d .orb-design-name svg{width:14px;height:14px}
+#agent-orbit-3d .orb-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#agent-orbit-3d .orb-reduce{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--orb-muted)}
+#agent-orbit-3d .orb-reduce input{accent-color:var(--orb-blue);width:14px;height:14px}
+#agent-orbit-3d .orb-actions button{display:flex;align-items:center;gap:7px;font-size:11px;border:1px solid var(--orb-border);background:var(--orb-chrome);color:var(--orb-ink);padding:7px 10px;border-radius:8px;min-height:34px}
+#agent-orbit-3d .orb-actions svg{width:13px;height:13px}#agent-orbit-3d .orb-actions button:disabled{opacity:.6}
+#agent-orbit-3d .orb-world{height:668px;position:relative;background:radial-gradient(ellipse at 42% 42%,#15253a 0,#090f21 52%,#030916 100%);isolation:isolate;overflow:hidden;touch-action:none;cursor:grab}
+#agent-orbit-3d .orb-world.orb-dragging{cursor:grabbing}
+#agent-orbit-3d .orb-fallback,#agent-orbit-3d .orb-webgl,#agent-orbit-3d .orb-webgl canvas{display:block;position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#agent-orbit-3d .orb-labels,#agent-orbit-3d .orb-agents{position:absolute;inset:0;pointer-events:none}
+#agent-orbit-3d .orb-team-title{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;text-align:center;color:#e0edf8;font-size:14px;letter-spacing:.025em;text-shadow:0 2px 12px #020816}
+#agent-orbit-3d .orb-team-title small{font-size:11px;color:#98b0c9;display:block;letter-spacing:0;margin-top:4px}
+#agent-orbit-3d .orb-team-title b{display:inline-block;width:5px;height:5px;border-radius:50%;vertical-align:middle;margin-right:7px}
+#agent-orbit-3d .orb-agent{position:absolute;transform:translate(-50%,-50%);width:68px;min-height:68px;padding:0;border:0;background:transparent;color:#e5effa;pointer-events:auto;display:flex;align-items:center;flex-direction:column;gap:5px;touch-action:none;text-shadow:0 2px 7px #020816}
+#agent-orbit-3d .orb-agent-hit{display:block;width:var(--orb-size,44px);height:var(--orb-size,44px);position:relative}
+#agent-orbit-3d .orb-state-dot{position:absolute;bottom:0;right:0;width:11px;height:11px;border-radius:50%;border:2px solid #081527;background:#65cfff;color:#081527;line-height:8px;font-size:8px;text-align:center}
+#agent-orbit-3d .orb-agent[data-state=waiting] .orb-state-dot{background:#ffd176}#agent-orbit-3d .orb-agent[data-state=done] .orb-state-dot{background:#82dfb2}
+#agent-orbit-3d .orb-agent-name{font-size:12px;white-space:nowrap;padding:0 3px;border-radius:4px}
+#agent-orbit-3d .orb-agent[aria-pressed=true] .orb-agent-name{color:#fff;background:#28425c}
+#agent-orbit-3d .orb-agent small{display:none;font-size:11px;color:#9cc0dd;line-height:1.1}
+#agent-orbit-3d .orb-agent:hover small,#agent-orbit-3d .orb-agent:focus-visible small,#agent-orbit-3d .orb-agent[aria-pressed=true] small{display:block}
+#agent-orbit-3d .orb-scene-top{position:absolute;left:20px;right:20px;top:16px;display:flex;justify-content:space-between;gap:15px;color:#8ea7be;font-size:11px;letter-spacing:.12em;pointer-events:none}
+#agent-orbit-3d .orb-motion-state{letter-spacing:0;color:#c5dce8}
+#agent-orbit-3d .orb-view-controls{position:absolute;bottom:48px;left:16px;right:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;pointer-events:none}
+#agent-orbit-3d .orb-presets,#agent-orbit-3d .orb-zoom{display:flex;align-items:center;gap:2px;background:#101e30;border:1px solid #2c435a;border-radius:9px;padding:4px;pointer-events:auto;color:#cee0f0;cursor:default}
+#agent-orbit-3d .orb-view-controls button{font-size:11px;padding:7px 10px;min-height:32px;background:transparent;border:0;color:#acbfd0;border-radius:6px}
+#agent-orbit-3d .orb-presets button[aria-pressed=true]{background:#2b455e;color:#e5f6ff}
+#agent-orbit-3d .orb-zoom-value{font-size:11px;min-width:40px;text-align:center;font-variant-numeric:tabular-nums}
+#agent-orbit-3d .orb-zoom button[data-zoom]{font-size:16px;padding:3px 9px}
+#agent-orbit-3d .orb-zoom .orb-overview{border-left:1px solid #2c435a;border-radius:0;margin-left:4px}
+#agent-orbit-3d .orb-scene-bottom{position:absolute;left:20px;right:20px;bottom:15px;display:flex;justify-content:space-between;gap:10px;font-size:11px;color:#98b0c6;pointer-events:none}
+#agent-orbit-3d .orb-legend{display:flex;gap:16px}
+#agent-orbit-3d .orb-legend span{display:flex;align-items:center;gap:6px}
+#agent-orbit-3d .orb-legend b{width:5px;height:5px;border-radius:50%}
+#agent-orbit-3d .orb-busy{background:#65cfff}#agent-orbit-3d .orb-waiting{background:#ffd176}#agent-orbit-3d .orb-done{background:#82dfb2}
+#agent-orbit-3d .orb-inspector{padding:13px 23px;background:var(--orb-chrome);display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:57px;flex-wrap:wrap}
+#agent-orbit-3d .orb-selection{font-size:12px}#agent-orbit-3d .orb-detail{font-size:11px;color:var(--orb-muted)}
+#agent-orbit-3d .orb-footer{padding:12px 23px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;color:var(--orb-muted);font-size:11px}
+@media(max-width:520px){#agent-orbit-3d .orb-world{min-height:1080px}}
+@media(max-width:760px){#agent-orbit-3d .orb-product{grid-template-columns:minmax(0,1fr)}#agent-orbit-3d .orb-sidebar{display:none}#agent-orbit-3d .orb-header{padding:20px 18px 12px}#agent-orbit-3d .orb-toolbar{padding:8px 18px 14px}#agent-orbit-3d .orb-inspector,#agent-orbit-3d .orb-footer{padding-left:18px;padding-right:18px}}
+@media(max-width:520px){#agent-orbit-3d .orb-world{height:980px}#agent-orbit-3d .orb-header h2{font-size:20px}#agent-orbit-3d .orb-header{gap:16px}#agent-orbit-3d .orb-toolbar{align-items:flex-start}#agent-orbit-3d .orb-design-name{width:100%}#agent-orbit-3d .orb-actions{gap:8px}#agent-orbit-3d .orb-actions button{min-height:40px}#agent-orbit-3d .orb-scene-top{left:14px;right:14px}#agent-orbit-3d .orb-scene-top&gt;span:first-child{letter-spacing:.03em;font-size:11px}#agent-orbit-3d .orb-view-controls{left:10px;right:10px;bottom:78px;flex-wrap:wrap;justify-content:center}#agent-orbit-3d .orb-view-controls button{min-height:40px;padding-left:11px;padding-right:11px}#agent-orbit-3d .orb-scene-bottom{left:14px;right:14px;bottom:16px;justify-content:center;flex-wrap:wrap}#agent-orbit-3d .orb-gesture{width:100%;text-align:center}#agent-orbit-3d .orb-inspector{min-height:76px;gap:5px}#agent-orbit-3d .orb-detail{width:100%}#agent-orbit-3d .orb-scene-top .orb-motion-state{max-width:86px;text-align:right}}
+@media(pointer:coarse){#agent-orbit-3d .orb-actions button,#agent-orbit-3d .orb-view-controls button{min-height:44px;min-width:44px}#agent-orbit-3d .orb-reduce{min-height:44px}}
+&lt;/style&gt;
+&lt;script&gt;
+(function(){
+  &#x27;use strict&#x27;;
+  const root=document.getElementById(&#x27;agent-orbit-3d&#x27;),world=root.querySelector(&#x27;.orb-world&#x27;),canvas=root.querySelector(&#x27;.orb-fallback&#x27;),ctx=canvas.getContext(&#x27;2d&#x27;);
+  world.dataset.nodeStyle=&#x27;light-ring&#x27;;
+  world.dataset.backgroundMotion=&#x27;slow-star-drift&#x27;;
+  const teams=[
+    {name:&#x27;測試用&#x27;,color:&#x27;#82d7f8&#x27;,roles:[&#x27;規劃&#x27;,&#x27;整合&#x27;],states:[&#x27;busy&#x27;,&#x27;done&#x27;]},
+    {name:&#x27;測試2&#x27;,color:&#x27;#b69cec&#x27;,roles:[&#x27;規劃&#x27;,&#x27;設計&#x27;,&#x27;開發&#x27;,&#x27;測試&#x27;,&#x27;研究&#x27;],states:[&#x27;busy&#x27;,&#x27;busy&#x27;,&#x27;waiting&#x27;,&#x27;done&#x27;,&#x27;busy&#x27;]},
+    {name:&#x27;購物網站 DEMO&#x27;,color:&#x27;#83dec1&#x27;,roles:[&#x27;規劃&#x27;,&#x27;設計&#x27;,&#x27;開發&#x27;],states:[&#x27;busy&#x27;,&#x27;done&#x27;,&#x27;busy&#x27;]},
+    {name:&#x27;Taiwan景點&#x27;,color:&#x27;#e9c48d&#x27;,roles:[&#x27;規劃&#x27;,&#x27;查資料&#x27;,&#x27;整理&#x27;],states:[&#x27;done&#x27;,&#x27;waiting&#x27;,&#x27;done&#x27;]}
+  ];
+  const colours=[&#x27;#65b5f2&#x27;,&#x27;#53d5ae&#x27;,&#x27;#aa8ae9&#x27;,&#x27;#fac455&#x27;,&#x27;#ed96c6&#x27;];
+  const state={yaw:.14,pitch:.55,zoom:1,paused:false,reduce:matchMedia(&#x27;(prefers-reduced-motion: reduce)&#x27;).matches,selected:null,view:&#x27;oblique&#x27;,drift:1,glow:.8,history:true};
+  const statusNames={busy:&#x27;工作中&#x27;,waiting:&#x27;等待協作&#x27;,done:&#x27;已完成&#x27;};
+  const nodes=[],routes=[[&#x27;t0a0&#x27;,&#x27;t0a1&#x27;,&#x27;任務摘要&#x27;],[&#x27;t1a0&#x27;,&#x27;t1a2&#x27;,&#x27;功能規格&#x27;],[&#x27;t1a2&#x27;,&#x27;t1a3&#x27;,&#x27;測試版本&#x27;],[&#x27;t2a1&#x27;,&#x27;t2a2&#x27;,&#x27;商品頁設計&#x27;],[&#x27;t3a0&#x27;,&#x27;t3a1&#x27;,&#x27;景點查詢&#x27;],[&#x27;t3a1&#x27;,&#x27;t3a2&#x27;,&#x27;景點資料&#x27;]];
+  const labels=[],positions={},buttons={};
+  let w=1,h=1,dpr=1,mobile=false,distance=20,focal=1,phase=0,last=0,raf=0,visible=true,dirty=true,sequence=null,sequenceIndex=0,engine=null,restoring=false;
+  const clamp=(n,a,b)=&gt;Math.max(a,Math.min(b,n));
+  const saved=window.openai&amp;&amp;window.openai.widgetState;
+  function restore(snapshot){const s=snapshot&amp;&amp;snapshot.privateContent&amp;&amp;snapshot.privateContent.orbit3d;if(!s)return;for(const key of [&#x27;yaw&#x27;,&#x27;pitch&#x27;,&#x27;zoom&#x27;,&#x27;drift&#x27;,&#x27;glow&#x27;])if(Number.isFinite(s[key]))state[key]=s[key];for(const key of [&#x27;paused&#x27;,&#x27;reduce&#x27;,&#x27;history&#x27;])if(typeof s[key]===&#x27;boolean&#x27;)state[key]=s[key];if(typeof s.selected===&#x27;string&#x27;)state.selected=s.selected;state.yaw=clamp(state.yaw,-1.35,1.35);state.pitch=clamp(state.pitch,.08,1.35);state.zoom=clamp(state.zoom,.65,2.2);state.view=[&#x27;oblique&#x27;,&#x27;top&#x27;,&#x27;side&#x27;].includes(s.view)?s.view:&#x27;custom&#x27;;}
+  restore(saved);
+  teams.forEach(function(team,t){
+    const side=document.createElement(&#x27;span&#x27;);side.innerHTML=&#x27;&lt;b style=&quot;background:&#x27;+team.color+&#x27;&quot;&gt;&lt;/b&gt;&#x27;+team.name+&#x27;&lt;small&gt;&#x27;+team.roles.length+&#x27; 位 Agents&lt;/small&gt;&#x27;;root.querySelector(&#x27;.orb-team-nav&#x27;).append(side);
+    const title=document.createElement(&#x27;div&#x27;);title.className=&#x27;orb-team-title&#x27;;title.innerHTML=&#x27;&lt;b style=&quot;background:&#x27;+team.color+&#x27;&quot;&gt;&lt;/b&gt;&#x27;+team.name+&#x27;&lt;small&gt;&#x27;+team.roles.length+&#x27; 位 Agents · 協作軌道&lt;/small&gt;&#x27;;root.querySelector(&#x27;.orb-labels&#x27;).append(title);labels.push(title);
+    team.roles.forEach(function(role,i){
+      const n={id:&#x27;t&#x27;+t+&#x27;a&#x27;+i,team:t,index:i,name:&#x27;AI &#x27;+(i+1),role:role,state:team.states[i],color:colours[i],position:[0,0,0],projected:null};nodes.push(n);
+      const button=document.createElement(&#x27;button&#x27;);button.className=&#x27;orb-agent cursor-interaction&#x27;;button.type=&#x27;button&#x27;;button.dataset.id=n.id;button.dataset.state=n.state;button.setAttribute(&#x27;aria-pressed&#x27;,&#x27;false&#x27;);button.setAttribute(&#x27;aria-label&#x27;,team.name+&#x27; &#x27;+n.name+&#x27;，&#x27;+role+&#x27;，&#x27;+statusNames[n.state]);button.innerHTML=&#x27;&lt;span class=&quot;orb-agent-hit&quot; aria-hidden=&quot;true&quot;&gt;&lt;b class=&quot;orb-state-dot&quot;&gt;&#x27;+(n.state===&#x27;done&#x27;?&#x27;✓&#x27;:&#x27;&#x27;)+&#x27;&lt;/b&gt;&lt;/span&gt;&lt;span class=&quot;orb-agent-name&quot;&gt;&#x27;+n.name+&#x27;&lt;/span&gt;&lt;small&gt;&#x27;+role+&#x27;&lt;/small&gt;&#x27;;button.addEventListener(&#x27;click&#x27;,function(e){if(wasDragging){e.preventDefault();return;}select(n.id);});root.querySelector(&#x27;.orb-agents&#x27;).append(button);buttons[n.id]=button;
+    });
+  });
+  const connections=[],connectionKeys=new Set();
+  function addConnection(a,b,kind){const key=[a,b].sort().join(&#x27;|&#x27;);if(connectionKeys.has(key))return;connectionKeys.add(key);connections.push({route:[a,b],team:nodes.find(n=&gt;n.id===a).team,kind});}
+  teams.forEach((team,t)=&gt;{for(let i=1;i&lt;team.roles.length;i++)addConnection(&#x27;t&#x27;+t+&#x27;a0&#x27;,&#x27;t&#x27;+t+&#x27;a&#x27;+i,&#x27;collaboration&#x27;);});
+  routes.forEach(r=&gt;addConnection(r[0],r[1],&#x27;workflow&#x27;));
+  world.dataset.connectionGraph=JSON.stringify(connections.map(c=&gt;({from:c.route[0],to:c.route[1],kind:c.kind})));
+  world.dataset.connectionCount=String(connections.length);
+  if(!nodes.some(n=&gt;n.id===state.selected))state.selected=null;
+  function persist(){if(restoring||!window.openai||!window.openai.setWidgetState)return;const n=nodes.find(n=&gt;n.id===state.selected);window.openai.setWidgetState({modelContent:{design:&#x27;協作軌道 · 光環節點&#x27;,selectedAgent:n?teams[n.team].name+&#x27; / &#x27;+n.name:null,view:state.view,motion:state.reduce?&#x27;減少動態&#x27;:state.paused?&#x27;已暫停&#x27;:&#x27;漂浮中&#x27;},privateContent:{orbit3d:{...state}}}).catch(function(){});}
+  function select(id){state.selected=id;const n=nodes.find(n=&gt;n.id===id);nodes.forEach(n=&gt;buttons[n.id].setAttribute(&#x27;aria-pressed&#x27;,String(n.id===id)));root.querySelector(&#x27;.orb-selection&#x27;).textContent=n?teams[n.team].name+&#x27; / &#x27;+n.name+&#x27; · &#x27;+n.role+&#x27; · &#x27;+statusNames[n.state]:&#x27;選擇 Agent 查看協作關係&#x27;;root.querySelector(&#x27;.orb-detail&#x27;).textContent=n?connections.filter(c=&gt;c.route.includes(id)).length+&#x27; 條協作連線 · 直接連結加亮&#x27;:&#x27;同團隊靠近 · 光線持續連結&#x27;;dirty=true;wake();persist();}
+  function sync(){root.querySelector(&#x27;.orb-reduce-input&#x27;).checked=state.reduce;const pause=root.querySelector(&#x27;.orb-pause&#x27;);pause.textContent=state.paused?&#x27;繼續漂浮&#x27;:&#x27;暫停漂浮&#x27;;pause.setAttribute(&#x27;aria-pressed&#x27;,String(state.paused));pause.disabled=state.reduce;root.querySelector(&#x27;.orb-motion-state&#x27;).textContent=state.reduce?&#x27;減少動態&#x27;:state.paused?&#x27;漂浮已暫停&#x27;:&#x27;緩慢漂浮中&#x27;;root.querySelector(&#x27;.orb-zoom-value&#x27;).textContent=Math.round(state.zoom*100)+&#x27;%&#x27;;root.querySelectorAll(&#x27;[data-view]&#x27;).forEach(b=&gt;b.setAttribute(&#x27;aria-pressed&#x27;,String(b.dataset.view===state.view)));world.dataset.zoom=state.zoom.toFixed(3);world.dataset.yaw=state.yaw.toFixed(4);world.dataset.pitch=state.pitch.toFixed(4);}
+  function layout(){const rect=world.getBoundingClientRect();w=rect.width;h=rect.height;mobile=w&lt;490;dpr=Math.min(devicePixelRatio||1,1.7);canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);focal=h/(2*Math.tan(42*Math.PI/360));distance=(mobile?Math.max(22,8.1*focal/w):Math.max(18.5,16.7*focal/w))/state.zoom;if(engine)engine.resize();dirty=true;wake();}
+  function centres(){return mobile?[[-.5,8.4,-.8],[.3,2.8,-.4],[-.4,-2.8,1],[.4,-8.4,.5]]:[[-4.6,1.3,-3.6],[3.2,1.7,-3],[-3.7,-.8,3.4],[4.7,-.4,3.3]];}
+  function updatePositions(){const c=centres();nodes.forEach(function(n){const count=teams[n.team].roles.length;let angle=0,radius=0,dy=0,depthRadius=0;if(n.index){const angles=count===2?[0]:count===3?[2.8,.1]:[.18,1.65,3.13,4.7];angle=angles[n.index-1]+phase*.022*state.drift*(n.team%2?-1:1);radius=mobile?(count===5?1.75:1.55):(count===5?2.35:1.62);depthRadius=mobile?.8:radius;dy=-Math.sin(angle)*(mobile?1.4:count===5?.9:.15);}const bob=Math.sin(phase*.78+n.team*1.7+n.index*1.4)*.22*state.drift;const roam=n.index?0:Math.sin(phase*.12+n.team)*.17*state.drift;n.position=[c[n.team][0]+Math.cos(angle)*radius+roam,c[n.team][1]+dy+bob+(n.index?0:.18),c[n.team][2]+Math.sin(angle)*depthRadius];positions[n.id]=n.position;});}
+  function project(p){const sy=Math.sin(state.yaw),cy=Math.cos(state.yaw),sp=Math.sin(state.pitch),cp=Math.cos(state.pitch);const x=p[0]*cy-p[2]*sy,y=-p[0]*sp*sy+p[1]*cp-p[2]*sp*cy,z=distance-p[0]*cp*sy-p[1]*sp-p[2]*cp*cy;return{x:w/2+x*focal/z,y:h*(mobile?.43:.465)-y*focal/z,scale:focal/z,depth:z};}
+  function colour(hex,alpha){return &#x27;rgba(&#x27;+parseInt(hex.slice(1,3),16)+&#x27;,&#x27;+parseInt(hex.slice(3,5),16)+&#x27;,&#x27;+parseInt(hex.slice(5,7),16)+&#x27;,&#x27;+alpha+&#x27;)&#x27;;}
+  function ringAppearance(n){const offset=n.team*1.4+n.index*.9;return{size:1.5*(1+.024*Math.sin(phase*.64+offset)),rotation:phase*.13*(n.index%2?-1:1)+offset,intensity:clamp((.88+.09*Math.sin(phase*.64+offset))*(.7+.3*state.glow),.5,1)};}
+  function paintEnergyRing(c,color,x,y,scale,rotation,intensity){
+    c.save();c.translate(x,y);c.rotate(rotation);c.scale(scale,scale);c.globalAlpha=intensity;
+    const mist=c.createRadialGradient(0,0,8,0,0,61);mist.addColorStop(0,colour(color,.09));mist.addColorStop(.5,colour(color,.025));mist.addColorStop(.67,colour(color,.16));mist.addColorStop(1,colour(color,0));c.fillStyle=mist;c.fillRect(-64,-64,128,128);
+    c.lineCap=&#x27;round&#x27;;c.shadowColor=color;c.shadowBlur=9;c.strokeStyle=colour(color,.38);c.lineWidth=5;c.beginPath();c.arc(0,0,38,0,Math.PI*2);c.stroke();
+    c.shadowBlur=4;c.strokeStyle=color;c.lineWidth=1.9;c.beginPath();c.arc(0,0,38,0,Math.PI*2);c.stroke();
+    c.shadowBlur=0;c.strokeStyle=&#x27;#effaff&#x27;;c.lineWidth=.65;c.beginPath();c.arc(0,0,37.2,0,Math.PI*2);c.stroke();
+    for(let i=0;i&lt;3;i++){const start=i*Math.PI*2/3+.15;c.strokeStyle=colour(color,.58);c.lineWidth=1.1;c.beginPath();c.arc(0,0,49,start,start+.86);c.stroke();const a=start+.86;c.shadowColor=color;c.shadowBlur=5;c.fillStyle=&#x27;#e7f8ff&#x27;;c.beginPath();c.arc(Math.cos(a)*49,Math.sin(a)*49,1.25,0,Math.PI*2);c.fill();c.shadowBlur=0;}
+    c.setLineDash([1,5]);c.lineWidth=.7;c.strokeStyle=colour(color,.33);c.beginPath();c.arc(0,0,27,0,Math.PI*2);c.stroke();c.setLineDash([]);
+    const core=c.createRadialGradient(0,0,0,0,0,17);core.addColorStop(0,&#x27;#ffffff&#x27;);core.addColorStop(.13,&#x27;#f3fcff&#x27;);core.addColorStop(.3,colour(color,.84));core.addColorStop(.6,colour(color,.23));core.addColorStop(1,colour(color,0));c.fillStyle=core;c.fillRect(-17,-17,34,34);
+    c.fillStyle=&#x27;#ffffff&#x27;;c.beginPath();c.arc(0,0,2,0,Math.PI*2);c.fill();c.restore();
+  }
+  function glow(x,y,r,color,alpha){const gradient=ctx.createRadialGradient(x,y,0,x,y,r);gradient.addColorStop(0,colour(color,alpha));gradient.addColorStop(.32,colour(color,alpha*.35));gradient.addColorStop(1,colour(color,0));ctx.fillStyle=gradient;ctx.fillRect(x-r,y-r,r*2,r*2);}
+  let seed=92;function random(){seed=(seed*1664525+1013904223)&gt;&gt;&gt;0;return seed/4294967296;}
+  const stars=Array.from({length:780},()=&gt;{const a=random()*Math.PI*2,z=random()*2-1,r=21+random()*27,s=Math.sqrt(1-z*z);return{p:[Math.cos(a)*r*s,z*r,Math.sin(a)*r*s],r:.5+random(),a:.15+random()*.42};});
+  function backgroundPoint(p){const a=phase*.0025,c=Math.cos(a),s=Math.sin(a);return[p[0]*c+p[2]*s,p[1]+Math.sin(phase*.025)*.7,p[2]*c-p[0]*s];}
+  const nebulae=[{p:[-8,4,-13],color:&#x27;#507cae&#x27;,radius:10,alpha:.085,angle:-.35},{p:[9,-5,-17],color:&#x27;#8270b6&#x27;,radius:12,alpha:.065,angle:.4},{p:[-5,-8,-9],color:&#x27;#3c9e99&#x27;,radius:9,alpha:.035,angle:-.6}];
+  function drawNebulae(){nebulae.forEach((cloud,i)=&gt;{const p=backgroundPoint(cloud.p);p[0]+=Math.sin(phase*.018+i*2)*1.2;p[1]+=Math.sin(phase*.014+i)*.8;const v=project(p);if(v.depth&lt;1)return;ctx.save();ctx.translate(v.x,v.y);ctx.rotate(cloud.angle+Math.sin(phase*.012+i)*.08);ctx.scale(1.65,.72);glow(0,0,v.scale*cloud.radius,cloud.color,cloud.alpha*state.glow);ctx.restore();});}
+  function drawBackdrop(){ctx.clearRect(0,0,w,h);drawNebulae();centres().forEach((p,t)=&gt;{const v=project(p);glow(v.x,v.y,clamp(v.scale*4.3,100,310),teams[t].color,.085*state.glow);});stars.forEach(s=&gt;{const v=project(backgroundPoint(s.p));if(v.depth&gt;1&amp;&amp;v.x&gt;0&amp;&amp;v.x&lt;w&amp;&amp;v.y&gt;0&amp;&amp;v.y&lt;h){ctx.globalAlpha=s.a;ctx.fillStyle=&#x27;#b9d4ea&#x27;;ctx.beginPath();ctx.arc(v.x,v.y,s.r,0,Math.PI*2);ctx.fill();}});ctx.globalAlpha=1;for(let t=0;t&lt;4;t++)for(let i=0;i&lt;3;i++){const v=project(orbitPoint(t,phase*.09+i*Math.PI*2/3+t,0));if(v.depth&gt;1){glow(v.x,v.y,7,teams[t].color,.22*state.glow);ctx.fillStyle=colour(teams[t].color,.65);ctx.beginPath();ctx.arc(v.x,v.y,1.1,0,Math.PI*2);ctx.fill();}}}
+  function orbitPoint(t,theta,layer){const c=centres()[t],r=(t===1?2.75:2.15)*(mobile?.8:1);const tilt=(mobile?-.6:t===1?-.38:-.13)+(layer===1?.26:0);return[c[0]+Math.cos(theta)*r,c[1]-.3+Math.sin(theta)*r*tilt+(layer===1?.14:0),c[2]+Math.sin(theta)*r*(mobile?.5:layer===1?.72:1)];}
+  function line(points,color,alpha,width){ctx.strokeStyle=colour(color,alpha);ctx.lineWidth=width||1;ctx.beginPath();let started=false;points.forEach(p=&gt;{const v=project(p);if(v.depth&lt;.5){started=false;return;}if(!started){ctx.moveTo(v.x,v.y);started=true;}else ctx.lineTo(v.x,v.y);});ctx.stroke();}
+  function curve(route,u){const a=positions[route[0]],b=positions[route[1]],q=1-u;return[a[0]*q+b[0]*u,a[1]*q+b[1]*u+Math.sin(u*Math.PI)*.8,a[2]*q+b[2]*u];}
+  function drawConnections(){
+    let visibleCount=0;
+    connections.forEach(function(c){
+      const direct=!!state.selected&amp;&amp;c.route.includes(state.selected),selected=nodes.find(n=&gt;n.id===state.selected),sameTeam=selected&amp;&amp;selected.team===c.team;
+      if(c.kind===&#x27;workflow&#x27;&amp;&amp;!state.history&amp;&amp;!direct)return;
+      const points=Array.from({length:33},(_,i)=&gt;curve(c.route,.09+i/32*.82));
+      const shade=teams[c.team].color,alpha=direct?.84:selected&amp;&amp;!sameTeam?.23:c.kind===&#x27;collaboration&#x27;?.48:.29;
+      ctx.save();ctx.lineCap=&#x27;round&#x27;;ctx.lineJoin=&#x27;round&#x27;;ctx.shadowColor=colour(shade,direct?.8:.55);ctx.shadowBlur=direct?14:9;
+      line(points,shade,alpha*.25,direct?5:3.8);ctx.shadowBlur=0;line(points,shade,alpha,direct?1.7:1.15);
+      line(points,direct?&#x27;#effaff&#x27;:&#x27;#d5eaf8&#x27;,alpha*(direct?.6:.22),.65);ctx.restore();visibleCount++;
+    });
+    world.dataset.visibleConnections=String(visibleCount);
+  }
+  function packetState(now){if(!sequence)return[];const elapsed=now-sequence.start;const out=[];sequence.entries.forEach(function(e){const t=(elapsed-e.delay)/1700;if(t&gt;=0&amp;&amp;t&lt;=1.17)out.push({route:e.route,t:t,color:e.color});});if(elapsed&gt;4300){sequence=null;root.querySelector(&#x27;.orb-play&#x27;).disabled=false;root.querySelector(&#x27;.orb-event-copy&#x27;).textContent=&#x27;示範完成 · 接收端已收到資料&#x27;;}return out;}
+  function projectLabels(){
+    const placed=[],occupied=[],wr=world.getBoundingClientRect();
+    nodes.forEach(function(n){const v=project(n.position);n.projected=v;const size=clamp(v.scale*.96,25,150),b=buttons[n.id];b.style.left=v.x+&#x27;px&#x27;;b.style.top=(v.y+12)+&#x27;px&#x27;;b.style.setProperty(&#x27;--orb-size&#x27;,size+&#x27;px&#x27;);b.style.zIndex=Math.round(1000-v.depth*10);b.style.opacity=clamp(1-(v.depth-distance)*.027,.5,1);const on=v.depth&gt;1&amp;&amp;v.x&gt;25&amp;&amp;v.x&lt;w-25&amp;&amp;v.y&gt;53&amp;&amp;v.y&lt;h-170;b.hidden=!on;b.style.visibility=on?&#x27;visible&#x27;:&#x27;hidden&#x27;;b.dataset.projectX=v.x.toFixed(2);b.dataset.projectY=v.y.toFixed(2);placed.push({x:v.x,y:v.y,size:size,team:n.team,on});});
+    nodes.forEach(n=&gt;{const b=buttons[n.id];if(b.style.visibility===&#x27;hidden&#x27;)return;const r=b.getBoundingClientRect();occupied.push({left:r.left-wr.left,right:r.right-wr.left,top:r.top-wr.top,bottom:r.bottom-wr.top});});
+    const hit=(a,b)=&gt;a.left&lt;b.right+7&amp;&amp;a.right&gt;b.left-7&amp;&amp;a.top&lt;b.bottom+7&amp;&amp;a.bottom&gt;b.top-7;
+    teams.forEach(function(t,i){
+      const list=placed.filter(p=&gt;p.team===i),c=project(centres()[i]),label=labels[i],lw=Math.max(label.offsetWidth,148),lh=Math.max(label.offsetHeight,38),targetY=Math.min(...list.map(p=&gt;p.y-p.size*.55))-42,maxY=h-(mobile?200:145);let choice=null;const candidates=[];
+      for(const dy of [0,-18,-36,-54,18,36,54,-80,80])for(const dx of [0,-60,60,-110,110])candidates.push({x:clamp(c.x+dx,lw/2+10,w-lw/2-10),y:clamp(targetY+dy,61,maxY),cost:Math.abs(dx)+Math.abs(dy)*1.5});
+      const bottomY=Math.max(...nodes.filter(n=&gt;n.team===i).map(n=&gt;buttons[n.id].getBoundingClientRect().bottom-wr.top))+lh/2+14;
+      for(const dx of [0,-60,60])candidates.push({x:clamp(c.x+dx,lw/2+10,w-lw/2-10),y:clamp(bottomY,61,maxY),cost:Math.abs(dx)+Math.abs(bottomY-targetY)*1.1});
+      candidates.sort((a,b)=&gt;a.cost-b.cost);for(const p of candidates){const box={left:p.x-lw/2,right:p.x+lw/2,top:p.y-lh/2,bottom:p.y+lh/2};if(!occupied.some(o=&gt;hit(box,o))){choice={...p,box};break;}}
+      if(!choice){const p=candidates[0];choice={...p,box:{left:p.x-lw/2,right:p.x+lw/2,top:p.y-lh/2,bottom:p.y+lh/2}};}label.style.left=choice.x+&#x27;px&#x27;;label.style.top=choice.y+&#x27;px&#x27;;label.hidden=!(c.depth&gt;1&amp;&amp;c.x&gt;-60&amp;&amp;c.x&lt;w+60&amp;&amp;c.y&gt;45&amp;&amp;c.y&lt;h-170);if(!label.hidden)occupied.push(choice.box);
+    });
+  }
+  function drawFallback(now,packets){drawBackdrop();for(let t=0;t&lt;4;t++){for(let l=0;l&lt;2;l++){const ps=Array.from({length:97},(_,i)=&gt;orbitPoint(t,i/96*Math.PI*2,l));line(ps,teams[t].color,l?.13:.35,1);}}
+    drawConnections();
+    const ordered=[...nodes].sort((a,b)=&gt;b.projected.depth-a.projected.depth);ordered.forEach(function(n){const v=n.projected;if(v.depth&lt;1)return;const look=ringAppearance(n);glow(v.x,v.y,v.scale*1.25,n.color,.21*state.glow);ctx.save();ctx.globalCompositeOperation=&#x27;lighter&#x27;;paintEnergyRing(ctx,n.color,v.x,v.y,v.scale*look.size/128,look.rotation,look.intensity);ctx.restore();if(n.id===state.selected){ctx.strokeStyle=&#x27;#d5eeff&#x27;;ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(v.x,v.y,v.scale*.69,0,Math.PI*2);ctx.stroke();}});
+    packets.forEach(function(p){const u=clamp(p.t,0,1);line(Array.from({length:25},(_,i)=&gt;curve(p.route,i/24)),p.color,.45,1.3);for(let k=0;k&lt;8;k++){const pos=project(curve(p.route,clamp(u-k*.016,0,1)));glow(pos.x,pos.y,8-k*.6,p.color,(1-k/9)*.55);}if(p.t&gt;1){const end=project(positions[p.route[1]]);ctx.strokeStyle=colour(p.color,(1.17-p.t)*4);ctx.beginPath();ctx.arc(end.x,end.y,12+(p.t-1)*170,0,Math.PI*2);ctx.stroke();}});
+  }
+  function draw(now){distance=(mobile?Math.max(22,8.1*focal/w):Math.max(18.5,16.7*focal/w))/state.zoom;updatePositions();projectLabels();const packets=packetState(now);if(engine){drawBackdrop();drawConnections();engine.draw(packets);}else drawFallback(now,packets);world.dataset.motionPhase=phase.toFixed(3);dirty=false;}
+  function tick(now){raf=0;world.dataset.frameState=!visible?&#x27;offscreen&#x27;:document.hidden?&#x27;hidden&#x27;:&#x27;active&#x27;;if(!visible||document.hidden){last=0;return;}const dt=last?Math.min((now-last)/1000,.08):0;if(now-last&lt;32&amp;&amp;!dirty){raf=requestAnimationFrame(tick);return;}last=now;if(!state.paused&amp;&amp;!state.reduce)phase+=dt;draw(now);if((!state.paused&amp;&amp;!state.reduce)||sequence)raf=requestAnimationFrame(tick);}
+  function wake(){dirty=true;if(!raf&amp;&amp;visible&amp;&amp;!document.hidden)raf=requestAnimationFrame(tick);}
+  function resetView(){state.yaw=.14;state.pitch=mobile?.25:.55;state.zoom=1;state.view=&#x27;oblique&#x27;;sync();wake();persist();}
+  root.querySelector(&#x27;.orb-overview&#x27;).addEventListener(&#x27;click&#x27;,resetView);
+  root.querySelectorAll(&#x27;[data-view]&#x27;).forEach(function(b){b.addEventListener(&#x27;click&#x27;,function(){state.view=b.dataset.view;state.yaw=state.view===&#x27;side&#x27;?.78:.14;state.pitch=state.view===&#x27;top&#x27;?1.18:state.view===&#x27;side&#x27;?.14:mobile?.25:.55;sync();wake();persist();});});
+  root.querySelectorAll(&#x27;[data-turn]&#x27;).forEach(b=&gt;b.addEventListener(&#x27;click&#x27;,function(){state.yaw=clamp(state.yaw+(b.dataset.turn===&#x27;left&#x27;?-.2:.2),-1.35,1.35);state.view=&#x27;custom&#x27;;sync();wake();persist();}));
+  function zoomBy(ratio){state.zoom=clamp(state.zoom*ratio,.65,2.2);sync();wake();}
+  root.querySelectorAll(&#x27;[data-zoom]&#x27;).forEach(b=&gt;b.addEventListener(&#x27;click&#x27;,()=&gt;{zoomBy(b.dataset.zoom===&#x27;in&#x27;?1.2:1/1.2);persist();}));
+  root.querySelector(&#x27;.orb-pause&#x27;).addEventListener(&#x27;click&#x27;,function(){state.paused=!state.paused;sync();last=0;wake();persist();});
+  root.querySelector(&#x27;.orb-reduce-input&#x27;).addEventListener(&#x27;change&#x27;,function(e){state.reduce=e.target.checked;if(state.reduce&amp;&amp;sequence){sequence=null;root.querySelector(&#x27;.orb-play&#x27;).disabled=false;}sync();last=0;wake();persist();});
+  root.querySelector(&#x27;.orb-play&#x27;).addEventListener(&#x27;click&#x27;,function(){const list=state.selected?routes.filter(r=&gt;nodes.find(n=&gt;n.id===r[0]).team===nodes.find(n=&gt;n.id===state.selected).team):routes;const chosen=Array.from({length:3},(_,i)=&gt;list[(sequenceIndex+i)%list.length]);sequenceIndex+=1;const src=nodes.find(n=&gt;n.id===chosen[0][0]),dst=nodes.find(n=&gt;n.id===chosen[0][1]);root.querySelector(&#x27;.orb-event-copy&#x27;).textContent=teams[src.team].name+&#x27; · &#x27;+src.name+&#x27; → &#x27;+dst.name+&#x27; · &#x27;+chosen[0][2];if(state.reduce){root.querySelector(&#x27;.orb-event-copy&#x27;).textContent+=&#x27; · 已收到（靜態示意）&#x27;;select(dst.id);}else{sequence={start:performance.now(),entries:chosen.map((r,i)=&gt;({route:r,delay:i*900,color:i===1?&#x27;#86e7c4&#x27;:&#x27;#8ed8ff&#x27;}))};root.querySelector(&#x27;.orb-play&#x27;).disabled=true;}wake();});
+  let pointerMap=new Map(),previousPoint=null,pinchDistance=0,wasDragging=false,startPoint=null;
+  function blocked(target){return target.closest(&#x27;.orb-view-controls&#x27;);}
+  world.addEventListener(&#x27;pointerdown&#x27;,function(e){if(blocked(e.target))return;pointerMap.set(e.pointerId,[e.clientX,e.clientY]);previousPoint=[e.clientX,e.clientY];startPoint=previousPoint;wasDragging=false;if(e.target===world||e.target===canvas||e.target.closest(&#x27;.orb-labels&#x27;))world.setPointerCapture(e.pointerId);if(pointerMap.size===2){const a=[...pointerMap.values()];pinchDistance=Math.hypot(a[1][0]-a[0][0],a[1][1]-a[0][1]);}});
+  world.addEventListener(&#x27;pointermove&#x27;,function(e){if(!pointerMap.has(e.pointerId))return;pointerMap.set(e.pointerId,[e.clientX,e.clientY]);if(pointerMap.size===2){const a=[...pointerMap.values()],d=Math.hypot(a[1][0]-a[0][0],a[1][1]-a[0][1]);if(pinchDistance&gt;0)zoomBy(d/pinchDistance);pinchDistance=d;wasDragging=true;return;}const dx=e.clientX-previousPoint[0],dy=e.clientY-previousPoint[1];if(Math.hypot(e.clientX-startPoint[0],e.clientY-startPoint[1])&gt;5){wasDragging=true;world.classList.add(&#x27;orb-dragging&#x27;);state.yaw=clamp(state.yaw-dx*.005,-1.35,1.35);state.pitch=clamp(state.pitch+dy*.004,.08,1.35);state.view=&#x27;custom&#x27;;sync();wake();}previousPoint=[e.clientX,e.clientY];});
+  function endPointer(e){if(!pointerMap.has(e.pointerId))return;pointerMap.delete(e.pointerId);if(pointerMap.size){previousPoint=[...pointerMap.values()][0];startPoint=previousPoint;}else{world.classList.remove(&#x27;orb-dragging&#x27;);persist();setTimeout(()=&gt;{wasDragging=false;},80);}pinchDistance=0;}
+  world.addEventListener(&#x27;pointerup&#x27;,endPointer);world.addEventListener(&#x27;pointercancel&#x27;,endPointer);world.addEventListener(&#x27;lostpointercapture&#x27;,endPointer);
+  window.addEventListener(&#x27;pointerup&#x27;,endPointer);window.addEventListener(&#x27;pointercancel&#x27;,endPointer);
+  let wheelTimer;world.addEventListener(&#x27;wheel&#x27;,function(e){e.preventDefault();zoomBy(Math.exp(-clamp(e.deltaY,-180,180)*.0015));clearTimeout(wheelTimer);wheelTimer=setTimeout(persist,180);},{passive:false});
+  new ResizeObserver(layout).observe(world);new IntersectionObserver(function(entries){visible=entries[0].isIntersecting;world.dataset.visibility=String(visible);if(visible){last=0;wake();}else if(raf){cancelAnimationFrame(raf);raf=0;last=0;}},{threshold:.02,root:root.querySelector(&#x27;.orb-main&#x27;)}).observe(world);
+  document.addEventListener(&#x27;visibilitychange&#x27;,function(){if(document.hidden&amp;&amp;raf){cancelAnimationFrame(raf);raf=0;last=0;}else wake();});
+  matchMedia(&#x27;(prefers-reduced-motion: reduce)&#x27;).addEventListener(&#x27;change&#x27;,function(e){state.reduce=e.matches;sync();last=0;wake();});
+  window.addEventListener(&#x27;openai:set_globals&#x27;,function(e){if(e.detail&amp;&amp;e.detail.globals&amp;&amp;e.detail.globals.widgetState){restoring=true;restore(e.detail.globals.widgetState);sync();select(state.selected);restoring=false;wake();}});
+  if(globalThis.Tweak){const tweak=new Tweak({container:world,onChange:function(){sync();wake();}});tweak.addSlider(state,&#x27;drift&#x27;,{label:&#x27;漂浮幅度&#x27;,min:.3,max:1.7,step:.1});tweak.addSlider(state,&#x27;glow&#x27;,{label:&#x27;光暈強度&#x27;,min:.2,max:1.3,step:.1});tweak.addToggle(state,&#x27;history&#x27;,{label:&#x27;顯示額外交付連線&#x27;});}
+  sync();layout();if(mobile&amp;&amp;!saved)state.pitch=.25;restoring=true;select(state.selected);restoring=false;
+  try{startNativeGL();}catch(error){world.dataset.renderer=&#x27;perspective-canvas&#x27;;world.dataset.engineError=String(error.message);wake();}
+  function startNativeGL(){
+    const surface=document.createElement(&#x27;canvas&#x27;),gl=surface.getContext(&#x27;webgl&#x27;,{alpha:true,antialias:true,premultipliedAlpha:true,powerPreference:&#x27;low-power&#x27;});if(!gl)throw new Error(&#x27;WebGL unavailable&#x27;);
+    root.querySelector(&#x27;.orb-webgl&#x27;).append(surface);
+    const common=&#x27;uniform vec3 uRight,uUp,uNormal;uniform float uDistance,uAspect,uOffset;vec4 project3D(vec3 p){float z=uDistance-dot(p,uNormal);return vec4(dot(p,uRight)*2.605089/uAspect,dot(p,uUp)*2.605089+uOffset*z,1.001251*z-.2001251,z);}&#x27;;
+    function shader(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;}
+    function program(v,f){const p=gl.createProgram();gl.attachShader(p,shader(gl.VERTEX_SHADER,v));gl.attachShader(p,shader(gl.FRAGMENT_SHADER,f));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return p;}
+    const linesProgram=program(&#x27;attribute vec3 aPosition;attribute vec4 aColour;varying vec4 vColour;&#x27;+common+&#x27;void main(){vColour=aColour;gl_Position=project3D(aPosition);}&#x27;, &#x27;precision mediump float;varying vec4 vColour;void main(){gl_FragColor=vColour;}&#x27;);
+    const pointsProgram=program(&#x27;attribute vec3 aPosition;attribute vec4 aColour;attribute float aRadius;uniform float uHeight,uPhase;varying vec4 vColour;&#x27;+common+&#x27;void main(){vColour=aColour;float a=uPhase*.0025,c=cos(a),s=sin(a);vec3 p=vec3(aPosition.x*c+aPosition.z*s,aPosition.y+sin(uPhase*.025)*.7,aPosition.z*c-aPosition.x*s);gl_Position=project3D(p);gl_PointSize=clamp(aRadius*uHeight*1.302545/(uDistance-dot(p,uNormal)),1.0,30.0);}&#x27;, &#x27;precision mediump float;varying vec4 vColour;void main(){float r=length(gl_PointCoord-.5)*2.0;float a=pow(max(0.0,1.0-r),1.4);gl_FragColor=vec4(vColour.rgb,vColour.a*a);}&#x27;);
+    const spriteProgram=program(&#x27;attribute vec2 aCorner;uniform vec3 uCenter;uniform vec2 uSize;uniform float uRotation;varying vec2 vUV;&#x27;+common+&#x27;void main(){vUV=(aCorner+1.0)*.5;vec2 q=aCorner*uSize*.5;float c=cos(uRotation),s=sin(uRotation);vec2 r=vec2(q.x*c-q.y*s,q.x*s+q.y*c);gl_Position=project3D(uCenter+uRight*r.x+uUp*r.y);}&#x27;, &#x27;precision mediump float;varying vec2 vUV;uniform sampler2D uTexture;uniform vec4 uTint;void main(){vec4 c=texture2D(uTexture,vUV)*uTint;if(c.a&lt;.004)discard;gl_FragColor=c;}&#x27;);
+    const buffer=gl.createBuffer(),quadBuffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quadBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+    function texture(painter){const c=document.createElement(&#x27;canvas&#x27;);c.width=c.height=256;const cctx=c.getContext(&#x27;2d&#x27;);cctx.scale(2,2);painter(cctx);const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,c);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return t;}
+    const glowMap=texture(function(c){const g=c.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,&#x27;#ffffffd0&#x27;);g.addColorStop(.18,&#x27;#ffffff72&#x27;);g.addColorStop(.45,&#x27;#ffffff16&#x27;);g.addColorStop(1,&#x27;#ffffff00&#x27;);c.fillStyle=g;c.fillRect(0,0,128,128);});
+    const maps=colours.map(color=&gt;texture(c=&gt;paintEnergyRing(c,color,64,64,1,0,1)));
+    const locations=new Map();function loc(p,name){const key=name+String(p===linesProgram?0:p===pointsProgram?1:2);if(!locations.has(key))locations.set(key,gl.getUniformLocation(p,name));return locations.get(key);}
+    function use(p){gl.useProgram(p);const sy=Math.sin(state.yaw),cy=Math.cos(state.yaw),sp=Math.sin(state.pitch),cp=Math.cos(state.pitch);gl.uniform3f(loc(p,&#x27;uRight&#x27;),cy,0,-sy);gl.uniform3f(loc(p,&#x27;uUp&#x27;),-sp*sy,cp,-sp*cy);gl.uniform3f(loc(p,&#x27;uNormal&#x27;),cp*sy,sp,cp*cy);gl.uniform1f(loc(p,&#x27;uDistance&#x27;),distance);gl.uniform1f(loc(p,&#x27;uAspect&#x27;),w/h);gl.uniform1f(loc(p,&#x27;uOffset&#x27;),mobile?.14:.07);}
+    function rgb(hex,a){return[parseInt(hex.slice(1,3),16)/255,parseInt(hex.slice(3,5),16)/255,parseInt(hex.slice(5,7),16)/255,a];}
+    function vertices(p,data,hasRadius){use(p);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.DYNAMIC_DRAW);const stride=(hasRadius?8:7)*4;const position=gl.getAttribLocation(p,&#x27;aPosition&#x27;),col=gl.getAttribLocation(p,&#x27;aColour&#x27;);gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,3,gl.FLOAT,false,stride,0);gl.enableVertexAttribArray(col);gl.vertexAttribPointer(col,4,gl.FLOAT,false,stride,12);if(hasRadius){const radius=gl.getAttribLocation(p,&#x27;aRadius&#x27;);gl.enableVertexAttribArray(radius);gl.vertexAttribPointer(radius,1,gl.FLOAT,false,stride,28);gl.uniform1f(loc(p,&#x27;uHeight&#x27;),h*dpr);gl.uniform1f(loc(p,&#x27;uPhase&#x27;),phase);}return data.length/(hasRadius?8:7);}
+    function stroke(ps,color,alpha,loop){const c=rgb(color,alpha),count=vertices(linesProgram,ps.flatMap(p=&gt;[...p,...c]),false);gl.drawArrays(loop?gl.LINE_LOOP:gl.LINE_STRIP,0,count);}
+    function blend(additive){gl.blendFuncSeparate(gl.SRC_ALPHA,additive?gl.ONE:gl.ONE_MINUS_SRC_ALPHA,gl.ONE,gl.ONE_MINUS_SRC_ALPHA);}
+    function sprite(center,size,map,tint,additive,rotation=0){use(spriteProgram);gl.bindBuffer(gl.ARRAY_BUFFER,quadBuffer);const corner=gl.getAttribLocation(spriteProgram,&#x27;aCorner&#x27;);gl.enableVertexAttribArray(corner);gl.vertexAttribPointer(corner,2,gl.FLOAT,false,8,0);gl.uniform3fv(loc(spriteProgram,&#x27;uCenter&#x27;),center);gl.uniform2fv(loc(spriteProgram,&#x27;uSize&#x27;),size);gl.uniform1f(loc(spriteProgram,&#x27;uRotation&#x27;),rotation);gl.uniform4fv(loc(spriteProgram,&#x27;uTint&#x27;),tint);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,map);gl.uniform1i(loc(spriteProgram,&#x27;uTexture&#x27;),0);blend(additive);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);}
+    function facingCircle(center,radius){const sy=Math.sin(state.yaw),cy=Math.cos(state.yaw),sp=Math.sin(state.pitch),cp=Math.cos(state.pitch);return Array.from({length:72},(_,i)=&gt;{const a=i/72*Math.PI*2,x=Math.cos(a)*radius,y=Math.sin(a)*radius;return[center[0]+x*cy-y*sp*sy,center[1]+y*cp,center[2]-x*sy-y*sp*cy];});}
+    const starData=stars.flatMap(s=&gt;[...s.p,...rgb(&#x27;#c8d7ea&#x27;,s.a),.06+s.r*.03]);
+    gl.enable(gl.BLEND);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.clearColor(0,0,0,0);
+    engine={resize:function(){surface.width=Math.round(w*dpr);surface.height=Math.round(h*dpr);gl.viewport(0,0,surface.width,surface.height);},draw:function(packets){gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.depthMask(false);centres().forEach((c,i)=&gt;sprite(c,[10,8],glowMap,rgb(teams[i].color,.1*state.glow),true));blend(true);let count=vertices(pointsProgram,starData,true);gl.drawArrays(gl.POINTS,0,count);blend(false);for(let t=0;t&lt;4;t++)for(let layer=0;layer&lt;2;layer++)stroke(Array.from({length:97},(_,i)=&gt;orbitPoint(t,i/96*Math.PI*2,layer)),teams[t].color,layer?.15:.45,false);
+      const selected=nodes.find(n=&gt;n.id===state.selected);
+      const sorted=[...nodes].sort((a,b)=&gt;b.projected.depth-a.projected.depth);sorted.forEach(n=&gt;sprite(n.position,[2.5,2.5],glowMap,rgb(n.color,.21*state.glow),true));sorted.forEach(n=&gt;{const look=ringAppearance(n);sprite(n.position,[look.size,look.size],maps[n.index],[1,1,1,look.intensity],true,look.rotation);});blend(false);if(selected)stroke(facingCircle(selected.position,.69),&#x27;#dcf3ff&#x27;,.85,true);
+      packets.forEach(function(p){stroke(Array.from({length:28},(_,i)=&gt;curve(p.route,i/27)),p.color,.45,false);if(p.t&lt;=1){for(let k=0;k&lt;8;k++)sprite(curve(p.route,clamp(p.t-k*.016,0,1)),[.45-k*.025,.45-k*.025],glowMap,rgb(p.color,(1-k/9)*.8),true);}else stroke(facingCircle(positions[p.route[1]],.28+(p.t-1)*3),p.color,(1.17-p.t)*4,true);});
+    }};
+    surface.addEventListener(&#x27;webglcontextlost&#x27;,function(e){e.preventDefault();engine=null;canvas.style.visibility=&#x27;visible&#x27;;surface.style.display=&#x27;none&#x27;;world.dataset.renderer=&#x27;perspective-canvas&#x27;;wake();});engine.resize();canvas.style.visibility=&#x27;visible&#x27;;world.dataset.renderer=&#x27;webgl&#x27;;wake();
+  }
+
+})();
+&lt;/script&gt;
+
+
+
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+  let lastPointerWasTouch = false;
+  let pinnedByTouch = false;
+
+  const getTrigger = (event) =&gt; {
+    for (const target of event.composedPath()) {
+      if (target?.nodeType === Node.ELEMENT_NODE) {
+        const trigger = target.closest(&quot;[data-tooltip]&quot;);
+        if (trigger) return trigger;
+      }
+    }
+    return null;
+  };
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    pinnedByTouch = false;
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handlePointer = (event) =&gt; {
+    lastPointerWasTouch =
+      event.type === &quot;pointerdown&quot; &amp;&amp; event.pointerType === &quot;touch&quot;;
+  };
+  const handleTouchClick = (event) =&gt; {
+    const isTouch = event.pointerType === &quot;touch&quot; || lastPointerWasTouch;
+    lastPointerWasTouch = false;
+    if (!isTouch || event.detail === 0) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (
+      trigger == null ||
+      !trigger.isConnected ||
+      getContent(trigger).length === 0 ||
+      (pinnedByTouch &amp;&amp; activeTrigger === trigger)
+    ) {
+      if (pinnedByTouch) {
+        closeTooltip();
+      }
+      return;
+    }
+    openTooltip(trigger);
+    pinnedByTouch = activeTrigger === trigger;
+    window.setTimeout(() =&gt; {
+      if (activeTrigger === trigger &amp;&amp; !trigger.isConnected) {
+        closeTooltip(false);
+      }
+    }, 0);
+  };
+  const handleLeave = (event) =&gt; {
+    if (pinnedByTouch) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    lastPointerWasTouch = false;
+    const trigger = getTrigger(event);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handlers = {
+    pointerover: handlePointerOpen,
+    pointerdown: handlePointer,
+    pointercancel: handlePointer,
+    click: handleTouchClick,
+    pointerout: handleLeave,
+    focusin: handleFocusIn,
+    focusout: handleLeave,
+    keydown: handleKeyDown,
+    contextmenu: handleContextMenu,
+  };
+  const roots = new Map();
+  const handledEvents = new WeakSet();
+  const handleEvent = (event) =&gt; {
+    if (handledEvents.has(event)) return;
+    handledEvents.add(event);
+    handlers[event.type](event);
+  };
+  const discoverRoots = (node) =&gt; {
+    if (node.shadowRoot) listen(node.shadowRoot);
+    for (const element of node.querySelectorAll(&quot;*&quot;)) {
+      if (element.shadowRoot) listen(element.shadowRoot);
+    }
+  };
+  const listen = (root) =&gt; {
+    if (roots.has(root)) return;
+    for (const type of Object.keys(handlers)) root.addEventListener(type, handleEvent);
+    const observer = new window.MutationObserver((records) =&gt; {
+      for (const { addedNodes } of records) {
+        for (const node of addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) discoverRoots(node);
+        }
+      }
+      for (const [root, cleanup] of roots) {
+        if (root.host &amp;&amp; !root.host.isConnected) {
+          cleanup();
+          roots.delete(root);
+        }
+      }
+      if (activeTrigger &amp;&amp; !activeTrigger.isConnected) closeTooltip(false);
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    roots.set(root, () =&gt; {
+      observer.disconnect();
+      for (const type of Object.keys(handlers)) root.removeEventListener(type, handleEvent);
+    });
+    discoverRoots(root);
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    lastPointerWasTouch = false;
+    for (const cleanup of roots.values()) cleanup();
+    roots.clear();
+    tooltip = null;
+  };
+
+  // Events between children of one shadow root never reach the document.
+  listen(document);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-tabs&quot;&gt;
+(() =&gt; {
+  const selector = &#x27;.nav[role=&quot;tablist&quot;] [role=&quot;tab&quot;]&#x27;;
+  const disabled = &#x27;:disabled,[aria-disabled=&quot;true&quot;]&#x27;;
+  const selectTab = (selected) =&gt; {
+    const panelId = selected.getAttribute(&quot;aria-controls&quot;);
+    for (const tab of selected.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;)) {
+      const active = tab === selected;
+      tab.classList.toggle(&quot;active&quot;, active);
+      tab.setAttribute(&quot;aria-selected&quot;, String(active));
+      const id = tab.getAttribute(&quot;aria-controls&quot;);
+      const panel = id &amp;&amp; document.getElementById(id);
+      if (panel != null) {
+        panel.hidden = id !== panelId;
+        if (!panel.hidden &amp;&amp; selected.id) {
+          panel.setAttribute(&quot;aria-labelledby&quot;, selected.id);
+        }
+      }
+    }
+  };
+  const interact = (event) =&gt; {
+    const tab = event.target?.closest?.(selector);
+    if (event.defaultPrevented || tab == null || tab.matches(disabled)) {
+      return;
+    }
+    if (event.type === &quot;click&quot;) {
+      selectTab(tab);
+      return;
+    }
+    const tabs = Array.from(
+      tab.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;),
+    ).filter((candidate) =&gt; !candidate.matches(disabled));
+    const current = tabs.indexOf(tab);
+    let next;
+    if (event.key === &quot;ArrowRight&quot; || event.key === &quot;ArrowDown&quot;) {
+      next = (current + 1) % tabs.length;
+    } else if (event.key === &quot;ArrowLeft&quot; || event.key === &quot;ArrowUp&quot;) {
+      next = (current + tabs.length - 1) % tabs.length;
+    } else if (event.key === &quot;Home&quot;) {
+      next = 0;
+    } else if (event.key === &quot;End&quot;) {
+      next = tabs.length - 1;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    tabs[next].focus();
+    selectTab(tabs[next]);
+  };
+
+  for (const list of document.querySelectorAll(&#x27;.nav[role=&quot;tablist&quot;]&#x27;)) {
+    const selected =
+      list.querySelector(&#x27;[role=&quot;tab&quot;][aria-selected=&quot;true&quot;]&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;].active&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;]&#x27;);
+    if (selected != null) {
+      selectTab(selected);
+    }
+  }
+  document.addEventListener(&quot;click&quot;, interact);
+  document.addEventListener(&quot;keydown&quot;, interact);
+  window.addEventListener(&quot;pagehide&quot;, () =&gt; {
+    document.removeEventListener(&quot;click&quot;, interact);
+    document.removeEventListener(&quot;keydown&quot;, interact);
+  }, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-carousel&quot;&gt;
+  (() =&gt; {
+    for (const root of document.querySelectorAll(&quot;.viz-carousel&quot;)) {
+      const panels = Array.from(
+        root.querySelectorAll(&quot;:scope &gt; [data-variant]&quot;),
+      );
+      if (panels.length === 0) {
+        continue;
+      }
+      root.setAttribute(&quot;role&quot;, &quot;group&quot;);
+      panels.forEach((panel, index) =&gt; {
+        panel.hidden = index !== 0;
+        panel.setAttribute(&quot;role&quot;, &quot;group&quot;);
+        if (!panel.hasAttribute(&quot;aria-label&quot;)) {
+          panel.setAttribute(&quot;aria-label&quot;, panel.dataset.variant);
+        }
+      });
+      root.dataset.activeVariant = panels[0].dataset.variant;
+      if (panels.length === 1) {
+        continue;
+      }
+
+      const controls = document.createElement(&quot;div&quot;);
+      controls.className = &quot;viz-carousel-controls&quot;;
+      // Portable copy of the settings dropdown&#x27;s legacy glyph; no 14px icon-package preset matches it.
+      // https://github.com/openai/openai/blob/master/codex/codex-apps/webview/src/icons/chevron.svg
+      controls.innerHTML = `
+      &lt;button type=&quot;button&quot; class=&quot;viz-carousel-previous cursor-interaction&quot;&gt;&lt;i data-lucide=&quot;chevron-left&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+      &lt;details class=&quot;viz-carousel-picker&quot;&gt;
+        &lt;summary class=&quot;cursor-interaction&quot;&gt;
+          &lt;span class=&quot;viz-carousel-count tabular-nums&quot;&gt;&lt;/span&gt;
+          &lt;span class=&quot;viz-carousel-name&quot;&gt;&lt;/span&gt;
+          &lt;svg class=&quot;viz-carousel-caret&quot; width=&quot;14&quot; height=&quot;14&quot; viewBox=&quot;0 0 20 21&quot; fill=&quot;none&quot; aria-hidden=&quot;true&quot; focusable=&quot;false&quot;&gt;
+            &lt;path d=&quot;M15.2793 7.71101C15.539 7.45131 15.961 7.45131 16.2207 7.71101C16.4804 7.97071 16.4804 8.39272 16.2207 8.65242L10.4707 14.4024C10.211 14.6621 9.78902 14.6621 9.52932 14.4024L3.77932 8.65242L3.69436 8.54792C3.52385 8.28979 3.55205 7.93828 3.77932 7.71101C4.00659 7.48374 4.3581 7.45554 4.61623 7.62605L4.72073 7.71101L10 12.9903L15.2793 7.71101Z&quot; fill=&quot;currentColor&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;0.6&quot; /&gt;
+          &lt;/svg&gt;
+        &lt;/summary&gt;
+        &lt;div class=&quot;viz-carousel-options&quot;&gt;&lt;/div&gt;
+      &lt;/details&gt;
+      &lt;button type=&quot;button&quot; class=&quot;viz-carousel-next cursor-interaction&quot;&gt;&lt;i data-lucide=&quot;chevron-right&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;`;
+      const previous = controls.querySelector(&quot;.viz-carousel-previous&quot;);
+      const next = controls.querySelector(&quot;.viz-carousel-next&quot;);
+      const picker = controls.querySelector(&quot;.viz-carousel-picker&quot;);
+      const summary = picker.querySelector(&quot;summary&quot;);
+      const count = controls.querySelector(&quot;.viz-carousel-count&quot;);
+      const name = controls.querySelector(&quot;.viz-carousel-name&quot;);
+      const options = controls.querySelector(&quot;.viz-carousel-options&quot;);
+      const status = document.createElement(&quot;span&quot;);
+      status.className = &quot;sr-only&quot;;
+      status.setAttribute(&quot;role&quot;, &quot;status&quot;);
+      status.setAttribute(&quot;aria-live&quot;, &quot;polite&quot;);
+      status.setAttribute(&quot;aria-atomic&quot;, &quot;true&quot;);
+      previous.setAttribute(
+        &quot;aria-label&quot;,
+        root.dataset.previousLabel ?? &quot;Previous variant&quot;,
+      );
+      next.setAttribute(&quot;aria-label&quot;, root.dataset.nextLabel ?? &quot;Next variant&quot;);
+
+      let active = 0;
+      let mousePointerId = null;
+      let summaryPointerHandled = false;
+      summary.addEventListener(&quot;pointerdown&quot;, (event) =&gt; {
+        summaryPointerHandled =
+          event.pointerType === &quot;mouse&quot; &amp;&amp; event.button === 0 &amp;&amp; !event.ctrlKey;
+        if (!summaryPointerHandled) {
+          return;
+        }
+        event.preventDefault();
+        summary.focus({ preventScroll: true });
+        picker.open = !picker.open;
+        mousePointerId = picker.open ? event.pointerId : null;
+      });
+      summary.addEventListener(&quot;click&quot;, (event) =&gt; {
+        if (summaryPointerHandled &amp;&amp; event.detail &gt; 0) {
+          event.preventDefault();
+        }
+      });
+      const choices = panels.map((panel, index) =&gt; {
+        const choice = document.createElement(&quot;button&quot;);
+        choice.type = &quot;button&quot;;
+        choice.className = &quot;cursor-interaction&quot;;
+        choice.textContent = panel.dataset.variant;
+        choice.addEventListener(&quot;click&quot;, () =&gt; {
+          select(index);
+          summary.focus();
+        });
+        choice.addEventListener(&quot;pointerup&quot;, (event) =&gt; {
+          if (
+            picker.open &amp;&amp;
+            event.pointerType === &quot;mouse&quot; &amp;&amp;
+            event.button === 0 &amp;&amp;
+            event.pointerId === mousePointerId
+          ) {
+            choice.click();
+          }
+        });
+        options.appendChild(choice);
+        return choice;
+      });
+      const select = (index) =&gt; {
+        const changed = active !== index;
+        active = index;
+        panels.forEach((panel, position) =&gt; {
+          panel.hidden = position !== active;
+          choices[position].setAttribute(
+            &quot;aria-current&quot;,
+            String(position === active),
+          );
+        });
+        root.dataset.activeVariant = panels[active].dataset.variant;
+        count.textContent = `${active + 1} / ${panels.length}`;
+        name.textContent = panels[active].dataset.variant;
+        picker.open = false;
+        mousePointerId = null;
+        if (changed) {
+          status.textContent = `${count.textContent}: ${name.textContent}`;
+        }
+      };
+      previous.addEventListener(&quot;click&quot;, () =&gt;
+        select((active + panels.length - 1) % panels.length),
+      );
+      next.addEventListener(&quot;click&quot;, () =&gt;
+        select((active + 1) % panels.length),
+      );
+      picker.addEventListener(&quot;keydown&quot;, (event) =&gt; {
+        if (event.key === &quot;Escape&quot; &amp;&amp; picker.open) {
+          event.preventDefault();
+          picker.open = false;
+          mousePointerId = null;
+          summary.focus();
+          return;
+        }
+        if (event.altKey || event.ctrlKey || event.metaKey) {
+          return;
+        }
+        const index = choices.indexOf(document.activeElement);
+        let nextIndex;
+        if (event.key === &quot;ArrowDown&quot;) {
+          nextIndex = index &lt; 0 ? active : (index + 1) % choices.length;
+        } else if (event.key === &quot;ArrowUp&quot;) {
+          nextIndex = index &lt; 0 ? active : (index + choices.length - 1) % choices.length;
+        } else if (picker.open &amp;&amp; event.key === &quot;Home&quot;) {
+          nextIndex = 0;
+        } else if (picker.open &amp;&amp; event.key === &quot;End&quot;) {
+          nextIndex = choices.length - 1;
+        } else {
+          return;
+        }
+        event.preventDefault();
+        picker.open = true;
+        choices[nextIndex].focus();
+      });
+      picker.addEventListener(&quot;focusout&quot;, (event) =&gt; {
+        if (!picker.contains(event.relatedTarget)) {
+          picker.open = false;
+          mousePointerId = null;
+        }
+      });
+      const dismiss = (event) =&gt; {
+        if (!summary.contains(event.target)) {
+          mousePointerId = null;
+        }
+        if (!picker.contains(event.target)) {
+          picker.open = false;
+        }
+      };
+      const endPointerSelection = () =&gt; {
+        mousePointerId = null;
+      };
+      const sizePicker = () =&gt; {
+        root.style.setProperty(
+          &quot;--viz-carousel-picker-height&quot;,
+          `${picker.open ? options.offsetHeight : 0}px`,
+        );
+      };
+      picker.addEventListener(&quot;toggle&quot;, sizePicker);
+      window.addEventListener(&quot;resize&quot;, sizePicker);
+      document.addEventListener(&quot;pointerdown&quot;, dismiss);
+      document.addEventListener(&quot;pointerup&quot;, endPointerSelection);
+      document.addEventListener(&quot;pointercancel&quot;, endPointerSelection);
+      window.addEventListener(&quot;blur&quot;, endPointerSelection);
+      window.addEventListener(
+        &quot;pagehide&quot;,
+        () =&gt; {
+          document.removeEventListener(&quot;pointerdown&quot;, dismiss);
+          document.removeEventListener(&quot;pointerup&quot;, endPointerSelection);
+          document.removeEventListener(&quot;pointercancel&quot;, endPointerSelection);
+          window.removeEventListener(&quot;blur&quot;, endPointerSelection);
+          window.removeEventListener(&quot;resize&quot;, sizePicker);
+        },
+        { once: true },
+      );
+      root.append(controls, status);
+      select(0);
+    }
+  })();
+&lt;/script&gt;
+
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+<script>(() => {
+  const frame = document.getElementById("codex-visualization");
+  if (!(frame instanceof HTMLIFrameElement)) {
+    return;
+  }
+  let viewportHeight = globalThis.innerHeight;
+  const storageKey = `codex:visualization-widget-state-v2:${JSON.stringify([
+    globalThis.location.pathname,
+    globalThis.location.search,
+  ])}`;
+  const parseState = (serializedState) => {
+    if (
+      typeof serializedState !== "string" ||
+      new TextEncoder().encode(serializedState).length > 16 * 1024
+    ) {
+      throw new TypeError(
+        "Widget state must be a JSON object of at most 16 KiB",
+      );
+    }
+    /** @type {unknown} */
+    const state = JSON.parse(serializedState);
+    if (
+      state == null ||
+      typeof state !== "object" ||
+      Array.isArray(state) ||
+      ("imageIds" in state &&
+        (!Array.isArray(state.imageIds) || state.imageIds.length > 0))
+    ) {
+      throw new TypeError("Widget state must be a JSON object");
+    }
+    const storedState = { modelContent: null, privateContent: null, ...state };
+    const canonicalState = JSON.stringify(
+      storedState,
+      (_key, /** @type {unknown} */ value) => {
+        if (typeof value === "number" && !Number.isFinite(value)) {
+          throw new TypeError("Widget state must contain finite numbers");
+        }
+        return value;
+      },
+    );
+    if (new TextEncoder().encode(canonicalState).length > 16 * 1024) {
+      throw new TypeError(
+        "Widget state must be a JSON object of at most 16 KiB",
+      );
+    }
+    return storedState;
+  };
+  let storage = null;
+  let state = null;
+  try {
+    const localStorage = globalThis.localStorage;
+    const probeKey = `${storageKey}:probe`;
+    localStorage.setItem(probeKey, "1");
+    localStorage.removeItem(probeKey);
+    storage = localStorage;
+    const savedState = storage.getItem(storageKey);
+    if (savedState != null) {
+      try {
+        state = parseState(savedState);
+      } catch {
+        // Invalid saved state does not disable future writes.
+      }
+    }
+  } catch {
+    storage = null;
+  }
+  const initialGlobals = {
+    widgetState: state,
+    statePersistence: storage == null ? "none" : "local",
+  };
+
+  const channel = new MessageChannel();
+  channel.port1.addEventListener("message", (event) => {
+    const data = event.data;
+    if (typeof data !== "object" || data == null) {
+      return;
+    }
+    if (data.type === "widget-state-write") {
+      if (!Number.isSafeInteger(data.id) || data.id <= 0) {
+        return;
+      }
+      let ok = false;
+      try {
+        if (storage != null) {
+          const state = parseState(data.state);
+          storage.setItem(storageKey, JSON.stringify(state));
+          ok = true;
+        }
+      } catch {
+        // Storage denial, quota limits, and invalid state return a failed receipt.
+      }
+      channel.port1.postMessage({
+        type: "widget-state-result",
+        id: data.id,
+        ok,
+      });
+      return;
+    }
+    if (data.type === "height") {
+      const height = data.height;
+      if (
+        typeof height === "number" &&
+        Number.isFinite(height) &&
+        height >= 0 &&
+        height <= 10_000
+      ) {
+        frame.style.height = Math.ceil(height) + "px";
+      }
+      return;
+    }
+    if (data.type === "scroll-to") {
+      const top = data.top;
+      if (
+        typeof top === "number" &&
+        Number.isFinite(top) &&
+        top >= 0 &&
+        globalThis.navigator.userActivation?.isActive === true
+      ) {
+        globalThis.scrollTo({
+          top: Math.ceil(
+            globalThis.scrollY + frame.getBoundingClientRect().top + top,
+          ),
+        });
+      }
+      return;
+    }
+    if (data.type === "open-external") {
+      const rawHref = data.href;
+      if (typeof rawHref !== "string") {
+        return;
+      }
+      let href;
+      try {
+        const url = new URL(rawHref, document.baseURI);
+        if (url.protocol !== "https:") {
+          return;
+        }
+        href = url.href;
+      } catch {
+        return;
+      }
+      if (globalThis.navigator.userActivation?.isActive === true) {
+        const anchor = document.createElement("a");
+        anchor.href = href;
+        anchor.rel = "noopener noreferrer";
+        anchor.target = "_blank";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      }
+      return;
+    }
+    if (data.type === "follow-up") {
+      const prompt = data.prompt;
+      if (
+        typeof prompt !== "string" ||
+        globalThis.navigator.userActivation?.isActive !== true
+      ) {
+        return;
+      }
+      const title = data.title;
+      globalThis.prompt(typeof title === "string" ? title : prompt, prompt);
+    }
+  });
+  channel.port1.start();
+  const srcdoc = frame.dataset.srcdoc;
+  if (srcdoc == null) {
+    return;
+  }
+  globalThis.addEventListener("resize", () => {
+    const height = Number.parseFloat(frame.style.height);
+    if (!Number.isFinite(height) || height <= viewportHeight) {
+      frame.style.removeProperty("height");
+    }
+    viewportHeight = globalThis.innerHeight;
+    channel.port1.postMessage({ type: "measure" });
+  });
+  frame.addEventListener(
+    "load",
+    () => {
+      frame.contentWindow?.postMessage(
+        { type: "codex-visualization-initialize" },
+        "*",
+        [channel.port2],
+      );
+    },
+    { once: true },
+  );
+  // Match the trusted bootstrap element, not the same text in an authored title.
+  frame.srcdoc = srcdoc.replace(
+    '<script type="application/json" id="codex-visualization-widget-state">__CODEX_VISUALIZATION_WIDGET_STATE__<\/script>',
+    () =>
+      '<script type="application/json" id="codex-visualization-widget-state">' +
+      JSON.stringify(initialGlobals).replaceAll("<", "\\u003c") +
+      "<\/script>",
+  );
+  delete frame.dataset.srcdoc;
+})();
+</script>
+</body>
+</html>

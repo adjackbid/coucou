@@ -1,0 +1,169 @@
+{
+  "packageName": "協作軌道光環星域",
+  "version": "1.0.0",
+  "createdAt": "2026-10-06T23:53:29+08:00",
+  "entryPoints": {
+    "guide": "README.md",
+    "specification": "規格書.md",
+    "interactiveReference": "index.html",
+    "aiHandoff": "AI-接手指令.txt"
+  },
+  "visualBasis": "光環節點、共同宇宙、3D 相機、常駐連線、傳送光流、慢移星塵與柔光",
+  "sourceSnapshot": {
+    "path": "examples/agent-orbit.fragment.html",
+    "sha256": "6547bcb0c52572e1246ee327cb6e3996162caa7d23a13fb436f1943791eedf6e"
+  },
+  "provenance": {
+    "scene": "本對話定稿的程式繪製光環和場景",
+    "externalArtAssets": [],
+    "export": "visualize standalone export，移除三個非必要遠端腳本",
+    "licenseNote": "未新增授權宣告，沿用專案及匯出工具的既有條款。來源快照供接入參考。"
+  },
+  "demoData": true,
+  "productionIntegrated": false,
+  "fileCountExcludingManifest": 21,
+  "checksumAlgorithm": "SHA256",
+  "checksumExcludes": [
+    "manifest.json",
+    "外層 ZIP 檔"
+  ],
+  "files": [
+    {
+      "path": "AI-接手指令.txt",
+      "bytes": 2269,
+      "sha256": "96ba32599bcd9ccfe20f737fb436b2d481cd24ca1f90523f35b90d8588e9299d"
+    },
+    {
+      "path": "data/example-events.json",
+      "bytes": 4614,
+      "sha256": "db3e4a0cd652577763a2b79a6e81f5023f33aaba57888a65b9b13ce381fd3653"
+    },
+    {
+      "path": "data/example-scene.json",
+      "bytes": 4713,
+      "sha256": "f32bc76672f25385f9cfaea1c663a5f9ffade2a421f9b01d81354b00c60cb778"
+    },
+    {
+      "path": "data/orbit-contracts.ts",
+      "bytes": 1951,
+      "sha256": "dcabcf2afb36746578d4ff51769475d5fe095b4c8b17e2bd781b9f3da9f7993c"
+    },
+    {
+      "path": "data/visual-config.json",
+      "bytes": 4190,
+      "sha256": "2bfa4565b18cf3ea1d68e6c2806ab912e2cd07b667fc76dd9637341f6eb131d5"
+    },
+    {
+      "path": "examples/agent-orbit.fragment.html",
+      "bytes": 46315,
+      "sha256": "6547bcb0c52572e1246ee327cb6e3996162caa7d23a13fb436f1943791eedf6e"
+    },
+    {
+      "path": "index.html",
+      "bytes": 121778,
+      "sha256": "cbc32a58eb07a96b8d714697c92bcb488ed411bc1caf14ffa9367168cb93fa26"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2956,
+      "sha256": "6a93ec5aa2f53d077e8e026b1ead2fa970893c51c1a905c5a3637ddb13d591e7"
+    },
+    {
+      "path": "references/canvas-fallback.png",
+      "bytes": 422497,
+      "sha256": "48796b32579dd941e7157dcdb5fa8d2d550004fb5f1f309c81f715666dd9e689",
+      "width": 390,
+      "height": 1720,
+      "description": "WebGL context lost 後備畫面",
+      "source": "本交付離線互動參考頁的瀏覽器截圖"
+    },
+    {
+      "path": "references/data-transfer.png",
+      "bytes": 632011,
+      "sha256": "006f36f45361c3920171c1c7fe21ce8780b180a789db26b151707bd223795dee",
+      "width": 1100,
+      "height": 1130,
+      "description": "傳送方向與光流",
+      "source": "本交付離線互動參考頁的瀏覽器截圖"
+    },
+    {
+      "path": "references/light-chrome.png",
+      "bytes": 585672,
+      "sha256": "653c685075ecaa5eb0a8ab60428a32698aa4bf2033034bafadc053cb1a1e3ebb",
+      "width": 1100,
+      "height": 1130,
+      "description": "淺色介面與深色宇宙",
+      "source": "本交付離線互動參考頁的瀏覽器截圖"
+    },
+    {
+      "path": "references/mobile-320.png",
+      "bytes": 331813,
+      "sha256": "f17513892c47c9944cf22af5d5382cb30b82098ed8a74a6b3956138848d23bfa",
+      "width": 320,
+      "height": 1500,
+      "description": "320px 窄畫面",
+      "source": "本交付離線互動參考頁的瀏覽器截圖"
+    },
+    {
+      "path": "references/overview-dark.png",
+      "bytes": 629593,
+      "sha256": "2b9430b563fd9db3c9938d3a0cd0fabd0559c9132dee4390039d7cb6636c74bb",
+      "width": 1100,
+      "height": 1130,
+      "description": "桌面總覽，常駐連線",
+      "source": "本交付離線互動參考頁的瀏覽器截圖"
+    },
+    {
+      "path": "references/selected-links.png",
+      "bytes": 631638,
+      "sha256": "386af4281f0be42de9488792639cda3fe59f07c7eb2d24d45eae2b49194f3616",
+      "width": 1100,
+      "height": 1130,
+      "description": "選取 Leader 的直接連線加亮",
+      "source": "本交付離線互動參考頁的瀏覽器截圖"
+    },
+    {
+      "path": "references/side-view.png",
+      "bytes": 605752,
+      "sha256": "49a787809f02045674d39913790957ff16bd4477323ca0156b4c1e1106528a78",
+      "width": 1100,
+      "height": 1130,
+      "description": "側視角度",
+      "source": "本交付離線互動參考頁的瀏覽器截圖"
+    },
+    {
+      "path": "references/top-view.png",
+      "bytes": 591397,
+      "sha256": "5dbd34069fd03bc213217366a652fe73c450f032ba233bf237a4a6dd77cff70a",
+      "width": 1100,
+      "height": 1130,
+      "description": "俯視角度",
+      "source": "本交付離線互動參考頁的瀏覽器截圖"
+    },
+    {
+      "path": "verification/package-check.json",
+      "bytes": 1375,
+      "sha256": "8e9bdafdc79bc0efc507a1903cc8e45a7106c66d04641d7c124a52356a7f6fd3"
+    },
+    {
+      "path": "verification/touch-fallback.json",
+      "bytes": 386,
+      "sha256": "16a97207d398e0976a0813b7f9789175298745e06d05bd82d579505ff80ac708"
+    },
+    {
+      "path": "verification/verification.json",
+      "bytes": 4168,
+      "sha256": "1d28b796b72a87e1a1530ecd64ff5076dc2a16148aceb89d091d05b9494cc303"
+    },
+    {
+      "path": "verification/驗收清單.md",
+      "bytes": 2685,
+      "sha256": "0463cdc5651bcc78a8568ca4b1d5786909c2ffd3b2543525d665a48d0d0c87cc"
+    },
+    {
+      "path": "規格書.md",
+      "bytes": 16582,
+      "sha256": "67a34178913138e65fe206a1f06c78f5820bca435e1ef972fcda4d54d6214461"
+    }
+  ]
+}

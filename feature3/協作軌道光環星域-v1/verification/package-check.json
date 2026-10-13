@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-06",
+  "scope": "delivery-package",
+  "passed": true,
+  "sourceSnapshotExact": true,
+  "markdownLinksChecked": 11,
+  "referenceImages": {
+    "overview-dark.png": {
+      "width": 1100,
+      "height": 1130,
+      "description": "桌面總覽，常駐連線"
+    },
+    "selected-links.png": {
+      "width": 1100,
+      "height": 1130,
+      "description": "選取 Leader 的直接連線加亮"
+    },
+    "data-transfer.png": {
+      "width": 1100,
+      "height": 1130,
+      "description": "傳送方向與光流"
+    },
+    "top-view.png": {
+      "width": 1100,
+      "height": 1130,
+      "description": "俯視角度"
+    },
+    "side-view.png": {
+      "width": 1100,
+      "height": 1130,
+      "description": "側視角度"
+    },
+    "mobile-320.png": {
+      "width": 320,
+      "height": 1500,
+      "description": "320px 窄畫面"
+    },
+    "light-chrome.png": {
+      "width": 1100,
+      "height": 1130,
+      "description": "淺色介面與深色宇宙"
+    },
+    "canvas-fallback.png": {
+      "width": 390,
+      "height": 1720,
+      "description": "WebGL context lost 後備畫面"
+    }
+  },
+  "fixture": {
+    "teams": 4,
+    "agents": 13,
+    "relations": 12,
+    "timelineEvents": 13
+  },
+  "offlineReferencePassed": true,
+  "productionIntegration": "not-performed"
+}
