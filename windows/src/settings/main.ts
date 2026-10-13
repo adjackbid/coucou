@@ -1047,14 +1047,33 @@ function generalSection(): HTMLElement {
   void checkHotkey();
 
   const screen = h("select", {}) as HTMLSelectElement;
-  screen.append(
-    h("option", { value: "primary", text: "Main display" }),
-    h("option", { value: "cursor", text: "Display under the cursor" }),
-  );
-  screen.value = settings.screen;
+  // "Where I put it" exists once the island has been dragged onto a display.
+  function fillScreens() {
+    screen.replaceChildren(
+      h("option", { value: "primary", text: "Main display" }),
+      h("option", { value: "cursor", text: "Display under the cursor" }),
+    );
+    if (settings.dock?.monitor) screen.append(h("option", { value: "docked", text: "Where I put it" }));
+    screen.value = settings.screen;
+  }
+  fillScreens();
   screen.addEventListener("change", () => {
     settings.screen = screen.value as Settings["screen"];
-    void save();
+    // Rust forgets the dragged-to display once another choice is made.
+    if (settings.screen !== "docked") settings.dock = { ...settings.dock, monitor: "" };
+    void save().then(fillScreens);
+  });
+  // A drag while this window is open changes where the island lives.
+  void onEvent<Settings>("settings-changed", (s) => {
+    if (s.screen !== screen.value || !!s.dock?.monitor !== !!screen.querySelector('[value="docked"]')) {
+      settings = { ...settings, screen: s.screen, dock: s.dock };
+      fillScreens();
+    }
+  });
+  const resetPosition = h("button", {
+    text: "Reset position",
+    title: "Back to the top centre of the screen",
+    onclick: () => void Bridge.resetDock(),
   });
 
   return h(
@@ -1074,6 +1093,11 @@ function generalSection(): HTMLElement {
     h("div", { class: "row" },
       h("label", { text: "Island lives on" }),
       screen,
+    ),
+    h("div", { class: "row" },
+      h("label", { text: "Position" }),
+      resetPosition,
+      h("span", { class: "hint", text: "drag the island to move it: the top, or the left or right side" }),
     ),
     h("div", { class: "row" },
       h("label", { text: "Hide after" }),
