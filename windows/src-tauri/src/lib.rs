@@ -202,11 +202,27 @@ pub fn store_dock(app: &AppHandle, dock: settings::Dock, screen: Option<String>)
     let _ = app.emit("settings-changed", updated);
 }
 
+/// The front end saw the capsule pulled past the click threshold: Rust's
+/// cursor poll takes the drag from here. False when the button is already up.
+#[tauri::command]
+fn begin_island_drag(app: AppHandle, shared: State<Shared>, grab_x: f64, grab_y: f64) -> bool {
+    island::begin_drag(&app, &shared.gate, (grab_x, grab_y))
+}
+
+/// The front end drew the dropped capsule at its new coordinates: move the window.
+#[tauri::command]
+fn commit_dock_geometry(app: AppHandle, shared: State<Shared>) {
+    island::commit_drop(&app, &shared.gate);
+}
+
 /// Hidden island → shrink the window to the invisible wake strip and park the
 /// cursor poll; anything else → full panel and 60 Hz polling.
 #[tauri::command]
 fn set_collapsed(app: AppHandle, shared: State<Shared>, collapsed: bool) {
     let settings = shared.settings.lock().unwrap().clone();
+    if collapsed {
+        shared.gate.abandon_drag();
+    }
     shared.gate.collapsed.store(collapsed, Ordering::Relaxed);
     island::apply_geometry(&app, &settings, collapsed);
     // The wake strip must always take the mouse, and a resize invalidates the flag.
@@ -232,6 +248,10 @@ fn focus_window(app: AppHandle, focused: bool) {
 
 #[tauri::command]
 fn reposition(app: AppHandle, shared: State<Shared>) {
+    // Mid-drag the poll owns the window.
+    if shared.gate.dragging() {
+        return;
+    }
     let settings = shared.settings.lock().unwrap().clone();
     let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
     island::apply_geometry(&app, &settings, collapsed);
@@ -1552,6 +1572,8 @@ pub fn run() {
             set_island_rect,
             set_dock,
             reset_dock,
+            begin_island_drag,
+            commit_dock_geometry,
             focus_window,
             reposition,
             open_url,

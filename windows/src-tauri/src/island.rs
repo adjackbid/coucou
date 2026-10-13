@@ -8,7 +8,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
@@ -16,7 +16,7 @@ use crate::settings::{Dock, Settings};
 use tauri::{AppHandle, Emitter, Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewWindow};
 
 use windows::Win32::Foundation::{HWND, POINT};
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_ESCAPE, VK_LBUTTON};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetCursorPos, GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_NOACTIVATE,
     WS_EX_TOOLWINDOW,
@@ -41,6 +41,17 @@ pub const CAPSULE_THICK: f64 = 32.0;
 pub const TOP_INSET: f64 = 24.0;
 /// Room kept above and below a capsule on its side.
 pub const SIDE_MARGIN: f64 = 12.0;
+/// How much nearer another edge (or third of the top) must be before the
+/// preview flips — keeps it from flickering around a corner.
+pub const SNAP_HYSTERESIS: f64 = 24.0;
+/// A side capsule dropped this close to the middle goes exactly to the middle.
+pub const CENTRE_SNAP: f64 = 24.0;
+/// The landing hint shows only while the cursor is this close to the edge.
+pub const HINT_DISTANCE: f64 = 96.0;
+/// After the capsule turns, the grab point slides back under its centre this fast.
+const FLIP_SETTLE: Duration = Duration::from_millis(120);
+/// A drop the front end never acknowledges still moves the window after this.
+const COMMIT_GRACE: Duration = Duration::from_millis(300);
 
 pub const WINDOW_LABEL: &str = "island";
 
@@ -114,6 +125,11 @@ pub struct PollGate {
     pub rect: Mutex<IslandRect>,
     /// Mirrors the window flag so we only call into Win32 when it changes.
     ignoring: AtomicBool,
+    /// The island being dragged, if it is.
+    drag: Mutex<Option<Drag>>,
+    /// A drop waiting for the front end (`commit_dock_geometry`) before the
+    /// window moves, and when to give up waiting.
+    pending: Mutex<Option<(Settings, Instant)>>,
 }
 
 impl PollGate {
@@ -124,7 +140,18 @@ impl PollGate {
             collapsed: AtomicBool::new(true),
             rect: Mutex::new(IslandRect::default()),
             ignoring: AtomicBool::new(false),
+            drag: Mutex::new(None),
+            pending: Mutex::new(None),
         }
+    }
+
+    pub fn dragging(&self) -> bool {
+        self.drag.lock().unwrap().is_some()
+    }
+
+    /// Stops a drag without a drop (the island was put away mid-drag).
+    pub fn abandon_drag(&self) {
+        *self.drag.lock().unwrap() = None;
     }
 
     pub fn set_rect(&self, rect: IslandRect) {
@@ -361,6 +388,385 @@ pub fn apply_geometry(app: &AppHandle, settings: &Settings, collapsed: bool) {
     let _ = app.emit_to(WINDOW_LABEL, "dock-changed", DockPlacement { dock, anchor_in_window });
 }
 
+// ── Snapping ──────────────────────────────────────────────────────────────────
+// The same rules and numbers as snapDock in src/core/dock.ts: change one side,
+// change the other. Both test the same cases.
+
+/// A rectangle in logical pixels.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct LRect {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+/// The capsule's centre `oy` px down a work area `height` px tall, as a dock offset.
+pub fn side_offset(oy: f64, height: f64) -> f64 {
+    let lo = CAPSULE_LEN / 2.0 + SIDE_MARGIN;
+    let hi = height - lo;
+    if hi <= lo || height <= 0.0 {
+        return 0.5;
+    }
+    if (oy - height / 2.0).abs() <= CENTRE_SNAP {
+        return 0.5;
+    }
+    oy.clamp(lo, hi) / height
+}
+
+/// Where a capsule let go at `(x, y)` docks, in the logical coordinates of its
+/// display's work area. There is no bottom edge: the nearest of the other
+/// three wins. `prev` (edge, anchor) is the preview so far; nearly-equal
+/// choices keep it.
+pub fn snap_dock(x: f64, y: f64, wa: LRect, prev: Option<(&str, &str)>) -> Dock {
+    let d_top = y - wa.y;
+    let d_left = x - wa.x;
+    let d_right = wa.x + wa.w - x;
+    let side = if d_left <= d_right { "left" } else { "right" };
+    let d_side = d_left.min(d_right);
+
+    let prev_edge = prev.map(|p| p.0);
+    let edge = match prev_edge {
+        Some("top") => if d_side < d_top - SNAP_HYSTERESIS { side } else { "top" },
+        Some("left") | Some("right") => if d_top < d_side - SNAP_HYSTERESIS { "top" } else { side },
+        _ => if d_side < d_top { side } else { "top" },
+    };
+
+    if edge == "top" {
+        let rx = x - wa.x;
+        let b1 = wa.w / 3.0;
+        let b2 = wa.w * 2.0 / 3.0;
+        let mut anchor = if rx < b1 { "start" } else if rx > b2 { "end" } else { "center" };
+        if let Some(("top", pa)) = prev {
+            let h = SNAP_HYSTERESIS;
+            if pa == "start" && rx < b1 + h {
+                anchor = "start";
+            } else if pa == "end" && rx > b2 - h {
+                anchor = "end";
+            } else if pa == "center" && rx >= b1 - h && rx <= b2 + h {
+                anchor = "center";
+            }
+        }
+        return Dock { edge: "top".into(), anchor: anchor.into(), offset: 0.5, monitor: String::new() };
+    }
+    Dock {
+        edge: edge.into(),
+        anchor: "center".into(),
+        offset: side_offset(y - wa.y, wa.h),
+        monitor: String::new(),
+    }
+}
+
+fn edge_distance(x: f64, y: f64, wa: LRect, edge: &str) -> f64 {
+    match edge {
+        "left" => x - wa.x,
+        "right" => wa.x + wa.w - x,
+        _ => y - wa.y,
+    }
+}
+
+// ── Dragging ──────────────────────────────────────────────────────────────────
+// The poll thread drives a drag on its own: it already reads the cursor and
+// the button every 16 ms, and the window takes no mouse input while it moves,
+// so a fast fling loses nothing. The front end only says when it starts and
+// draws the capsule turning.
+
+/// One display as it was when the drag started.
+#[derive(Clone)]
+struct Screen {
+    name: String,
+    bounds: Area,
+    wa: Area,
+    scale: f64,
+}
+
+impl Screen {
+    fn contains(&self, x: f64, y: f64) -> bool {
+        let b = self.bounds;
+        x >= b.x as f64 && x < (b.x + b.w as i32) as f64 && y >= b.y as f64 && y < (b.y + b.h as i32) as f64
+    }
+
+    fn logical_wa(&self) -> LRect {
+        let s = self.scale;
+        LRect { x: self.wa.x as f64 / s, y: self.wa.y as f64 / s, w: self.wa.w as f64 / s, h: self.wa.h as f64 / s }
+    }
+}
+
+pub struct Drag {
+    /// Cursor minus capsule centre, logical px.
+    grab: (f64, f64),
+    /// When the capsule last turned; the grab point then eases to its centre.
+    flipped_at: Option<Instant>,
+    preview: Dock,
+    /// What to go back to on Escape.
+    before: Settings,
+    /// The display the island was on.
+    home: String,
+    screens: Vec<Screen>,
+    /// Physical size last given to the window.
+    size: (u32, u32),
+    last_cursor: (f64, f64),
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct PreviewPayload {
+    edge: String,
+    anchor: String,
+    /// Where the capsule will land, as a thin line along the edge, in the
+    /// window's logical px; none when it is far away or out of the window.
+    hint: Option<LRect>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct DropPayload {
+    dock: Dock,
+    anchor_in_window: f64,
+    /// The capsule where it was let go, in the coordinates of the window
+    /// at its new place.
+    from: LRect,
+    cancelled: bool,
+}
+
+fn escape_down() -> bool {
+    unsafe { (GetAsyncKeyState(VK_ESCAPE.0 as i32) as u16 & 0x8000) != 0 }
+}
+
+fn screens(app: &AppHandle) -> Vec<Screen> {
+    app.available_monitors()
+        .unwrap_or_default()
+        .iter()
+        .map(|m| Screen {
+            name: monitor_name(m),
+            bounds: Area { x: m.position().x, y: m.position().y, w: m.size().width, h: m.size().height },
+            wa: Area::of(m),
+            scale: m.scale_factor(),
+        })
+        .collect()
+}
+
+fn capsule_size(vertical: bool) -> (f64, f64) {
+    if vertical { (CAPSULE_THICK, CAPSULE_LEN) } else { (CAPSULE_LEN, CAPSULE_THICK) }
+}
+
+/// Starts dragging the island, the cursor `grab` logical px from the
+/// capsule's centre. False when the button is already up — that was a click.
+pub fn begin_drag(app: &AppHandle, gate: &PollGate, grab: (f64, f64)) -> bool {
+    if !left_button_down() || gate.collapsed.load(Ordering::Relaxed) {
+        return false;
+    }
+    let Some(shared) = app.try_state::<crate::Shared>() else { return false };
+    let before = shared.settings.lock().unwrap().clone();
+    let Some(m) = resolve_monitor(app, &before) else { return false };
+    let preview = effective_dock(&before.dock, Area::of(&m), m.scale_factor());
+    *gate.pending.lock().unwrap() = None;
+    *gate.drag.lock().unwrap() = Some(Drag {
+        grab,
+        flipped_at: None,
+        preview,
+        before,
+        home: monitor_name(&m),
+        screens: screens(app),
+        size: (0, 0),
+        last_cursor: (f64::MIN, f64::MIN),
+    });
+    // The poll reads the mouse from here on; the window takes none of it.
+    if let Some(win) = window(app) {
+        gate.ignoring.store(true, Ordering::Relaxed);
+        let _ = win.set_ignore_cursor_events(true);
+    }
+    gate.set_active(true);
+    true
+}
+
+/// One poll tick of a drag: follow the cursor, preview the dock, or drop.
+fn drag_tick(app: &AppHandle, gate: &PollGate, win: &WebviewWindow) {
+    let Some((cx, cy)) = cursor_physical() else { return };
+    let cancelled = escape_down();
+    if cancelled || !left_button_down() {
+        let Some(drag) = gate.drag.lock().unwrap().take() else { return };
+        finish_drag(app, gate, win, drag, (cx, cy), cancelled);
+        return;
+    }
+
+    let mut guard = gate.drag.lock().unwrap();
+    let Some(drag) = guard.as_mut() else { return };
+    let moved = (cx - drag.last_cursor.0).abs() >= 1.0 || (cy - drag.last_cursor.1).abs() >= 1.0;
+    let settling = drag.flipped_at.is_some_and(|t| t.elapsed() < FLIP_SETTLE);
+    if !moved && !settling {
+        return;
+    }
+    drag.last_cursor = (cx, cy);
+
+    let Some(screen) = drag
+        .screens
+        .iter()
+        .find(|s| s.contains(cx, cy))
+        .or_else(|| drag.screens.first())
+        .cloned()
+    else {
+        return;
+    };
+    let scale = screen.scale;
+    let grab = current_grab(drag);
+    // The capsule's centre: what the snap is decided by, and what the window
+    // keeps under the cursor.
+    let (px_, py_) = (cx - grab.0 * scale, cy - grab.1 * scale);
+    let wa = screen.logical_wa();
+    let prev = (drag.preview.edge.clone(), drag.preview.anchor.clone());
+    let mut next = snap_dock(px_ / scale, py_ / scale, wa, Some((&prev.0, &prev.1)));
+    next = effective_dock(&next, screen.wa, scale);
+    if next.is_vertical() != drag.preview.is_vertical() {
+        // Turned on its side or back: the grab swaps axes and eases to the
+        // middle, so the capsule stays under the cursor instead of jumping off.
+        drag.grab = (grab.1, grab.0);
+        drag.flipped_at = Some(Instant::now());
+    }
+    drag.preview = next.clone();
+
+    let pw = px(PANEL_W, scale).max(1) as u32;
+    let ph = px(PANEL_H, scale).max(1) as u32;
+    let grab = current_grab(drag);
+    let wx = (cx - grab.0 * scale - pw as f64 / 2.0).round() as i32;
+    let wy = (cy - grab.1 * scale - ph as f64 / 2.0).round() as i32;
+    // A display with another scale gives the window another physical size.
+    if drag.size != (pw, ph) {
+        drag.size = (pw, ph);
+        let _ = win.set_size(PhysicalSize::new(pw, ph));
+    }
+    let _ = win.set_position(PhysicalPosition::new(wx, wy));
+
+    // The landing line, while the cursor is near the edge and it is in the window.
+    let near = edge_distance(cx / scale, cy / scale, wa, &next.edge) <= HINT_DISTANCE;
+    let hint = if near {
+        let (ox, oy, _, _) = window_rect(&next, screen.wa, scale, false);
+        let (kx, ky, kw, kh) = capsule_in_window(&next, anchor_in_window(&next, screen.wa, scale));
+        // In physical px on the screen, then in the dragged window's logical px.
+        let (lx, ly) = (ox as f64 + kx * scale, oy as f64 + ky * scale);
+        let line = match next.edge.as_str() {
+            "left" => LRect { x: lx, y: ly, w: 3.0 * scale, h: kh * scale },
+            "right" => LRect { x: lx + (kw - 3.0) * scale, y: ly, w: 3.0 * scale, h: kh * scale },
+            _ => LRect { x: lx, y: ly, w: kw * scale, h: 3.0 * scale },
+        };
+        let r = LRect {
+            x: (line.x - wx as f64) / scale,
+            y: (line.y - wy as f64) / scale,
+            w: line.w / scale,
+            h: line.h / scale,
+        };
+        let inside = r.x + r.w > 0.0 && r.x < PANEL_W && r.y + r.h > 0.0 && r.y < PANEL_H;
+        inside.then_some(r)
+    } else {
+        None
+    };
+    drop(guard);
+    let _ = app.emit_to(
+        WINDOW_LABEL,
+        "dock-preview",
+        PreviewPayload { edge: next.edge, anchor: next.anchor, hint },
+    );
+}
+
+fn current_grab(drag: &Drag) -> (f64, f64) {
+    match drag.flipped_at {
+        Some(t) => {
+            let k = 1.0 - (t.elapsed().as_secs_f64() / FLIP_SETTLE.as_secs_f64()).min(1.0);
+            (drag.grab.0 * k, drag.grab.1 * k)
+        }
+        None => drag.grab,
+    }
+}
+
+/// The drop: the dock is decided and saved, the front end is told where the
+/// capsule was let go, and the window moves once it has drawn that (or after
+/// `COMMIT_GRACE` regardless).
+fn finish_drag(app: &AppHandle, gate: &PollGate, win: &WebviewWindow, drag: Drag, cursor: (f64, f64), cancelled: bool) {
+    let screen = drag.screens.iter().find(|s| s.contains(cursor.0, cursor.1)).cloned();
+    let mut settings = drag.before.clone();
+    if !cancelled {
+        if let Some(screen) = &screen {
+            let mut dock = Dock { monitor: settings.dock.monitor.clone(), ..drag.preview.clone() };
+            // Dropped on another display: the island now lives there ("docked").
+            if screen.name != drag.home {
+                settings.screen = "docked".into();
+                dock.monitor = screen.name.clone();
+            } else if settings.screen == "docked" {
+                dock.monitor = screen.name.clone();
+            }
+            settings.dock = dock;
+        }
+        if let Some(shared) = app.try_state::<crate::Shared>() {
+            let mut current = shared.settings.lock().unwrap();
+            current.dock = settings.dock.clone();
+            current.screen = settings.screen.clone();
+            settings = current.clone();
+            if let Err(err) = crate::settings::save(&current) {
+                crate::log::line(format!("could not save the island's position: {err}"));
+            }
+        }
+        crate::log::line(format!(
+            "island docked {} {} {:.3} on {}",
+            settings.dock.edge,
+            settings.dock.anchor,
+            settings.dock.offset,
+            if settings.dock.monitor.is_empty() { "its display" } else { &settings.dock.monitor }
+        ));
+        let _ = app.emit("settings-changed", settings.clone());
+    }
+
+    // Where the window goes, on the display the settings now pick.
+    let target = drag
+        .screens
+        .iter()
+        .find(|s| {
+            if settings.screen == "docked" && !settings.dock.monitor.is_empty() {
+                s.name == settings.dock.monitor
+            } else {
+                s.name == drag.home
+            }
+        })
+        .or(screen.as_ref())
+        .or_else(|| drag.screens.first())
+        .cloned();
+    let payload = target.as_ref().map(|t| {
+        let dock = effective_dock(&settings.dock, t.wa, t.scale);
+        let (nx, ny, _, _) = window_rect(&dock, t.wa, t.scale, false);
+        let anchor = anchor_in_window(&dock, t.wa, t.scale);
+        // The capsule now: the middle of the dragged window.
+        let (ox, oy) = win
+            .outer_position()
+            .map(|p| (p.x as f64, p.y as f64))
+            .unwrap_or((nx as f64, ny as f64));
+        let (dw, dh) = drag.size;
+        let (mx, my) = (ox + dw as f64 / 2.0, oy + dh as f64 / 2.0);
+        let (w, h) = capsule_size(dock.is_vertical());
+        let from = LRect { x: (mx - nx as f64) / t.scale - w / 2.0, y: (my - ny as f64) / t.scale - h / 2.0, w, h };
+        DropPayload { dock, anchor_in_window: anchor, from, cancelled }
+    });
+
+    *gate.pending.lock().unwrap() = Some((settings, Instant::now() + COMMIT_GRACE));
+    if let Some(p) = payload {
+        let _ = app.emit_to(WINDOW_LABEL, "dock-drop", p);
+    }
+}
+
+/// The front end has drawn the capsule where it was let go: move the window.
+pub fn commit_drop(app: &AppHandle, gate: &PollGate) {
+    let Some((settings, _)) = gate.pending.lock().unwrap().take() else { return };
+    let scale_before = window(app).and_then(|w| w.scale_factor().ok());
+    apply_geometry(app, &settings, gate.collapsed.load(Ordering::Relaxed));
+    // Click-through starts afresh from the island's new shape.
+    if let Some(win) = window(app) {
+        gate.ignoring.store(false, Ordering::Relaxed);
+        let _ = win.set_ignore_cursor_events(false);
+        // Another scale: the page has to fit itself to the window again.
+        if win.scale_factor().ok() != scale_before {
+            let _ = app.emit_to(WINDOW_LABEL, "screen-changed", ());
+        }
+    }
+}
+
 fn hwnd_of(win: &WebviewWindow) -> Option<HWND> {
     let raw = win.hwnd().ok()?.0 as isize;
     if raw == 0 {
@@ -428,6 +834,28 @@ pub fn spawn_cursor_poll(app: AppHandle, gate: Arc<PollGate>) {
             let mut ticks: u32 = 0;
             while gate.is_active() {
                 std::thread::sleep(Duration::from_millis(16));
+
+                // A drop the front end never answered still lands.
+                let overdue = gate
+                    .pending
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .is_some_and(|(_, at)| Instant::now() >= *at);
+                if overdue {
+                    commit_drop(&app, &gate);
+                    last = (f64::MIN, f64::MIN);
+                }
+
+                if gate.dragging() {
+                    if let Some(win) = window(&app) {
+                        drag_tick(&app, &gate, &win);
+                    }
+                    // No hover, no click-outside, no display check mid-drag.
+                    was_down = true;
+                    last = (f64::MIN, f64::MIN);
+                    continue;
+                }
 
                 // Monitors get plugged in, unplugged, rearranged and rescaled, and
                 // an island pinned to coordinates that no longer exist is an island
@@ -601,6 +1029,76 @@ mod tests {
         assert_eq!(d.offset, 0.3);
         let d = effective_dock(&dock("left", "center", 0.3), WA, 1.0);
         assert_eq!(d.edge, "left");
+    }
+
+    // The same cases as snapDock in src/core/dock.test.ts.
+    const LWA: LRect = LRect { x: 0.0, y: 0.0, w: 1920.0, h: 1032.0 };
+
+    fn snap(x: f64, y: f64, prev: Option<(&str, &str)>) -> Dock {
+        snap_dock(x, y, LWA, prev)
+    }
+
+    #[test]
+    fn snap_splits_the_top_into_three() {
+        assert_eq!(snap(100.0, 5.0, None).anchor, "start");
+        assert_eq!(snap(960.0, 5.0, None).anchor, "center");
+        assert_eq!(snap(1800.0, 5.0, None).anchor, "end");
+        assert_eq!(snap(1800.0, 5.0, None).edge, "top");
+    }
+
+    #[test]
+    fn snap_docks_to_the_sides_on_screen() {
+        let d = snap(3.0, 300.0, None);
+        assert_eq!((d.edge.as_str(), d.offset), ("left", 300.0 / 1032.0));
+        assert_eq!(snap(1915.0, 700.0, None).edge, "right");
+        assert!((snap(3.0, 100.0, None).offset - 156.0 / 1032.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn snap_never_docks_to_the_bottom() {
+        assert_eq!(snap(900.0, 1000.0, None).edge, "left");
+        let d = snap(1910.0, 1030.0, None);
+        assert_eq!(d.edge, "right");
+        assert!((d.offset - 876.0 / 1032.0).abs() < 1e-9);
+        assert_eq!(snap(10.0, 1030.0, None).edge, "left");
+    }
+
+    #[test]
+    fn snap_hysteresis_between_edges_and_thirds() {
+        assert_eq!(snap(40.0, 50.0, Some(("top", "start"))).edge, "top");
+        assert_eq!(snap(20.0, 50.0, Some(("top", "start"))).edge, "left");
+        assert_eq!(snap(50.0, 40.0, Some(("left", "center"))).edge, "left");
+        assert_eq!(snap(50.0, 20.0, Some(("left", "center"))).edge, "top");
+        assert_eq!(snap(650.0, 5.0, Some(("top", "start"))).anchor, "start");
+        assert_eq!(snap(670.0, 5.0, Some(("top", "start"))).anchor, "center");
+        assert_eq!(snap(630.0, 5.0, Some(("top", "center"))).anchor, "center");
+        assert_eq!(snap(610.0, 5.0, Some(("top", "center"))).anchor, "start");
+        assert_eq!(snap(1290.0, 5.0, Some(("top", "center"))).anchor, "center");
+        assert_eq!(snap(1310.0, 5.0, Some(("top", "center"))).anchor, "end");
+        assert_eq!(snap(1270.0, 5.0, Some(("top", "end"))).anchor, "end");
+        assert_eq!(snap(1250.0, 5.0, Some(("top", "end"))).anchor, "center");
+    }
+
+    #[test]
+    fn snap_to_the_middle_and_off_origin_displays() {
+        assert_eq!(snap(3.0, 536.0, None).offset, 0.5);
+        assert_eq!(snap(3.0, 492.0, None).offset, 0.5);
+        assert!((snap(3.0, 546.0, None).offset - 546.0 / 1032.0).abs() < 1e-9);
+        let wa = LRect { x: -1920.0, y: -300.0, w: 1920.0, h: 1040.0 };
+        let d = snap_dock(-1900.0, 100.0, wa, None);
+        assert_eq!((d.edge.as_str(), d.offset), ("left", 400.0 / 1040.0));
+        let d = snap_dock(-100.0, -295.0, wa, None);
+        assert_eq!((d.edge.as_str(), d.anchor.as_str()), ("top", "end"));
+        assert_eq!(snap_dock(-5.0, 200.0, wa, None).edge, "right");
+        assert_eq!(side_offset(100.0, 250.0), 0.5);
+    }
+
+    #[test]
+    fn the_capsule_lands_where_dock_ts_draws_it() {
+        assert_eq!(capsule_in_window(&Dock::default(), 16.0), (516.0, 0.0, 288.0, 32.0));
+        assert_eq!(capsule_in_window(&dock("top", "end", 0.5), 16.0).0, 1320.0 - 288.0 - 24.0);
+        assert_eq!(capsule_in_window(&dock("left", "center", 0.5), 160.0), (0.0, 16.0, 32.0, 288.0));
+        assert_eq!(capsule_in_window(&dock("right", "center", 0.5), 310.0), (1288.0, 32.0, 32.0, 288.0));
     }
 
     #[test]

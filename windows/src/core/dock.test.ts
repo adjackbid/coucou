@@ -20,7 +20,7 @@ describe("snapDock", () => {
   it("docks to the sides with an offset that keeps the capsule on screen", () => {
     expect(snapDock({ x: 3, y: 300 }, WA, null)).toMatchObject({ edge: "left", offset: 300 / 1032 });
     expect(snapDock({ x: 1915, y: 700 }, WA, null)).toMatchObject({ edge: "right", offset: 700 / 1032 });
-    expect(snapDock({ x: 3, y: 160 }, WA, null).offset).toBeCloseTo(156 / 1032);
+    expect(snapDock({ x: 3, y: 100 }, WA, null).offset).toBeCloseTo(156 / 1032, 9);
   });
 
   it("never docks to the bottom", () => {

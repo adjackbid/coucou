@@ -1,7 +1,7 @@
 // Entry point: boot the bridge, wire the island, start the greeting.
 
 import "./style.css";
-import { Bridge, IS_TAURI, onEvent, type AcpPermission, type AcpUpdate, type DockPlacement } from "./core/bridge";
+import { Bridge, IS_TAURI, onEvent, type AcpPermission, type AcpUpdate, type DockDrop, type DockPlacement, type DockPreview } from "./core/bridge";
 import { Sound } from "./core/sound";
 import { State, type Settings } from "./core/state";
 import { Island } from "./island/island";
@@ -113,6 +113,9 @@ async function main() {
 
   // The window moved to another edge (a drag, Reset position, another display).
   await onEvent<DockPlacement>("dock-changed", (p) => island.setPlacement(p));
+  // A drag, driven by Rust's cursor poll: the edge it would dock to, then the drop.
+  await onEvent<DockPreview>("dock-preview", (p) => island.dockPreview(p));
+  await onEvent<DockDrop>("dock-drop", (d) => void island.dockDrop(d));
 
   // The settings window writes preferences; apply them here without a restart.
   await onEvent<Settings>("settings-changed", (s) => {

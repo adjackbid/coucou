@@ -28,6 +28,19 @@ export interface DockPlacement {
   anchorInWindow: number;
 }
 
+/** A drag's preview: the edge the capsule would dock to, and a landing line. */
+export interface DockPreview {
+  edge: Dock["edge"];
+  anchor: Dock["anchor"];
+  hint: { x: number; y: number; w: number; h: number } | null;
+}
+
+/** A drop: the dock, and the capsule where it was let go in the new window's coordinates. */
+export interface DockDrop extends DockPlacement {
+  from: { x: number; y: number; w: number; h: number };
+  cancelled: boolean;
+}
+
 export interface BootInfo {
   settings: Settings;
   /** Logical screen rect of the monitor the island lives on, and where on it the island sits. */
@@ -73,6 +86,15 @@ export const Bridge = {
 
   /** Back to the top centre (the tray's "Reset island position"). */
   resetDock: () => call<void>("reset_dock"),
+
+  /**
+   * Hands the island to Rust's cursor poll to drag, the cursor `grab` px from
+   * the capsule's centre. False (or null) when the button is already up.
+   */
+  beginIslandDrag: (grabX: number, grabY: number) => call<boolean>("begin_island_drag", { grabX, grabY }),
+
+  /** The dropped capsule is drawn at its new coordinates: Rust may move the window. */
+  commitDockGeometry: () => call<void>("commit_dock_geometry"),
 
   openUrl: (url: string) => call<void>("open_url", { url }),
 

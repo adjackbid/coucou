@@ -32,6 +32,9 @@ export class IslandStateMachine {
    */
   keepVisible = false;
 
+  /** The island is being dragged: no timer runs and hovering means nothing. */
+  private held = false;
+
   private petitHide: number | null = null;
   private homeCollapse: number | null = null;
   private greetCollapse: number | null = null;
@@ -44,6 +47,7 @@ export class IslandStateMachine {
   }
 
   mouseEntered() {
+    if (this.held) return;
     switch (this.state) {
       case "hidden":
         this.cancelTimers();
@@ -63,6 +67,7 @@ export class IslandStateMachine {
   }
 
   mouseLeft() {
+    if (this.held) return;
     switch (this.state) {
       case "hidden":
         break;
@@ -124,6 +129,19 @@ export class IslandStateMachine {
   forceHidden() {
     this.cancelTimers();
     this.transition("hidden");
+  }
+
+  /** A drag starts: everything waits. */
+  hold() {
+    this.held = true;
+    this.cancelTimers();
+  }
+
+  /** The drag ended: the capsule stays the full while, as after a click. */
+  release() {
+    this.held = false;
+    this.peeked = false;
+    if (this.state === "petit") this.schedulePetitHide();
   }
 
   // ── Timers ──────────────────────────────────────────────────────────────────

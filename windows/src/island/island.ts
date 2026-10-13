@@ -2,7 +2,10 @@
 // Mirrors IslandRootView.swift + IslandWindowController.swift.
 
 import { Tracked, Spring, clamp } from "../core/anim";
-import { Bridge, IS_TAURI, onDragDrop, type AcpPermission, type DockPlacement, type DroppedFile } from "../core/bridge";
+import {
+  Bridge, IS_TAURI, onDragDrop,
+  type AcpPermission, type DockDrop, type DockPlacement, type DockPreview, type DroppedFile,
+} from "../core/bridge";
 import { cornerRadii, dockedRect, isVertical, wakeStripRect, type Dock, type Rect } from "../core/dock";
 import {
   EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
@@ -39,6 +42,11 @@ async function readDropped(file: File): Promise<DroppedFile> {
 /** Same margin as the Rust hit test (src-tauri/src/island.rs). */
 const HIT_MARGIN = 14;
 
+/** A press that moves this far (logical px) is a drag, not a click. */
+const DRAG_THRESHOLD = 5;
+/** A press held this long without moving picks the island up too (touchpads). */
+const LONG_PRESS_MS = 600;
+
 /** The three views the drop sequence owns; leaving them stops the engine. */
 const UPLOAD_VIEWS: ReadonlySet<IslandViewName> = new Set(["upload", "uploading", "choose"]);
 
@@ -74,6 +82,7 @@ export class Island {
   private miniGrid!: HTMLElement;
   private countdown!: HTMLElement;
   private wakeStrip!: HTMLElement;
+  private dockHint!: HTMLElement;
   private compactStatus!: HTMLElement;
 
   private header!: ViewHost;
@@ -106,6 +115,13 @@ export class Island {
   private collapsed = false;
   private collapseTimer: number | null = null;
   private wasInIsland = false;
+  /**
+   * A press on the island that may still become a click or a drag, in
+   * window-logical px. `header` = pressed on the open island's title bar.
+   */
+  private press: { x: number; y: number; timer: number; header: boolean } | null = null;
+  /** The island is being dragged; `preview` is where it would dock now. */
+  private drag: { preview: Pick<Dock, "edge" | "anchor"> } | null = null;
   /** A side wake strip only wakes the island after the mouse rests on it (D5). */
   private wakeTimer: number | null = null;
   /** Last shape handed to Rust for the click-through test. */
@@ -294,6 +310,7 @@ export class Island {
     };
 
     this.wakeStrip = h("div", { id: "wake-strip" });
+    this.dockHint = h("div", { id: "dock-hint" });
     this.botGlow = h("div", { id: "bot-glow" });
     this.botCanvas = h("canvas", { id: "bot-canvas" });
     this.greetingCanvas = h("canvas", { id: "greeting-canvas" });
@@ -343,7 +360,7 @@ export class Island {
     this.greetingCanvas.style.width = `${EXPANDED_W}px`;
     this.greetingCanvas.style.height = "150px";
 
-    this.root.append(this.wakeStrip, this.islandEl);
+    this.root.append(this.wakeStrip, this.dockHint, this.islandEl);
     this.placeWakeStrip();
     this.applyGeometry();
   }
@@ -476,6 +493,7 @@ export class Island {
    */
   toggle() {
     void Bridge.log(`hotkey mode=${State.mode} fsm=${this.fsm.state}`);
+    if (this.drag) return;
     if (State.mode === "expanded") {
       State.isPinned = false;
       this.fsm.pinned = false;
@@ -730,9 +748,9 @@ export class Island {
     this.ensureRunning();
   }
 
-  /** The dock the island is drawn for right now. */
+  /** The dock the island is drawn for right now: while dragged, the preview. */
   private get dock(): Dock {
-    return State.dock;
+    return this.drag ? { ...State.dock, ...this.drag.preview } : State.dock;
   }
 
   /** Docked left or right: the capsule stands on end (the panel never turns). */
@@ -742,6 +760,7 @@ export class Island {
 
   /** Rust placed the window for a dock (boot, `dock-changed`). */
   setPlacement(p: DockPlacement) {
+    if (this.drag) return;
     State.dock = p.dock;
     State.anchorInWindow = p.anchorInWindow;
     this.syncDockClasses();
@@ -762,7 +781,7 @@ export class Island {
     const r = this.radius.value;
     this.islandEl.style.width = `${w}px`;
     this.islandEl.style.height = `${hh}px`;
-    this.islandEl.style.borderRadius = cornerRadii(this.dock, r);
+    this.islandEl.style.borderRadius = cornerRadii(this.dock, r, !!this.drag);
     this.islandEl.style.transform = `translate(${rect.x}px, ${rect.y}px)`;
     // These follow the island as it resizes, so they belong here rather than in
     // the state-driven DOM sync. On its side the mini grid goes under Mochi.
@@ -788,7 +807,7 @@ export class Island {
 
   /** Island rect in window coordinates (origin top-left of the 1320x320 window). */
   private islandRect(): Rect {
-    const r = dockedRect(this.dock, this.width.value, this.height.value, State.anchorInWindow);
+    const r = dockedRect(this.dock, this.width.value, this.height.value, State.anchorInWindow, !!this.drag);
     return { ...r, x: r.x + this.slideX.value, y: r.y + this.slideY.value };
   }
 
@@ -863,8 +882,17 @@ export class Island {
       Sound.resume();
       State.lastActivity = performance.now();
       if (State.mode !== "expanded") {
-        this.fsm.click();
+        // The capsule opens on release now: a press that moves is a drag.
+        if (e.button === 0 && this.canDrag()) this.startPress(e, false);
+        else this.fsm.click();
         return;
+      }
+      // The open island's title bar, away from its buttons, drags it too.
+      if (
+        e.button === 0 && this.canDrag() &&
+        (e.target as Element).closest("#header") && !(e.target as Element).closest("button")
+      ) {
+        this.startPress(e, true);
       }
       // A click on the open island is a look at what it shows.
       if (State.focusTask?.unread) {
@@ -875,6 +903,14 @@ export class Island {
         this.cancelBotHover();
         this.engine.slap();
       }
+    });
+
+    window.addEventListener("mousemove", (e) => this.pressMoved(e.clientX / State.zoom, e.clientY / State.zoom));
+    window.addEventListener("mouseup", (e) => {
+      if (e.button !== 0 || !this.press) return;
+      const header = this.press.header;
+      this.endPress();
+      if (!header) this.fsm.click();
     });
 
     window.addEventListener("keydown", (e) => {
@@ -925,8 +961,127 @@ export class Island {
     }
   }
 
+  // ── Dragging the island ─────────────────────────────────────────────────────
+
+  /** Not while it waits for an answer, greets, or eats a file. */
+  private canDrag(): boolean {
+    if (!IS_TAURI || this.drag || State.fileDragOver || UploadSeq.isActive) return false;
+    if (State.mode === "expanded") return this.fsm.state === "home" && !State.isPinned && !UPLOAD_VIEWS.has(State.view);
+    return this.fsm.state === "petit";
+  }
+
+  private startPress(e: MouseEvent, header: boolean) {
+    this.endPress();
+    const x = e.clientX / State.zoom;
+    const y = e.clientY / State.zoom;
+    const timer = window.setTimeout(() => void this.startDrag(true), LONG_PRESS_MS);
+    this.press = { x, y, timer, header };
+  }
+
+  private endPress() {
+    if (this.press) window.clearTimeout(this.press.timer);
+    this.press = null;
+    this.islandEl.classList.remove("lifted");
+  }
+
+  /** The cursor moved while pressed (DOM or Rust's poll): past the threshold it is a drag. */
+  private pressMoved(x: number, y: number) {
+    const p = this.press;
+    if (!p) return;
+    if (Math.hypot(x - p.x, y - p.y) > DRAG_THRESHOLD) void this.startDrag(false);
+  }
+
+  private async startDrag(longPress: boolean) {
+    const p = this.press;
+    if (!p) return;
+    window.clearTimeout(p.timer);
+    if (longPress && !p.header) this.islandEl.classList.add("lifted");
+    const rect = this.islandRect();
+    // From the title bar the island shuts to the capsule first, centred under the cursor.
+    const grab = p.header ? { x: 0, y: 0 } : { x: p.x - (rect.x + rect.w / 2), y: p.y - (rect.y + rect.h / 2) };
+    const ok = await Bridge.beginIslandDrag(grab.x, grab.y);
+    if (this.press !== p) return;
+    this.endPress();
+    if (!ok) {
+      // The button was already up: it was a click after all.
+      if (!p.header) this.fsm.click();
+      return;
+    }
+    void Bridge.log(`island drag ${longPress ? "(long press)" : ""} from ${State.dock.edge}/${State.dock.anchor}`);
+    if (p.header) this.collapse();
+    this.drag = { preview: { edge: State.dock.edge, anchor: State.dock.anchor } };
+    this.fsm.hold();
+    this.cancelBotHover();
+    this.engine.triggerEmote("surprised");
+    this.islandEl.classList.add("dragging");
+    this.syncDockClasses();
+    this.animateGeometry(false);
+    this.dirty = true;
+    this.ensureRunning();
+  }
+
+  /** Rust: where the dragged capsule would dock now. */
+  dockPreview(p: DockPreview) {
+    if (!this.drag) return;
+    const turned = isVertical(p) !== isVertical(this.drag.preview);
+    this.drag.preview = { edge: p.edge, anchor: p.anchor };
+    if (turned) {
+      this.syncDockClasses();
+      const { w, h } = this.targetSize();
+      this.width.springTo(w, 0.16, 0.86);
+      this.height.springTo(h, 0.16, 0.86);
+      this.ensureRunning();
+    }
+    if (p.hint) {
+      const st = this.dockHint.style;
+      st.left = `${p.hint.x}px`;
+      st.top = `${p.hint.y}px`;
+      st.width = `${p.hint.w}px`;
+      st.height = `${p.hint.h}px`;
+    }
+    this.dockHint.classList.toggle("on", !!p.hint);
+  }
+
+  /**
+   * Rust: let go (or Escape). The capsule is drawn where it was let go in the
+   * coordinates of the window's new place, the window moves, and the capsule
+   * slides into its edge. Hidden for the frame or two in between, so it never
+   * shows at the old place in the new window or the other way round.
+   */
+  async dockDrop(d: DockDrop) {
+    const wasDragging = !!this.drag;
+    this.drag = null;
+    this.dockHint.classList.remove("on");
+    this.islandEl.classList.remove("dragging", "lifted");
+    State.dock = d.dock;
+    State.anchorInWindow = d.anchorInWindow;
+    this.syncDockClasses();
+    this.placeWakeStrip();
+    this.islandEl.style.visibility = "hidden";
+    const { w, h } = this.targetSize();
+    this.width.jump(d.from.w);
+    this.height.jump(d.from.h);
+    this.width.springTo(w);
+    this.height.springTo(h);
+    const at = dockedRect(d.dock, d.from.w, d.from.h, d.anchorInWindow);
+    this.slideX.set(d.from.x - at.x);
+    this.slideY.set(d.from.y - at.y);
+    this.slideX.target = 0;
+    this.slideY.target = 0;
+    await Bridge.commitDockGeometry();
+    // Two frames: the window has moved by the time the capsule shows again.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      this.islandEl.style.visibility = "";
+    }));
+    if (wasDragging && !d.cancelled) Sound.play("blip");
+    this.fsm.release();
+    this.dirty = true;
+    this.ensureRunning();
+  }
+
   /** Cursor in window-logical coordinates. */
   onCursor(x: number, y: number) {
+    this.pressMoved(x, y);
     State.mouse = { x, y };
     const rect = this.islandRect();
     State.mouseInIsland = { x: x - rect.x, y: y - rect.y };

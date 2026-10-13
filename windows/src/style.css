@@ -74,6 +74,33 @@ body {
   will-change: width, height, transform;
 }
 
+/* Being dragged: lifted off the screen. */
+#island.dragging {
+  opacity: 0.92;
+  animation: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* Held still long enough to drag without moving: picked up. */
+#island.lifted {
+  scale: 1.06;
+  transition: scale 0.12s ease-out;
+}
+
+/* Where the dragged capsule will land: a thin line along the edge. */
+#dock-hint {
+  position: fixed;
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 2px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out;
+}
+
+#dock-hint.on {
+  opacity: 1;
+}
+
 /* Something finished and nobody has looked: the shut island breathes a ring
    of light in that session's colour until it is opened. */
 #island.unread {
