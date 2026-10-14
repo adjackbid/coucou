@@ -11,6 +11,7 @@
 
 import { BotEngine, hexToRGB } from "../mochi/engine";
 import type { BotStateName } from "../core/layout";
+import { onLangChange, tr, trf } from "../core/i18n";
 import { h, clear } from "../views/dom";
 import type { FeedItem, Line, MemberView, ScreenPatch, Snapshot } from "./types";
 import { imagePaths, picKey, thumbRow } from "./images";
@@ -63,7 +64,7 @@ export function setSaid(fn: (text: string) => string) {
 const keyOf = (team: string, member: string) => `${team}/${member}`;
 
 function nameOf(snap: Snapshot | undefined, id: string): string {
-  if (id === YOU) return "你";
+  if (id === YOU) return tr("你", "You");
   if (id === SYSTEM) return "Coucou";
   return snap?.members.find((m) => m.id === id)?.name ?? id;
 }
@@ -103,45 +104,51 @@ function teamWords(snap: Snapshot | undefined, l: Line): string {
   const a = (k: string) => arg(l.input, k);
   const task = (id: string) => {
     const t = snap?.tasks.find((x) => x.id === id);
-    return t ? `${id}「${t.title}」` : id;
+    return t ? trf("{id}「{title}」", "{id} “{title}”", { id, title: t.title }) : id;
   };
   switch (l.teamTool) {
     case "team_status":
-      return "查看團隊現況";
+      return tr("查看團隊現況", "Check how the team is doing");
     case "task_create":
-      return `建立任務「${a("title")}」→ ${nameOf(snap, a("owner"))}`;
+      return trf("建立任務「{title}」→ {owner}", "Create task “{title}” → {owner}", { title: a("title"), owner: nameOf(snap, a("owner")) });
     case "task_assign":
-      return `把 ${task(a("task"))} 交給 ${nameOf(snap, a("owner"))}`;
+      return trf("把 {task} 交給 {owner}", "Give {task} to {owner}", { task: task(a("task")), owner: nameOf(snap, a("owner")) });
     case "team_finish":
-      return "宣告團隊工作完成";
+      return tr("宣告團隊工作完成", "Declare the team's work done");
     case "task_update":
-      return a("status") === "doing" ? `開始做 ${task(a("task"))}` : `更新 ${task(a("task"))}${a("note") ? `:${short(a("note"), 60)}` : ""}`;
+      return a("status") === "doing"
+        ? trf("開始做 {task}", "Start {task}", { task: task(a("task")) })
+        : a("note")
+          ? trf("更新 {task}:{note}", "Update {task}: {note}", { task: task(a("task")), note: short(a("note"), 60) })
+          : trf("更新 {task}", "Update {task}", { task: task(a("task")) });
     case "task_block":
-      return `卡住了,等 ${nameOf(snap, a("waiting_on"))}:${short(a("reason"), 60)}`;
+      return trf("卡住了,等 {who}:{reason}", "Stuck, waiting for {who}: {reason}", { who: nameOf(snap, a("waiting_on")), reason: short(a("reason"), 60) });
     case "deliver":
-      return `交付 ${task(a("task"))}:${short(a("summary"), 70)}`;
+      return trf("交付 {task}:{summary}", "Deliver {task}: {summary}", { task: task(a("task")), summary: short(a("summary"), 70) });
     case "review":
-      return a("accept") === "true" ? `驗收通過 ${task(a("task"))}` : `退回 ${task(a("task"))}:${short(a("reason"), 60)}`;
+      return a("accept") === "true"
+        ? trf("驗收通過 {task}", "Accept {task}", { task: task(a("task")) })
+        : trf("退回 {task}:{reason}", "Send back {task}: {reason}", { task: task(a("task")), reason: short(a("reason"), 60) });
     case "message_send":
-      return `傳訊息給 ${nameOf(snap, a("to"))}:${short(a("text"), 80)}`;
+      return trf("傳訊息給 {to}:{text}", "Message {to}: {text}", { to: nameOf(snap, a("to")), text: short(a("text"), 80) });
     case "ask_human":
-      return `問你:${short(a("question"), 80)}`;
+      return trf("問你:{q}", "Ask you: {q}", { q: short(a("question"), 80) });
     default:
       return l.text;
   }
 }
 
-/** Any other tool: what it did, short. */
+/** Any other tool: what it did, short. The agents title their steps in English. */
 function toolWords(l: Line): string {
   const command = arg(l.input, "command");
   if (l.tool === "execute") return bare(command || l.text.replace(/^Run\s+/, ""));
   return l.text
-    .replace(/^Run\s+/, "執行 ")
-    .replace(/^Edit\s+/, "編輯 ")
-    .replace(/^Read\s+/, "讀取 ")
-    .replace(/^Search the web$/, "搜尋網路")
-    .replace(/^Sub-agent\s+(.*)$/, "子代理 $1 分頭處理")
-    .replace(/^Generate an image$/, "生成圖片");
+    .replace(/^Run\s+/, tr("執行 ", "Run "))
+    .replace(/^Edit\s+/, tr("編輯 ", "Edit "))
+    .replace(/^Read\s+/, tr("讀取 ", "Read "))
+    .replace(/^Search the web$/, tr("搜尋網路", "Search the web"))
+    .replace(/^Sub-agent\s+(.*)$/, tr("子代理 $1 分頭處理", "Sub-agent $1"))
+    .replace(/^Generate an image$/, tr("生成圖片", "Generate an image"));
 }
 
 const TOOL_MARK: Record<string, string> = {
@@ -155,20 +162,20 @@ const TOOL_MARK: Record<string, string> = {
   delete: "⌫",
 };
 
-/** What a member heard at the start of a turn, in the window's words. */
+/** What a member heard at the start of a turn (Coucou tells members in English), in the window's words. */
 export function heardWords(text: string): string {
   const rules: [RegExp, (m: RegExpMatchArray) => string][] = [
-    [/^The team has started\./, () => "團隊開始了:規劃工作並建立任務"],
-    [/^(TASK-\d+) is yours and ready to start: (.+)/, (m) => `${m[1]}「${m[2]}」交給你了`],
-    [/^(.+?) handed in (TASK-\d+) \((.+?)\), which is meant for you/, (m) => `${m[1]} 交付了 ${m[2]}「${m[3]}」給你`],
-    [/^(.+?) handed in (TASK-\d+) \((.+?)\)/, (m) => `${m[1]} 交付了 ${m[2]}「${m[3]}」,請驗收`],
-    [/^(.+?) sent (TASK-\d+) \((.+?)\) back: (.+)/, (m) => `${m[1]} 退回了 ${m[2]}「${m[3]}」:${m[4]}`],
-    [/^No task exists yet/, () => "還沒有任務,請馬上建立"],
-    [/^You ended your turn, but this is still open/, () => "提醒:手上的工作還沒回報"],
-    [/^You were restarted/, () => "你被重新啟動了"],
-    [/^Coucou was closed while the team was working/, () => "Coucou 重新開啟了,從中斷的地方接著做"],
-    [/^Every task has been accepted\./, () => "全部驗收完成,請寫最終報告"],
-    [/^You asked: [\s\S]*?\nThe user answers: ([\s\S]+)/, (m) => `你的回覆:${m[1]}`],
+    [/^The team has started\./, () => tr("團隊開始了:規劃工作並建立任務", "The team has started: plan the work and create tasks")],
+    [/^(TASK-\d+) is yours and ready to start: (.+)/, (m) => trf("{task}「{title}」交給你了", "{task} “{title}” is yours", { task: m[1], title: m[2] })],
+    [/^(.+?) handed in (TASK-\d+) \((.+?)\), which is meant for you/, (m) => trf("{who} 交付了 {task}「{title}」給你", "{who} handed in {task} “{title}” for you", { who: m[1], task: m[2], title: m[3] })],
+    [/^(.+?) handed in (TASK-\d+) \((.+?)\)/, (m) => trf("{who} 交付了 {task}「{title}」,請驗收", "{who} handed in {task} “{title}”: please review it", { who: m[1], task: m[2], title: m[3] })],
+    [/^(.+?) sent (TASK-\d+) \((.+?)\) back: (.+)/, (m) => trf("{who} 退回了 {task}「{title}」:{why}", "{who} sent {task} “{title}” back: {why}", { who: m[1], task: m[2], title: m[3], why: m[4] })],
+    [/^No task exists yet/, () => tr("還沒有任務,請馬上建立", "No task yet: create them now")],
+    [/^You ended your turn, but this is still open/, () => tr("提醒:手上的工作還沒回報", "Reminder: your open work isn't reported yet")],
+    [/^You were restarted/, () => tr("你被重新啟動了", "You were restarted")],
+    [/^Coucou was closed while the team was working/, () => tr("Coucou 重新開啟了,從中斷的地方接著做", "Coucou reopened: carry on where you left off")],
+    [/^Every task has been accepted\./, () => tr("全部驗收完成,請寫最終報告", "Everything is accepted: write the final report")],
+    [/^You asked: [\s\S]*?\nThe user answers: ([\s\S]+)/, (m) => trf("你的回覆:{answer}", "Your answer: {answer}", { answer: m[1] })],
   ];
   for (const [pattern, to] of rules) {
     const m = text.match(pattern);
@@ -182,7 +189,7 @@ function row(snap: Snapshot | undefined, l: Line): HTMLElement {
     case "turn": {
       if (l.status === "start") {
         const heard = Array.isArray(l.input) ? (l.input as { from: string; text: string }[]) : [];
-        const el = h("div", { class: "line turn" }, h("span", { class: "rule", text: `第 ${l.text} 回合` }));
+        const el = h("div", { class: "line turn" }, h("span", { class: "rule", text: trf("第 {n} 回合", "Turn {n}", { n: l.text }) }));
         for (const x of heard.slice(-4)) {
           el.append(
             h(
@@ -195,16 +202,16 @@ function row(snap: Snapshot | undefined, l: Line): HTMLElement {
         }
         return el;
       }
-      if (l.status === "failed") return h("div", { class: "line turn failed" }, h("span", { class: "rule", text: "回合失敗" }), h("div", { class: "why", text: said(l.output) }));
-      return h("div", { class: "line turn end" }, h("span", { class: "rule", text: "回合結束" }));
+      if (l.status === "failed") return h("div", { class: "line turn failed" }, h("span", { class: "rule", text: tr("回合失敗", "Turn failed") }), h("div", { class: "why", text: said(l.output) })); // i18n-ok: CSS classes
+      return h("div", { class: "line turn end" }, h("span", { class: "rule", text: tr("回合結束", "Turn ended") })); // i18n-ok: CSS classes
     }
     case "say":
       return h("div", { class: "line say" }, h("p", { text: l.text.trim() }));
     case "think":
-      return h("div", { class: "line think", text: `思考 · ${tailOf(l.text, 220)}` });
+      return h("div", { class: "line think", text: `${tr("思考", "Thinking")} · ${tailOf(l.text, 220)}` });
     case "tool": {
       const team = !!l.teamTool;
-      const mark = l.status === "running" ? h("i", { class: "spin", "aria-label": "進行中" }) : h("i", { class: "mark", text: l.status === "failed" ? "✕" : "✓" });
+      const mark = l.status === "running" ? h("i", { class: "spin", "aria-label": tr("進行中", "Running") }) : h("i", { class: "mark", text: l.status === "failed" ? "✕" : "✓" });
       const el = h(
         "div",
         { class: `line tool ${team ? "team" : `k-${l.tool}`} s-${l.status}`, title: team ? "" : l.text },
@@ -383,31 +390,31 @@ function mood(snap: Snapshot, m: MemberView, d: Desk): BotStateName {
 function bubbleText(snap: Snapshot, m: MemberView, d: Desk): string {
   switch (m.status) {
     case "lost":
-      return `我失聯了:${said(m.lostWhy)}`;
+      return trf("我失聯了:{why}", "I lost contact: {why}", { why: said(m.lostWhy) });
     case "waitingYou": {
       if (m.permission) {
         const raw = m.permission.rawInput && typeof m.permission.rawInput === "object" ? (m.permission.rawInput as Record<string, unknown>) : {};
-        const more = m.morePermissions.length ? `(還有 ${m.morePermissions.length} 個)` : "";
-        return `等你批准${more}:${short(typeof raw.command === "string" ? bare(raw.command) : m.permission.title, 90)}`;
+        const more = m.morePermissions.length ? trf("(還有 {n} 個)", " ({n} more)", { n: m.morePermissions.length }) : "";
+        return trf("等你批准{more}:{what}", "Waiting for you to approve{more}: {what}", { more, what: short(typeof raw.command === "string" ? bare(raw.command) : m.permission.title, 90) });
       }
       const q = snap.questions.find((x) => x.by === m.id && x.answer === null);
-      return q ? `想問你:${short(q.question, 90)}` : "等你回覆";
+      return q ? trf("想問你:{q}", "I have a question: {q}", { q: short(q.question, 90) }) : tr("等你回覆", "Waiting for your answer");
     }
     case "waitingDelivery":
-      return m.waiting ? `等 ${nameOf(snap, m.waiting.on)} 交付「${m.waiting.what}」` : "等隊友交付";
+      return m.waiting ? trf("等 {who} 交付「{what}」", "Waiting for {who} to deliver “{what}”", { who: nameOf(snap, m.waiting.on), what: m.waiting.what }) : tr("等隊友交付", "Waiting for a teammate to deliver");
     case "waitingReply":
-      return m.waiting ? `等 ${nameOf(snap, m.waiting.on)} 回覆:${short(m.waiting.what, 60)}` : "等隊友回覆";
+      return m.waiting ? trf("等 {who} 回覆:{what}", "Waiting for {who} to reply: {what}", { who: nameOf(snap, m.waiting.on), what: short(m.waiting.what, 60) }) : tr("等隊友回覆", "Waiting for a teammate to reply");
     case "done":
-      return snap.status === "finished" ? "收工!" : "我的工作都交付了";
+      return snap.status === "finished" ? tr("收工!", "All done!") : tr("我的工作都交付了", "All my work is delivered");
     case "idle":
-      return snap.status === "finished" ? (snap.ended ? "團隊已結束" : "收工!") : snap.status === "paused" ? "團隊暫停中" : "待命中,等下一個任務";
+      return snap.status === "finished" ? (snap.ended ? tr("團隊已結束", "The team has ended") : tr("收工!", "All done!")) : snap.status === "paused" ? tr("團隊暫停中", "The team is paused") : tr("待命中,等下一個任務", "Standing by for the next task");
     case "working": {
       const last = d.lines.get(Math.max(0, ...d.lines.keys()));
-      if (!last) return "開工了…";
+      if (!last) return tr("開工了…", "Getting started…");
       if (last.kind === "say") return tailOf(last.text, 110) || "…";
-      if (last.kind === "think") return "思考中…";
-      if (last.kind === "tool") return last.teamTool ? teamWords(snap, last) : `${last.tool === "execute" ? "執行 " : ""}${short(toolWords(last), 90)}`;
-      return "開工了…";
+      if (last.kind === "think") return tr("思考中…", "Thinking…");
+      if (last.kind === "tool") return last.teamTool ? teamWords(snap, last) : `${last.tool === "execute" ? tr("執行 ", "Run ") : ""}${short(toolWords(last), 90)}`;
+      return tr("開工了…", "Getting started…");
     }
   }
 }
@@ -435,9 +442,35 @@ export function parts(snap: Snapshot, m: MemberView): { avatar: HTMLElement; bub
     for (const l of m.screen) put(snap, d, l);
     refresh(snap, m);
   }
-  if (!d.rows.size && !d.screen.firstChild) d.screen.append(h("div", { class: "line quiet", text: "還沒有動靜。輪到這位成員時,它說的話、跑的指令和結果都會即時出現在這裡。" }));
+  if (!d.rows.size && !d.screen.firstChild) d.screen.append(quietLine());
   return { avatar: d.avatar, bubble: d.bubble, screen: d.screen, pulse: d.pulse };
 }
+
+function quietLine(): HTMLElement {
+  return h("div", { class: "line quiet", text: tr("還沒有動靜。輪到這位成員時,它說的話、跑的指令和結果都會即時出現在這裡。", "Nothing yet. When it is this member's turn, what it says, the commands it runs and their results appear here as they happen.") });
+}
+
+/**
+ * The language changed: the screens keep their lines as drawn, so each is
+ * drawn again from what it said (where it was scrolled to stays), and so are
+ * the bubbles and the signs of life.
+ */
+onLangChange(() => {
+  for (const d of desks.values()) {
+    const snap = snaps.get(d.team);
+    const lines = [...d.lines.values()].sort((a, b) => a.n - b.n);
+    clear(d.screen);
+    d.lines.clear();
+    d.rows.clear();
+    d.pics.clear();
+    for (const l of lines) put(snap, d, l);
+    if (!d.rows.size) d.screen.append(quietLine());
+    const m = snap?.members.find((x) => x.id === d.member);
+    if (snap && m) refresh(snap, m);
+    stick(d);
+  }
+  signs();
+});
 
 /** A new picture of a team. */
 export function applySnapshot(snap: Snapshot) {
@@ -486,9 +519,9 @@ export function afterRender() {
 
 function ago(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${s} 秒`;
+  if (s < 60) return trf("{n} 秒", "{n}s", { n: s });
   const m = Math.floor(s / 60);
-  return m < 60 ? `${m} 分鐘` : `${Math.floor(m / 60)} 小時 ${m % 60} 分`;
+  return m < 60 ? trf("{n} 分鐘", "{n} min", { n: m }) : trf("{h} 小時 {m} 分", "{h} h {m} min", { h: Math.floor(m / 60), m: m % 60 });
 }
 
 function clockOf(ms: number): string {
@@ -511,10 +544,10 @@ function signs() {
     let text = "";
     if (working && last) {
       const running = lines.filter((l) => l.kind === "tool" && l.status === "running").sort((a, b) => b.n - a.n)[0];
-      const on = running ? `,停在「${short(running.teamTool ? teamWords(snap, running) : toolWords(running), 40)}」${ago(now - running.since)}` : "";
-      text = quiet ? `⚠ 已經 ${ago(now - last)}沒有動靜${on}` : now - last < 15_000 ? "● 正在動" : `● ${ago(now - last)}前有動靜${on}`;
+      const on = running ? trf(",停在「{what}」{for}", ", on “{what}” for {for}", { what: short(running.teamTool ? teamWords(snap, running) : toolWords(running), 40), for: ago(now - running.since) }) : "";
+      text = quiet ? trf("⚠ 已經 {ago}沒有動靜{on}", "⚠ No sign of life for {ago}{on}", { ago: ago(now - last), on }) : now - last < 15_000 ? tr("● 正在動", "● Active now") : trf("● {ago}前有動靜{on}", "● Active {ago} ago{on}", { ago: ago(now - last), on });
     } else if (last) {
-      text = `上次動靜:${ago(now - last)}前`;
+      text = trf("上次動靜:{ago}前", "Last active {ago} ago", { ago: ago(now - last) });
     }
     if (d.pulse.textContent !== text) d.pulse.textContent = text;
     d.pulse.className = `pulse${working ? " on" : ""}${quiet ? " quiet" : ""}`;
@@ -550,7 +583,7 @@ document.addEventListener("visibilitychange", () => {
 
 const FLY: Partial<Record<FeedItem["kind"], string>> = {
   message: "✉",
-  task: "＋",
+  task: String.fromCharCode(0xff0b), // a full-width plus: a glyph, not a word
   delivered: "⬆",
   accepted: "✓",
   rejected: "↩",
@@ -584,7 +617,8 @@ function fly(snap: Snapshot, f: FeedItem) {
     document.body.append(layer);
   }
   const task = f.task ? snap.tasks.find((t) => t.id === f.task) : undefined;
-  const label = f.kind === "message" || f.kind === "answered" ? short(f.text, 16) : f.kind === "accepted" ? "驗收" : f.kind === "rejected" ? "退回" : short(task?.title ?? f.text, 14);
+  const label = f.kind === "message" || f.kind === "answered" ? short(f.text, 16) : f.kind === "accepted" ? tr("驗收", "Accepted") : f.kind === "rejected" ? tr("退回", "Sent back") : short(task?.title ?? f.text, 14);
+
   const color = f.from === YOU || f.from === SYSTEM ? "#f5f6f8" : colorOf(snap, f.from);
   const flyer = h("div", { class: `flyer k-${f.kind}`, style: `--c:${color}` }, h("b", { text: glyph }), label);
   layer.append(flyer);

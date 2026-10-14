@@ -8,6 +8,7 @@
 //
 // `…&pose=combo_fire_wind:520` — one move held still at that many ms.
 
+import { tr } from "../core/i18n";
 import type { Snapshot } from "./types";
 import type { Office } from "./office/office";
 import type { BattleSignal, HeroClass, SignalKind } from "./office/battle/contracts";
@@ -44,7 +45,7 @@ export function playBattle(snap: Snapshot, apply: (next: Snapshot) => void) {
     [4000, () => accept(["TASK-04"])],
     // The leader adds four tasks: the boss regains 400.
     [6500, () => {
-      snap.tasks = [...snap.tasks, added("TASK-08", "優惠券", "ai4"), added("TASK-09", "會員登入", "ai3"), added("TASK-10", "訂單查詢", "ai2"), added("TASK-11", "商品評價", "ai4")];
+      snap.tasks = [...snap.tasks, added("TASK-08", tr("優惠券", "Coupons"), "ai4"), added("TASK-09", tr("會員登入", "Member sign-in"), "ai3"), added("TASK-10", tr("訂單查詢", "Order lookup"), "ai2"), added("TASK-11", tr("商品評價", "Product reviews"), "ai4")];
       task("TASK-06").status = "doing";
     }],
     // AI 4 and AI 2 accepted together: fire and wind, one blow of -200.
@@ -59,7 +60,7 @@ export function playBattle(snap: Snapshot, apply: (next: Snapshot) => void) {
       for (const id of ["TASK-07", "TASK-09"]) {
         const t = task(id);
         t.status = "doing";
-        t.blocked = { on: "ai4", reason: "等待商品圖與金流規格" };
+        t.blocked = { on: "ai4", reason: tr("等待商品圖與金流規格", "Waiting for the product pictures and the payment spec") };
       }
     }],
     // Freed again (支援光), and one member hits a tool error: the third attack.
@@ -67,7 +68,7 @@ export function playBattle(snap: Snapshot, apply: (next: Snapshot) => void) {
       for (const id of ["TASK-07", "TASK-09"]) task(id).blocked = null;
       const m = member("ai2");
       m.status = "lost";
-      m.lostWhy = "Tool failed twice in a row.";
+      m.lostWhy = tr("工具連續失敗兩次。", "Tool failed twice in a row.");
     }],
     [19500, () => {
       const m = member("ai2");
@@ -78,15 +79,15 @@ export function playBattle(snap: Snapshot, apply: (next: Snapshot) => void) {
     [21000, () => {
       const m = member("ai1");
       m.status = "waitingYou";
-      m.waiting = { on: "you", what: "首版要支援手機版嗎?", task: "TASK-07" };
-      snap.questions = [...snap.questions, { id: "Q-battle", by: "ai1", question: "首版要支援手機版嗎?", task: "TASK-07", at: Date.now(), answer: null }];
+      m.waiting = { on: "you", what: tr("首版要支援手機版嗎?", "Should the first version work on phones?"), task: "TASK-07" };
+      snap.questions = [...snap.questions, { id: "Q-battle", by: "ai1", question: tr("首版要支援手機版嗎?", "Should the first version work on phones?"), task: "TASK-07", at: Date.now(), answer: null }];
     }],
     // Answered: freed.
     [23500, () => {
       const m = member("ai1");
       m.status = "working";
       m.waiting = null;
-      snap.questions = snap.questions.map((q) => (q.id === "Q-battle" ? { ...q, answer: "要" } : q));
+      snap.questions = snap.questions.map((q) => (q.id === "Q-battle" ? { ...q, answer: tr("要", "Yes") } : q));
     }],
     // Four turns in a blink: the boss answers the burn with its ultimate; ai2 overspends and falls.
     [24300, () => {
@@ -146,7 +147,8 @@ export function poseBossMove(office: Office, teamId: string, spec: string) {
   const signal: BattleSignal = {
     teamId, runId: vm.runId, signalId: `bpose|${moveId}`, kind: "boss_counter",
     source: { teamId, runId: vm.runId, kind: "manual_replay", streamId: null, domainSeq: null, taskIds: [`${teamId}:TASK-04`], memberIds: ["ai3"], questionIds: [] },
-    reasonLabel: "購物車功能 卡住了", hpBefore: null, hpAfter: null, maxHpBefore: null, maxHpAfter: null,
+    reasonLabel: tr("購物車功能 卡住了", "Cart is stuck"), hpBefore: null,
+ hpAfter: null, maxHpBefore: null, maxHpAfter: null,
     displayDelta: null, actorMemberId: "ai3", observedAt: new Date().toISOString(), evidence: "observed_transition", replay: true,
   };
   layer.poseBossMove(moveId, ms, signal);

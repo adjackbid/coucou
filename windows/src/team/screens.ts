@@ -9,6 +9,7 @@
 // links) and, once the team runs, its snapshot (tasks, messages, feed).
 
 import { Bridge } from "../core/bridge";
+import { tr, trf } from "../core/i18n";
 import { h } from "../views/dom";
 import { heardWords } from "./live";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
@@ -31,17 +32,26 @@ export interface Page {
 const YOU = "you";
 const SYSTEM = "system";
 
-const STATUS_WORD: Record<MemberStatus, string> = {
-  working: "工作中",
-  waitingDelivery: "等待交付",
-  waitingReply: "等待回覆",
-  waitingYou: "等你處理",
-  idle: "待命",
-  done: "已完成",
-  lost: "失聯",
-};
+function statusWord(s: MemberStatus): string {
+  switch (s) {
+    case "working": return tr("工作中", "Working");
+    case "waitingDelivery": return tr("等待交付", "Waiting for a delivery");
+    case "waitingReply": return tr("等待回覆", "Waiting for a reply");
+    case "waitingYou": return tr("等你處理", "Waiting for you");
+    case "idle": return tr("待命", "Idle");
+    case "done": return tr("已完成", "Done");
+    case "lost": return tr("失聯", "Lost contact");
+  }
+}
 
-const TASK_WORD: Record<Task["status"], string> = { todo: "待處理", doing: "進行中", delivered: "待驗收", done: "已完成" };
+function taskWord(s: Task["status"]): string {
+  switch (s) {
+    case "todo": return tr("待處理", "To do");
+    case "doing": return tr("進行中", "In progress");
+    case "delivered": return tr("待驗收", "To review");
+    case "done": return tr("已完成", "Done");
+  }
+}
 
 const short = (text: string, keep: number) => {
   const flat = text.replace(/\s+/g, " ").trim();
@@ -54,7 +64,7 @@ function clock(ms: number): string {
 }
 
 function nameIn(config: TeamConfig, snap: Snapshot | undefined, id: string): string {
-  if (id === YOU) return "你";
+  if (id === YOU) return tr("你", "You");
   if (id === SYSTEM) return "Coucou";
   return config.members.find((m) => m.id === id)?.name ?? snap?.members.find((m) => m.id === id)?.name ?? id;
 }
@@ -222,9 +232,9 @@ export function linksScreen(config: TeamConfig, snap: Snapshot | undefined, page
       },
       m.id === config.leader ? h("i", { class: "crown-mini", text: "♛" }) : null,
       page.blob(page.colorOf(config, m.id), 40),
-      h("span", { class: "map-name", text: m.id === config.leader ? `${m.name} · Leader` : m.name }),
-      h("span", { class: "map-role", text: m.role || "未設定角色" }),
-      view ? h("span", { class: `map-state ${view.status}`, text: STATUS_WORD[view.status] }) : null,
+      h("span", { class: "map-name", text: m.id === config.leader ? `${m.name} · Leader` : m.name }), // i18n-ok: Leader is the same in both
+      h("span", { class: "map-role", text: m.role || tr("未設定角色", "No role set") }),
+      view ? h("span", { class: `map-state ${view.status}`, text: statusWord(view.status) }) : null,
     );
     map.append(node);
   }
@@ -240,21 +250,21 @@ export function linksScreen(config: TeamConfig, snap: Snapshot | undefined, page
     h(
       "div",
       { class: "panel-head" },
-      h("h2", { text: "協作地圖" }),
+      h("h2", { text: tr("協作地圖", "Collaboration map") }),
       h(
         "span",
         { class: "legend" },
         h("i", { class: "key solid" }),
-        "交付",
+        tr("交付", "Delivery"),
         h("i", { class: "key dashed" }),
-        "溝通",
+        tr("溝通", "Talk"),
         h("i", { class: "key lead" }),
-        "Leader 指派與審核",
+        tr("Leader 指派與審核", "Leader assigns and reviews"),
         snap ? h("i", { class: "key live" }) : null,
-        snap ? "正在進行" : null,
+        snap ? tr("正在進行", "In progress") : null,
       ),
     ),
-    h("p", { class: "hint", text: "點一位成員,看它的輸入、交付對象與完成條件。交付關係也可以在右邊調整。" }),
+    h("p", { class: "hint", text: tr("點一位成員,看它的輸入、交付對象與完成條件。交付關係也可以在右邊調整。", "Click a member to see its inputs, who it delivers to and its done criteria. You can change the deliveries on the right.") }),
     map,
   );
 
@@ -273,7 +283,7 @@ function memberPanel(config: TeamConfig, snap: Snapshot | undefined, id: string,
       page.blob(page.colorOf(config, other), 20),
       h("span", { class: "rel-name", text: nameIn(config, snap, other) }),
       h("span", { class: "rel-what", text: what || "—" }),
-      removable ? h("button", { type: "button", class: "icon-btn", title: "拿掉這個關係", "aria-label": "拿掉這個關係", onClick: removable }, "×") : null,
+      removable ? h("button", { type: "button", class: "icon-btn", title: tr("拿掉這個關係", "Remove this link"), "aria-label": tr("拿掉這個關係", "Remove this link"), onClick: removable }, "×") : null,
     );
 
   const drop = (link: TeamConfig["links"][number]) => () => {
@@ -288,8 +298,8 @@ function memberPanel(config: TeamConfig, snap: Snapshot | undefined, id: string,
   for (const t of snap?.tasks ?? []) {
     if (t.deliverTo === id && t.owner !== id && !config.links.some((l) => l.from === t.owner && l.to === id)) inputs.append(who(t.owner, `${t.id} · ${t.title}`));
   }
-  if (id !== config.leader) inputs.append(who(config.leader, "任務與審核"));
-  if (!inputs.childElementCount) inputs.append(h("p", { class: "hint", text: "沒有固定的輸入來源。" }));
+  if (id !== config.leader) inputs.append(who(config.leader, tr("任務與審核", "Tasks and reviews")));
+  if (!inputs.childElementCount) inputs.append(h("p", { class: "hint", text: tr("沒有固定的輸入來源。", "No fixed inputs.") }));
 
   // Where its work goes.
   const outputs = h("div", { class: "rel-list" });
@@ -297,17 +307,17 @@ function memberPanel(config: TeamConfig, snap: Snapshot | undefined, id: string,
   for (const t of snap?.tasks ?? []) {
     if (t.owner === id && t.deliverTo && t.deliverTo !== id && !config.links.some((l) => l.from === id && l.to === t.deliverTo)) outputs.append(who(t.deliverTo, `${t.id} · ${t.title}`));
   }
-  if (!outputs.childElementCount) outputs.append(h("p", { class: "hint", text: id === config.leader ? "Leader 的成果交給你。" : "沒有指定交付對象時,成果交給 Leader 驗收。" }));
+  if (!outputs.childElementCount) outputs.append(h("p", { class: "hint", text: id === config.leader ? tr("Leader 的成果交給你。", "The Leader's results go to you.") : tr("沒有指定交付對象時,成果交給 Leader 驗收。", "With no one named to deliver to, results go to the Leader for review.") }));
 
   // A new hand-over, from this member to another.
   const others = config.members.filter((x) => x.id !== id);
   let target = others[0]?.id ?? "";
-  const what = h("input", { class: "field", type: "text", placeholder: "交付什麼,例如:圖片素材", spellcheck: "false" }) as HTMLInputElement;
+  const what = h("input", { class: "field", type: "text", placeholder: tr("交付什麼,例如:圖片素材", "What it delivers, e.g. image assets"), spellcheck: "false" }) as HTMLInputElement;
   const add = others.length
     ? h(
         "div",
         { class: "rel-add" },
-        dropdown({ value: target, choices: others.map((x) => ({ value: x.id, label: `交給 ${x.name}`, hint: x.role })), onChange: (v) => (target = v), className: "narrow" }),
+        dropdown({ value: target, choices: others.map((x) => ({ value: x.id, label: trf("交給 {name}", "To {name}", { name: x.name }), hint: x.role })), onChange: (v) => (target = v), className: "narrow" }),
         what,
         h("button", {
           type: "button",
@@ -318,7 +328,7 @@ function memberPanel(config: TeamConfig, snap: Snapshot | undefined, id: string,
             page.touched();
             page.render();
           },
-        }, "加入"),
+        }, tr("加入", "Add")),
       )
     : null;
 
@@ -326,7 +336,7 @@ function memberPanel(config: TeamConfig, snap: Snapshot | undefined, id: string,
   const task = view?.task ? snap?.tasks.find((t) => t.id === view.task) : snap?.tasks.find((t) => t.owner === id && t.status !== "done");
   const criteria = task?.criteria.length
     ? h("div", { class: "checks" }, ...task.criteria.map((c) => h("div", { class: `check${c.claimed ? " on" : ""}` }, h("i", { text: c.claimed ? "✓" : "" }), c.text)))
-    : h("p", { class: "hint", text: task ? "這個任務沒有列出完成條件。" : "目前沒有任務;Leader 指派時會寫上完成條件。" });
+    : h("p", { class: "hint", text: task ? tr("這個任務沒有列出完成條件。", "This task lists no done criteria.") : tr("目前沒有任務;Leader 指派時會寫上完成條件。", "No task right now; the Leader writes the done criteria when it assigns one.") });
 
   const toggle = (label: string, hint: string, on: boolean, set: (v: boolean) => void) =>
     h(
@@ -357,26 +367,26 @@ function memberPanel(config: TeamConfig, snap: Snapshot | undefined, id: string,
         "div",
         {},
         h("div", { class: "member-card-name", text: `${m.name}${m.role ? ` · ${m.role}` : ""}` }),
-        h("div", { class: `member-card-state ${view?.status ?? "idle"}`, text: view ? STATUS_WORD[view.status] : id === config.leader ? "Leader" : "尚未啟動" }),
+        h("div", { class: `member-card-state ${view?.status ?? "idle"}`, text: view ? statusWord(view.status) : id === config.leader ? "Leader" : tr("尚未啟動", "Not started") }),
       ),
     ),
-    h("label", { text: "角色職責" }),
-    h("p", { class: "duty", text: m.duty || "還沒有寫職責(在「團隊設定」填寫)。" }),
-    h("label", { text: "輸入來源" }),
+    h("label", { text: tr("角色職責", "Role and duty") }),
+    h("p", { class: "duty", text: m.duty || tr("還沒有寫職責(在「團隊設定」填寫)。", "No duty written yet (fill it in under Team setup).") }),
+    h("label", { text: tr("輸入來源", "Inputs") }),
     inputs,
-    h("label", { text: "交付給" }),
+    h("label", { text: tr("交付給", "Delivers to") }),
     outputs,
     add,
-    h("label", { text: task ? `完成條件 · ${task.id}` : "完成條件" }),
+    h("label", { text: task ? trf("完成條件 · {id}", "Done criteria · {id}", { id: task.id }) : tr("完成條件", "Done criteria") }),
     criteria,
-    h("label", { text: "溝通設定(整個團隊)" }),
-    toggle("成員可直接溝通", "關掉時,成員只能透過 Leader 傳話", config.directTalk, (v) => (config.directTalk = v)),
-    toggle("共用任務與成果", "每位成員都看得到整個任務看板與交付成果", config.sharedBoard, (v) => (config.sharedBoard = v)),
+    h("label", { text: tr("溝通設定(整個團隊)", "Communication (whole team)") }),
+    toggle(tr("成員可直接溝通", "Members can talk directly"), tr("關掉時,成員只能透過 Leader 傳話", "When off, members can only pass messages through the Leader"), config.directTalk, (v) => (config.directTalk = v)),
+    toggle(tr("共用任務與成果", "Shared tasks and results"), tr("每位成員都看得到整個任務看板與交付成果", "Every member sees the whole task board and all deliveries"), config.sharedBoard, (v) => (config.sharedBoard = v)),
     h(
       "div",
       { class: "row end" },
-      snap && snap.status !== "finished" ? h("span", { class: "hint", text: "執行中的團隊下次啟動才會套用。" }) : null,
-      h("button", { type: "button", class: "btn primary", onClick: () => void page.act(page.save) }, "儲存"),
+      snap && snap.status !== "finished" ? h("span", { class: "hint", text: tr("執行中的團隊下次啟動才會套用。", "A running team uses this from its next start.") }) : null,
+      h("button", { type: "button", class: "btn primary", onClick: () => void page.act(page.save) }, tr("儲存", "Save")),
     ),
   );
 }
@@ -414,7 +424,7 @@ function threads(snap: Snapshot): Thread[] {
     let t = byKey.get(key);
     if (!t) {
       const task = key === OTHER ? null : snap.tasks.find((x) => x.id === key) ?? null;
-      t = { key, title: task?.title ?? (key === OTHER ? "團隊對話" : key), task, people: [], messages: [], events: [], last: 0, blocked: false, delivered: false };
+      t = { key, title: task?.title ?? (key === OTHER ? tr("團隊對話", "Team conversation") : key), task, people: [], messages: [], events: [], last: 0, blocked: false, delivered: false };
       byKey.set(key, t);
     }
     return t;
@@ -445,17 +455,21 @@ function threads(snap: Snapshot): Thread[] {
   return [...byKey.values()].sort((a, b) => b.last - a.last);
 }
 
-const EVENT_WORD: Partial<Record<FeedItem["kind"], string>> = {
-  task: "建立任務",
-  delivered: "交付成果",
-  accepted: "驗收通過",
-  rejected: "退回修改",
-  blocked: "被卡住",
-  asked: "向你提問",
-  answered: "你的回覆",
-  lost: "失聯",
-  joined: "加入團隊",
-};
+/** What happened, after who did it: "Mia delivered". */
+function eventWord(kind: FeedItem["kind"]): string | undefined {
+  switch (kind) {
+    case "task": return tr("建立任務", "created a task");
+    case "delivered": return tr("交付成果", "delivered");
+    case "accepted": return tr("驗收通過", "accepted it");
+    case "rejected": return tr("退回修改", "sent it back");
+    case "blocked": return tr("被卡住", "is stuck");
+    case "asked": return tr("向你提問", "asked you");
+    case "answered": return tr("你的回覆", "answered");
+    case "lost": return tr("失聯", "lost contact");
+    case "joined": return tr("加入團隊", "joined the team");
+    default: return undefined;
+  }
+}
 
 export function logScreen(config: TeamConfig, snap: Snapshot, page: Page): HTMLElement {
   const all = threads(snap);
@@ -471,7 +485,7 @@ export function logScreen(config: TeamConfig, snap: Snapshot, page: Page): HTMLE
   const current = all.find((t) => t.key === key);
 
   // ── Left: the threads ──
-  const search = h("input", { class: "field", type: "search", placeholder: "搜尋訊息或任務", value: query, "data-key": "log-search", spellcheck: "false" }) as HTMLInputElement;
+  const search = h("input", { class: "field", type: "search", placeholder: tr("搜尋訊息或任務", "Search messages or tasks"), value: query, "data-key": "log-search", spellcheck: "false" }) as HTMLInputElement;
   search.addEventListener("input", () => {
     query = search.value;
     page.render();
@@ -490,14 +504,14 @@ export function logScreen(config: TeamConfig, snap: Snapshot, page: Page): HTMLE
           "span",
           { class: "thread-body" },
           h("span", { class: "thread-title" }, t.blocked ? h("i", { class: "flag blocked", text: "!" }) : null, t.title),
-          h("span", { class: "thread-sub", text: `${t.people.map((p) => nameIn(config, snap, p)).join("、") || "Coucou"} · ${count} 則訊息` }),
+          h("span", { class: "thread-sub", text: `${t.people.map((p) => nameIn(config, snap, p)).join(tr("、", ", ")) || "Coucou"} · ${count === 1 ? tr("1 則訊息", "1 message") : trf("{n} 則訊息", "{n} messages", { n: count })}` }),
         ),
         h("time", { text: t.last ? clock(t.last) : "" }),
       ),
     );
   }
-  if (!shown.length) list.append(h("p", { class: "hint", text: all.length ? "沒有符合的對話。" : "團隊還沒有任何對話。" }));
-  const left = h("section", { class: "panel log-threads" }, search, h("div", { class: "filters" }, chip("all", "全部"), chip("blocked", "阻塞"), chip("delivered", "交付")), list);
+  if (!shown.length) list.append(h("p", { class: "hint", text: all.length ? tr("沒有符合的對話。", "No matching conversation.") : tr("團隊還沒有任何對話。", "The team hasn't talked yet.") }));
+  const left = h("section", { class: "panel log-threads" }, search, h("div", { class: "filters" }, chip("all", tr("全部", "All")), chip("blocked", tr("阻塞", "Blocked")), chip("delivered", tr("交付", "Delivered"))), list);
 
   // ── Middle: the conversation ──
   const convo = h("div", { class: "convo" });
@@ -527,7 +541,7 @@ export function logScreen(config: TeamConfig, snap: Snapshot, page: Page): HTMLE
               h("div", { class: "convo-head" }, h("b", { text: nameIn(config, snap, m.from) }), member?.role ? h("span", { text: member.role }) : null, h("span", { text: `→ ${nameIn(config, snap, m.to)}` }), h("time", { text: clock(m.at) })),
               h("div", { class: "convo-bubble", text: m.text }),
               thumbsFor(snap.id, m.text),
-              !m.heard && m.to !== YOU ? h("div", { class: "convo-unread", text: "對方下一輪才會讀到" }) : null,
+              !m.heard && m.to !== YOU ? h("div", { class: "convo-unread", text: tr("對方下一輪才會讀到", "They read it on their next turn") }) : null,
             ),
           ),
         );
@@ -538,13 +552,13 @@ export function logScreen(config: TeamConfig, snap: Snapshot, page: Page): HTMLE
             "div",
             { class: `convo-event ev-${e.kind}` },
             page.blob(page.colorOf(snap, e.from), 22),
-            h("span", {}, h("b", { text: `${nameIn(config, snap, e.from)} ${EVENT_WORD[e.kind] ?? e.kind}` }), e.text ? ` · ${short(page.said(e.text), 140)}` : "", thumbsFor(snap.id, e.text, ...(e.task && /delivered|accepted|rejected/.test(e.kind) ? snap.deliverables.filter((d) => d.task === e.task).slice(-1).map((d) => d.locator) : []))),
+            h("span", {}, h("b", { text: `${nameIn(config, snap, e.from)} ${eventWord(e.kind) ?? e.kind}` }), e.text ? ` · ${short(page.said(e.text), 140)}` : "", thumbsFor(snap.id, e.text, ...(e.task && /delivered|accepted|rejected/.test(e.kind) ? snap.deliverables.filter((d) => d.task === e.task).slice(-1).map((d) => d.locator) : []))),
             h("time", { text: clock(e.at) }),
           ),
         );
       }
     }
-    if (!items.length) convo.append(h("p", { class: "hint", text: "這裡還沒有對話。" }));
+    if (!items.length) convo.append(h("p", { class: "hint", text: tr("這裡還沒有對話。", "No conversation here yet.") }));
   }
   const mid = h(
     "section",
@@ -555,9 +569,9 @@ export function logScreen(config: TeamConfig, snap: Snapshot, page: Page): HTMLE
           { class: "convo-top" },
           h("h2", { text: current.title }),
           current.task ? h("span", { class: "chip", text: current.task.id }) : null,
-          h("span", { class: "convo-people" }, ...current.people.filter((p) => p !== YOU).map((p) => page.blob(page.colorOf(snap, p), 20)), h("span", { class: "hint", text: current.people.map((p) => nameIn(config, snap, p)).join("、") })),
+          h("span", { class: "convo-people" }, ...current.people.filter((p) => p !== YOU).map((p) => page.blob(page.colorOf(snap, p), 20)), h("span", { class: "hint", text: current.people.map((p) => nameIn(config, snap, p)).join(tr("、", ", ")) })),
         )
-      : h("h2", { text: "溝通紀錄" }),
+      : h("h2", { text: tr("溝通紀錄", "Conversations") }),
     convo,
     page.composer(snap),
   );
@@ -568,7 +582,7 @@ export function logScreen(config: TeamConfig, snap: Snapshot, page: Page): HTMLE
 
 function taskPanel(config: TeamConfig, snap: Snapshot, task: Task | null, page: Page): HTMLElement {
   if (!task) {
-    return h("section", { class: "panel log-task" }, h("h2", { text: "關聯任務" }), h("p", { class: "hint", text: "這段對話沒有綁定任務。選左邊一個任務,這裡會列出它的負責人、完成條件、依賴與成果。" }));
+    return h("section", { class: "panel log-task" }, h("h2", { text: tr("關聯任務", "Related task") }), h("p", { class: "hint", text: tr("這段對話沒有綁定任務。選左邊一個任務,這裡會列出它的負責人、完成條件、依賴與成果。", "This conversation isn't tied to a task. Pick a task on the left to see its owner, done criteria, dependencies and results here.") }));
   }
   const person = (label: string, id: string | null) =>
     id
@@ -580,28 +594,28 @@ function taskPanel(config: TeamConfig, snap: Snapshot, task: Task | null, page: 
   return h(
     "section",
     { class: "panel log-task" },
-    h("h2", { text: "關聯任務" }),
+    h("h2", { text: tr("關聯任務", "Related task") }),
     h(
       "div",
       { class: "task-card-big" },
       h("span", { class: "chip", text: task.id }),
       h("b", { text: task.title }),
-      h("span", { class: `chip state ${task.status}`, text: task.blocked ? "被卡住" : TASK_WORD[task.status] }),
+      h("span", { class: `chip state ${task.status}`, text: task.blocked ? tr("被卡住", "Stuck") : taskWord(task.status) }),
     ),
     task.detail ? h("p", { class: "duty", text: short(task.detail, 220) }) : null,
-    person("負責人", task.owner),
+    person(tr("負責人", "Owner"), task.owner),
     person("Leader", config.leader),
-    person("交付給", task.deliverTo),
-    task.blocked ? h("p", { class: "problem", text: `卡住:${task.blocked.reason}(等 ${nameIn(config, snap, task.blocked.on)})` }) : null,
-    h("label", { text: `完成條件 ${task.criteria.length ? `${met} / ${task.criteria.length}` : ""}` }),
+    person(tr("交付給", "Delivers to"), task.deliverTo),
+    task.blocked ? h("p", { class: "problem", text: trf("卡住:{reason}(等 {who})", "Stuck: {reason} (waiting for {who})", { reason: task.blocked.reason, who: nameIn(config, snap, task.blocked.on) }) }) : null,
+    h("label", { text: `${tr("完成條件", "Done criteria")} ${task.criteria.length ? `${met} / ${task.criteria.length}` : ""}` }),
     task.criteria.length
       ? h("div", { class: "checks" }, ...task.criteria.map((c) => h("div", { class: `check${c.claimed ? " on" : ""}` }, h("i", { text: c.claimed ? "✓" : "" }), c.text)))
-      : h("p", { class: "hint", text: "沒有列出完成條件。" }),
-    deps.length ? h("label", { text: `依賴項目 ${deps.filter((d) => d.status === "delivered" || d.status === "done").length} / ${deps.length}` }) : null,
+      : h("p", { class: "hint", text: tr("沒有列出完成條件。", "No done criteria listed.") }),
+    deps.length ? h("label", { text: `${tr("依賴項目", "Depends on")} ${deps.filter((d) => d.status === "delivered" || d.status === "done").length} / ${deps.length}` }) : null,
     deps.length
       ? h("div", { class: "checks" }, ...deps.map((d) => h("div", { class: `check${d.status === "delivered" || d.status === "done" ? " on" : ""}` }, h("i", { text: d.status === "delivered" || d.status === "done" ? "✓" : "" }), `${d.id} · ${d.title}`)))
       : null,
-    h("label", { text: "關聯成果" }),
+    h("label", { text: tr("關聯成果", "Results") }),
     handed.length
       ? h(
           "div",
@@ -612,15 +626,16 @@ function taskPanel(config: TeamConfig, snap: Snapshot, task: Task | null, page: 
               {
                 type: "button",
                 class: "deliverable small",
-                title: isImage(d.locator) ? `看 ${d.locator}` : `開啟 ${d.locator}`,
+                title: isImage(d.locator) ? trf("看 {path}", "View {path}", { path: d.locator }) : trf("開啟 {path}", "Open {path}", { path: d.locator }),
                 onClick: () => (isImage(d.locator) ? openImage(snap.id, d.locator) : void page.act(() => Bridge.teamOpen(snap.id, d.locator))),
               },
               isImage(d.locator) ? thumbImg(snap.id, d.locator, "rel-thumb") : null,
               h("span", { class: "deliverable-body" }, h("span", { class: "deliverable-name", text: d.locator }), h("span", { class: "dim", text: `${nameIn(config, snap, d.by)} · ${clock(d.at)} · ${short(d.summary, 60)}` })),
-              h("span", { class: `chip ${d.accepted === true ? "ok" : d.accepted === false ? "warn" : "pending"}`, text: d.accepted === true ? "已驗收" : d.accepted === false ? "已退回" : "待驗收" }),
+              h("span", { class: `chip ${d.accepted === true ? "ok" : d.accepted === false ? "warn" : "pending"}`, text: d.accepted === true ? tr("已驗收", "Accepted") : d.accepted === false ? tr("已退回", "Sent back") : tr("待驗收", "To review") }),
             ),
           ),
         )
-      : h("p", { class: "hint", text: "還沒有交付成果。" }),
+      : h("p", { class: "hint", text: tr("還沒有交付成果。", "Nothing delivered yet.") }),
+
   );
 }

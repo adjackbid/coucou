@@ -8,6 +8,7 @@
 // (see `menuOpen`), so the field it hangs from stays where it is.
 
 import "./ui.css";
+import { tr, trf } from "../core/i18n";
 import { h } from "../views/dom";
 
 export interface Choice {
@@ -77,7 +78,7 @@ function popover(anchor: HTMLElement, choices: Choice[], current: string, pick: 
     items.push(el);
     menu.append(el);
   });
-  if (!choices.length) menu.append(h("div", { class: "menu-empty", text: empty || "沒有可選的項目" }));
+  if (!choices.length) menu.append(h("div", { class: "menu-empty", text: empty || tr("沒有可選的項目", "Nothing to choose from") }));
   mark();
   document.body.append(menu);
 
@@ -140,7 +141,7 @@ function popover(anchor: HTMLElement, choices: Choice[], current: string, pick: 
 export function dropdown(opts: { value: string; choices: Choice[]; onChange: (value: string) => void; title?: string; className?: string; placeholder?: string }): HTMLButtonElement {
   const label = h("span", { class: "dropdown-label" });
   const current = opts.choices.find((c) => c.value === opts.value);
-  label.textContent = current?.label ?? opts.placeholder ?? "選擇…";
+  label.textContent = current?.label ?? opts.placeholder ?? tr("選擇…", "Choose…");
   if (!current) label.classList.add("placeholder");
   const button = h(
     "button",
@@ -184,7 +185,7 @@ export function suggest(input: HTMLInputElement, choices: () => Choice[] | strin
         input.dispatchEvent(new Event("change", { bubbles: true }));
       },
       true,
-      typeof all === "string" ? all : "沒有符合的模型",
+      typeof all === "string" ? all : tr("沒有符合的模型", "No matching model"),
     );
   };
   input.addEventListener("focus", show);
@@ -315,7 +316,7 @@ export function editableText(
     }, 0);
     return input;
   }
-  const el: HTMLElement = h(opts.tag ?? "span", { class: `editable ${opts.className ?? ""}`, tabindex: "0", title: `點一下修改${opts.label}`, text: value });
+  const el: HTMLElement = h(opts.tag ?? "span", { class: `editable ${opts.className ?? ""}`, tabindex: "0", title: trf("點一下修改{what}", "{what}: click to change", { what: opts.label }), text: value });
   const start = () => {
     naming.set(key, value);
     opts.render();

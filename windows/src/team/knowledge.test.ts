@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { setLang } from "../core/i18n";
 import { dropTarget, kbSaid, kindHint, sizeText, usageLine } from "./knowledge";
 import type { KnowledgeDoc, KnowledgeView } from "./types";
 
@@ -27,22 +28,32 @@ describe("the knowledge panel's words", () => {
       bytes: 1_258_291,
       limits: { maxDocs: 50, maxBytes: 200 * 1024 * 1024, maxText: 1, maxImage: 1, maxFile: 1 },
     };
+    setLang("zh-TW");
     expect(usageLine(view)).toBe("3 份 · 1.2 MB / 200 MB");
+    setLang("en");
+    expect(usageLine(view)).toBe("3 documents · 1.2 MB / 200 MB");
   });
 
   it("says what a member gets of each kind of file", () => {
+    setLang("zh-TW");
     expect(kindHint(doc({ kind: "file" }))).toContain("成員拿到檔案路徑");
     expect(kindHint(doc({ kind: "file" }))).toContain("沒有檢查是否含金鑰");
     expect(kindHint(doc({ kind: "file", name: "setup.bat", program: true }))).toContain("不會執行");
     expect(kindHint(doc({ kind: "image" }))).toBe("圖片");
+    setLang("en");
+    expect(kindHint(doc({ kind: "image" }))).toBe("Picture");
   });
 
   it("puts the backend's refusals in the window's language", () => {
+    setLang("zh-TW");
     expect(kbSaid("Error: movie.mp4 is larger than 20 MB.")).toBe("movie.mp4:超過 20 MB");
     expect(kbSaid("b.md is already in the knowledge base, as a.md.")).toBe("b.md:已經在知識庫裡了(a.md)");
     expect(kbSaid("A team keeps at most 50 documents. Remove one first.")).toBe("一個團隊最多 50 份文件,請先移除一些");
     expect(kbSaid("The knowledge base would be larger than 200 MB (it holds 199 MB).")).toBe("知識庫會超過 200 MB(目前 199 MB)");
     expect(kbSaid("The original is no longer at D:\\Docs\\a.md.")).toBe("原檔已不在 D:\\Docs\\a.md");
+    expect(kbSaid("Something else entirely")).toBe("Something else entirely");
+    setLang("en");
+    expect(kbSaid("Error: movie.mp4 is larger than 20 MB.")).toBe("movie.mp4 is larger than 20 MB");
     expect(kbSaid("Something else entirely")).toBe("Something else entirely");
   });
 });

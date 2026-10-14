@@ -5,6 +5,7 @@
 // findings worked out from those numbers. The secretary can then be asked
 // to read the same numbers (its cost_analysis tool) and explain them.
 
+import { tr, trf } from "../core/i18n";
 import { h } from "../views/dom";
 import type { Activity, Found, UsageReport, UsageRow } from "./types";
 
@@ -13,7 +14,7 @@ export interface AnalysisHost {
   /** Formats an amount (US dollars) the way the page shows money. */
   money(usd: number): string;
   tokens(n: number): string;
-  /** "近 30 天", "2026-10-01 ~ 2026-10-04". */
+  /** "近 30 天" / "the last 30 days", "2026-10-01 ~ 2026-10-04". */
   periodLabel(): string;
   /** The person asks the secretary; resolves to its words, or why not. */
   consult(text: string): Promise<string>;
@@ -22,7 +23,7 @@ export interface AnalysisHost {
 
 const PALETTE = ["#3b9eff", "#a78bfa", "#34d399", "#f5a524", "#f472b6", "#22d3ee"];
 const KIND_COLORS = { input: "#3b9eff", output: "#f5a524", cacheRead: "#34d399", cacheWrite: "#a78bfa" };
-const KIND_NAMES = { input: "輸入(未快取)", output: "輸出", cacheRead: "快取讀取", cacheWrite: "快取寫入" };
+const kindNames = (): Record<keyof typeof KIND_COLORS, string> => ({ input: tr("輸入(未快取)", "Input (not cached)"), output: tr("輸出", "Output"), cacheRead: tr("快取讀取", "Cache reads"), cacheWrite: tr("快取寫入", "Cache writes") });
 
 let picked = "";
 let asking = false;
@@ -145,8 +146,8 @@ function cumulative(ms: Member[], rows: UsageRow[], host: AnalysisHost): HTMLEle
     let sum = 0;
     return list.filter((r) => r.estimatedUsd != null).map((r) => [r.at, (sum += r.estimatedUsd!)] as [number, number]);
   };
-  const series: Series[] = [{ label: "全隊", color: "#f5f6f8", points: pile(rows), width: 3 }, ...ms.slice(0, 6).map((m) => ({ label: m.name, color: m.color, points: pile(m.rows) }))];
-  return chart(series, host.money, "這段期間沒有可以估價的用量。");
+  const series: Series[] = [{ label: tr("全隊", "Whole team"), color: "#f5f6f8", points: pile(rows), width: 3 }, ...ms.slice(0, 6).map((m) => ({ label: m.name, color: m.color, points: pile(m.rows) }))];
+  return chart(series, host.money, tr("這段期間沒有可以估價的用量。", "No usage that can be priced in this period."));
 }
 
 /** What each call carried in: a context that keeps growing costs more every turn. */
@@ -161,13 +162,14 @@ function context(ms: Member[], host: AnalysisHost): HTMLElement {
     });
     if (avg.length > 2) series.push({ label: m.name, color: m.color, points: avg, width: 2 });
   }
-  return chart(series, host.tokens, "沒有用量紀錄。");
+  return chart(series, host.tokens, tr("沒有用量紀錄。", "No usage recorded."));
 }
 
 /** What kind of token the money went on, member by member. */
 function composition(ms: Member[], host: AnalysisHost): HTMLElement {
   const most = Math.max(...ms.map((m) => Object.values(m.kinds).reduce((a, b) => a + b, 0)), 0) || 1;
   const keys = Object.keys(KIND_COLORS) as (keyof typeof KIND_COLORS)[];
+  const names = kindNames();
   return h(
     "div",
     { class: "ca-bars" },
@@ -180,12 +182,12 @@ function composition(ms: Member[], host: AnalysisHost): HTMLElement {
         h(
           "span",
           { class: "ca-bar", style: `width:${Math.max((total / most) * 100, 0.5)}%` },
-          ...keys.filter((k) => m.kinds[k] > 0).map((k) => h("i", { style: `flex:${m.kinds[k]} 0 0;background:${KIND_COLORS[k]}`, title: `${KIND_NAMES[k]} ${host.money(m.kinds[k])}(${Math.round((m.kinds[k] / (total || 1)) * 100)}%)` })),
+          ...keys.filter((k) => m.kinds[k] > 0).map((k) => h("i", { style: `flex:${m.kinds[k]} 0 0;background:${KIND_COLORS[k]}`, title: trf("{kind} {usd}({pct}%)", "{kind} {usd} ({pct}%)", { kind: names[k], usd: host.money(m.kinds[k]), pct: Math.round((m.kinds[k] / (total || 1)) * 100) }) })),
         ),
         h("em", { text: host.money(total) }),
       );
     }),
-    h("div", { class: "cost-legend" }, ...keys.map((k) => h("span", {}, h("i", { style: `background:${KIND_COLORS[k]}` }), KIND_NAMES[k]))),
+    h("div", { class: "cost-legend" }, ...keys.map((k) => h("span", {}, h("i", { style: `background:${KIND_COLORS[k]}` }), names[k]))),
   );
 }
 
@@ -212,29 +214,37 @@ function findings(report: UsageReport, ms: Member[], rows: UsageRow[], host: Ana
     const ratio = cheapest && price(cheapest) > 0 ? price(top) / price(cheapest) : 1;
     out.push({
       tone: "bad",
-      title: `成本集中在 ${top.name}:${Math.round((top.usd / usd) * 100)}%(${host.money(top.usd)})`,
+      title: trf("成本集中在 {name}:{pct}%({usd})", "Most of the cost is {name}: {pct}% ({usd})", { name: top.name, pct: Math.round((top.usd / usd) * 100), usd: host.money(top.usd) }),
       advice:
         ratio >= 3 && cheapest
-          ? `它用的 ${top.models.join("、")} 輸出單價是 ${cheapest.name} 的 ${ratio.toFixed(1)} 倍。只把需要強模型的工作(規劃、驗收、只有它做得到的事)留給它,寫文件、整理報告這類交給便宜的模型。`
-          : `${top.did?.turns ?? 0} 個回合、${top.did?.reviews ?? 0} 次驗收都在它身上。可以把部分工作拆給其他成員,或請它回覆精簡一點。`,
+          ? trf(
+              "它用的 {models} 輸出單價是 {cheapest} 的 {ratio} 倍。只把需要強模型的工作(規劃、驗收、只有它做得到的事)留給它,寫文件、整理報告這類交給便宜的模型。",
+              "Its {models} costs {ratio} times as much per output token as {cheapest}'s. Keep only the work that needs a strong model for it (planning, reviews, what only it can do) and give writing docs or tidying reports to a cheaper model.",
+              { models: top.models.join(tr("、", ", ")), cheapest: cheapest.name, ratio: ratio.toFixed(1) },
+            )
+          : trf(
+              "{turns} 個回合、{reviews} 次驗收都在它身上。可以把部分工作拆給其他成員,或請它回覆精簡一點。",
+              "{turns} turns and {reviews} reviews are all on it. Split some of the work off to other members, or ask it for shorter replies.",
+              { turns: top.did?.turns ?? 0, reviews: top.did?.reviews ?? 0 },
+            ),
     });
   }
   // The money went on output.
   if (kinds.output / priced > 0.4) {
-    out.push({ tone: "warn", title: `輸出佔成本 ${Math.round((kinds.output / priced) * 100)}%`, advice: "輸出單價通常是輸入的 4–5 倍。請成員回覆、報告寫精簡,不要整段貼回程式碼;長文件改成交付檔案、訊息只寫摘要。" });
+    out.push({ tone: "warn", title: trf("輸出佔成本 {pct}%", "Output is {pct}% of the cost", { pct: Math.round((kinds.output / priced) * 100) }), advice: tr("輸出單價通常是輸入的 4–5 倍。請成員回覆、報告寫精簡,不要整段貼回程式碼;長文件改成交付檔案、訊息只寫摘要。", "Output usually costs 4–5 times as much as input. Ask members for short replies and reports, not whole blocks of code pasted back; deliver long documents as files and keep messages to a summary.") });
   }
   // Input not read from the cache.
   const inputSide = rows.reduce((a, r) => a + contextOf(r), 0);
   const cached = rows.reduce((a, r) => a + r.usage.cacheRead, 0);
   const hit = inputSide ? cached / inputSide : 0;
   if (kinds.input / priced > 0.4 && hit < 0.5) {
-    out.push({ tone: "warn", title: `輸入佔成本 ${Math.round((kinds.input / priced) * 100)}%,快取命中只有 ${Math.round(hit * 100)}%`, advice: "同樣的內容每次都重新計費。讓成員在同一個 session 裡連續工作(Coucou 會沿用),避免一直換模型或重開;端點若支援提示快取,確認有開。" });
+    out.push({ tone: "warn", title: trf("輸入佔成本 {pct}%,快取命中只有 {hit}%", "Input is {pct}% of the cost, with only {hit}% from the cache", { pct: Math.round((kinds.input / priced) * 100), hit: Math.round(hit * 100) }), advice: tr("同樣的內容每次都重新計費。讓成員在同一個 session 裡連續工作(Coucou 會沿用),避免一直換模型或重開;端點若支援提示快取,確認有開。", "The same content is billed again every time. Let members keep working in one session (Coucou keeps it), avoid switching models or restarting; if the endpoint supports prompt caching, make sure it is on.") });
   } else if (hit >= 0.8) {
     const saved = rows.reduce((a, r) => {
       const p = priceOf(report, r.usage.model)?.price;
       return p ? a + (r.usage.cacheRead * Math.max(0, p.input - p.cacheRead)) / 1e6 : a;
     }, 0);
-    out.push({ tone: "good", title: `快取命中 ${Math.round(hit * 100)}%,省下約 ${host.money(saved)}`, advice: "重複的內容大多從快取讀取,這部分已經很省。" });
+    out.push({ tone: "good", title: trf("快取命中 {hit}%,省下約 {usd}", "{hit}% from the cache, about {usd} saved", { hit: Math.round(hit * 100), usd: host.money(saved) }), advice: tr("重複的內容大多從快取讀取,這部分已經很省。", "Repeated content is mostly read from the cache: this part is already cheap.") });
   }
   // A context that keeps growing.
   for (const m of ms) {
@@ -244,26 +254,26 @@ function findings(report: UsageReport, ms: Member[], rows: UsageRow[], host: Ana
     const early = avg(m.rows.slice(0, third));
     const late = avg(m.rows.slice(-third));
     if (early > 0 && late / early >= 2) {
-      out.push({ tone: "warn", title: `${m.name} 每次呼叫帶的內容越來越大:${host.tokens(early)} → ${host.tokens(late)}`, advice: "對話越長,每一輪都要重送更多內容。把大任務拆成幾個小任務,做完一段就交付,下一段讓它重新開始(新任務會帶新的工作說明)。" });
+      out.push({ tone: "warn", title: trf("{name} 每次呼叫帶的內容越來越大:{early} → {late}", "{name} carries more into every call: {early} → {late}", { name: m.name, early: host.tokens(early), late: host.tokens(late) }), advice: tr("對話越長,每一輪都要重送更多內容。把大任務拆成幾個小任務,做完一段就交付,下一段讓它重新開始(新任務會帶新的工作說明)。", "The longer the conversation, the more is sent again every turn. Split big tasks into small ones, deliver each part when done, and let the next part start fresh (a new task comes with a new brief).") });
     }
   }
   // Work done twice.
   const rejected = ms.reduce((a, m) => a + (m.did?.rejected ?? 0), 0);
   const accepted = ms.reduce((a, m) => a + (m.did?.accepted ?? 0), 0);
   if (rejected > 0) {
-    const who = ms.filter((m) => (m.did?.rejected ?? 0) > 0).map((m) => `${m.name} ${m.did!.rejected} 次`).join("、");
-    out.push({ tone: "warn", title: `退回重做 ${rejected} 次(${who})`, advice: "每次退回都是再跑一輪。開任務時把驗收標準寫清楚(要哪些檔案、要通過哪些測試),或請成員交付前先自己對一次標準。" });
+    const who = ms.filter((m) => (m.did?.rejected ?? 0) > 0).map((m) => trf("{name} {n} 次", "{name} {n}×", { name: m.name, n: m.did!.rejected })).join(tr("、", ", "));
+    out.push({ tone: "warn", title: trf("退回重做 {n} 次({who})", "Sent back for rework {n} times ({who})", { n: rejected, who }), advice: tr("每次退回都是再跑一輪。開任務時把驗收標準寫清楚(要哪些檔案、要通過哪些測試),或請成員交付前先自己對一次標準。", "Every send-back is another round. Write clear acceptance criteria when a task starts (which files, which tests must pass), or ask members to check against them before delivering.") });
   }
   const failed = ms.reduce((a, m) => a + (m.did?.failedTurns ?? 0), 0);
   if (failed > 0) {
-    out.push({ tone: "warn", title: `${failed} 個回合執行失敗`, advice: "失敗的回合也會花 token。到看板看是哪位成員、什麼錯誤(端點、權限或模型名稱)。" });
+    out.push({ tone: "warn", title: failed === 1 ? tr("1 個回合執行失敗", "1 turn failed") : trf("{n} 個回合執行失敗", "{n} turns failed", { n: failed }), advice: tr("失敗的回合也會花 token。到看板看是哪位成員、什麼錯誤(端點、權限或模型名稱)。", "Failed turns cost tokens too. Check the board for which member and what error (endpoint, permission or model name).") });
   }
   if (accepted > 0) {
-    out.push({ tone: "good", title: `每個驗收的任務平均 ${host.money(usd / accepted)}`, advice: `${accepted} 個任務已驗收。拿這個數字比較不同團隊、不同模型組合的效率。` });
+    out.push({ tone: "good", title: trf("每個驗收的任務平均 {usd}", "{usd} per accepted task on average", { usd: host.money(usd / accepted) }), advice: accepted === 1 ? tr("1 個任務已驗收。拿這個數字比較不同團隊、不同模型組合的效率。", "1 task accepted. Use this number to compare teams and model mixes.") : trf("{n} 個任務已驗收。拿這個數字比較不同團隊、不同模型組合的效率。", "{n} tasks accepted. Use this number to compare teams and model mixes.", { n: accepted }) });
   }
   const unpriced = rows.filter((r) => r.estimatedUsd == null).reduce((a, r) => a + tokensOf(r), 0);
   if (unpriced > 0) {
-    out.push({ tone: "warn", title: `有 ${host.tokens(unpriced)} tokens 沒有價格`, advice: "這部分沒算進成本。到「總覽」下方的價格表補上。" });
+    out.push({ tone: "warn", title: trf("有 {n} tokens 沒有價格", "{n} tokens have no price", { n: host.tokens(unpriced) }), advice: tr("這部分沒算進成本。到「總覽」下方的價格表補上。", "They are not in the cost. Add the prices in the price table under Overview.") });
   }
   return out;
 }
@@ -277,7 +287,7 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
       return { id, name: rows[rows.length - 1]?.teamName || id, usd: rows.reduce((a, r) => a + (r.estimatedUsd ?? 0), 0) };
     })
     .sort((a, b) => b.usd - a.usd);
-  if (!teams.length) return h("section", { class: "panel cost-empty" }, h("p", { class: "dim", text: "這段期間沒有團隊用量,換一個期間看看。" }));
+  if (!teams.length) return h("section", { class: "panel cost-empty" }, h("p", { class: "dim", text: tr("這段期間沒有團隊用量,換一個期間看看。", "No team usage in this period: try another period.") }));
   if (!teams.some((t) => t.id === picked)) picked = teams[0].id;
   const team = teams.find((t) => t.id === picked)!;
   const rows = report.rows.filter((r) => r.team === picked);
@@ -293,7 +303,14 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
     asking = true;
     answer = null;
     host.render();
-    const text = await host.consult(`幫我分析「${team.name}」在${host.periodLabel()}的成本:為什麼這麼高(或這麼低)?怎麼優化、改善?請用具體數字說明,並給可以直接照做的建議。`);
+    // Sent as the person's own question, so in their language: the secretary answers in it.
+    const text = await host.consult(
+      trf(
+        "幫我分析「{team}」在{period}的成本:為什麼這麼高(或這麼低)?怎麼優化、改善?請用具體數字說明,並給可以直接照做的建議。",
+        "Analyse the cost of “{team}” over {period}: why is it this high (or low), and how can it be brought down? Use concrete numbers and give advice I can act on right away.",
+        { team: team.name, period: host.periodLabel() },
+      ),
+    );
     asking = false;
     answer = { team: picked, text };
     host.render();
@@ -313,45 +330,46 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
     h(
       "section",
       { class: "kpis" },
-      tile("預估成本", host.money(usd), `${host.tokens(rows.reduce((a, r) => a + tokensOf(r), 0))} tokens · ${rows.length} 次呼叫`),
-      tile("每個驗收任務", accepted ? host.money(usd / accepted) : "—", accepted ? `${accepted} 個任務驗收通過` : "這段期間還沒有驗收的任務"),
-      tile("每回合", turns ? host.money(usd / turns) : "—", `${turns} 個回合`),
-      tile("快取命中", `${Math.round(hit * 100)}%`, "輸入中從快取讀取的比例"),
+      tile(tr("預估成本", "Estimated cost"), host.money(usd), trf("{tokens} tokens · {n} 次呼叫", "{tokens} tokens · {n} calls", { tokens: host.tokens(rows.reduce((a, r) => a + tokensOf(r), 0)), n: rows.length })),
+      tile(tr("每個驗收任務", "Per accepted task"), accepted ? host.money(usd / accepted) : "—", accepted === 1 ? tr("1 個任務驗收通過", "1 task accepted") : accepted ? trf("{n} 個任務驗收通過", "{n} tasks accepted", { n: accepted }) :
+ tr("這段期間還沒有驗收的任務", "No task accepted in this period yet")),
+      tile(tr("每回合", "Per turn"), turns ? host.money(usd / turns) : "—", trf("{n} 個回合", "{n} turns", { n: turns })),
+      tile(tr("快取命中", "Cache hits"), `${Math.round(hit * 100)}%`, tr("輸入中從快取讀取的比例", "Share of the input read from the cache")),
     ),
     h(
       "section",
       { class: "panel" },
-      h("div", { class: "panel-head" }, h("h2", { text: "診斷與建議" }), h("span", { class: "dim", text: "依這段期間的數字算出來的" })),
-      found.length ? h("ul", { class: "ca-findings" }, ...found.map((f) => h("li", { class: f.tone }, h("b", { text: f.title }), h("span", { text: f.advice })))) : h("p", { class: "dim", text: "沒有看到明顯的問題。" }),
+      h("div", { class: "panel-head" }, h("h2", { text: tr("診斷與建議", "Findings and advice") }), h("span", { class: "dim", text: tr("依這段期間的數字算出來的", "Worked out from this period's numbers") })),
+      found.length ? h("ul", { class: "ca-findings" }, ...found.map((f) => h("li", { class: f.tone }, h("b", { text: f.title }), h("span", { text: f.advice })))) : h("p", { class: "dim", text: tr("沒有看到明顯的問題。", "Nothing stands out.") }),
       h(
         "div",
         { class: "ca-ask" },
-        h("button", { class: "btn primary", type: "button", disabled: asking, onClick: () => void ask() }, asking ? "秘書分析中…" : "請秘書分析原因與優化方式"),
-        h("span", { class: "hint", text: "秘書會讀同一份數字(成員、模型、回合、退件、快取),用你的聊天模型寫成說明與建議。" }),
+        h("button", { class: "btn primary", type: "button", disabled: asking, onClick: () => void ask() }, asking ? tr("秘書分析中…", "The secretary is analysing…") : tr("請秘書分析原因與優化方式", "Ask the secretary why, and how to cut it")),
+        h("span", { class: "hint", text: tr("秘書會讀同一份數字(成員、模型、回合、退件、快取),用你的聊天模型寫成說明與建議。", "The secretary reads the same numbers (members, models, turns, send-backs, cache) and explains them with advice, using your chat model.") }),
       ),
       answer && answer.team === picked
         ? h(
             "div",
             { class: "ca-answer" },
             wordsOf(answer.text),
-            h("button", { class: "link", type: "button", onClick: () => host.openSecretary() }, "到秘書頁繼續問 →"),
+            h("button", { class: "link", type: "button", onClick: () => host.openSecretary() }, tr("到秘書頁繼續問 →", "Keep asking on the secretary's page →")),
           )
         : null,
     ),
-    h("section", { class: "panel" }, h("div", { class: "panel-head" }, h("h2", { text: "累積成本" }), h("span", { class: "dim", text: "曲線越陡,那段時間花得越快" })), cumulative(ms, rows, host)),
-    h("section", { class: "panel" }, h("div", { class: "panel-head" }, h("h2", { text: "每次呼叫帶的內容" }), h("span", { class: "dim", text: "點是每一次呼叫的輸入量(含快取),線是趨勢;一路往上代表對話越滾越大" })), context(ms, host)),
-    h("section", { class: "panel" }, h("div", { class: "panel-head" }, h("h2", { text: "成本花在哪種 token" }), h("span", { class: "dim", text: "滑過色塊看金額" })), composition(ms, host)),
+    h("section", { class: "panel" }, h("div", { class: "panel-head" }, h("h2", { text: tr("累積成本", "Cost over time") }), h("span", { class: "dim", text: tr("曲線越陡,那段時間花得越快", "The steeper the curve, the faster the money went") })), cumulative(ms, rows, host)),
+    h("section", { class: "panel" }, h("div", { class: "panel-head" }, h("h2", { text: tr("每次呼叫帶的內容", "What each call carries") }), h("span", { class: "dim", text: tr("點是每一次呼叫的輸入量(含快取),線是趨勢;一路往上代表對話越滾越大", "Dots are each call's input (cache included), lines the trend; climbing all the way means the conversation keeps growing") })), context(ms, host)),
+    h("section", { class: "panel" }, h("div", { class: "panel-head" }, h("h2", { text: tr("成本花在哪種 token", "Which tokens the cost went on") }), h("span", { class: "dim", text: tr("滑過色塊看金額", "Hover a block for the amount") })), composition(ms, host)),
     h(
       "section",
       { class: "panel cost-tree" },
-      h("div", { class: "panel-head" }, h("h2", { text: "成員效率" })),
+      h("div", { class: "panel-head" }, h("h2", { text: tr("成員效率", "Member efficiency") })),
       h(
         "div",
         { class: "table-wrap" },
         h(
           "table",
           {},
-          h("thead", {}, h("tr", {}, ...["成員", "模型", "成本", "占比", "回合", "每回合", "交付", "退回", "驗收"].map((t, i) => h("th", { class: i > 1 ? "num" : "", text: t })))),
+          h("thead", {}, h("tr", {}, ...[tr("成員", "Member"), tr("模型", "Model"), tr("成本", "Cost"), tr("占比", "Share"), tr("回合", "Turns"), tr("每回合", "Per turn"), tr("交付", "Delivered"), tr("退回", "Sent back"), tr("驗收", "Accepted")].map((t, i) => h("th", { class: i > 1 ? "num" : "", text: t })))),
           h(
             "tbody",
             {},
@@ -360,7 +378,8 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
                 "tr",
                 {},
                 h("td", { class: "name" }, h("span", { class: "name-in" }, h("i", { class: "ca-dot", style: `background:${m.color}` }), h("span", { class: "label", text: m.name }), m.did?.leader ? h("span", { class: "chip", text: "Leader" }) : null)),
-                h("td", { class: "mono", text: m.models.join("、") }),
+                h("td", { class: "mono", text: m.models.join(tr("、", ", ")) }),
+
                 h("td", { class: "num strong", text: host.money(m.usd) }),
                 h("td", { class: "num", text: `${usd ? Math.round((m.usd / usd) * 100) : 0}%` }),
                 h("td", { class: "num", text: String(m.did?.turns ?? 0) }),

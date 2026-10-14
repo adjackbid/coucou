@@ -10,6 +10,7 @@
 
 import "./images.css";
 import { Bridge, IS_TAURI } from "../core/bridge";
+import { tr, trf } from "../core/i18n";
 import { h } from "../views/dom";
 
 const EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
@@ -135,7 +136,7 @@ export function thumbRow(team: string, paths: string[]): HTMLElement | null {
         type: "button",
         class: "pic loading",
         "data-pic": norm(path),
-        title: `${fileName(path)} · 按一下放大`,
+        title: trf("{name} · 按一下放大", "{name} · click to enlarge", { name: fileName(path) }),
         onClick: (e: Event) => {
           e.stopPropagation();
           openImage(team, list, i);
@@ -190,8 +191,8 @@ export function openImage(team: string, list: string | string[], at = 0) {
   const where = h("span", { class: "lightbox-path" });
   const count = h("span", { class: "lightbox-count" });
   const problem = h("p", { class: "lightbox-problem" });
-  const prev = h("button", { type: "button", class: "lightbox-nav prev", "aria-label": "上一張", onClick: (e: Event) => (e.stopPropagation(), show(i - 1)) }, "‹");
-  const next = h("button", { type: "button", class: "lightbox-nav next", "aria-label": "下一張", onClick: (e: Event) => (e.stopPropagation(), show(i + 1)) }, "›");
+  const prev = h("button", { type: "button", class: "lightbox-nav prev", "aria-label": tr("上一張", "Previous"), onClick: (e: Event) => (e.stopPropagation(), show(i - 1)) }, "‹");
+  const next = h("button", { type: "button", class: "lightbox-nav next", "aria-label": tr("下一張", "Next"), onClick: (e: Event) => (e.stopPropagation(), show(i + 1)) }, "›");
 
   const show = (n: number) => {
     i = (n + paths.length) % paths.length;
@@ -214,7 +215,7 @@ export function openImage(team: string, list: string | string[], at = 0) {
       (err) => {
         if (asked !== i) return;
         img.removeAttribute("src");
-        problem.textContent = `看不到這張圖:${String(err instanceof Error ? err.message : err).replace(/^Error:\s*/, "")}`;
+        problem.textContent = trf("看不到這張圖:{why}", "Can't show this picture: {why}", { why: String(err instanceof Error ? err.message : err).replace(/^Error:\s*/, "") });
       },
     );
   };
@@ -225,7 +226,7 @@ export function openImage(team: string, list: string | string[], at = 0) {
   };
   const box = h(
     "div",
-    { class: "lightbox", role: "dialog", "aria-modal": "true", "aria-label": "圖片", onClick: () => close() },
+    { class: "lightbox", role: "dialog", "aria-modal": "true", "aria-label": tr("圖片", "Picture"), onClick: () => close() },
     h("div", { class: "lightbox-stage" }, prev, img, next),
     h(
       "div",
@@ -235,9 +236,9 @@ export function openImage(team: string, list: string | string[], at = 0) {
       h(
         "div",
         { class: "lightbox-actions" },
-        h("button", { type: "button", class: "btn plain", title: "用 Windows 預設的看圖程式開啟", onClick: act(() => (IS_TAURI ? Bridge.teamOpenImage(team, paths[i]) : Promise.resolve())) }, "用預設程式開啟"),
-        h("button", { type: "button", class: "btn plain", title: "在檔案總管中選取這個檔案", onClick: act(() => (IS_TAURI ? Bridge.teamOpen(team, paths[i]) : Promise.resolve())) }, "在檔案總管中顯示"),
-        h("button", { type: "button", class: "btn plain", "aria-label": "關閉", onClick: () => close() }, "關閉"),
+        h("button", { type: "button", class: "btn plain", title: tr("用 Windows 預設的看圖程式開啟", "Open in the Windows default image viewer"), onClick: act(() => (IS_TAURI ? Bridge.teamOpenImage(team, paths[i]) : Promise.resolve())) }, tr("用預設程式開啟", "Open in default app")),
+        h("button", { type: "button", class: "btn plain", title: tr("在檔案總管中選取這個檔案", "Select this file in File Explorer"), onClick: act(() => (IS_TAURI ? Bridge.teamOpen(team, paths[i]) : Promise.resolve())) }, tr("在檔案總管中顯示", "Show in File Explorer")),
+        h("button", { type: "button", class: "btn plain", "aria-label": tr("關閉", "Close"), onClick: () => close() }, tr("關閉", "Close")),
       ),
     ),
   );

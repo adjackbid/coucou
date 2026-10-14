@@ -2,7 +2,13 @@
 // the shopping-site team of the design drafts, eighteen minutes in. Add
 // `?state=waiting` to see a member holding a permission card and another
 // waiting for an answer.
+//
+// The demo is in the language of the page when it is first read (`?lang=en`
+// or `?lang=zh-TW`), like a record. What Coucou itself tells members, the
+// agents' step titles and the orchestrator's sentences stay in English, as
+// the app writes them: the window words them (heardWords, said, toolWords).
 
+import { tr } from "../core/i18n";
 import type { Line, PastRun, PricingChoices, ScreenPatch, Snapshot, TeamFile, TeamConfig, Usage, UsageReport, UsageRow } from "./types";
 
 const NOW = Date.now();
@@ -10,21 +16,21 @@ const ago = (minutes: number) => NOW - minutes * 60_000;
 
 const config: TeamConfig = {
   id: "shop",
-  name: "購物網站團隊",
-  goal: "建立一個購物網站\n包含商品列表、購物車與會員登入\n交付可預覽網站與測試報告",
-  scope: ["商品目錄", "購物車", "會員登入"],
+  name: tr("購物網站團隊", "Shopping site team"),
+  goal: tr("建立一個購物網站\n包含商品列表、購物車與會員登入\n交付可預覽網站與測試報告", "Build a shopping site\nwith a product list, a cart and member sign-in\nDeliver a site to preview and a test report"),
+  scope: [tr("商品目錄", "Product catalog"), tr("購物車", "Cart"), tr("會員登入", "Member sign-in")],
   workDir: "D:\\Projects\\shop",
   leader: "ai1",
   autoApprove: true,
   members: [
-    { id: "ai1", name: "AI 1", role: "規劃", duty: "分解需求、指派任務、審查成果", agent: "claude", model: "sonnet", color: "#5b8def" },
-    { id: "ai2", name: "AI 2", role: "執行整合", duty: "整合交付物、測試與驗收", agent: "copilot", color: "#34c7a0", maxTokens: 300_000 },
-    { id: "ai3", name: "AI 3", role: "網站開發", duty: "網站前後端開發與功能實作", agent: "cg", color: "#a06cf0" },
-    { id: "ai4", name: "AI 4", role: "圖片生成", duty: "生成商品圖與行銷素材", agent: "agy", color: "#f5b63d" },
+    { id: "ai1", name: "AI 1", role: tr("規劃", "Planning"), duty: tr("分解需求、指派任務、審查成果", "Breaks down the needs, assigns tasks, reviews results"), agent: "claude", model: "sonnet", color: "#5b8def" },
+    { id: "ai2", name: "AI 2", role: tr("執行整合", "Integration"), duty: tr("整合交付物、測試與驗收", "Puts the deliveries together, tests and accepts them"), agent: "copilot", color: "#34c7a0", maxTokens: 300_000 },
+    { id: "ai3", name: "AI 3", role: tr("網站開發", "Web dev"), duty: tr("網站前後端開發與功能實作", "Builds the site's front and back end and its features"), agent: "cg", color: "#a06cf0" },
+    { id: "ai4", name: "AI 4", role: tr("圖片生成", "Images"), duty: tr("生成商品圖與行銷素材", "Makes product pictures and marketing assets"), agent: "agy", color: "#f5b63d" },
   ],
   links: [
-    { from: "ai4", to: "ai3", kind: "delivery", what: "圖片素材" },
-    { from: "ai3", to: "ai2", kind: "delivery", what: "網站版本" },
+    { from: "ai4", to: "ai3", kind: "delivery", what: tr("圖片素材", "Image assets") },
+    { from: "ai3", to: "ai2", kind: "delivery", what: tr("網站版本", "Site builds") },
   ],
   expected: [],
   directTalk: true,
@@ -36,9 +42,9 @@ const config: TeamConfig = {
 if (typeof location !== "undefined") config.officeTheme = new URLSearchParams(location.search).get("theme") ?? undefined;
 // `?members=8` adds members to the demo team, to look at a full room.
 const wanted = typeof location === "undefined" ? 4 : Math.min(12, Number(new URLSearchParams(location.search).get("members")) || 4);
-const EXTRA_ROLES = ["文案撰寫", "測試驗收", "資料整理", "營運支援", "前端開發", "後端開發", "資料分析", "設計審查"];
+const EXTRA_ROLES = [tr("文案撰寫", "Copywriting"), tr("測試驗收", "Testing"), tr("資料整理", "Data cleanup"), tr("營運支援", "Operations"), tr("前端開發", "Front end"), tr("後端開發", "Back end"), tr("資料分析", "Data analysis"), tr("設計審查", "Design review")];
 for (let i = config.members.length; i < wanted; i++) {
-  config.members.push({ id: `ai${i + 1}`, name: `AI ${i + 1}`, role: EXTRA_ROLES[i - 4] ?? "支援", duty: "", agent: "copilot", color: ["#F472B6", "#22D3EE", "#F59E0B", "#84CC16", "#FB7185", "#38BDF8", "#A78BFA", "#34D399"][i - 4] ?? "#94A3B8" });
+  config.members.push({ id: `ai${i + 1}`, name: `AI ${i + 1}`, role: EXTRA_ROLES[i - 4] ?? tr("支援", "Support"), duty: "", agent: "copilot", color: ["#F472B6", "#22D3EE", "#F59E0B", "#84CC16", "#FB7185", "#38BDF8", "#A78BFA", "#34D399"][i - 4] ?? "#94A3B8" });
 }
 
 export const demoAgents: import("../core/state").AgentProfile[] = [
@@ -59,8 +65,8 @@ export const demoFiles: { dir: string; files: TeamFile[] } = {
     { file: "shop.json", config, problems: [] },
     {
       file: "docs.json",
-      config: { ...config, id: "docs", name: "文件翻譯團隊", goal: "把 README 翻成三種語言" },
-      problems: ["The work folder D:\\Projects\\docs does not exist.", "AI 3 runs as agent 'cg', which is not in Settings → Agents."],
+      config: { ...config, id: "docs", name: tr("文件翻譯團隊", "Docs translation team"), goal: tr("把 README 翻成三種語言", "Translate the README into three languages") },
+      problems: ["The work folder D:\\Projects\\docs does not exist.", "AI 3 runs as agent 'cg', which is not in Settings → Agents."], // i18n-ok: Rust's English, worded by said()
     },
   ],
 };
@@ -118,36 +124,36 @@ const team = (name: string, input: unknown, status = "done") => line("tool", `co
 /** What each member's screen shows, eighteen minutes in. */
 const screens: Record<string, Line[]> = {
   ai1: [
-    turn(1, [{ from: "system", text: "The team has started. Plan the work for this goal and create the tasks now:" }]),
-    line("say", "我先看一下團隊與需求,再把工作拆成可以驗收的任務。"),
+    turn(1, [{ from: "system", text: "The team has started. Plan the work for this goal and create the tasks now:" }]), // i18n-ok: what Coucou tells a member
+    line("say", tr("我先看一下團隊與需求,再把工作拆成可以驗收的任務。", "Let me look at the team and the requirements first, then split the work into tasks that can be reviewed.")),
     team("team_status", {}),
-    team("task_create", { title: "商品圖片", owner: "ai4" }),
-    team("task_create", { title: "購物車功能", owner: "ai3" }),
+    team("task_create", { title: tr("商品圖片", "Product images"), owner: "ai4" }),
+    team("task_create", { title: tr("購物車功能", "Cart"), owner: "ai3" }),
     line("turn", "1", { status: "end" }),
-    turn(4, [{ from: "ai3", text: "請問優惠券是否需要支援滿額折扣?以及是否需要會員限定的優惠?" }]),
+    turn(4, [{ from: "ai3", text: tr("請問優惠券是否需要支援滿額折扣?以及是否需要會員限定的優惠?", "Should coupons support discounts above a spend? And do we need members-only offers?") }]),
     tool("Read docs/spec.md", "read", "done"),
-    line("say", "首版先完成基本結帳流程,優惠券規則後續再擴充。我回覆 AI 3,"),
+    line("say", tr("首版先完成基本結帳流程,優惠券規則後續再擴充。我回覆 AI 3,", "The first version does the basic checkout; coupon rules can come later.")),
   ],
   ai2: [
-    turn(1, [{ from: "system", text: "TASK-06 is yours and ready to start: 整合測試" }]),
-    line("say", "TASK-06 要等 AI 3 的購物車功能交付才能開始,我先把測試清單寫好。"),
+    turn(1, [{ from: "system", text: `TASK-06 is yours and ready to start: ${tr("整合測試", "Integration tests")}` }]), // i18n-ok: what Coucou tells a member
+    line("say", tr("TASK-06 要等 AI 3 的購物車功能交付才能開始,我先把測試清單寫好。", "TASK-06 has to wait for AI 3's cart, so I'm writing the test checklist first.")),
     tool("Edit tests/checklist.md", "edit", "done"),
     line("turn", "1", { status: "end" }),
   ],
   ai3: [
-    turn(3, [{ from: "system", text: "AI 4 (ai4) handed in TASK-03 (商品圖片), which is meant for you: 6 張商品圖" }]),
-    line("say", "收到商品圖,接著把購物車頁面做出來。"),
+    turn(3, [{ from: "system", text: `AI 4 (ai4) handed in TASK-03 (${tr("商品圖片", "Product images")}), which is meant for you: ${tr("6 張商品圖", "6 product pictures")}` }]), // i18n-ok: what Coucou tells a member
+    line("say", tr("收到商品圖,接著把購物車頁面做出來。", "Got the product pictures; now building the cart page.")),
     team("task_update", { task: "TASK-04", status: "doing" }),
-    tool("Run npm install zustand", "execute", "done", { input: { command: '"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -NoProfile -Command npm install zustand' } }),
+    tool("Run npm install zustand", "execute", "done", { input: { command: '"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -NoProfile -Command npm install zustand' } }), // i18n-ok: the agent's step title
     tool("Edit src/cart/CartPage.tsx", "edit", "done"),
-    tool("Run npm test -- cart", "execute", "running", { input: { command: "npm test -- cart" }, output: "PASS src/cart/add.test.ts\nPASS src/cart/qty.test.ts\nRUNS src/cart/total.test.ts" }),
+    tool("Run npm test -- cart", "execute", "running", { input: { command: "npm test -- cart" }, output: "PASS src/cart/add.test.ts\nPASS src/cart/qty.test.ts\nRUNS src/cart/total.test.ts" }), // i18n-ok: the agent's step title
   ],
   ai4: [
-    turn(2, [{ from: "system", text: "TASK-03 is yours and ready to start: 商品圖片" }]),
-    line("say", "六張商品圖都生成好了,放在 public/images:主圖 public/images/hero.png、情境圖 public/images/scene.jpg。"),
-    tool("Generate an image", "other", "done"),
+    turn(2, [{ from: "system", text: `TASK-03 is yours and ready to start: ${tr("商品圖片", "Product images")}` }]), // i18n-ok: what Coucou tells a member
+    line("say", tr("六張商品圖都生成好了,放在 public/images:主圖 public/images/hero.png、情境圖 public/images/scene.jpg。", "All six product pictures are made, in public/images: the main one public/images/hero.png, the scene public/images/scene.jpg.")),
+    tool("Generate an image", "other", "done"), // i18n-ok: the agent's step title
     tool("Read public/images/hero.png", "read", "done", { input: { path: "public/images/hero.png" } }),
-    team("deliver", { task: "TASK-03", summary: "6 張商品圖:主圖、情境圖與細節圖", locator: "public/images" }),
+    team("deliver", { task: "TASK-03", summary: tr("6 張商品圖:主圖、情境圖與細節圖", "6 product pictures: main, scene and detail shots"), locator: "public/images" }),
     line("turn", "2", { status: "end" }),
   ],
 };
@@ -176,7 +182,7 @@ export function demoSnapshot(): Snapshot {
         isLeader: false,
         status: "waitingDelivery",
         task: "TASK-06",
-        waiting: { on: "ai3", what: "購物車功能", task: "TASK-06" },
+        waiting: { on: "ai3", what: tr("購物車功能", "Cart"), task: "TASK-06" },
         activity: "",
         turns: 1,
         permission: null,
@@ -185,46 +191,46 @@ export function demoSnapshot(): Snapshot {
       },
       { ...seat(2), isLeader: false, status: "working", task: "TASK-04", waiting: null, activity: "Editing src/cart/CartPage.tsx", turns: 3, permission: null, lostWhy: "", usage: [used("glm-5.3-flash", 182_000, 21_400, 96_000)] },
       { ...seat(3), isLeader: false, status: "done", task: null, waiting: null, activity: "", turns: 2, permission: null, lostWhy: "", usage: [used("gemini-3.8-flash", 23_000, 4_100)] },
-      ...config.members.slice(4).map((_, k) => ({ ...seat(4 + k), isLeader: false, status: (k % 2 ? "idle" : "working") as Snapshot["members"][number]["status"], task: null, waiting: null, activity: k % 2 ? "" : "Writing copy", turns: 1, permission: null, lostWhy: "" })),
+      ...config.members.slice(4).map((_, k) => ({ ...seat(4 + k), isLeader: false, status: (k % 2 ? "idle" : "working") as Snapshot["members"][number]["status"], task: null, waiting: null, activity: k % 2 ? "" : "Writing copy", turns: 1, permission: null, lostWhy: "" })), // i18n-ok: an agent's step title
     ],
     tasks: [
-      task(1, "需求拆解", "ai1", "done", { note: "完成需求分析與任務分配" }),
-      task(2, "商品列表", "ai3", "done", { note: "完成商品列表頁面" }),
-      task(3, "商品圖片", "ai4", "done", { note: "6 張商品圖已交付", deliverTo: "ai3" }),
-      task(4, "購物車功能", "ai3", "doing", {
+      task(1, tr("需求拆解", "Break down the needs"), "ai1", "done", { note: tr("完成需求分析與任務分配", "Needs analysed and tasks assigned") }),
+      task(2, tr("商品列表", "Product list"), "ai3", "done", { note: tr("完成商品列表頁面", "Product list page done") }),
+      task(3, tr("商品圖片", "Product images"), "ai4", "done", { note: tr("6 張商品圖已交付", "6 product pictures delivered"), deliverTo: "ai3" }),
+      task(4, tr("購物車功能", "Cart"), "ai3", "doing", {
         priority: "high",
-        note: "實作購物車頁面與結帳流程",
+        note: tr("實作購物車頁面與結帳流程", "Build the cart page and the checkout"),
         deliverTo: "ai2",
         dependsOn: ["TASK-03"],
         criteria: [
-          { text: "加入商品", claimed: true },
-          { text: "調整數量", claimed: false },
-          { text: "計算小計", claimed: false },
+          { text: tr("加入商品", "Add items"), claimed: true },
+          { text: tr("調整數量", "Change quantities"), claimed: false },
+          { text: tr("計算小計", "Work out the subtotal"), claimed: false },
         ],
       }),
-      task(5, "需求確認", "ai1", "doing", { note: "確認優惠券與會員功能需求" }),
-      task(6, "整合測試", "ai2", "todo", { dependsOn: ["TASK-04"], dispatched: false }),
-      task(7, "驗收報告", "ai2", "todo", { dependsOn: ["TASK-06"], dispatched: false, note: "彙整測試結果與產出報告" }),
+      task(5, tr("需求確認", "Confirm the needs"), "ai1", "doing", { note: tr("確認優惠券與會員功能需求", "Confirm what coupons and member features need") }),
+      task(6, tr("整合測試", "Integration tests"), "ai2", "todo", { dependsOn: ["TASK-04"], dispatched: false }),
+      task(7, tr("驗收報告", "Acceptance report"), "ai2", "todo", { dependsOn: ["TASK-06"], dispatched: false, note: tr("彙整測試結果與產出報告", "Gather the test results into a report") }),
     ],
     deliverables: [
-      { id: "D-1", task: "TASK-01", kind: "spec", locator: "docs/shopping-site-spec.md", summary: "需求規格", by: "ai1", at: ago(14), accepted: true },
-      { id: "D-2", task: "TASK-03", kind: "image", locator: "public/images", summary: "6 張商品圖:主圖、情境圖與細節圖", by: "ai4", at: ago(4), accepted: true },
-      { id: "D-3", task: "TASK-02", kind: "preview", locator: "http://localhost:5173/", summary: "購物網站首頁(開發中)", by: "ai3", at: ago(6), accepted: true },
+      { id: "D-1", task: "TASK-01", kind: "spec", locator: "docs/shopping-site-spec.md", summary: tr("需求規格", "Requirements spec"), by: "ai1", at: ago(14), accepted: true },
+      { id: "D-2", task: "TASK-03", kind: "image", locator: "public/images", summary: tr("6 張商品圖:主圖、情境圖與細節圖", "6 product pictures: main, scene and detail shots"), by: "ai4", at: ago(4), accepted: true },
+      { id: "D-3", task: "TASK-02", kind: "preview", locator: "http://localhost:5173/", summary: tr("購物網站首頁(開發中)", "Shopping site home page (in progress)"), by: "ai3", at: ago(6), accepted: true },
     ],
     messages: [
-      { id: "M-1", from: "system", to: "ai4", text: "TASK-03 is yours and ready to start: 商品圖片", task: "TASK-03", at: ago(17), heard: true },
-      { id: "M-2", from: "ai4", to: "ai3", text: "這是 6 張商品圖,包含主圖、情境圖與細節圖,請用於購物車與商品頁面。", task: "TASK-03", at: ago(4), heard: true },
-      { id: "M-3", from: "ai1", to: "ai3", text: "請完成購物車、數量調整與小計。", task: "TASK-04", at: ago(8), heard: true },
-      { id: "M-4", from: "ai3", to: "ai1", text: "請問優惠券是否需要支援滿額折扣?以及是否需要會員限定的優惠?", task: "TASK-04", at: ago(3), heard: true },
-      { id: "M-5", from: "ai1", to: "ai3", text: "首版先完成基本結帳流程,優惠券規則後續再擴充,請先專注於核心功能實作。", task: "TASK-04", at: ago(2), heard: true },
-      { id: "M-6", from: "you", to: "ai1", text: "首頁的 Banner 請換成夏季主題。", task: null, at: ago(1), heard: false },
+      { id: "M-1", from: "system", to: "ai4", text: `TASK-03 is yours and ready to start: ${tr("商品圖片", "Product images")}`, task: "TASK-03", at: ago(17), heard: true }, // i18n-ok: what Coucou tells a member
+      { id: "M-2", from: "ai4", to: "ai3", text: tr("這是 6 張商品圖,包含主圖、情境圖與細節圖,請用於購物車與商品頁面。", "Here are the 6 product pictures: main, scene and detail shots. Use them on the cart and product pages."), task: "TASK-03", at: ago(4), heard: true },
+      { id: "M-3", from: "ai1", to: "ai3", text: tr("請完成購物車、數量調整與小計。", "Please finish the cart, quantity changes and the subtotal."), task: "TASK-04", at: ago(8), heard: true },
+      { id: "M-4", from: "ai3", to: "ai1", text: tr("請問優惠券是否需要支援滿額折扣?以及是否需要會員限定的優惠?", "Should coupons support discounts above a spend? And do we need members-only offers?"), task: "TASK-04", at: ago(3), heard: true },
+      { id: "M-5", from: "ai1", to: "ai3", text: tr("首版先完成基本結帳流程,優惠券規則後續再擴充,請先專注於核心功能實作。", "The first version does the basic checkout; coupon rules come later. Focus on the core features first."), task: "TASK-04", at: ago(2), heard: true },
+      { id: "M-6", from: "you", to: "ai1", text: tr("首頁的 Banner 請換成夏季主題。", "Please give the home page banner a summer theme."), task: null, at: ago(1), heard: false },
     ],
     questions: [],
     feed: [
-      { at: ago(18), kind: "task", from: "ai1", to: "ai4", text: "商品圖片", task: "TASK-03" },
-      { at: ago(4), kind: "delivered", from: "ai4", to: "ai3", text: "這是 6 張商品圖,包含主圖、情境圖與細節圖,請用於購物車與商品頁面。", task: "TASK-03" },
-      { at: ago(3), kind: "message", from: "ai3", to: "ai1", text: "請問優惠券是否需要支援滿額折扣?以及是否需要會員限定的優惠?", task: "TASK-04" },
-      { at: ago(2), kind: "message", from: "ai1", to: "ai3", text: "首版先完成基本結帳流程,優惠券規則後續再擴充,請先專注於核心功能實作。", task: "TASK-04" },
+      { at: ago(18), kind: "task", from: "ai1", to: "ai4", text: tr("商品圖片", "Product images"), task: "TASK-03" },
+      { at: ago(4), kind: "delivered", from: "ai4", to: "ai3", text: tr("這是 6 張商品圖,包含主圖、情境圖與細節圖,請用於購物車與商品頁面。", "Here are the 6 product pictures: main, scene and detail shots. Use them on the cart and product pages."), task: "TASK-03" },
+      { at: ago(3), kind: "message", from: "ai3", to: "ai1", text: tr("請問優惠券是否需要支援滿額折扣?以及是否需要會員限定的優惠?", "Should coupons support discounts above a spend? And do we need members-only offers?"), task: "TASK-04" },
+      { at: ago(2), kind: "message", from: "ai1", to: "ai3", text: tr("首版先完成基本結帳流程,優惠券規則後續再擴充,請先專注於核心功能實作。", "The first version does the basic checkout; coupon rules come later. Focus on the core features first."), task: "TASK-04" },
     ],
   };
 
@@ -235,30 +241,30 @@ export function demoSnapshot(): Snapshot {
       waiting: { on: "you", what: "Run rm -rf node_modules", task: "TASK-04" },
       morePermissions: [1, 2].map((i) => ({
         requestId: 12 + i,
-        title: `Run npm install --save-dev @types/node@${20 + i}`,
+        title: `Run npm install --save-dev @types/node@${20 + i}`, // i18n-ok: the agent's own title
         kind: "execute",
         rawInput: { command: `npm install --save-dev @types/node@${20 + i}` },
         options: [
-          { optionId: "allow", name: "Allow", kind: "allow_once" },
-          { optionId: "reject", name: "Reject", kind: "reject_once" },
+          { optionId: "allow", name: "Allow", kind: "allow_once" }, // i18n-ok: the agent's own option
+          { optionId: "reject", name: "Reject", kind: "reject_once" }, // i18n-ok: the agent's own option
         ],
         danger: "installs" as const,
       })),
       permission: {
         requestId: 12,
-        title: "Run rm -rf node_modules",
+        title: "Run rm -rf node_modules", // i18n-ok: the agent's own title
         kind: "execute",
         rawInput: { command: "rm -rf node_modules && npm install" },
         options: [
-          { optionId: "allow", name: "Allow", kind: "allow_once" },
-          { optionId: "reject", name: "Reject", kind: "reject_once" },
+          { optionId: "allow", name: "Allow", kind: "allow_once" }, // i18n-ok: the agent's own option
+          { optionId: "reject", name: "Reject", kind: "reject_once" }, // i18n-ok: the agent's own option
         ],
         danger: "deletes-folder",
       },
     };
-    snapshot.members[0] = { ...snapshot.members[0], status: "waitingYou", waiting: { on: "you", what: "首版要支援手機版嗎?", task: "TASK-05" } };
-    snapshot.questions = [{ id: "Q-1", by: "ai1", question: "首版要支援手機版嗎?", task: "TASK-05", at: ago(1), answer: null }];
-    snapshot.members[3] = { ...snapshot.members[3], status: "lost", lostWhy: "It ended two turns in a row without a word about its open work." };
+    snapshot.members[0] = { ...snapshot.members[0], status: "waitingYou", waiting: { on: "you", what: tr("首版要支援手機版嗎?", "Should the first version work on phones?"), task: "TASK-05" } };
+    snapshot.questions = [{ id: "Q-1", by: "ai1", question: tr("首版要支援手機版嗎?", "Should the first version work on phones?"), task: "TASK-05", at: ago(1), answer: null }];
+    snapshot.members[3] = { ...snapshot.members[3], status: "lost", lostWhy: "It ended two turns in a row without a word about its open work." }; // i18n-ok: Rust's English, worded by said()
     snapshot.tasks[3].blocked = null;
   }
   // `?state=quiet`: AI 3 has been stuck in one command for seven minutes.
@@ -272,9 +278,9 @@ export function demoSnapshot(): Snapshot {
   if (new URLSearchParams(location.search).get("state") === "earlier") {
     snapshot.status = "paused";
     snapshot.detached = true;
-    snapshot.pausedWhy = "Coucou was closed while the team was running.";
+    snapshot.pausedWhy = "Coucou was closed while the team was running."; // i18n-ok: Rust's English, worded by said()
     snapshot.members = snapshot.members.map((m) => ({ ...m, status: m.status === "working" ? "idle" : m.status }));
-    snapshot.members[0] = { ...snapshot.members[0], status: "lost", lostWhy: "It ended two turns in a row without a word about its open work." };
+    snapshot.members[0] = { ...snapshot.members[0], status: "lost", lostWhy: "It ended two turns in a row without a word about its open work." }; // i18n-ok: Rust's English, worded by said()
   }
   return snapshot;
 }
@@ -284,7 +290,10 @@ export function demoSnapshot(): Snapshot {
  * command runs and passes, and now and then something is handed across.
  */
 export function demoStream(onScreen: (patch: ScreenPatch) => void, onChange: (snap: Snapshot) => void, snap: Snapshot) {
-  const words = "我回覆 AI 3:首版先專注在加入商品、調整數量與小計,優惠券下一版再做。接著我來檢查規格裡的結帳流程有沒有漏掉的地方。".split("");
+  const words = tr(
+    "我回覆 AI 3:首版先專注在加入商品、調整數量與小計,優惠券下一版再做。接著我來檢查規格裡的結帳流程有沒有漏掉的地方。",
+    " I'm telling AI 3: focus on adding items, changing quantities and the subtotal first; coupons come in the next version. Then I'll check the spec's checkout for anything missing.",
+  ).split("");
   const leader = snap.members[0].screen;
   const say = leader[leader.length - 1];
   const dev = snap.members[2].screen;
@@ -304,9 +313,9 @@ export function demoStream(onScreen: (patch: ScreenPatch) => void, onChange: (sn
     }
     if (beat % 40 === 0) {
       const kinds = [
-        { kind: "message" as const, from: "ai1", to: "ai3", text: "首版先做核心結帳流程", task: "TASK-04" },
-        { kind: "delivered" as const, from: "ai3", to: "ai2", text: "購物車功能", task: "TASK-04" },
-        { kind: "task" as const, from: "ai1", to: "ai2", text: "整合測試", task: "TASK-06" },
+        { kind: "message" as const, from: "ai1", to: "ai3", text: tr("首版先做核心結帳流程", "Core checkout first in version one"), task: "TASK-04" },
+        { kind: "delivered" as const, from: "ai3", to: "ai2", text: tr("購物車功能", "Cart"), task: "TASK-04" },
+        { kind: "task" as const, from: "ai1", to: "ai2", text: tr("整合測試", "Integration tests"), task: "TASK-06" },
         { kind: "accepted" as const, from: "ai1", to: "ai4", text: "", task: "TASK-03" },
       ];
       const k = kinds[(beat / 40 - 1) % kinds.length];
@@ -355,9 +364,9 @@ export function demoReport(from: number, to: number): UsageReport {
   let seed = 7;
   const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const teams = [
-    { id: "shop", name: "購物網站團隊", members: [["ai1", "AI 1", "claude", "claude-sonnet-5-5"], ["ai2", "AI 2", "copilot", "gpt-5.6-sol"], ["ai3", "AI 3", "cg", "glm-5.3-flash"], ["ai4", "AI 4", "agy", "gemini-3.8-flash"]] },
-    { id: "docs", name: "文件翻譯團隊", members: [["ai1", "AI 1", "codex", "gpt-5.6-sol"], ["ai2", "AI 2", "cg", "deepseek-v4.1-flash"], ["ai3", "AI 3", "cg", "deepseek-v4.1-flash"]] },
-    { id: "brand", name: "品牌設計團隊", members: [["lead", "總監", "claude", "claude-opus-5-5"], ["d1", "設計 1", "agy", "gemini-3.8-flash"], ["w1", "文案", "claude", "claude-haiku-4-5"]] },
+    { id: "shop", name: tr("購物網站團隊", "Shopping site team"), members: [["ai1", "AI 1", "claude", "claude-sonnet-5-5"], ["ai2", "AI 2", "copilot", "gpt-5.6-sol"], ["ai3", "AI 3", "cg", "glm-5.3-flash"], ["ai4", "AI 4", "agy", "gemini-3.8-flash"]] },
+    { id: "docs", name: tr("文件翻譯團隊", "Docs translation team"), members: [["ai1", "AI 1", "codex", "gpt-5.6-sol"], ["ai2", "AI 2", "cg", "deepseek-v4.1-flash"], ["ai3", "AI 3", "cg", "deepseek-v4.1-flash"]] },
+    { id: "brand", name: tr("品牌設計團隊", "Brand design team"), members: [["lead", tr("總監", "Director"), "claude", "claude-opus-5-5"], ["d1", tr("設計 1", "Designer 1"), "agy", "gemini-3.8-flash"], ["w1", tr("文案", "Copywriter"), "claude", "claude-haiku-4-5"]] },
   ];
   const rows: UsageRow[] = [];
   const day = 86_400_000;
@@ -414,7 +423,7 @@ export function demoReport(from: number, to: number): UsageReport {
     activity,
     models: [...seen].map(([model, found]) => ({ model, found })).sort((a, b) => a.model.localeCompare(b.model)),
     choices: structuredClone(demoChoices),
-    tableSource: "Coucou 內建的價目表 (LiteLLM)",
+    tableSource: tr("Coucou 內建的價目表 (LiteLLM)", "Coucou's built-in price list (LiteLLM)"),
     tableFetchedAt: NOW - 3 * day,
     tableSize: 1329,
   };
@@ -440,17 +449,23 @@ export function demoKeySpend(): import("./types").KeySpend {
 /** The secretary in a browser: a canned answer, after a moment, with a card when asked for a team. */
 export async function demoSecretary(text: string): Promise<import("./types").SecretaryReply> {
   await new Promise((r) => setTimeout(r, 900));
-  if (/開|建立|新團隊/.test(text)) {
+  if (/開|建立|新團隊|new team|set up|create/i.test(text)) {
     return {
-      text: "已擬好新團隊,**尚未建立**。按卡片上的「建立並啟動」才會執行。",
-      steps: [{ tool: "list_agents", label: "查看可用的代理" }, { tool: "propose_team", label: "擬好新團隊「官網改版」" }],
+      text: tr("已擬好新團隊,**尚未建立**。按卡片上的「建立並啟動」才會執行。", "I've prepared a new team, **not created yet**. Nothing happens until you click “Create and start” on the card."),
+      steps: [{ tool: "list_agents", label: tr("查看可用的代理", "Looked at the available agents") }, { tool: "propose_team", label: tr("擬好新團隊「官網改版」", "Prepared the new team “Website redesign”") }],
       proposals: [
         {
           id: "P-1",
           kind: "team",
-          title: "新團隊「官網改版」",
-          lines: ["目標:把公司官網改成新版設計,含首頁、產品頁、聯絡我們", "工作資料夾:D:\\Code\\site(會建立)", "AI 1(Leader) · 規劃 · claude / sonnet — 拆解需求、派工、驗收", "AI 2 · 前端 · cg / glm-5.3-flash — 實作頁面", "AI 3 · 文案 · codex / gpt-5.6-sol — 撰寫各頁文案"],
-          confirm: "建立並啟動",
+          title: tr("新團隊「官網改版」", "New team “Website redesign”"),
+          lines: [
+            tr("目標:把公司官網改成新版設計,含首頁、產品頁、聯絡我們", "Goal: move the company website to the new design, with the home, product and contact pages"),
+            tr("工作資料夾:D:\\Code\\site(會建立)", "Work folder: D:\\Code\\site (will be created)"),
+            tr("AI 1(Leader) · 規劃 · claude / sonnet — 拆解需求、派工、驗收", "AI 1 (Leader) · Planning · claude / sonnet — breaks down the needs, hands out work, reviews"),
+            tr("AI 2 · 前端 · cg / glm-5.3-flash — 實作頁面", "AI 2 · Front end · cg / glm-5.3-flash — builds the pages"),
+            tr("AI 3 · 文案 · codex / gpt-5.6-sol — 撰寫各頁文案", "AI 3 · Copy · codex / gpt-5.6-sol — writes each page's copy"),
+          ],
+          confirm: tr("建立並啟動", "Create and start"),
           state: "open",
           outcome: "",
         },
@@ -458,8 +473,11 @@ export async function demoSecretary(text: string): Promise<import("./types").Sec
     };
   }
   return {
-    text: "目前有 2 個團隊:\n- **購物網站團隊**:執行中,任務 3/7 已驗收,第 11/60 回合。AI 3 正在做購物車,AI 2 在等 AI 3 交付。\n- **文件翻譯團隊**:還沒啟動(工作資料夾不存在)。\n\n**在等你的**:沒有權限卡;Leader 有 1 個問題「首版要支援手機版嗎?」。\n近 7 天花費約 NT$21(1.03M tokens)。",
-    steps: [{ tool: "list_teams", label: "查看所有團隊" }, { tool: "team_detail", label: "查看「購物網站團隊」的現況" }, { tool: "usage_summary", label: "查詢近 7 天的用量與成本" }],
+    text: tr(
+      "目前有 2 個團隊:\n- **購物網站團隊**:執行中,任務 3/7 已驗收,第 11/60 回合。AI 3 正在做購物車,AI 2 在等 AI 3 交付。\n- **文件翻譯團隊**:還沒啟動(工作資料夾不存在)。\n\n**在等你的**:沒有權限卡;Leader 有 1 個問題「首版要支援手機版嗎?」。\n近 7 天花費約 NT$21(1.03M tokens)。",
+      "There are 2 teams:\n- **Shopping site team**: running, 3/7 tasks accepted, turn 11/60. AI 3 is building the cart, AI 2 is waiting for AI 3's delivery.\n- **Docs translation team**: not started (its work folder doesn't exist).\n\n**Waiting for you**: no permission cards; the Leader has 1 question, “Should the first version work on phones?”.\nThe last 7 days cost about NT$21 (1.03M tokens).",
+    ),
+    steps: [{ tool: "list_teams", label: tr("查看所有團隊", "Looked at all teams") }, { tool: "team_detail", label: tr("查看「購物網站團隊」的現況", "Checked on “Shopping site team”") }, { tool: "usage_summary", label: tr("查詢近 7 天的用量與成本", "Looked up the last 7 days' usage and cost") }],
     proposals: [],
   };
 }
@@ -469,14 +487,15 @@ export function demoConstitution(): import("./types").Constitution {
   const r = (id: string, text: string, level: "off" | "ask" | "never") => ({ id, text, level, check: id, patterns: [] as string[] });
   return {
     rules: [
-      r("git-folder", "不能刪除或搬走 .git 資料夾(整個版本紀錄會不見)", "never"),
-      r("drive-root", "不能刪除或格式化整顆磁碟,或 Windows、Program Files、使用者資料夾這類系統資料夾", "never"),
-      r("install", "安裝軟體或套件之前要先問我", "ask"),
-      r("git-destructive", "會丟掉變更的 git 指令(reset --hard、clean、強制推送)之前要先問我", "ask"),
-      r("send-out", "對外發送或發布(git push、npm publish、寄信、上傳)之前要先問我", "ask"),
-      r("system", "變更系統(登錄檔、服務、關閉程式、權限)之前要先問我", "ask"),
-      r("download", "從網路下載檔案之前要先問我", "ask"),
-      { id: "mine-1", text: "不能動 D:\\重要資料", level: "never" as const, check: "", patterns: ["D:\\重要資料\\*"] },
+      r("git-folder", tr("不能刪除或搬走 .git 資料夾(整個版本紀錄會不見)", "Don't delete or move a .git folder (the whole version history would be lost)"), "never"),
+      r("drive-root", tr("不能刪除或格式化整顆磁碟,或 Windows、Program Files、使用者資料夾這類系統資料夾", "Don't delete or format a whole drive, or system folders such as Windows, Program Files or the user folders"), "never"),
+      r("install", tr("安裝軟體或套件之前要先問我", "Ask me before installing software or packages"), "ask"),
+      r("git-destructive", tr("會丟掉變更的 git 指令(reset --hard、clean、強制推送)之前要先問我", "Ask me before git commands that throw changes away (reset --hard, clean, force push)"), "ask"),
+      r("send-out", tr("對外發送或發布(git push、npm publish、寄信、上傳)之前要先問我", "Ask me before sending or publishing anything (git push, npm publish, email, uploads)"), "ask"),
+      r("system", tr("變更系統(登錄檔、服務、關閉程式、權限)之前要先問我", "Ask me before changing the system (registry, services, closing programs, permissions)"), "ask"),
+      r("download", tr("從網路下載檔案之前要先問我", "Ask me before downloading files from the internet"), "ask"),
+      { id: "mine-1", text: tr("不能動 D:\\重要資料", "Keep out of D:\\Important"), level: "never" as const, check: "", patterns: [tr("D:\\重要資料\\*", "D:\\Important\\*")] },
+
     ],
   };
 }
