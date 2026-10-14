@@ -30,6 +30,12 @@ use crate::policy::Scope;
 
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
+// Language: what members are told is for a model, and stays English. The
+// sentences the Teamwork window matches — why a team paused or a member was
+// lost, and a few errors (`said()` in team/main.ts) — stay English too: the
+// window shows them in the person's language, also for an old record. The
+// rest of what reaches the person is written in the language of the moment.
+
 /// A task sent back this many times stops the team for a person to look.
 const MAX_REJECTIONS: u32 = 3;
 /// Turns in a row a member may end without a word about its open work.
@@ -39,7 +45,9 @@ const MAX_SILENT_TURNS: u32 = 2;
 /// from outside the async runtime (a synchronous Tauri command runs on the
 /// window's thread), spawning would panic and take the app down.
 fn runtime() -> Result<tokio::runtime::Handle, String> {
-    tokio::runtime::Handle::try_current().map_err(|_| "Coucou cannot run a team from here: it was asked outside its async runtime.".to_string())
+    tokio::runtime::Handle::try_current().map_err(|_| -> String {
+        tr!("Coucou 沒辦法在這裡執行團隊:這個要求不是從它的非同步執行環境送來的。", "Coucou cannot run a team from here: it was asked outside its async runtime.")
+    })
 }
 /// Lines of each member's screen in a snapshot.
 const SCREEN_LINES: usize = 150;
@@ -207,6 +215,18 @@ pub fn seat_key(team: &str, member: &str) -> String {
     format!("team:{team}:{member}")
 }
 
+fn not_started() -> String {
+    tr!("團隊沒有啟動。", "The team did not start.")
+}
+
+fn no_setup() -> String {
+    tr!("這個團隊沒有設定。", "The team has no setup.")
+}
+
+fn nothing_to_send() -> String {
+    tr!("沒有要送出的內容。", "There is nothing to send.")
+}
+
 fn settle(store: &mut Store) {
     loop {
         let more = tools::react(store.state());
@@ -355,6 +375,7 @@ impl Team {
     }
 
     /// A member's tool call, from the MCP server.
+    // i18n: model-facing
     pub fn act(&self, member: &str, tool: &str, args: &Value) -> Result<String, String> {
         let text = {
             let mut store = self.store.lock().unwrap();
@@ -371,7 +392,7 @@ impl Team {
             for task in sent_back {
                 let over = store.state().task(&task).map(|t| t.rejections >= MAX_REJECTIONS).unwrap_or(false);
                 if over && store.state().status == TeamStatus::Running {
-                    store.append(Event::Paused { why: format!("{task} was sent back {MAX_REJECTIONS} times.") });
+                    store.append(Event::Paused { why: format!("{task} was sent back {MAX_REJECTIONS} times.") }); // i18n-ok: said() in team/main.ts translates it
                 }
             }
             settle(&mut store);
@@ -402,7 +423,7 @@ impl Team {
                 continue;
             }
             if state.total_turns >= config.max_turns {
-                store.append(Event::Paused { why: format!("The team has used its {} turns.", config.max_turns) });
+                store.append(Event::Paused { why: format!("The team has used its {} turns.", config.max_turns) }); // i18n-ok: said() in team/main.ts translates it
                 break;
             }
             // A session that has not heard its role yet hears it first.
@@ -412,7 +433,8 @@ impl Team {
                 let own = self.seat(&member.id).map(|s| crate::team_agents::brief_text(&s.profile)).unwrap_or_default();
                 // The documents it may read, as the knowledge base is now.
                 let docs = knowledge::brief_text(&self.kb(), member.id == config.leader);
-                format!("{}{own}{docs}\n\n", brief::role(&config, &member.id))
+                // Last, the language the person reads the team in.
+                format!("{}{own}{docs}\n{}\n\n", brief::role(&config, &member.id), crate::i18n::reply_language())
             } else {
                 String::new()
             };
@@ -470,14 +492,14 @@ impl Team {
         });
         let tokens: u64 = used.values().map(|u| u.input + u.output + u.cache_read + u.cache_write).sum();
         if let Some(max) = max_tokens.filter(|m| tokens >= *m) {
-            return Some(format!("{name} reached its limit: {tokens} / {max} tokens."));
+            return Some(format!("{name} reached its limit: {tokens} / {max} tokens.")); // i18n-ok: said() in team/main.ts translates it
         }
         if let Some(max) = max_usd {
             let choices = crate::pricing::load_choices();
             let table = crate::pricing::cached_table();
             let usd: f64 = used.values().map(|u| crate::pricing::lookup(&u.model, &choices, &table).map(|f| f.price.cost(u)).or(u.cost_usd).unwrap_or(0.0)).sum();
             if usd >= max {
-                return Some(format!("{name} reached its limit: ${usd:.2} / ${max:.2}."));
+                return Some(format!("{name} reached its limit: ${usd:.2} / ${max:.2}.")); // i18n-ok: said() in team/main.ts translates it
             }
         }
         None
@@ -602,7 +624,7 @@ impl Team {
                     } else if state.turns.get(&member).map(|t| t.silent).unwrap_or(0) >= MAX_SILENT_TURNS {
                         vec![Event::Lost {
                             member: member.clone(),
-                            why: "It ended two turns in a row without a word about its open work.".into(),
+                            why: "It ended two turns in a row without a word about its open work.".into(), // i18n-ok: said() in team/main.ts translates it
                         }]
                     } else {
                         let text = if no_plan { brief::nudge_leader_no_tasks() } else { brief::nudge(&open) };
@@ -721,7 +743,7 @@ impl Teams {
     }
 
     fn team(&self, id: &str) -> Result<Arc<Team>, String> {
-        self.get(id).ok_or_else(|| format!("There is no team '{id}'."))
+        self.get(id).ok_or_else(|| -> String { tr!(format!("沒有「{id}」這個團隊。"), format!("There is no team '{id}'.")) })
     }
 
     /// Agents still stand behind this team: it is running, or paused in this run.
@@ -746,7 +768,7 @@ impl Teams {
         let mut seats = BTreeMap::new();
         let mut tokens = BTreeMap::new();
         for member in &config.members {
-            let profile = profiles.iter().find(|p| p.id == member.agent).cloned().ok_or("an agent went missing")?;
+            let profile = profiles.iter().find(|p| p.id == member.agent).cloned().ok_or_else(|| -> String { tr!("有一個 agent 不見了", "an agent went missing") })?;
             let secret = token();
             let launch = Launch {
                 cwd: Some(config.work_dir.clone()),
@@ -818,12 +840,12 @@ impl Teams {
         }
         if let Some(existing) = self.get(&config.id) {
             if existing.with_state(|s| s.status == TeamStatus::Running || s.turns.values().any(|t| t.active)) {
-                return Err(format!("The team '{}' is already running.", config.name));
+                return Err(format!("The team '{}' is already running.", config.name)); // i18n-ok: said() in team/main.ts translates it
             }
         }
 
         let store = match &self.root {
-            Some(root) => Store::fresh(&root.join(&config.id)).map_err(|e| format!("Could not open the team's log: {e}"))?,
+            Some(root) => Store::fresh(&root.join(&config.id)).map_err(|e| -> String { tr!(format!("無法開啟團隊的紀錄:{e}"), format!("Could not open the team's log: {e}")) })?,
             None => Store::memory(),
         };
 
@@ -857,7 +879,7 @@ impl Teams {
         self.teams.lock().unwrap().insert(team.id.clone(), team.clone());
         log::line(format!("team {}: started with {} member(s)", team.id, team.seat_keys().len()));
         runtime.spawn(team.clone().run());
-        team.snapshot().ok_or_else(|| "The team did not start.".to_string())
+        team.snapshot().ok_or_else(not_started)
     }
 
     /// Picks a team loaded from an earlier run up where it stopped: its
@@ -868,9 +890,9 @@ impl Teams {
         let runtime = runtime()?;
         let old = self.team(id)?;
         if old.has_seats() {
-            return Err(format!("The team '{id}' is already running."));
+            return Err(format!("The team '{id}' is already running.")); // i18n-ok: said() in team/main.ts translates it
         }
-        let config = old.config().ok_or("The team's record has no setup to pick up.")?;
+        let config = old.config().ok_or("The team's record has no setup to pick up.")?; // i18n-ok: said() in team/main.ts translates it
         let known: Vec<String> = profiles.iter().map(|p| p.id.clone()).collect();
         let problems = config.problems(&known);
         if !problems.is_empty() {
@@ -928,7 +950,7 @@ impl Teams {
         log::line(format!("team {id}: picked up again with {} member(s)", team.seat_keys().len()));
         runtime.spawn(team.clone().run());
         team.changed();
-        team.snapshot().ok_or_else(|| "The team did not start.".to_string())
+        team.snapshot().ok_or_else(not_started)
     }
 
     /// More hands for a running team: the members of `wanted` it does not
@@ -937,19 +959,19 @@ impl Teams {
     pub fn join(&self, id: &str, wanted: &TeamConfig, profiles: &[AgentProfile]) -> Result<Vec<String>, String> {
         let team = self.team(id)?;
         if !team.has_seats() {
-            return Err("This team was loaded from an earlier run. Press Continue to pick it up.".into());
+            return Err("This team was loaded from an earlier run. Press Continue to pick it up.".into()); // i18n-ok: said() in team/main.ts translates it
         }
-        let mut config = team.config().ok_or("The team has no setup.")?;
+        let mut config = team.config().ok_or_else(no_setup)?;
         let new: Vec<super::MemberConfig> = wanted.members.iter().filter(|m| !config.has_member(&m.id)).cloned().collect();
         if new.is_empty() {
-            return Err("There is nobody new to add: add a member in the setup first.".into());
+            return Err(tr!("沒有新成員可以加入:請先在團隊設定裡新增成員。", "There is nobody new to add: add a member in the setup first."));
         }
         for m in &new {
             if !super::is_plain_id(&m.id) || m.id == SYSTEM || m.id == YOU {
-                return Err(format!("'{}' cannot be a member id.", m.id));
+                return Err(format!("'{}' cannot be a member id.", m.id)); // i18n-ok: said() in team/main.ts translates it
             }
             if !profiles.iter().any(|p| p.id == m.agent) {
-                return Err(format!("{} runs as agent '{}', which is not in Settings → Agents or Teamwork → Agent 設定.", m.name, m.agent));
+                return Err(super::no_agent(&m.name, &m.agent));
             }
         }
         // Their seats are made exactly as at the start, from the running setup.
@@ -1031,6 +1053,7 @@ impl Teams {
 
     /// `knowledge_read`: what a member may read of the team's knowledge base,
     /// as MCP content. Who is the leader is the running setup's say.
+    // i18n: model-facing
     pub fn knowledge_read(&self, team: &str, member: &str, token: &str, args: &Value) -> Result<Value, String> {
         let team = self.team(team)?;
         if !team.token_ok(member, token) {
@@ -1047,6 +1070,8 @@ impl Teams {
     /// `knowledge_share`: the leader opens one of its documents to the whole
     /// team — only when the person asked it to: one of their messages to the
     /// leader, since the document was added, names it. Nobody is asked.
+    /// What it answers is the leader's to read; the line told to the person is not.
+    // i18n: model-facing
     pub fn knowledge_share(&self, team: &str, member: &str, token: &str, args: &Value) -> Result<String, String> {
         let team = self.team(team)?;
         if !team.token_ok(member, token) {
@@ -1071,13 +1096,14 @@ impl Teams {
         kb.update(&doc.id, Some(Visibility::Shared), None)?;
         log::line(format!("team {}: leader shared knowledge {}", team.id, doc.id));
         let mut tell: Vec<(String, String)> = config.members.iter().filter(|m| m.id != config.leader).map(|m| (m.id.clone(), knowledge::shared_text(&doc))).collect();
-        tell.push((YOU.to_string(), format!("Leader 已把「{}」分享給全隊。", doc.name)));
+        tell.push((YOU.to_string(), tr!(format!("Leader 已把「{}」分享給全隊。", doc.name), format!("The leader shared \"{}\" with the whole team.", doc.name))));
         team.tell(tell);
         (self.knowledge_shared)(&config.id);
         Ok(format!("「{}」 is now shared with the whole team; they have been told.", doc.name))
     }
 
     /// A member's tool call. The token is the one its bridge was started with.
+    // i18n: model-facing
     pub fn act(&self, team: &str, member: &str, token: &str, tool: &str, args: &Value) -> Result<String, String> {
         let team = self.team(team)?;
         if !team.token_ok(member, token) {
@@ -1104,15 +1130,15 @@ impl Teams {
         }
         let text = text.trim();
         if text.is_empty() {
-            return Err("There is nothing to send.".into());
+            return Err(nothing_to_send());
         }
         if !old.with_state(|s| s.status == TeamStatus::Finished) {
-            return Err("The team has not finished: write to it as usual.".into());
+            return Err(tr!("團隊還沒完成:照平常那樣寫給它就好。", "The team has not finished: write to it as usual."));
         }
-        let config = old.config().ok_or("The team's record has no setup to pick up.")?;
+        let config = old.config().ok_or("The team's record has no setup to pick up.")?; // i18n-ok: said() in team/main.ts translates it
         let to = if to.is_empty() || to == "leader" { config.leader.clone() } else { to.to_string() };
         if !config.has_member(&to) {
-            return Err("That is not a member of the team.".into());
+            return Err("That is not a member of the team.".into()); // i18n-ok: said() in team/main.ts translates it
         }
         let known: Vec<String> = profiles.iter().map(|p| p.id.clone()).collect();
         let problems = config.problems(&known);
@@ -1168,7 +1194,7 @@ impl Teams {
         let team = self.team(team)?;
         let text = text.trim();
         if text.is_empty() {
-            return Err("There is nothing to send.".into());
+            return Err(nothing_to_send());
         }
         if let Some(sent) = request.and_then(|r| team.requests.lock().unwrap().get(r).cloned()) {
             return Ok(sent);
@@ -1179,7 +1205,7 @@ impl Teams {
             let known = config.map(|c| c.has_member(&to)).unwrap_or(false);
             (known.then_some(to), s.next_message_id())
         });
-        let to = to.ok_or("That is not a member of the team.")?;
+        let to = to.ok_or("That is not a member of the team.")?; // i18n-ok: said() in team/main.ts translates it
         if let Some(r) = request {
             team.requests.lock().unwrap().insert(r.to_string(), id.clone());
         }
@@ -1193,9 +1219,11 @@ impl Teams {
         let found = team.with_state(|s| {
             s.questions.iter().find(|q| q.id == question && q.answer.is_none()).map(|q| (q.by.clone(), q.question.clone(), q.task.clone(), s.next_message_id()))
         });
-        let (by, asked, task, id) = found.ok_or("That question is not open.")?;
+        let (by, asked, task, id) = found.ok_or_else(|| -> String { tr!("這個問題已經不在等待回答了。", "That question is not open.") })?;
         team.record(vec![
             Event::Answered { id: question.to_string(), text: text.trim().to_string() },
+            // For the member; the window words it for the person (live.ts heardWords()).
+            // i18n: model-facing
             Event::Message { id, from: YOU.into(), to: by, text: format!("You asked: {asked}\nThe user answers: {}", text.trim()), task },
         ]);
         Ok(())
@@ -1206,11 +1234,11 @@ impl Teams {
     /// same kind (allow once, reject once) as the one chosen.
     pub async fn permit(&self, team: &str, member: &str, option_id: Option<String>, all: bool) -> Result<(), String> {
         let team = self.team(team)?;
-        let key = team.seat(member).map(|s| s.key).ok_or("That is not a member of the team.")?;
+        let key = team.seat(member).map(|s| s.key).ok_or("That is not a member of the team.")?; // i18n-ok: said() in team/main.ts translates it
         let requests: Vec<PermissionView> = {
             let mut live = team.live.lock().unwrap();
             let held = live.get_mut(member).map(|l| &mut l.permissions).filter(|p| !p.is_empty());
-            let held = held.ok_or("That member is not waiting for a permission.")?;
+            let held = held.ok_or_else(|| -> String { tr!("這位成員沒有在等權限。", "That member is not waiting for a permission.") })?;
             if all { std::mem::take(held) } else { vec![held.remove(0)] }
         };
         let option_of = |r: &PermissionView, id: &str| r.options.iter().find(|o| o.get("optionId").and_then(Value::as_str) == Some(id)).cloned();
@@ -1240,7 +1268,9 @@ impl Teams {
     /// An agent's hook asks before a step (agy, whose headless mode cannot
     /// ask anyone): the rules answer what is safe at once; anything else
     /// becomes a card like every other agent's and waits for the person.
-    /// The answer is the hook's: `{decision, reason}`.
+    /// The answer is the hook's: `{decision, reason}`, which the agent reads.
+    /// The card's buttons are the window's own words (the options' names are not shown).
+    // i18n: model-facing
     pub async fn gate(&self, team: &str, member: &str, token: &str, tool: &str, args: &Value) -> Value {
         let deny = |why: &str| serde_json::json!({ "decision": "deny", "reason": why });
         let Ok(team) = self.team(team) else { return deny("Coucou has no such team running.") };
@@ -1308,7 +1338,7 @@ impl Teams {
     pub fn pause(&self, team: &str) -> Result<(), String> {
         let team = self.team(team)?;
         if team.with_state(|s| s.status == TeamStatus::Running) {
-            team.record(vec![Event::Paused { why: "Paused by the user.".into() }]);
+            team.record(vec![Event::Paused { why: "Paused by the user.".into() }]); // i18n-ok: said() in team/main.ts translates it
         }
         Ok(())
     }
@@ -1322,7 +1352,7 @@ impl Teams {
         // A member still past its limit would only stop the team again.
         let members: Vec<String> = team.with_state(|s| s.config.as_ref().map(|c| c.members.iter().map(|m| m.id.clone()).collect()).unwrap_or_default());
         if let Some(why) = members.iter().find_map(|m| team.over_limit(m)) {
-            return Err(format!("{why} Raise the limit in the team's setup and save, then resume."));
+            return Err(format!("{why} Raise the limit in the team's setup and save, then resume.")); // i18n-ok: said() in team/main.ts translates it
         }
         if team.with_state(|s| s.status == TeamStatus::Paused) {
             team.record(vec![Event::Resumed]);
@@ -1366,7 +1396,7 @@ impl Teams {
             return Ok(());
         }
         let active: Vec<String> = team.with_state(|s| s.turns.iter().filter(|(_, t)| t.active).map(|(m, _)| m.clone()).collect());
-        team.record(vec![Event::Ended { why: "Ended by the user.".into() }]);
+        team.record(vec![Event::Ended { why: "Ended by the user.".into() }]); // i18n-ok: said() in team/main.ts translates it
         for member in active {
             if let Some(seat) = team.seat(&member) {
                 let _ = team.drive.cancel(seat.key).await;
@@ -1380,7 +1410,7 @@ impl Teams {
     /// carries on: the member is reminded of its open work in its next turn.
     pub async fn interrupt_member(&self, team: &str, member: &str) -> Result<(), String> {
         let team = self.team(team)?;
-        let seat = team.seat(member).ok_or("That is not a member of the team.")?;
+        let seat = team.seat(member).ok_or("That is not a member of the team.")?; // i18n-ok: said() in team/main.ts translates it
         if team.with_state(|s| s.turns.get(member).map(|t| t.active).unwrap_or(false)) {
             team.drive.cancel(seat.key).await?;
         }
@@ -1391,14 +1421,16 @@ impl Teams {
     pub async fn recover(&self, team: &str, member: &str) -> Result<(), String> {
         let team = self.team(team)?;
         if !team.has_seats() {
-            return Err("This team was loaded from an earlier run. Press Continue to pick it up.".into());
+            return Err("This team was loaded from an earlier run. Press Continue to pick it up.".into()); // i18n-ok: said() in team/main.ts translates it
         }
-        let seat = team.seat(member).ok_or("That is not a member of the team.")?;
+        let seat = team.seat(member).ok_or("That is not a member of the team.")?; // i18n-ok: said() in team/main.ts translates it
         if !team.with_state(|s| s.lost.contains_key(member)) {
             return Ok(());
         }
         team.drive.stop(seat.key).await;
         team.briefed.lock().unwrap().remove(member);
+        // What the member is told (the window words it: live.ts heardWords()).
+        // i18n: model-facing
         let (id, text) = team.with_state(|s| {
             let open = s.open_tasks(member);
             let text = if open.is_empty() {
@@ -2330,7 +2362,7 @@ mod tests {
             for m in ["ai2", "ai3", "ai4"] {
                 assert!(snap.messages.iter().any(|x| x.to == m && x.text.contains("「報價.md」 is now in the team's knowledge base")), "{m} was not told");
             }
-            assert!(snap.messages.iter().any(|x| x.to == YOU && x.from == SYSTEM && x.text.contains("Leader 已把「報價.md」分享給全隊")));
+            assert!(snap.messages.iter().any(|x| x.to == YOU && x.from == SYSTEM && x.text.contains("The leader shared \"報價.md\" with the whole team")));
             assert!(bench.teams.knowledge_read("shop", "ai3", &ai3, &json!({ "doc": secret })).is_ok());
             bench.drive.hold.notify_one();
         });

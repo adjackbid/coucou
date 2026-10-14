@@ -158,20 +158,30 @@ pub const PREVIEW_MAX_BYTES: u64 = 8 * 1024 * 1024;
 pub fn preview_path(work_dir: &str, locator: &str) -> Result<std::path::PathBuf, String> {
     let lower = locator.to_ascii_lowercase();
     if !["png", "jpg", "jpeg", "gif", "webp", "bmp"].iter().any(|ext| lower.ends_with(&format!(".{ext}"))) {
-        return Err("Not a picture.".into());
+        return Err(tr!("這不是圖片。", "Not a picture."));
     }
-    let root = std::fs::canonicalize(work_dir).map_err(|_| "The work folder is not there.".to_string())?;
+    let root = std::fs::canonicalize(work_dir).map_err(|_| -> String { tr!("找不到工作資料夾。", "The work folder is not there.") })?;
     let path = std::path::Path::new(locator);
     let full = if path.is_absolute() { path.to_path_buf() } else { root.join(path) };
-    let full = std::fs::canonicalize(&full).map_err(|_| format!("{locator} is not there."))?;
+    let full = std::fs::canonicalize(&full).map_err(|_| -> String { tr!(format!("找不到 {locator}。"), format!("{locator} is not there.")) })?;
     if !full.starts_with(&root) {
-        return Err("Only pictures in the team's work folder are shown.".into());
+        return Err(tr!("只會顯示團隊工作資料夾裡的圖片。", "Only pictures in the team's work folder are shown."));
     }
     let size = std::fs::metadata(&full).map_err(|e| e.to_string())?.len();
     if size > PREVIEW_MAX_BYTES {
-        return Err("The picture is too large to preview.".into());
+        return Err(tr!("圖片太大,無法預覽。", "The picture is too large to preview."));
     }
     Ok(full)
+}
+
+/// A member whose agent is not among the ones a team may run as. The
+/// English is the sentence `said()` in team/main.ts matches (and words for
+/// the window); the Chinese is said()'s own, for where it is shown as is.
+pub fn no_agent(name: &str, agent: &str) -> String {
+    tr!(
+        if agent.is_empty() { format!("{name} 還沒有選擇代理") } else { format!("{name} 還沒有選擇代理(「{agent}」不在 設定 → Agents 或 Agent 設定 裡)") },
+        format!("{name} runs as agent '{agent}', which is not in Settings → Agents or Teamwork → Agent 設定.")
+    )
 }
 
 impl TeamConfig {
@@ -201,41 +211,45 @@ impl TeamConfig {
 
     /// Everything that would stop this team from starting, in plain words.
     /// `agents` are the profile ids that exist in settings.
+    ///
+    /// In English on purpose: the Teamwork window matches each sentence
+    /// (`said()` in team/main.ts) and shows it in the person's language,
+    /// worded for its own screens. Change a sentence there too.
     pub fn problems(&self, agents: &[String]) -> Vec<String> {
         let mut out = Vec::new();
         if !is_plain_id(&self.id) {
-            out.push("The team id may only use letters, digits, '-' and '_'.".to_string());
+            out.push("The team id may only use letters, digits, '-' and '_'.".to_string()); // i18n-ok: said() in team/main.ts translates it
         }
         if self.goal.trim().is_empty() {
-            out.push("The team has no goal.".to_string());
+            out.push("The team has no goal.".to_string()); // i18n-ok: said() in team/main.ts translates it
         }
         if self.members.is_empty() {
-            out.push("The team has no members.".to_string());
+            out.push("The team has no members.".to_string()); // i18n-ok: said() in team/main.ts translates it
         }
         let dir = std::path::Path::new(self.work_dir.trim());
         if self.work_dir.trim().is_empty() || !dir.is_absolute() {
-            out.push("The work folder must be a full path.".to_string());
+            out.push("The work folder must be a full path.".to_string()); // i18n-ok: said() in team/main.ts translates it
         } else if !dir.is_dir() {
-            out.push(format!("The work folder {} does not exist.", dir.display()));
+            out.push(format!("The work folder {} does not exist.", dir.display())); // i18n-ok: said() in team/main.ts translates it
         }
         let mut seen = std::collections::BTreeSet::new();
         for m in &self.members {
             if !is_plain_id(&m.id) || m.id == YOU || m.id == SYSTEM || m.id == "all" || m.id == "leader" {
-                out.push(format!("'{}' cannot be a member id.", m.id));
+                out.push(format!("'{}' cannot be a member id.", m.id)); // i18n-ok: said() in team/main.ts translates it
             }
             if !seen.insert(m.id.as_str()) {
-                out.push(format!("Two members are called '{}'.", m.id));
+                out.push(format!("Two members are called '{}'.", m.id)); // i18n-ok: said() in team/main.ts translates it
             }
             if !agents.iter().any(|a| *a == m.agent) {
-                out.push(format!("{} runs as agent '{}', which is not in Settings → Agents or Teamwork → Agent 設定.", m.name, m.agent));
+                out.push(no_agent(&m.name, &m.agent));
             }
         }
         if !self.has_member(&self.leader) {
-            out.push(format!("The leader '{}' is not a member.", self.leader));
+            out.push(format!("The leader '{}' is not a member.", self.leader)); // i18n-ok: said() in team/main.ts translates it
         }
         for l in &self.links {
             if !self.has_member(&l.from) || !self.has_member(&l.to) {
-                out.push(format!("A link joins '{}' and '{}', and one of them is not a member.", l.from, l.to));
+                out.push(format!("A link joins '{}' and '{}', and one of them is not a member.", l.from, l.to)); // i18n-ok: said() in team/main.ts translates it
             }
         }
         out

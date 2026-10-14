@@ -49,30 +49,58 @@ pub struct Constitution {
     pub rules: Vec<Rule>,
 }
 
-/// Coucou's own checks, with the words and the level they start with.
-const BUILTIN: [(&str, &str, Level); 7] = [
-    ("git-folder", "不能刪除或搬走 .git 資料夾(整個版本紀錄會不見)", Level::Never),
-    ("drive-root", "不能刪除或格式化整顆磁碟,或 Windows、Program Files、使用者資料夾這類系統資料夾", Level::Never),
-    ("install", "安裝軟體或套件之前要先問我", Level::Ask),
-    ("git-destructive", "會丟掉變更的 git 指令(reset --hard、clean、強制推送)之前要先問我", Level::Ask),
-    ("send-out", "對外發送或發布(git push、npm publish、寄信、上傳)之前要先問我", Level::Ask),
-    ("system", "變更系統(登錄檔、服務、關閉程式、權限)之前要先問我", Level::Ask),
-    ("download", "從網路下載檔案之前要先問我", Level::Ask),
+/// Coucou's own checks, with the level they start with.
+const BUILTIN: [(&str, Level); 7] = [
+    ("git-folder", Level::Never),
+    ("drive-root", Level::Never),
+    ("install", Level::Ask),
+    ("git-destructive", Level::Ask),
+    ("send-out", Level::Ask),
+    ("system", Level::Ask),
+    ("download", Level::Ask),
 ];
+
+/// What one of Coucou's checks says, in the language of the moment.
+fn builtin_text(check: &str) -> String {
+    match check {
+        "git-folder" => tr!("不能刪除或搬走 .git 資料夾(整個版本紀錄會不見)", "Don't delete or move a .git folder (the whole version history would be lost)"),
+        "drive-root" => tr!(
+            "不能刪除或格式化整顆磁碟,或 Windows、Program Files、使用者資料夾這類系統資料夾",
+            "Don't delete or format a whole drive, or a system folder such as Windows, Program Files or the user folders"
+        ),
+        "install" => tr!("安裝軟體或套件之前要先問我", "Ask me before installing software or packages"),
+        "git-destructive" => tr!("會丟掉變更的 git 指令(reset --hard、clean、強制推送)之前要先問我", "Ask me before git commands that throw changes away (reset --hard, clean, force push)"),
+        "send-out" => tr!("對外發送或發布(git push、npm publish、寄信、上傳)之前要先問我", "Ask me before sending or publishing anything (git push, npm publish, email, uploads)"),
+        "system" => tr!("變更系統(登錄檔、服務、關閉程式、權限)之前要先問我", "Ask me before changing the system (registry, services, closing programs, permissions)"),
+        "download" => tr!("從網路下載檔案之前要先問我", "Ask me before downloading files from the internet"),
+        other => other.to_string(),
+    }
+}
 
 impl Constitution {
     /// Coucou's checks at their starting levels.
     pub fn starting() -> Self {
         Self {
-            rules: BUILTIN.iter().map(|(id, text, level)| Rule { id: (*id).into(), text: (*text).into(), level: *level, check: (*id).into(), patterns: vec![] }).collect(),
+            rules: BUILTIN.iter().map(|(id, level)| Rule { id: (*id).into(), text: builtin_text(id), level: *level, check: (*id).into(), patterns: vec![] }).collect(),
         }
     }
 
     /// Checks added to Coucou after the person last saved join at their starting levels.
     fn completed(mut self) -> Self {
-        for (i, (id, text, level)) in BUILTIN.iter().enumerate() {
+        for (i, (id, level)) in BUILTIN.iter().enumerate() {
             if !self.rules.iter().any(|r| r.check == *id) {
-                self.rules.insert(i.min(self.rules.len()), Rule { id: (*id).into(), text: (*text).into(), level: *level, check: (*id).into(), patterns: vec![] });
+                self.rules.insert(i.min(self.rules.len()), Rule { id: (*id).into(), text: builtin_text(id), level: *level, check: (*id).into(), patterns: vec![] });
+            }
+        }
+        self
+    }
+
+    /// Coucou's own checks in the language of the moment, whichever one they
+    /// were saved in (the person cannot reword them; their own rules stay as written).
+    fn localized(mut self) -> Self {
+        for rule in &mut self.rules {
+            if BUILTIN.iter().any(|(id, _)| !rule.check.is_empty() && rule.check == *id) {
+                rule.text = builtin_text(&rule.check);
             }
         }
         self
@@ -109,6 +137,7 @@ impl Constitution {
     }
 
     /// The rules in force, for a member's brief; empty when there are none.
+    // i18n: model-facing
     pub fn for_brief(&self) -> String {
         let never: Vec<&str> = self.rules.iter().filter(|r| r.level == Level::Never).map(|r| r.text.as_str()).collect();
         let ask: Vec<&str> = self.rules.iter().filter(|r| r.level == Level::Ask).map(|r| r.text.as_str()).collect();
@@ -210,7 +239,7 @@ fn path() -> PathBuf {
 /// The constitution in force: the person's, or Coucou's starting one.
 pub fn current() -> Constitution {
     if let Some(c) = CURRENT.read().unwrap().as_ref() {
-        return c.clone();
+        return c.clone().localized();
     }
     let c = std::fs::read(path())
         .ok()
@@ -218,7 +247,7 @@ pub fn current() -> Constitution {
         .map(Constitution::completed)
         .unwrap_or_else(Constitution::starting);
     *CURRENT.write().unwrap() = Some(c.clone());
-    c
+    c.localized()
 }
 
 pub fn save(c: Constitution) -> Result<(), String> {
@@ -257,6 +286,7 @@ pub fn rule_for_hook(payload: &serde_json::Value) -> Option<(Level, Rule)> {
 }
 
 /// The rules in force, for a member's brief (none in tests: the person's file is not theirs).
+// i18n: model-facing
 pub fn brief_text() -> String {
     if cfg!(test) {
         return String::new();
@@ -365,7 +395,12 @@ mod tests {
         assert_eq!(now.rules.len(), BUILTIN.len());
         assert_eq!(now.rules[0].level, Level::Ask, "the person's choice is kept");
         let brief = Constitution::starting().for_brief();
-        assert!(brief.contains("- Never: 不能刪除或搬走 .git 資料夾") && brief.contains("- Ask the user first: 安裝軟體"));
+        assert!(brief.contains("- Never: Don't delete or move a .git folder") && brief.contains("- Ask the user first: Ask me before installing"));
+        // Saved in one language, Coucou's own checks read in the language of the moment.
+        let saved = Constitution { rules: vec![Rule { id: "install".into(), text: "安裝軟體或套件之前要先問我".into(), level: Level::Ask, check: "install".into(), patterns: vec![] }] };
+        assert_eq!(saved.localized().rules[0].text, "Ask me before installing software or packages");
+        let mine = Rule { id: "mine-1".into(), text: "不能碰重要資料".into(), level: Level::Never, check: String::new(), patterns: vec!["x".into()] };
+        assert_eq!(Constitution { rules: vec![mine] }.localized().rules[0].text, "不能碰重要資料", "the person's own words stay");
         assert!(Constitution { rules: vec![] }.for_brief().is_empty());
     }
 }

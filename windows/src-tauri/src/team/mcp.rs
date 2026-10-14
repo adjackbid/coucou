@@ -51,6 +51,7 @@ fn tool_result(text: &str, is_error: bool) -> Value {
 
 /// One line from a member's MCP client. `None` for a notification, which
 /// gets no answer; anything with an id gets exactly one.
+// i18n: model-facing
 pub fn answer(teams: &Teams, who: &Hello, line: &str) -> Option<String> {
     let Ok(msg) = serde_json::from_str::<Value>(line) else {
         return Some(error(&Value::Null, -32700, "That line is not JSON."));
@@ -138,6 +139,7 @@ async fn listen(teams: Arc<Teams>, mut server: NamedPipeServer) {
     }
 }
 
+// i18n: model-facing
 async fn serve(teams: Arc<Teams>, pipe: NamedPipeServer) {
     let (read, mut write) = tokio::io::split(pipe);
     let mut lines = BufReader::new(read).lines();

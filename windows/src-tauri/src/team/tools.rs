@@ -5,6 +5,9 @@
 // disk (except to check that a delivery is really there), so the whole of a
 // team's rules can be read and tested in one place. `react` is the other half:
 // what Coucou does on its own once the state has changed.
+//
+// Everything written here is for a member's model (tool results, errors,
+// messages to members, tool descriptions): English, not translated.
 
 use std::path::Path;
 
@@ -39,6 +42,7 @@ fn text(args: &Value, key: &str) -> Option<String> {
     args.get(key).and_then(Value::as_str).map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
+// i18n: model-facing
 fn need(args: &Value, key: &str) -> Result<String, String> {
     text(args, key).ok_or_else(|| format!("`{key}` is missing."))
 }
@@ -75,6 +79,7 @@ fn message(ids: &mut Ids, from: &str, to: &str, text: String, task: Option<&str>
 
 /// Runs one tool call for `member`. `Err` is a message for the member: what
 /// was wrong with the call, in words it can act on.
+// i18n: model-facing
 pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Outcome, String> {
     let config = state.config.as_ref().ok_or("The team has not started.")?;
     if !config.has_member(member) {
@@ -341,6 +346,7 @@ pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Out
     }
 }
 
+// i18n: model-facing
 fn find_task<'a>(state: &'a State, args: &Value) -> Result<&'a super::state::Task, String> {
     let id = need(args, "task")?;
     state.task(&id).ok_or_else(|| {
@@ -349,6 +355,7 @@ fn find_task<'a>(state: &'a State, args: &Value) -> Result<&'a super::state::Tas
     })
 }
 
+// i18n: model-facing
 fn status_word(status: TaskStatus) -> &'static str {
     match status {
         TaskStatus::Todo => "not started",
@@ -358,6 +365,7 @@ fn status_word(status: TaskStatus) -> &'static str {
     }
 }
 
+// i18n: model-facing
 fn status_text(state: &State, config: &TeamConfig, member: &str) -> String {
     let me = config.member(member).expect("checked by call");
     let mut out = format!(
@@ -458,6 +466,7 @@ pub fn react(state: &State) -> Vec<Event> {
 }
 
 /// The tools as MCP describes them, for `tools/list`. The leader gets two more.
+// i18n: model-facing
 pub fn describe(config: &TeamConfig, member: &str) -> Vec<Value> {
     let members = members_line(config);
     let tool = |name: &str, description: &str, properties: Value, required: &[&str]| {

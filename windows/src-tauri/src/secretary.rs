@@ -208,7 +208,7 @@ impl Secretary {
     pub fn upload(&self, name: &str, bytes: Vec<u8>, origin: &str) -> Result<UploadView, String> {
         let name = knowledge::clean_name(name);
         if bytes.len() as u64 > knowledge::MAX_FILE {
-            return Err(format!("{name} is larger than {} MB.", knowledge::MAX_FILE / 1024 / 1024));
+            return Err(format!("{name} is larger than {} MB.", knowledge::MAX_FILE / 1024 / 1024)); // i18n-ok: kbSaid() in team/knowledge.ts translates it
         }
         let (kind, kept) = knowledge::classify(bytes);
         let key_like = if kind == DocKind::Text { knowledge::find_key_like(&String::from_utf8_lossy(&kept)) } else { None };
@@ -219,9 +219,10 @@ impl Secretary {
                 break id;
             }
         };
-        std::fs::create_dir_all(&self.uploads_dir).map_err(|e| format!("Could not keep {name}: {e}"))?;
+        let not_kept = |e: std::io::Error| -> String { tr!(format!("無法保留 {name}:{e}"), format!("Could not keep {name}: {e}")) };
+        std::fs::create_dir_all(&self.uploads_dir).map_err(not_kept)?;
         let file = self.uploads_dir.join(format!("{id}-{name}"));
-        std::fs::write(&file, &kept).map_err(|e| format!("Could not keep {name}: {e}"))?;
+        std::fs::write(&file, &kept).map_err(not_kept)?;
         let upload = Upload { id: id.clone(), name, file, origin: origin.to_string(), kind, bytes: kept.len() as u64, key_like, force: false };
         let view = upload.view();
         all.insert(id, upload);
@@ -231,7 +232,7 @@ impl Secretary {
     /// The person keeps an attached file that looks like it holds a key.
     pub fn upload_force(&self, id: &str) -> Result<UploadView, String> {
         let mut all = self.uploads.lock().unwrap();
-        let u = all.get_mut(id).ok_or("That file is no longer attached.")?;
+        let u = all.get_mut(id).ok_or_else(|| -> String { tr!("這個檔案已經不在附件裡了。", "That file is no longer attached.") })?;
         u.force = true;
         Ok(u.view())
     }
@@ -245,6 +246,7 @@ impl Secretary {
 
     /// What the model hears of the files attached to a request: names, kinds
     /// and sizes, never what is in them.
+    // i18n: model-facing
     fn attached_line(&self, ids: &[String]) -> Option<String> {
         let all = self.uploads.lock().unwrap();
         let parts: Vec<String> = ids
@@ -268,7 +270,7 @@ impl Secretary {
     /// prepares what is asked, then answers. `uploads`: the files attached to it.
     pub async fn ask(&self, provider: &Provider, office: &Office, text: &str, uploads: &[String], on_step: &(dyn Fn(&Step) + Send + Sync)) -> Result<Reply, String> {
         if self.busy.swap(true, Ordering::SeqCst) {
-            return Err("The secretary is still on the last request.".into());
+            return Err(tr!("秘書還在處理上一個請求。", "The secretary is still on the last request."));
         }
         let text = match self.attached_line(uploads) {
             Some(line) => format!("{text}\n\n{line}"),
@@ -295,7 +297,7 @@ impl Secretary {
             if reply.calls.is_empty() {
                 let text = reply.text.trim().to_string();
                 if text.is_empty() {
-                    return Err(format!("{} gave no answer.", provider.name));
+                    return Err(tr!(format!("{} 沒有回答。", provider.name), format!("{} gave no answer.", provider.name)));
                 }
                 turns.push(Turn::Assistant { text: text.clone(), calls: vec![] });
                 self.keep(turns);
@@ -309,10 +311,12 @@ impl Secretary {
                 let out = match self.call(call, office).await {
                     Ok(Called::Text(t)) => t,
                     Ok(Called::Proposed(p)) => {
+                        // i18n: model-facing
                         let text = format!("Proposal {} is on the user's screen as a card. Nothing has happened yet: it happens only if they click it. Tell them in one or two lines what you prepared.", p.id);
                         made.push(p);
                         text
                     }
+                    // i18n: model-facing
                     Err(err) => format!("ERROR: {err}"),
                 };
                 results.push((call.id.clone(), call.name.clone(), cut(&out, MAX_RESULT)));
@@ -323,7 +327,11 @@ impl Secretary {
         // Out of rounds: what was found so far is kept, the person told.
         let _ = start;
         self.keep(turns);
-        Ok(Reply { text: "這件事需要查的東西比較多,我先停在這裡。可以再說得具體一點,或請我接著查。".into(), steps, proposals: made })
+        let text = tr!(
+            "這件事需要查的東西比較多,我先停在這裡。可以再說得具體一點,或請我接著查。",
+            "This needs more looking up than I can do in one go, so I'll stop here. Tell me more precisely what you need, or ask me to carry on."
+        );
+        Ok(Reply { text, steps, proposals: made })
     }
 
     /// Keeps the conversation, from a user turn on, within bounds.
@@ -347,6 +355,7 @@ impl Secretary {
         let p = all.iter_mut().find(|p| p.id == id)?;
         p.state = state.into();
         p.outcome = outcome.into();
+        // i18n: model-facing
         let note = match state {
             "done" => format!("[Coucou] The user confirmed {} ({}): {outcome}", p.id, p.title),
             "declined" => format!("[Coucou] The user declined {} ({}).", p.id, p.title),
@@ -377,9 +386,9 @@ impl Secretary {
     /// `create_folder` is the person's answer to "the work folder does not exist,
     /// create it?": without it a missing folder is never created.
     pub async fn confirm(&self, id: &str, office: &Office, create_folder: bool) -> Result<Proposal, String> {
-        let p = self.proposal(id).ok_or("That proposal is no longer there.")?;
+        let p = self.proposal(id).ok_or_else(|| -> String { tr!("這個提案已經不在了。", "That proposal is no longer there.") })?;
         if p.state != "open" {
-            return Err("That proposal was already dealt with.".into());
+            return Err(tr!("這個提案已經處理過了。", "That proposal was already dealt with."));
         }
         let uploads = self.uploads.lock().unwrap().clone();
         let done = match p.kind.as_str() {
@@ -387,7 +396,7 @@ impl Secretary {
             "knowledge" => add_knowledge(&p.payload, office, &uploads),
             "instruction" => instruct(&p.payload, office),
             "action" => act(&p.payload, office, create_folder).await,
-            _ => Err("Unknown proposal.".into()),
+            _ => Err(tr!("不明的提案。", "Unknown proposal.")),
         };
         match done {
             Ok(outcome) => {
@@ -404,6 +413,7 @@ impl Secretary {
         }
     }
 
+    // i18n: model-facing
     async fn call(&self, call: &Call, office: &Office) -> Result<Called, String> {
         let a = &call.arguments;
         match call.name.as_str() {
@@ -450,10 +460,13 @@ impl Secretary {
         let goal = need(a, "goal")?;
         let work_dir = need(a, "work_dir")?;
         if !std::path::Path::new(&work_dir).is_absolute() {
+            // i18n: model-facing
             return Err("work_dir must be a full path such as D:\\Code\\my-site. Ask the user where the team should work if you do not know.".into());
         }
+        // i18n: model-facing
         let members = a.get("members").and_then(Value::as_array).filter(|m| !m.is_empty()).ok_or("members is required: at least one member.")?;
         if members.len() > 12 {
+            // i18n: model-facing
             return Err("A team has at most 12 members.".into());
         }
         let mut list = Vec::new();
@@ -463,6 +476,7 @@ impl Secretary {
                 .choices
                 .iter()
                 .find(|p| p.id.eq_ignore_ascii_case(&agent_given) || p.name.eq_ignore_ascii_case(&agent_given))
+                // i18n: model-facing
                 .ok_or_else(|| format!("Member {}: there is no agent '{agent_given}'. Agents: {}.", i + 1, office.choices.iter().map(|p| p.id.as_str()).collect::<Vec<_>>().join(", ")))?;
             list.push(json!({
                 "id": format!("ai{}", i + 1),
@@ -504,29 +518,33 @@ impl Secretary {
             "members": list,
         });
         let draft: TeamConfig = serde_json::from_value(config.clone()).map_err(|e| e.to_string())?;
-        let mut lines = vec![format!("目標:{goal}")];
+        let mut lines: Vec<String> = vec![tr!(format!("目標:{goal}"), format!("Goal: {goal}"))];
         if !scope.is_empty() {
-            lines.push(format!("範圍:{}", scope.join("、")));
+            lines.push(tr!(format!("範圍:{}", scope.join("、")), format!("Scope: {}", scope.join(", "))));
         }
-        let note = match folder_state(&work_dir) {
+        let note: String = match folder_state(&work_dir) {
             Folder::Ready => String::new(),
-            Folder::Missing => "(還不存在,按下後會先問你要不要建立)".into(),
-            Folder::Blocked(why) => format!("({why})"),
+            Folder::Missing => tr!("(還不存在,按下後會先問你要不要建立)", " (doesn't exist yet: you'll be asked whether to create it when you confirm)"),
+            Folder::Blocked(why) => tr!(format!("({why})"), format!(" ({why})")),
         };
-        lines.push(format!("工作資料夾:{work_dir}{note}"));
+        lines.push(tr!(format!("工作資料夾:{work_dir}{note}"), format!("Work folder: {work_dir}{note}")));
         lines.extend(knowledge_lines(&items, from.as_ref().map(|(_, name, n)| (name.as_str(), *n))));
         for m in &draft.members {
-            let model = if m.model.trim().is_empty() { "代理預設".to_string() } else { m.model.clone() };
-            lines.push(format!("{}{} · {} · {} / {}{}", m.name, if m.id == draft.leader { "(Leader)" } else { "" }, if m.role.is_empty() { "—" } else { &m.role }, m.agent, model, if m.duty.is_empty() { String::new() } else { format!(" — {}", m.duty) }));
+            let model: String = if m.model.trim().is_empty() { tr!("代理預設", "agent default") } else { m.model.clone() };
+            let lead: &str = if m.id == draft.leader { tr!("(Leader)", " (Leader)") } else { "" };
+            lines.push(format!("{}{lead} · {} · {} / {}{}", m.name, if m.role.is_empty() { "—" } else { &m.role }, m.agent, model, if m.duty.is_empty() { String::new() } else { format!(" — {}", m.duty) }));
         }
-        let confirm = if start { "建立並啟動" } else { "建立團隊" };
+        let confirm: &str = if start { tr!("建立並啟動", "Create and start") } else { tr!("建立團隊", "Create team") };
         let knowledge = serde_json::to_value(&items).map_err(|e| e.to_string())?;
         let from = from.map(|(id, _, _)| id).unwrap_or_default();
-        Ok(self.add("team", format!("新團隊「{}」", draft.name), lines, confirm, json!({ "config": config, "start": start, "knowledge": knowledge, "knowledgeFrom": from })))
+        let title: String = tr!(format!("新團隊「{}」", draft.name), format!("New team \"{}\"", draft.name));
+        Ok(self.add("team", title, lines, confirm, json!({ "config": config, "start": start, "knowledge": knowledge, "knowledgeFrom": from })))
     }
 
     /// The documents a proposal names, checked now so the card is honest:
     /// attached files of this conversation, or full paths the person wrote.
+    /// Its errors are the model's to read (a propose_* tool's result).
+    // i18n: model-facing
     fn knowledge_items(&self, a: &Value) -> Result<Vec<Item>, String> {
         let Some(list) = a.get("knowledge").and_then(Value::as_array) else { return Ok(Vec::new()) };
         let uploads = self.uploads.lock().unwrap();
@@ -570,14 +588,19 @@ impl Secretary {
         let (id, config) = find_team(office, &need(a, "team")?)?;
         let items = self.knowledge_items(a)?;
         if items.is_empty() {
+            // i18n: model-facing
             return Err("knowledge is required: at least one document (an attached file or a full path).".into());
         }
         let mut lines = knowledge_lines(&items, None);
         if office.teams.is_live(&id) {
-            lines.push("團隊執行中:加入後會通知 Leader;共享的文件也會通知其他成員。".into());
+            lines.push(tr!(
+                "團隊執行中:加入後會通知 Leader;共享的文件也會通知其他成員。",
+                "The team is running: the leader is told once they are added, and the other members hear of the shared ones."
+            ));
         }
         let knowledge = serde_json::to_value(&items).map_err(|e| e.to_string())?;
-        Ok(self.add("knowledge", format!("加入「{}」的知識庫", config.name), lines, "加入知識庫", json!({ "team": id, "knowledge": knowledge })))
+        let title: String = tr!(format!("加入「{}」的知識庫", config.name), format!("Add to the knowledge base of \"{}\"", config.name));
+        Ok(self.add("knowledge", title, lines, tr!("加入知識庫", "Add to knowledge base"), json!({ "team": id, "knowledge": knowledge })))
     }
 
     fn propose_instruction(&self, a: &Value, office: &Office) -> Result<Proposal, String> {
@@ -592,34 +615,38 @@ impl Secretary {
                 .iter()
                 .find(|m| m.id.eq_ignore_ascii_case(&to_given) || m.name.eq_ignore_ascii_case(&to_given))
                 .map(|m| m.id.clone())
+                // i18n: model-facing
                 .ok_or_else(|| format!("'{to_given}' is not a member of {}.", config.name))?
         };
         let who = if to.is_empty() {
-            config.members.iter().find(|m| m.id == config.leader).map(|m| format!("{}(Leader)", m.name)).unwrap_or("Leader".into())
+            config.members.iter().find(|m| m.id == config.leader).map(|m| -> String { tr!(format!("{}(Leader)", m.name), format!("{} (Leader)", m.name)) }).unwrap_or("Leader".into())
         } else {
             config.members.iter().find(|m| m.id == to).map(|m| m.name.clone()).unwrap_or(to.clone())
         };
         let finished = office.teams.is_finished(&id);
-        let mut lines = vec![format!("給:{who}"), format!("內容:{words}")];
+        let mut lines: Vec<String> = vec![tr!(format!("給:{who}"), format!("To: {who}")), tr!(format!("內容:{words}"), format!("Message: {words}"))];
         if finished {
-            lines.push("這個團隊已完成;送出後會重新開始工作。".into());
+            lines.push(tr!("這個團隊已完成;送出後會重新開始工作。", "This team has finished; sending this starts it working again."));
         }
-        Ok(self.add("instruction", format!("給「{}」的指令", config.name), lines, "送出指令", json!({ "team": id, "to": to, "text": words })))
+        let title: String = tr!(format!("給「{}」的指令", config.name), format!("Instruction for \"{}\"", config.name));
+        Ok(self.add("instruction", title, lines, tr!("送出指令", "Send instruction"), json!({ "team": id, "to": to, "text": words })))
     }
 
     fn propose_action(&self, a: &Value, office: &Office) -> Result<Proposal, String> {
         let (id, config) = find_team(office, &need(a, "team")?)?;
         let action = need(a, "action")?.to_lowercase();
-        let (title, line, confirm) = match action.as_str() {
-            "start" => ("啟動", "從頭開始執行這個團隊(之前的紀錄會保留)。", "啟動"),
-            "pause" => ("暫停", "不再開始新的回合;正在做的會做完。", "暫停"),
-            "resume" => ("繼續", "從暫停或中斷的地方接著做。", "繼續"),
-            "stop" => ("立刻停下", "暫停並中斷所有正在進行的回合。", "立刻停下"),
-            "archive" => ("封存", "收起來,不再顯示在團隊清單和公司總覽(不會刪除)。", "封存"),
-            "unarchive" => ("取消封存", "放回團隊清單和公司總覽。", "取消封存"),
+        let (title, line): (&str, &str) = match action.as_str() {
+            "start" => (tr!("啟動", "Start"), tr!("從頭開始執行這個團隊(之前的紀錄會保留)。", "Runs this team from the start (its earlier record is kept).")),
+            "pause" => (tr!("暫停", "Pause"), tr!("不再開始新的回合;正在做的會做完。", "No new turns start; the ones under way finish.")),
+            "resume" => (tr!("繼續", "Resume"), tr!("從暫停或中斷的地方接著做。", "Carries on from where it was paused or interrupted.")),
+            "stop" => (tr!("立刻停下", "Stop now"), tr!("暫停並中斷所有正在進行的回合。", "Pauses and interrupts every turn under way.")),
+            "archive" => (tr!("封存", "Archive"), tr!("收起來,不再顯示在團隊清單和公司總覽(不會刪除)。", "Puts it away: it no longer shows in the team list or the company overview (nothing is deleted).")),
+            "unarchive" => (tr!("取消封存", "Unarchive"), tr!("放回團隊清單和公司總覽。", "Puts it back in the team list and the company overview.")),
+            // i18n: model-facing
             other => return Err(format!("Unknown action '{other}'. Use start, pause, resume, stop, archive or unarchive.")),
         };
-        Ok(self.add("action", format!("{title}「{}」", config.name), vec![line.to_string()], confirm, json!({ "team": id, "action": action })))
+        let heading: String = tr!(format!("{title}「{}」", config.name), format!("{title} \"{}\"", config.name));
+        Ok(self.add("action", heading, vec![line.to_string()], title, json!({ "team": id, "action": action })))
     }
 }
 
@@ -631,20 +658,20 @@ enum Called {
 /// The card's lines about a knowledge base: each document and who may read
 /// it, and the team whose documents come along.
 fn knowledge_lines(items: &[Item], from: Option<(&str, usize)>) -> Vec<String> {
-    let mut out = Vec::new();
+    let mut out: Vec<String> = Vec::new();
     if let Some((name, count)) = from {
-        out.push(format!("知識庫:沿用「{name}」的 {count} 份文件"));
+        out.push(tr!(format!("知識庫:沿用「{name}」的 {count} 份文件"), format!("Knowledge base: starts with the {count} document(s) of \"{name}\"")));
     }
     if !items.is_empty() {
         let docs: Vec<String> = items
             .iter()
-            .map(|d| {
-                let who = if d.visibility == Visibility::Shared { "團隊共享" } else { "只有 Leader" };
-                let key = if d.key_like { " ⚠ 疑似含金鑰" } else { "" };
-                format!("{}({who}{key})", d.name)
+            .map(|d| -> String {
+                let who: &str = if d.visibility == Visibility::Shared { tr!("團隊共享", "shared with the team") } else { tr!("只有 Leader", "leader only") };
+                let key: &str = if d.key_like { tr!(" ⚠ 疑似含金鑰", ", ⚠ may hold a key") } else { "" };
+                tr!(format!("{}({who}{key})", d.name), format!("{} ({who}{key})", d.name))
             })
             .collect();
-        out.push(format!("知識庫:{}", docs.join("、")));
+        out.push(tr!(format!("知識庫:{}", docs.join("、")), format!("Knowledge base: {}", docs.join(", "))));
     }
     out
 }
@@ -661,14 +688,14 @@ fn fill_knowledge(kb: &Kb, items: &[Item], uploads: &BTreeMap<String, Upload>) -
             knowledge::read_source(Path::new(&item.path)).map(|(_, bytes)| (bytes, item.path.clone(), false))
         } else {
             match uploads.get(&item.upload) {
-                Some(u) => std::fs::read(&u.file).map(|bytes| (bytes, u.origin.clone(), u.force)).map_err(|e| format!("Could not read {}: {e}", u.name)),
-                None => Err("the attached file is no longer there".to_string()),
+                Some(u) => std::fs::read(&u.file).map(|bytes| (bytes, u.origin.clone(), u.force)).map_err(|e| -> String { tr!(format!("無法讀取 {}:{e}", u.name), format!("Could not read {}: {e}", u.name)) }),
+                None => Err(tr!("附加的檔案已經不在了", "the attached file is no longer there")),
             }
         };
         let (bytes, source, force) = match got {
             Ok(x) => x,
             Err(err) => {
-                failed.push(format!("{}:{err}", item.name));
+                failed.push(tr!(format!("{}:{err}", item.name), format!("{}: {err}", item.name)));
                 continue;
             }
         };
@@ -676,13 +703,16 @@ fn fill_knowledge(kb: &Kb, items: &[Item], uploads: &BTreeMap<String, Upload>) -
             Ok(knowledge::Added { doc: Some(doc), .. }) => {
                 if item.visibility == Visibility::Shared {
                     if let Err(err) = kb.update(&doc.id, Some(Visibility::Shared), None) {
-                        failed.push(format!("{}:沒能設成團隊共享({err})", item.name));
+                        failed.push(tr!(format!("{}:沒能設成團隊共享({err})", item.name), format!("{}: could not be shared with the team ({err})", item.name)));
                     }
                 }
                 added.push(doc.id);
             }
-            Ok(_) => failed.push(format!("{} 看起來含有金鑰,沒有加入;請在團隊設定裡確認後手動加入", item.name)),
-            Err(err) => failed.push(format!("{}:{err}", item.name)),
+            Ok(_) => failed.push(tr!(
+                format!("{} 看起來含有金鑰,沒有加入;請在團隊設定裡確認後手動加入", item.name),
+                format!("{} looks like it holds a key, so it was not added; check it in the team's setup and add it there yourself", item.name)
+            )),
+            Err(err) => failed.push(tr!(format!("{}:{err}", item.name), format!("{}: {err}", item.name))),
         }
     }
     (added, failed)
@@ -694,12 +724,13 @@ fn items_of(payload: &Value) -> Vec<Item> {
 
 /// What happened to the documents, for the card and the model.
 fn knowledge_outcome(added: usize, failed: &[String]) -> String {
-    let mut out = if added > 0 { format!("{added} document(s) were put in its knowledge base") } else { String::new() };
+    let mut out: String = if added > 0 { tr!(format!("已有 {added} 份文件放進它的知識庫"), format!("{added} document(s) were put in its knowledge base")) } else { String::new() };
     if !failed.is_empty() {
         if !out.is_empty() {
-            out.push_str("; ");
+            out.push_str(tr!(";", "; "));
         }
-        out.push_str(&format!("not added: {}", failed.join(";")));
+        let not_added: String = tr!(format!("沒有加入:{}", failed.join(";")), format!("not added: {}", failed.join("; ")));
+        out.push_str(&not_added);
     }
     out
 }
@@ -709,7 +740,7 @@ fn knowledge_outcome(added: usize, failed: &[String]) -> String {
 fn add_knowledge(payload: &Value, office: &Office, uploads: &BTreeMap<String, Upload>) -> Result<String, String> {
     let team = s(payload, "team");
     if !crate::team::is_plain_id(team) {
-        return Err("There is no such team.".into());
+        return Err(tr!("沒有這個團隊。", "There is no such team."));
     }
     let (added, failed) = fill_knowledge(&office.teams.kb(team), &items_of(payload), uploads);
     for doc in &added {
@@ -722,6 +753,7 @@ fn add_knowledge(payload: &Value, office: &Office, uploads: &BTreeMap<String, Up
     Ok(knowledge_outcome(added.len(), &failed))
 }
 
+// i18n: model-facing
 fn need(a: &Value, key: &str) -> Result<String, String> {
     text(a, key).ok_or_else(|| format!("'{key}' is required."))
 }
@@ -730,6 +762,7 @@ fn text(a: &Value, key: &str) -> Option<String> {
     a.get(key).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
 }
 
+// i18n: model-facing
 fn cut(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         return s.to_string();
@@ -754,6 +787,7 @@ fn team_files() -> Vec<(String, Result<TeamConfig, String>)> {
 }
 
 /// A team by its id or name (any case): its id and setup.
+// i18n: model-facing
 fn find_team(office: &Office, given: &str) -> Result<(String, TeamConfig), String> {
     let _ = office;
     let given = given.trim();
@@ -805,6 +839,7 @@ fn n(v: &Value, key: &str) -> u64 {
     v.get(key).and_then(Value::as_u64).unwrap_or(0)
 }
 
+// i18n: model-facing
 fn list_teams(office: &Office, include_archived: bool) -> String {
     let mut out = Vec::new();
     for (file, config) in team_files() {
@@ -849,6 +884,7 @@ fn list_teams(office: &Office, include_archived: bool) -> String {
     }
 }
 
+// i18n: model-facing
 fn team_detail(office: &Office, given: &str) -> Result<String, String> {
     let (id, c) = find_team(office, given)?;
     let mut out = vec![
@@ -921,6 +957,7 @@ fn team_detail(office: &Office, given: &str) -> Result<String, String> {
     Ok(out.join("\n"))
 }
 
+// i18n: model-facing
 fn team_messages(office: &Office, given: &str, limit: usize) -> Result<String, String> {
     let (id, c) = find_team(office, given)?;
     let p = picture(office, &id).ok_or_else(|| format!("{} has never run.", c.name))?;
@@ -931,6 +968,7 @@ fn team_messages(office: &Office, given: &str, limit: usize) -> Result<String, S
 }
 
 /// [from, to) in ms and its name, for a period word, on the person's clock.
+// i18n: model-facing
 fn period_range(office: &Office, period: &str) -> (u64, u64, &'static str) {
     let now = crate::team::store::now_ms() as i64;
     let tz = office.tz_minutes * 60_000;
@@ -952,6 +990,7 @@ fn period_range(office: &Office, period: &str) -> (u64, u64, &'static str) {
 
 /// One team's cost taken apart: who spent it on which model, on what kind
 /// of token, how hard they worked for it, and whether their context grew.
+// i18n: model-facing
 fn cost_analysis(office: &Office, given: &str, period: &str) -> Result<String, String> {
     let (id, c) = find_team(office, given)?;
     let (from, to, name) = period_range(office, period);
@@ -1045,6 +1084,7 @@ fn cost_analysis(office: &Office, given: &str, period: &str) -> Result<String, S
     Ok(out.join("\n"))
 }
 
+// i18n: model-facing
 fn usage_summary(office: &Office, period: &str) -> String {
     let now = crate::team::store::now_ms() as i64;
     let tz = office.tz_minutes * 60_000;
@@ -1103,6 +1143,7 @@ fn usage_summary(office: &Office, period: &str) -> String {
 }
 
 /// A member's agent as the user knows it: a team agent by its name (its id is Coucou's own).
+// i18n: model-facing
 fn agent_label(office: &Office, id: &str) -> String {
     match office.agents.iter().find(|p| p.id == id && p.extras.is_some()) {
         Some(p) => format!("{} (team agent {id})", p.name),
@@ -1110,6 +1151,7 @@ fn agent_label(office: &Office, id: &str) -> String {
     }
 }
 
+// i18n: model-facing
 fn list_agents(office: &Office) -> String {
     if office.choices.is_empty() {
         return if office.team_agents {
@@ -1145,7 +1187,7 @@ enum Folder {
 fn folder_state(dir: &str) -> Folder {
     match std::fs::metadata(dir) {
         Ok(m) if m.is_dir() => Folder::Ready,
-        Ok(_) => Folder::Blocked(format!("{dir} 是一個檔案,不是資料夾,請換一個資料夾路徑。")),
+        Ok(_) => Folder::Blocked(tr!(format!("{dir} 是一個檔案,不是資料夾,請換一個資料夾路徑。"), format!("{dir} is a file, not a folder. Choose another folder path."))),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Folder::Missing,
         Err(e) => Folder::Blocked(folder_error(dir, &e, false)),
     }
@@ -1158,7 +1200,10 @@ fn ensure_folder(dir: &str, create: bool) -> Result<(), String> {
     match folder_state(dir) {
         Folder::Ready => Ok(()),
         Folder::Blocked(why) => Err(why),
-        Folder::Missing if !create => Err(format!("工作資料夾 {dir} 不存在。沒有建立資料夾,團隊也沒有開。")),
+        Folder::Missing if !create => Err(tr!(
+            format!("工作資料夾 {dir} 不存在。沒有建立資料夾,團隊也沒有開。"),
+            format!("The work folder {dir} does not exist. No folder was created and the team was not started.")
+        )),
         Folder::Missing => std::fs::create_dir_all(dir).map_err(|e| folder_error(dir, &e, true)),
     }
 }
@@ -1171,15 +1216,24 @@ fn folder_error(dir: &str, e: &std::io::Error, creating: bool) -> String {
         ErrorKind::PermissionDenied if creating => {
             // The deepest folder that is there is the one that refused.
             let parent = path.ancestors().skip(1).find(|a| a.is_dir()).map(|a| a.display().to_string()).unwrap_or_else(|| dir.to_string());
-            format!("Windows 拒絕存取:你的帳號沒有權限在 {parent} 底下建立資料夾,所以沒有建立 {dir}。請換一個你能寫入的位置(例如 D:\\Code 底下),或先在檔案總管自己建立好再試。")
+            tr!(
+                format!("Windows 拒絕存取:你的帳號沒有權限在 {parent} 底下建立資料夾,所以沒有建立 {dir}。請換一個你能寫入的位置(例如 D:\\Code 底下),或先在檔案總管自己建立好再試。"),
+                format!("Windows denied access: your account may not create folders in {parent}, so {dir} was not created. Choose a place you can write to (under D:\\Code, say), or create the folder yourself in File Explorer and try again.")
+            )
         }
-        ErrorKind::PermissionDenied => format!("Windows 拒絕存取 {dir}:這個資料夾存在,但你的帳號沒有權限使用它。請換一個資料夾,或在資料夾的「內容 → 安全性」給自己讀寫權限。"),
+        ErrorKind::PermissionDenied => tr!(
+            format!("Windows 拒絕存取 {dir}:這個資料夾存在,但你的帳號沒有權限使用它。請換一個資料夾,或在資料夾的「內容 → 安全性」給自己讀寫權限。"),
+            format!("Windows denied access to {dir}: the folder is there, but your account may not use it. Choose another folder, or give yourself read and write permission in the folder's Properties → Security.")
+        ),
         ErrorKind::NotFound if creating => {
             let root = path.ancestors().last().map(|a| a.display().to_string()).unwrap_or_default();
-            format!("無法建立 {dir}:{root} 不存在或目前無法使用(例如磁碟沒有接上)。")
+            tr!(
+                format!("無法建立 {dir}:{root} 不存在或目前無法使用(例如磁碟沒有接上)。"),
+                format!("Could not create {dir}: {root} does not exist or cannot be used right now (a drive that is not plugged in, say).")
+            )
         }
-        _ if creating => format!("無法建立資料夾 {dir}:{e}"),
-        _ => format!("無法使用資料夾 {dir}:{e}"),
+        _ if creating => tr!(format!("無法建立資料夾 {dir}:{e}"), format!("Could not create the folder {dir}: {e}")),
+        _ => tr!(format!("無法使用資料夾 {dir}:{e}"), format!("Could not use the folder {dir}: {e}")),
     }
 }
 
@@ -1189,7 +1243,7 @@ async fn create_team(payload: &Value, office: &Office, create_folder: bool, uplo
     let id = (1..1000)
         .map(|n| if n == 1 { "team".to_string() } else { format!("team-{n}") })
         .find(|id| !dir.join(format!("{id}.json")).exists())
-        .ok_or("There are too many team files.")?;
+        .ok_or_else(|| -> String { tr!("團隊檔案太多了。", "There are too many team files.") })?;
     let mut config: TeamConfig = serde_json::from_value(payload["config"].clone()).map_err(|e| e.to_string())?;
     config.id = id.clone();
     ensure_folder(&config.work_dir, create_folder)?;
@@ -1199,7 +1253,7 @@ async fn create_team(payload: &Value, office: &Office, create_folder: bool, uplo
         return Err(problems.join(" "));
     }
     let file = format!("{id}.json");
-    std::fs::write(dir.join(&file), serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?).map_err(|e| format!("Could not save {file}: {e}"))?;
+    std::fs::write(dir.join(&file), serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?).map_err(|e| -> String { tr!(format!("無法儲存 {file}:{e}"), format!("Could not save {file}: {e}")) })?;
     crate::log::line(format!("secretary: created team {id}"));
     // Its documents, before it starts: the members hear of them in their opening words.
     let kb = office.teams.kb(&id);
@@ -1207,26 +1261,36 @@ async fn create_team(payload: &Value, office: &Office, create_folder: bool, uplo
     let from = s(payload, "knowledgeFrom");
     if crate::team::is_plain_id(from) {
         match office.teams.kb(from).copy_to(&kb) {
-            Ok(n) => docs.push_str(&format!("; {n} document(s) were copied from team {from}")),
-            Err(err) => docs.push_str(&format!("; the documents of team {from} were not copied: {err}")),
+            Ok(n) => {
+                let line: String = tr!(format!(";從團隊 {from} 複製了 {n} 份文件"), format!("; {n} document(s) were copied from team {from}"));
+                docs.push_str(&line);
+            }
+            Err(err) => {
+                let line: String = tr!(format!(";團隊 {from} 的文件沒有複製:{err}"), format!("; the documents of team {from} were not copied: {err}"));
+                docs.push_str(&line);
+            }
         }
     }
     let (added, failed) = fill_knowledge(&kb, &items_of(payload), uploads);
     let more = knowledge_outcome(added.len(), &failed);
     if !more.is_empty() {
-        docs.push_str(&format!("; {more}"));
+        docs.push_str(tr!(";", "; "));
+        docs.push_str(&more);
     }
     if payload["start"].as_bool() == Some(true) {
         start(&config, office)?;
-        Ok(format!("team {} (id {id}) was created and started{docs}", config.name))
+        Ok(tr!(format!("已建立並啟動團隊 {}(id {id}){docs}", config.name), format!("team {} (id {id}) was created and started{docs}", config.name)))
     } else {
-        Ok(format!("team {} (id {id}) was created, not started{docs}", config.name))
+        Ok(tr!(format!("已建立團隊 {}(id {id}),尚未啟動{docs}", config.name), format!("team {} (id {id}) was created, not started{docs}", config.name)))
     }
 }
 
 fn start(config: &TeamConfig, office: &Office) -> Result<(), String> {
     if !settings::team_mcp_exe_path().is_file() {
-        return Err("coucou-team-mcp.exe is missing from Coucou's bin folder, so members could not report. Reinstall or rebuild Coucou.".into());
+        return Err(tr!(
+            "Coucou 的 bin 資料夾裡少了 coucou-team-mcp.exe,成員沒辦法回報。請重新安裝或重新建置 Coucou。",
+            "coucou-team-mcp.exe is missing from Coucou's bin folder, so members could not report. Reinstall or rebuild Coucou."
+        ));
     }
     office.teams.start(config.clone(), &office.agents).map(|_| ())
 }
@@ -1237,9 +1301,9 @@ fn instruct(payload: &Value, office: &Office) -> Result<String, String> {
     let words = s(payload, "text");
     if office.teams.is_finished(team) {
         office.teams.reopen(team, to, words, None, &office.agents)?;
-        return Ok("the instruction was sent and the finished team started again".into());
+        return Ok(tr!("指令已送出,已完成的團隊重新開始工作", "the instruction was sent and the finished team started again"));
     }
-    office.teams.instruct(team, to, words, None).map(|_| "the instruction was sent".into())
+    office.teams.instruct(team, to, words, None).map(|_| tr!("指令已送出", "the instruction was sent"))
 }
 
 async fn act(payload: &Value, office: &Office, create_folder: bool) -> Result<String, String> {
@@ -1249,29 +1313,30 @@ async fn act(payload: &Value, office: &Office, create_folder: bool) -> Result<St
             let config = crate::read_team_file(&format!("{team}.json"))?;
             ensure_folder(&config.work_dir, create_folder)?;
             start(&config, office)?;
-            Ok("the team was started".into())
+            Ok(tr!("團隊已啟動", "the team was started"))
         }
-        "pause" => office.teams.pause(team).map(|_| "the team was paused".into()),
-        "resume" => office.teams.resume(team, &office.agents).map(|_| "the team carries on".into()),
-        "stop" => office.teams.interrupt(team).await.map(|_| "the team was stopped".into()),
+        "pause" => office.teams.pause(team).map(|_| tr!("團隊已暫停", "the team was paused")),
+        "resume" => office.teams.resume(team, &office.agents).map(|_| tr!("團隊繼續工作", "the team carries on")),
+        "stop" => office.teams.interrupt(team).await.map(|_| tr!("團隊已停下", "the team was stopped")),
         "archive" | "unarchive" => {
             let archived = s(payload, "action") == "archive";
             let file = format!("{team}.json");
             let path = crate::team_file_path(&file)?;
             let mut config = crate::read_team_file(&file)?;
             if archived && office.teams.is_live(&config.id) {
-                return Err("This team is running. Stop it before putting it away.".into());
+                return Err(tr!("這個團隊正在執行,請先停下再封存。", "This team is running. Stop it before putting it away."));
             }
             config.archived = archived;
             std::fs::write(path, serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-            Ok(if archived { "the team was archived".into() } else { "the team was taken out of the archive".into() })
+            Ok(if archived { tr!("團隊已封存", "the team was archived") } else { tr!("團隊已取消封存", "the team was taken out of the archive") })
         }
-        other => Err(format!("Unknown action '{other}'.")),
+        other => Err(tr!(format!("不明的操作「{other}」。"), format!("Unknown action '{other}'."))),
     }
 }
 
 // ── What the model is told ───────────────────────────────────────────────────
 
+// i18n: model-facing
 fn system_prompt(office: &Office) -> String {
     format!(
         "{}You are the secretary of the user's company of AI agents, inside Coucou, a Windows app. The company is made of teams: each has a goal, a work folder and AI members (each runs an agent such as Codex, Claude Code, Copilot or Antigravity, with a model); a leader member plans tasks, hands them out and reviews them. The user calls on you when they need you: to find out how the teams are doing, what is stuck or waiting for them, what it cost, or to get something done.\n\
@@ -1282,11 +1347,13 @@ How you work:\n\
 - Prefer one proposal that does what was asked. Ask a short question first only when something essential is missing, such as the work folder for a new team.\n\
 - For a new team: pick agents and models from list_agents (agent_models lists what an agent offers); give the leader the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
 - A team has a knowledge base: documents (design notes, specs, pictures, any file) its members work from. When the user attaches files or mentions design documents, specs or reference material for a team, put them in `knowledge` (propose_team for a new team, propose_knowledge for one that exists): attached files by their id (u…), or full paths the user wrote — never a path you guessed. Each is for the leader only unless the user says the whole team should see it (then visibility \"shared\"). You only see the files' names, never what is in them.\n\
-- Answer in the user's language (Traditional Chinese when they write Chinese), short and concrete: a few lines or a short list. Point out anything waiting for the user (permission cards, questions) first.\n\
+- Answer in the language named on the last line of this prompt, short and concrete: a few lines or a short list. Point out anything waiting for the user (permission cards, questions) first.\n\
 \n\
-Now: {} (the user's local time).",
+Now: {} (the user's local time).\n\
+{}",
+        // The window's name for a secretary the person has not named, in either language.
         match office.name.trim() {
-            "" | "秘書" => String::new(),
+            "" | "秘書" | "Secretary" => String::new(),
             name => format!("Your name is {name}; the user calls you that, and you may call yourself that. "),
         },
         if office.team_agents {
@@ -1294,10 +1361,12 @@ Now: {} (the user's local time).",
         } else {
             ""
         },
-        when(crate::team::store::now_ms(), office.tz_minutes)
+        when(crate::team::store::now_ms(), office.tz_minutes),
+        crate::i18n::reply_language(),
     )
 }
 
+// i18n: model-facing
 fn describe() -> Vec<Tool> {
     let tool = |name: &str, description: &str, properties: Value, required: &[&str]| Tool {
         name: name.into(),
@@ -1376,26 +1445,26 @@ fn label(call: &Call, office: &Office) -> String {
         find_team(office, &given).map(|(_, c)| c.name).unwrap_or(given)
     };
     match call.name.as_str() {
-        "list_teams" => "查看所有團隊".into(),
-        "team_detail" => format!("查看「{}」的現況", team()),
-        "team_messages" => format!("讀「{}」的溝通紀錄", team()),
-        "cost_analysis" => format!("分析「{}」的成本", team()),
-        "usage_summary" => format!(
-            "查詢{}的用量與成本",
-            match a.get("period").and_then(Value::as_str).unwrap_or("7d") {
-                "today" => "今天",
-                "yesterday" => "昨天",
-                "30d" => "近 30 天",
-                "month" => "本月",
-                _ => "近 7 天",
-            }
-        ),
-        "list_agents" => "查看可用的代理".into(),
-        "agent_models" => format!("查詢「{}」提供的模型", text(a, "agent").unwrap_or_default()),
-        "propose_team" => format!("擬好新團隊「{}」", text(a, "name").unwrap_or_default()),
-        "propose_instruction" => format!("擬好給「{}」的指令", team()),
-        "propose_team_action" => format!("擬好「{}」的操作", team()),
-        "propose_knowledge" => format!("擬好「{}」的知識庫文件", team()),
+        "list_teams" => tr!("查看所有團隊", "Looking at all the teams"),
+        "team_detail" => tr!(format!("查看「{}」的現況", team()), format!("Checking how \"{}\" is doing", team())),
+        "team_messages" => tr!(format!("讀「{}」的溝通紀錄", team()), format!("Reading the messages of \"{}\"", team())),
+        "cost_analysis" => tr!(format!("分析「{}」的成本", team()), format!("Analyzing the cost of \"{}\"", team())),
+        "usage_summary" => {
+            let period: &str = match a.get("period").and_then(Value::as_str).unwrap_or("7d") {
+                "today" => tr!("今天", "today"),
+                "yesterday" => tr!("昨天", "yesterday"),
+                "30d" => tr!("近 30 天", "the last 30 days"),
+                "month" => tr!("本月", "this month"),
+                _ => tr!("近 7 天", "the last 7 days"),
+            };
+            tr!(format!("查詢{period}的用量與成本"), format!("Checking usage and cost for {period}"))
+        }
+        "list_agents" => tr!("查看可用的代理", "Looking at the available agents"),
+        "agent_models" => tr!(format!("查詢「{}」提供的模型", text(a, "agent").unwrap_or_default()), format!("Checking the models \"{}\" offers", text(a, "agent").unwrap_or_default())),
+        "propose_team" => tr!(format!("擬好新團隊「{}」", text(a, "name").unwrap_or_default()), format!("Drafted the new team \"{}\"", text(a, "name").unwrap_or_default())),
+        "propose_instruction" => tr!(format!("擬好給「{}」的指令", team()), format!("Drafted an instruction for \"{}\"", team())),
+        "propose_team_action" => tr!(format!("擬好「{}」的操作", team()), format!("Drafted an action for \"{}\"", team())),
+        "propose_knowledge" => tr!(format!("擬好「{}」的知識庫文件", team()), format!("Drafted documents for the knowledge base of \"{}\"", team())),
         other => other.to_string(),
     }
 }
@@ -1411,7 +1480,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir.parent().unwrap());
         assert!(matches!(folder_state(&path), Folder::Missing));
         let refused = ensure_folder(&path, false).unwrap_err();
-        assert!(refused.contains("不存在"), "{refused}");
+        assert!(refused.contains("does not exist"), "{refused}");
         assert!(!dir.exists());
         ensure_folder(&path, true).unwrap();
         assert!(dir.is_dir());
@@ -1495,7 +1564,10 @@ mod tests {
             .unwrap();
         assert_eq!(items.len(), 2);
         assert_eq!((items[0].visibility, items[1].visibility), (Visibility::Shared, Visibility::Leader));
-        assert_eq!(knowledge_lines(&items, Some(("購物網站", 3))), vec!["知識庫:沿用「購物網站」的 3 份文件".to_string(), "知識庫:品牌指南.md(團隊共享)、spec.md(只有 Leader)".to_string()]);
+        assert_eq!(
+            knowledge_lines(&items, Some(("購物網站", 3))),
+            vec!["Knowledge base: starts with the 3 document(s) of \"購物網站\"".to_string(), "Knowledge base: 品牌指南.md (shared with the team), spec.md (leader only)".to_string()]
+        );
 
         for bad in [
             json!({ "knowledge": [{ "upload": "u9999" }] }),
@@ -1509,7 +1581,7 @@ mod tests {
         sec.upload_force(&env.id).unwrap();
         let kept = sec.knowledge_items(&json!({ "knowledge": [{ "upload": env.id }] })).unwrap();
         assert!(kept[0].key_like);
-        assert!(knowledge_lines(&kept, None)[0].contains("⚠ 疑似含金鑰"));
+        assert!(knowledge_lines(&kept, None)[0].contains("⚠ may hold a key"));
         let _ = std::fs::remove_dir_all(&base);
     }
 
@@ -1534,12 +1606,15 @@ mod tests {
         let uploads = sec.uploads.lock().unwrap().clone();
         let (added, failed) = fill_knowledge(&kb, &items, &uploads);
         assert_eq!(added.len(), 2);
-        assert_eq!(failed, vec!["leaked.md 看起來含有金鑰,沒有加入;請在團隊設定裡確認後手動加入".to_string()]);
+        assert_eq!(failed, vec!["leaked.md looks like it holds a key, so it was not added; check it in the team's setup and add it there yourself".to_string()]);
         let index = kb.load();
         let brand_doc = index.docs.iter().find(|d| d.name == "品牌指南.md").unwrap();
         assert_eq!((brand_doc.visibility, brand_doc.source.as_str()), (Visibility::Shared, r"D:\Docs\品牌指南.md"));
         assert_eq!(index.docs.iter().find(|d| d.name == "env.md").unwrap().visibility, Visibility::Leader);
-        assert_eq!(knowledge_outcome(added.len(), &failed), "2 document(s) were put in its knowledge base; not added: leaked.md 看起來含有金鑰,沒有加入;請在團隊設定裡確認後手動加入");
+        assert_eq!(
+            knowledge_outcome(added.len(), &failed),
+            "2 document(s) were put in its knowledge base; not added: leaked.md looks like it holds a key, so it was not added; check it in the team's setup and add it there yourself"
+        );
         let _ = std::fs::remove_dir_all(&base);
     }
 

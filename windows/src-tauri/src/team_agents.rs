@@ -126,41 +126,47 @@ pub fn save(doc: TeamAgents, natives: &[AgentProfile]) -> Result<(), String> {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
     let json = serde_json::to_vec_pretty(&doc).map_err(|e| e.to_string())?;
-    std::fs::write(&file, json).map_err(|e| format!("Could not save the team agents: {e}"))
+    std::fs::write(&file, json).map_err(|e| tr!(format!("無法儲存團隊 Agent:{e}"), format!("Couldn't save the team agents: {e}")))
 }
 
 impl TeamAgents {
     /// What stops these from being saved, in plain words.
     pub fn problems(&self, natives: &[AgentProfile]) -> Vec<String> {
-        let mut out = Vec::new();
+        let mut out: Vec<String> = Vec::new();
         let mut seen = std::collections::BTreeSet::new();
         for a in &self.agents {
             let name = if a.name.trim().is_empty() { a.id.as_str() } else { a.name.trim() };
             if !crate::team::is_plain_id(&a.id) {
-                out.push(format!("Team agent '{name}': its id may only use letters, digits, '-' and '_'."));
+                out.push(tr!(format!("團隊 Agent「{name}」:id 只能用英文字母、數字、'-' 和 '_'。"), format!("Team agent '{name}': its id may only use letters, digits, '-' and '_'.")));
             }
             if !seen.insert(a.id.as_str()) {
-                out.push(format!("Two team agents have the id '{}'.", a.id));
+                out.push(tr!(format!("有兩個團隊 Agent 的 id 都是「{}」。", a.id), format!("Two team agents have the id '{}'.", a.id)));
             }
             if natives.iter().any(|n| n.id == a.id) {
-                out.push(format!("Team agent '{name}' has the id of an agent in Settings → Agents."));
+                out.push(tr!(format!("團隊 Agent「{name}」的 id 和「設定 → Agents」裡的某個 agent 相同。"), format!("Team agent '{name}' has the id of an agent in Settings → Agents.")));
             }
             if a.name.trim().is_empty() {
-                out.push(format!("Team agent '{}' has no name.", a.id));
+                out.push(tr!(format!("團隊 Agent「{}」沒有名字。", a.id), format!("Team agent '{}' has no name.", a.id)));
             }
             let mut servers = std::collections::BTreeSet::new();
             for m in &a.mcp {
                 if !crate::team::is_plain_id(m.name.trim()) || m.name.trim() == crate::acp::TEAM_SERVER {
-                    out.push(format!("Team agent '{name}': '{}' cannot be an MCP server's name (letters, digits, '-' and '_').", m.name));
+                    out.push(tr!(
+                        format!("團隊 Agent「{name}」:「{}」不能當 MCP 伺服器的名字(只能用英文字母、數字、'-' 和 '_')。", m.name),
+                        format!("Team agent '{name}': '{}' cannot be an MCP server's name (letters, digits, '-' and '_').", m.name)
+                    ));
                 } else if !servers.insert(m.name.trim()) {
-                    out.push(format!("Team agent '{name}' has two MCP servers called '{}'.", m.name.trim()));
+                    out.push(tr!(format!("團隊 Agent「{name}」有兩個都叫「{}」的 MCP 伺服器。", m.name.trim()), format!("Team agent '{name}' has two MCP servers called '{}'.", m.name.trim())));
                 }
                 let url = m.url.trim();
                 if url.is_empty() && m.command.trim().is_empty() {
-                    out.push(format!("Team agent '{name}': the MCP server '{}' needs a command or a URL.", m.name));
+                    out.push(tr!(format!("團隊 Agent「{name}」:MCP 伺服器「{}」需要一個指令或一個網址。", m.name), format!("Team agent '{name}': the MCP server '{}' needs a command or a URL.", m.name)));
                 }
                 if !url.is_empty() && !(url.starts_with("http://") || url.starts_with("https://")) {
-                    out.push(format!("Team agent '{name}': the MCP server '{}' URL must start with http:// or https://.", m.name));
+                    out.push(tr!(
+                        format!("團隊 Agent「{name}」:MCP 伺服器「{}」的網址必須以 http:// 或 https:// 開頭。", m.name),
+                        format!("Team agent '{name}': the MCP server '{}' URL must start with http:// or https://.", m.name)
+                    ));
                 }
             }
         }
@@ -242,6 +248,7 @@ fn skill_description(skill_md: &std::path::Path) -> Option<String> {
 /// What a member running as a team agent is told with its role, besides
 /// the team's own words: the system prompt, where its protocol has no place
 /// for one, and the skills it may use.
+// i18n: model-facing
 pub fn brief_text(profile: &AgentProfile) -> String {
     let Some(x) = profile.extras.as_ref() else { return String::new() };
     let mut out = String::new();
@@ -270,6 +277,7 @@ pub fn brief_text(profile: &AgentProfile) -> String {
 }
 
 /// One line per agent for the secretary: who it is, what it runs on, what it is for.
+// i18n: model-facing
 pub fn describe(profile: &AgentProfile) -> Option<String> {
     let x = profile.extras.as_ref()?;
     let mut bits = vec![format!("team agent built on {}", x.base)];

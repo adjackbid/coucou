@@ -372,6 +372,10 @@ pub fn find_key_like(text: &str) -> Option<KeyLike> {
 // ── The folder ────────────────────────────────────────────────────────────────
 
 /// One team's knowledge base on disk.
+///
+/// Errors the Teamwork window matches (`kbSaid()` in team/knowledge.ts) stay
+/// in English: it shows them in the person's language, live. The others are
+/// written in the language of the moment.
 pub struct Kb {
     dir: PathBuf,
 }
@@ -403,11 +407,12 @@ impl Kb {
 
     /// Written beside and moved into place, so a crash never leaves half an index.
     pub fn save(&self, index: &Index) -> Result<(), String> {
-        std::fs::create_dir_all(&self.dir).map_err(|e| format!("Could not make {}: {e}", self.dir.display()))?;
+        std::fs::create_dir_all(&self.dir).map_err(|e| -> String { tr!(format!("無法建立 {}:{e}", self.dir.display()), format!("Could not make {}: {e}", self.dir.display())) })?;
         let json = serde_json::to_vec_pretty(index).map_err(|e| e.to_string())?;
         let tmp = self.dir.join("index.json.tmp");
-        std::fs::write(&tmp, json).map_err(|e| format!("Could not save the knowledge base: {e}"))?;
-        std::fs::rename(&tmp, self.dir.join(INDEX)).map_err(|e| format!("Could not save the knowledge base: {e}"))
+        let failed = |e: std::io::Error| -> String { tr!(format!("無法儲存知識庫:{e}"), format!("Could not save the knowledge base: {e}")) };
+        std::fs::write(&tmp, json).map_err(failed)?;
+        std::fs::rename(&tmp, self.dir.join(INDEX)).map_err(failed)
     }
 
     /// The folder a document of this visibility lives in.
@@ -457,20 +462,20 @@ impl Kb {
         let name = clean_name(name);
         let size = bytes.len() as u64;
         if size > MAX_FILE {
-            return Err(format!("{name} is larger than {} MB.", MAX_FILE / 1024 / 1024));
+            return Err(format!("{name} is larger than {} MB.", MAX_FILE / 1024 / 1024)); // i18n-ok: kbSaid() in team/knowledge.ts translates it
         }
         let mut index = self.load();
         if index.docs.len() >= MAX_DOCS {
-            return Err(format!("A team keeps at most {MAX_DOCS} documents. Remove one first."));
+            return Err(format!("A team keeps at most {MAX_DOCS} documents. Remove one first.")); // i18n-ok: kbSaid() in team/knowledge.ts translates it
         }
         let (kind, bytes) = classify(bytes);
         let hash = hash_of(&bytes);
         if let Some(same) = index.docs.iter().find(|d| d.hash == hash && d.bytes == bytes.len() as u64) {
-            return Err(format!("{name} is already in the knowledge base, as {}.", same.name));
+            return Err(format!("{name} is already in the knowledge base, as {}.", same.name)); // i18n-ok: kbSaid() in team/knowledge.ts translates it
         }
         let total: u64 = index.docs.iter().map(|d| d.bytes).sum();
         if total + bytes.len() as u64 > MAX_TOTAL {
-            return Err(format!("The knowledge base would be larger than {} MB (it holds {} MB).", MAX_TOTAL / 1024 / 1024, total / 1024 / 1024));
+            return Err(format!("The knowledge base would be larger than {} MB (it holds {} MB).", MAX_TOTAL / 1024 / 1024, total / 1024 / 1024)); // i18n-ok: kbSaid() in team/knowledge.ts translates it
         }
         if kind == DocKind::Text && !force {
             let text = String::from_utf8_lossy(&bytes);
@@ -497,9 +502,10 @@ impl Kb {
             note: String::new(),
         };
         let folder = self.folder(&index, doc.visibility);
-        std::fs::create_dir_all(&folder).map_err(|e| format!("Could not make the knowledge folder: {e}"))?;
-        std::fs::create_dir_all(self.shared_dir()).map_err(|e| format!("Could not make the knowledge folder: {e}"))?;
-        std::fs::write(folder.join(&doc.file), &bytes).map_err(|e| format!("Could not save {name}: {e}"))?;
+        let no_folder = |e: std::io::Error| -> String { tr!(format!("無法建立知識庫資料夾:{e}"), format!("Could not make the knowledge folder: {e}")) };
+        std::fs::create_dir_all(&folder).map_err(no_folder)?;
+        std::fs::create_dir_all(self.shared_dir()).map_err(no_folder)?;
+        std::fs::write(folder.join(&doc.file), &bytes).map_err(|e| -> String { tr!(format!("無法儲存 {name}:{e}"), format!("Could not save {name}: {e}")) })?;
         index.docs.push(doc.clone());
         self.save(&index)?;
         Ok(Added { doc: Some(self.doc_view(&index, &doc)), key_like: None })
@@ -508,7 +514,7 @@ impl Kb {
     /// Who may read it, and the person's line about it.
     pub fn update(&self, id: &str, visibility: Option<Visibility>, note: Option<&str>) -> Result<(Doc, Option<Visibility>), String> {
         let mut index = self.load();
-        let at = index.docs.iter().position(|d| d.id == id).ok_or("There is no such document.")?;
+        let at = index.docs.iter().position(|d| d.id == id).ok_or("There is no such document.")?; // i18n-ok: kbSaid() in team/knowledge.ts translates it
         let mut was = None;
         if let Some(v) = visibility {
             let doc = index.docs[at].clone();
@@ -516,7 +522,7 @@ impl Kb {
                 let from = self.path_of(&index, &doc);
                 let to_dir = self.folder(&index, v);
                 std::fs::create_dir_all(&to_dir).map_err(|e| e.to_string())?;
-                std::fs::rename(&from, to_dir.join(&doc.file)).map_err(|e| format!("Could not move {}: {e}", doc.name))?;
+                std::fs::rename(&from, to_dir.join(&doc.file)).map_err(|e| -> String { tr!(format!("無法搬移 {}:{e}", doc.name), format!("Could not move {}: {e}", doc.name)) })?;
                 was = Some(doc.visibility);
                 index.docs[at].visibility = v;
             }
@@ -531,24 +537,24 @@ impl Kb {
     /// The original copied in again, over the old copy: same id, visibility and note.
     pub fn reimport(&self, id: &str, force: bool) -> Result<Added, String> {
         let mut index = self.load();
-        let at = index.docs.iter().position(|d| d.id == id).ok_or("There is no such document.")?;
+        let at = index.docs.iter().position(|d| d.id == id).ok_or("There is no such document.")?; // i18n-ok: kbSaid() in team/knowledge.ts translates it
         let doc = index.docs[at].clone();
         let source = Path::new(&doc.source);
         if doc.source.is_empty() || !source.is_file() {
-            return Err(format!("The original is no longer at {}.", doc.source));
+            return Err(format!("The original is no longer at {}.", doc.source)); // i18n-ok: kbSaid() in team/knowledge.ts translates it
         }
         let (_, bytes) = read_source(source)?;
         let (kind, bytes) = classify(bytes);
         let total: u64 = index.docs.iter().filter(|d| d.id != id).map(|d| d.bytes).sum();
         if total + bytes.len() as u64 > MAX_TOTAL {
-            return Err(format!("The knowledge base would be larger than {} MB.", MAX_TOTAL / 1024 / 1024));
+            return Err(format!("The knowledge base would be larger than {} MB.", MAX_TOTAL / 1024 / 1024)); // i18n-ok: kbSaid() in team/knowledge.ts translates it
         }
         if kind == DocKind::Text && !force {
             if let Some(hit) = find_key_like(&String::from_utf8_lossy(&bytes)) {
                 return Ok(Added { doc: None, key_like: Some(hit) });
             }
         }
-        std::fs::write(self.path_of(&index, &doc), &bytes).map_err(|e| format!("Could not save {}: {e}", doc.name))?;
+        std::fs::write(self.path_of(&index, &doc), &bytes).map_err(|e| -> String { tr!(format!("無法儲存 {}:{e}", doc.name), format!("Could not save {}: {e}", doc.name)) })?;
         index.docs[at].kind = kind;
         index.docs[at].bytes = bytes.len() as u64;
         index.docs[at].hash = hash_of(&bytes);
@@ -559,13 +565,13 @@ impl Kb {
     /// Takes a document out. Its file is kept in `.removed` for a while.
     pub fn remove(&self, id: &str) -> Result<Doc, String> {
         let mut index = self.load();
-        let at = index.docs.iter().position(|d| d.id == id).ok_or("There is no such document.")?;
+        let at = index.docs.iter().position(|d| d.id == id).ok_or("There is no such document.")?; // i18n-ok: kbSaid() in team/knowledge.ts translates it
         let doc = index.docs.remove(at);
         let from = self.path_of(&index, &doc);
         if from.is_file() {
             let bin = self.dir.join(REMOVED);
             std::fs::create_dir_all(&bin).map_err(|e| e.to_string())?;
-            std::fs::rename(&from, bin.join(format!("{}-{}", now_ms(), doc.file))).map_err(|e| format!("Could not remove {}: {e}", doc.name))?;
+            std::fs::rename(&from, bin.join(format!("{}-{}", now_ms(), doc.file))).map_err(|e| -> String { tr!(format!("無法移除 {}:{e}", doc.name), format!("Could not remove {}: {e}", doc.name)) })?;
         }
         self.save(&index)?;
         Ok(doc)
@@ -616,7 +622,7 @@ impl Kb {
             let to = other.folder(&theirs, doc.visibility);
             std::fs::create_dir_all(&to).map_err(|e| e.to_string())?;
             std::fs::create_dir_all(other.shared_dir()).map_err(|e| e.to_string())?;
-            std::fs::copy(&from, to.join(&doc.file)).map_err(|e| format!("Could not copy {}: {e}", doc.name))?;
+            std::fs::copy(&from, to.join(&doc.file)).map_err(|e| -> String { tr!(format!("無法複製 {}:{e}", doc.name), format!("Could not copy {}: {e}", doc.name)) })?;
             theirs.docs.push(doc);
             copied += 1;
         }
@@ -640,15 +646,15 @@ pub fn stem(name: &str) -> &str {
 /// A file the person picked or dropped: its name and bytes, refused before
 /// reading when it is too large.
 pub fn read_source(path: &Path) -> Result<(String, Vec<u8>), String> {
-    let meta = std::fs::metadata(path).map_err(|e| format!("Could not read {}: {e}", path.display()))?;
+    let meta = std::fs::metadata(path).map_err(|e| format!("Could not read {}: {e}", path.display()))?; // i18n-ok: kbSaid() in team/knowledge.ts translates it
     if !meta.is_file() {
-        return Err(format!("{} is not a file.", path.display()));
+        return Err(format!("{} is not a file.", path.display())); // i18n-ok: kbSaid() in team/knowledge.ts translates it
     }
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     if meta.len() > MAX_FILE {
-        return Err(format!("{name} is larger than {} MB.", MAX_FILE / 1024 / 1024));
+        return Err(format!("{name} is larger than {} MB.", MAX_FILE / 1024 / 1024)); // i18n-ok: kbSaid() in team/knowledge.ts translates it
     }
-    let bytes = std::fs::read(path).map_err(|e| format!("Could not read {name}: {e}"))?;
+    let bytes = std::fs::read(path).map_err(|e| format!("Could not read {name}: {e}"))?; // i18n-ok: kbSaid() in team/knowledge.ts translates it
     Ok((name, bytes))
 }
 
@@ -677,6 +683,7 @@ pub fn size_text(bytes: u64) -> String {
     }
 }
 
+// i18n: model-facing
 fn kind_word(kind: DocKind) -> &'static str {
     match kind {
         DocKind::Text => "text",
@@ -685,11 +692,14 @@ fn kind_word(kind: DocKind) -> &'static str {
     }
 }
 
+// i18n: model-facing
 const LEADER_ONLY: &str = "for you as the leader only — do not copy it into the work folder or pass its contents to teammates; if the user asks you to share it, call `knowledge_share`";
+// i18n: model-facing
 const PROGRAM: &str = " It is a program or script the user stored as reference: do not run it unless the user asks.";
 
 /// One document in a list a member reads: its name, kind, size, who may read
 /// it and the person's note.
+// i18n: model-facing
 fn doc_line(d: &Doc) -> String {
     let who = match d.visibility {
         Visibility::Shared => "shared with the whole team",
@@ -700,6 +710,7 @@ fn doc_line(d: &Doc) -> String {
 }
 
 /// How a member gets at a document that is not in its opening words.
+// i18n: model-facing
 fn reach(kb: &Kb, index: &Index, d: &Doc) -> String {
     match d.kind {
         DocKind::Text => format!("read it with `knowledge_read` (doc \"{}\")", d.id),
@@ -715,6 +726,7 @@ fn reach(kb: &Kb, index: &Index, d: &Doc) -> String {
 /// documents it may read, and the small texts among them in full. Read from
 /// disk each time, so a member that starts again hears what is there now.
 /// Nothing at all when there is nothing for this member.
+// i18n: model-facing
 pub fn brief_text(kb: &Kb, is_leader: bool) -> String {
     let index = kb.load();
     let docs: Vec<&Doc> = visible_to(&index, is_leader).into_iter().filter(|d| kb.path_of(&index, d).is_file()).collect();
@@ -751,6 +763,7 @@ pub fn brief_text(kb: &Kb, is_leader: bool) -> String {
 }
 
 /// Told to the leader when the person adds a document while the team works.
+// i18n: model-facing
 pub fn added_text(d: &Doc) -> String {
     let who = match d.visibility {
         Visibility::Shared => "shared with the whole team",
@@ -760,6 +773,7 @@ pub fn added_text(d: &Doc) -> String {
 }
 
 /// Told to the other members when a document is opened to the team.
+// i18n: model-facing
 pub fn shared_text(d: &Doc) -> String {
     format!("「{}」 is now in the team's knowledge base. Read it with `knowledge_read` (doc \"{}\") if it bears on your work.", d.name, d.id)
 }
@@ -772,6 +786,7 @@ fn content_text(text: String) -> serde_json::Value {
 /// with one, the document — text (in parts when long), the picture itself,
 /// or where any other file is. A document this member may not read is
 /// answered exactly as one that does not exist. Returns MCP content.
+// i18n: model-facing
 pub fn read(kb: &Kb, is_leader: bool, args: &serde_json::Value) -> Result<serde_json::Value, String> {
     let index = kb.load();
     let docs = visible_to(&index, is_leader);

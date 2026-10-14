@@ -1,11 +1,16 @@
 // The words a member is given. A member is another vendor's CLI: all it knows
 // about the team is what these texts say, so they are plain, complete, and
 // say every time which tool reports what.
+//
+// All of it is for a model, in English whatever the person's language; the
+// line saying which language to write to the person in is added where the
+// first-turn brief is put together (orchestrator.rs `next_turns`).
 
 use super::state::{Message, State, Task, TaskStatus};
 use super::{LinkKind, TeamConfig, SYSTEM, YOU};
 
 /// `AI 3 (ai3)` — the name a person reads and the id a tool call needs.
+// i18n: model-facing
 pub fn who(config: &TeamConfig, id: &str) -> String {
     match id {
         YOU => "the user".to_string(),
@@ -17,6 +22,7 @@ pub fn who(config: &TeamConfig, id: &str) -> String {
     }
 }
 
+// i18n: model-facing
 fn roster(config: &TeamConfig, me: &str) -> String {
     config
         .members
@@ -31,6 +37,7 @@ fn roster(config: &TeamConfig, me: &str) -> String {
 }
 
 /// What a member is told once, at the start of its first turn.
+// i18n: model-facing
 pub fn role(config: &TeamConfig, me: &str) -> String {
     let Some(member) = config.member(me) else { return String::new() };
     let is_leader = me == config.leader;
@@ -84,12 +91,13 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
          - When you cannot go on: `task_block` with the reason and who you are waiting for, or `ask_human` if only the user can decide. Then end your turn.\n\
          - To ask or tell a teammate something: `message_send`. `team_status` shows your tasks, the board and any new messages.\n\
          - Then end your turn. You get a new turn when a task, a delivery or a message arrives for you. Do not wait or poll.\n\
-         - Write notes, messages and summaries in the language the user's goal is written in.\n",
+         - Write notes, messages and summaries in the language named on the last line of this brief.\n",
     );
     out
 }
 
 /// The leader's first message.
+// i18n: model-facing
 pub fn kickoff(config: &TeamConfig) -> String {
     format!(
         "The team has started. Plan the work for this goal and create the tasks now:\n{}\nUse `team_status` to see your teammates and `task_create` for each task.",
@@ -98,6 +106,7 @@ pub fn kickoff(config: &TeamConfig) -> String {
 }
 
 /// A task handed to its owner.
+// i18n: model-facing
 pub fn task(state: &State, task: &Task) -> String {
     let config = state.config.as_ref();
     let name = |id: &str| config.map(|c| who(c, id)).unwrap_or_else(|| id.to_string());
@@ -133,6 +142,7 @@ pub fn task(state: &State, task: &Task) -> String {
     out
 }
 
+// i18n: model-facing
 pub fn to_review(config: &TeamConfig, task: &Task, by: &str, locator: &str, summary: &str) -> String {
     let criteria: Vec<String> = task.criteria.iter().enumerate().map(|(i, c)| format!("{}. {}", i + 1, c.text)).collect();
     format!(
@@ -147,6 +157,7 @@ pub fn to_review(config: &TeamConfig, task: &Task, by: &str, locator: &str, summ
     )
 }
 
+// i18n: model-facing
 pub fn as_input(config: &TeamConfig, task: &Task, by: &str, locator: &str, summary: &str) -> String {
     format!(
         "{} handed in {} ({}), which is meant for you: {}\nWhere: {}",
@@ -158,6 +169,7 @@ pub fn as_input(config: &TeamConfig, task: &Task, by: &str, locator: &str, summa
     )
 }
 
+// i18n: model-facing
 pub fn rejected(config: &TeamConfig, task: &Task, by: &str, reason: &str) -> String {
     format!(
         "{} sent {} ({}) back: {}\nFix it, then `deliver` again.",
@@ -169,6 +181,7 @@ pub fn rejected(config: &TeamConfig, task: &Task, by: &str, reason: &str) -> Str
 }
 
 /// A member ended its turn with work still open and nothing said about it.
+// i18n: model-facing
 pub fn nudge(tasks: &[&Task]) -> String {
     let list: Vec<String> = tasks
         .iter()
@@ -180,10 +193,12 @@ pub fn nudge(tasks: &[&Task]) -> String {
     )
 }
 
+// i18n: model-facing
 pub fn nudge_leader_no_tasks() -> String {
     "No task exists yet, so nobody on the team has anything to do. Create the tasks with `task_create` now.".to_string()
 }
 
+// i18n: model-facing
 pub fn wrap_up(state: &State) -> String {
     let handed: Vec<String> = state.deliverables.iter().filter(|d| d.accepted == Some(true)).map(|d| format!("- {}: {} ({})", d.task, d.locator, d.summary)).collect();
     format!(
@@ -193,23 +208,27 @@ pub fn wrap_up(state: &State) -> String {
 }
 
 /// Everything is accepted and nobody works, but the leader has not closed the team.
+// i18n: model-facing
 pub fn finish_reminder() -> String {
     "Every task is accepted and nobody on the team is working. If the user's request is fully handled and you have reported to them, call `team_finish` to close the team. If something is still left, create the tasks for it or say what you are waiting for."
         .to_string()
 }
 
 /// A member's request the constitution refused.
+// i18n: model-facing
 pub fn refused(title: &str, rule: &str) -> String {
     format!("Coucou refused \"{title}\": the user's constitution says {rule}. It will be refused every time — do not try it again. Find another way, or tell the leader (or ask the user with `ask_human`) if the task cannot be done without it.")
 }
 
 /// The leader of a finished team, when the person comes back with more.
+// i18n: model-facing
 pub fn reopened() -> String {
     "The team had finished and you had reported. The user has come back with more — their message follows. If it needs work, plan it: create the tasks with `task_create` and the team carries on; when everything is accepted again you will be asked for a new report. If it is a question, or something you can settle in a word, answer the user with `message_send` (to \"you\"). If you ask teammates for something, wait for their answers before you answer. Once the user's request is fully handled, call `team_finish`."
         .to_string()
 }
 
 /// The start of a turn: everything that arrived for the member since its last.
+// i18n: model-facing
 pub fn turn(config: &TeamConfig, messages: &[&Message]) -> String {
     let mut out = String::new();
     for m in messages {
@@ -228,6 +247,7 @@ pub fn turn(config: &TeamConfig, messages: &[&Message]) -> String {
 
 /// Coucou was closed while the team worked, and is picking it up again: the
 /// member's agent is a new session that remembers nothing.
+// i18n: model-facing
 pub fn revived(open: &[&Task], to_review: &[&Task]) -> String {
     let mut out = "Coucou was closed while the team was working and has now picked the team up again. Your session is a new one: call `team_status` to see where the team stands.".to_string();
     if !open.is_empty() {
@@ -245,6 +265,7 @@ pub fn revived(open: &[&Task], to_review: &[&Task]) -> String {
 }
 
 /// The person added someone to the team while it runs: the leader puts them to work.
+// i18n: model-facing
 pub fn joined(config: &TeamConfig, member: &str) -> String {
     let m = config.members.iter().find(|m| m.id == member);
     let what = m
