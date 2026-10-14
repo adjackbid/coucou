@@ -8,8 +8,13 @@
 // It is called on, never running by itself: one conversation, kept in
 // memory, sent to the chat provider the person picked, with Coucou's office
 // tools (below) as the only tools it has — no files, no shell.
+//
+// The person may attach files to what they ask (for a team's knowledge
+// base). The model hears their names, kinds and sizes, never what is in
+// them; a proposal names them, and only its confirmation copies them in.
 
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -20,7 +25,8 @@ use crate::acp::{AgentProfile, Agents};
 use crate::llm::tools::{self, Call, Tool, Turn};
 use crate::llm::Provider;
 use crate::settings;
-use crate::team::orchestrator::Teams;
+use crate::team::knowledge::{self, DocKind, Kb, KeyLike, Visibility};
+use crate::team::orchestrator::{KnowledgeChange, Teams};
 use crate::team::TeamConfig;
 
 const MAX_ROUNDS: usize = 8;
@@ -43,8 +49,69 @@ pub struct Proposal {
     /// "open", "done", "declined" or "failed".
     pub state: String,
     pub outcome: String,
+    /// The attached files it would put in a knowledge base.
+    pub uses: Vec<String>,
     #[serde(skip)]
     payload: Value,
+}
+
+/// A file the person attached in the conversation, kept until a proposal
+/// that names it is confirmed (or the conversation is cleared).
+#[derive(Debug, Clone)]
+pub struct Upload {
+    /// `u` and four hex digits.
+    pub id: String,
+    pub name: String,
+    /// Its copy in the uploads folder.
+    pub file: PathBuf,
+    /// Where it came from, when it was dropped or picked; empty for a paste.
+    pub origin: String,
+    pub kind: DocKind,
+    pub bytes: u64,
+    /// It looks like it holds a key…
+    pub key_like: Option<KeyLike>,
+    /// …and the person said to keep it anyway.
+    pub force: bool,
+}
+
+/// An attached file, as the window shows it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadView {
+    pub id: String,
+    pub name: String,
+    pub kind: DocKind,
+    pub bytes: u64,
+    pub key_like: Option<KeyLike>,
+    pub force: bool,
+}
+
+impl Upload {
+    pub fn view(&self) -> UploadView {
+        UploadView { id: self.id.clone(), name: self.name.clone(), kind: self.kind, bytes: self.bytes, key_like: self.key_like.clone(), force: self.force }
+    }
+
+    /// May a proposal name it? Not while it waits for the person's word on a key.
+    fn ready(&self) -> bool {
+        self.key_like.is_none() || self.force
+    }
+}
+
+/// One document a proposal puts in a team's knowledge base.
+#[derive(Debug, Clone, Serialize, serde::Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct Item {
+    /// An attached file's id…
+    #[serde(default)]
+    upload: String,
+    /// …or a full path the person wrote.
+    #[serde(default)]
+    path: String,
+    name: String,
+    visibility: Visibility,
+    bytes: u64,
+    /// Looks like it holds a key (for an attached file: the person kept it anyway).
+    key_like: bool,
 }
 
 /// A look-up or a preparation the secretary made on the way to its answer.
@@ -97,29 +164,117 @@ impl Office {
     }
 }
 
-#[derive(Default)]
 pub struct Secretary {
     turns: Mutex<Vec<Turn>>,
     proposals: Mutex<Vec<Proposal>>,
     /// What the person did with proposals since the model last heard, told with their next words.
     notes: Mutex<Vec<String>>,
     busy: AtomicBool,
+    /// Files attached in this conversation, by id.
+    uploads: Mutex<BTreeMap<String, Upload>>,
+    uploads_dir: PathBuf,
+}
+
+impl Default for Secretary {
+    fn default() -> Self {
+        Self::at(settings::secretary_uploads_dir())
+    }
 }
 
 impl Secretary {
+    /// A secretary keeping attached files in `dir`.
+    pub fn at(dir: PathBuf) -> Self {
+        Self { turns: Default::default(), proposals: Default::default(), notes: Default::default(), busy: AtomicBool::new(false), uploads: Default::default(), uploads_dir: dir }
+    }
+
+    /// The one the app runs: files attached in an earlier run belong to a
+    /// conversation that is gone, so they go too.
+    pub fn fresh() -> Self {
+        let me = Self::default();
+        let _ = std::fs::remove_dir_all(&me.uploads_dir);
+        me
+    }
+
     pub fn reset(&self) {
         self.turns.lock().unwrap().clear();
         self.proposals.lock().unwrap().clear();
         self.notes.lock().unwrap().clear();
+        self.uploads.lock().unwrap().clear();
+        let _ = std::fs::remove_dir_all(&self.uploads_dir);
+    }
+
+    /// A file the person attached: kept aside, checked as the knowledge base
+    /// checks a document (its size, its kind, a key in a text).
+    pub fn upload(&self, name: &str, bytes: Vec<u8>, origin: &str) -> Result<UploadView, String> {
+        let name = knowledge::clean_name(name);
+        if bytes.len() as u64 > knowledge::MAX_FILE {
+            return Err(format!("{name} is larger than {} MB.", knowledge::MAX_FILE / 1024 / 1024));
+        }
+        let (kind, kept) = knowledge::classify(bytes);
+        let key_like = if kind == DocKind::Text { knowledge::find_key_like(&String::from_utf8_lossy(&kept)) } else { None };
+        let mut all = self.uploads.lock().unwrap();
+        let id = loop {
+            let id = format!("u{}", knowledge::random_hex(4));
+            if !all.contains_key(&id) {
+                break id;
+            }
+        };
+        std::fs::create_dir_all(&self.uploads_dir).map_err(|e| format!("Could not keep {name}: {e}"))?;
+        let file = self.uploads_dir.join(format!("{id}-{name}"));
+        std::fs::write(&file, &kept).map_err(|e| format!("Could not keep {name}: {e}"))?;
+        let upload = Upload { id: id.clone(), name, file, origin: origin.to_string(), kind, bytes: kept.len() as u64, key_like, force: false };
+        let view = upload.view();
+        all.insert(id, upload);
+        Ok(view)
+    }
+
+    /// The person keeps an attached file that looks like it holds a key.
+    pub fn upload_force(&self, id: &str) -> Result<UploadView, String> {
+        let mut all = self.uploads.lock().unwrap();
+        let u = all.get_mut(id).ok_or("That file is no longer attached.")?;
+        u.force = true;
+        Ok(u.view())
+    }
+
+    /// The person takes an attached file away again.
+    pub fn upload_remove(&self, id: &str) {
+        if let Some(u) = self.uploads.lock().unwrap().remove(id) {
+            let _ = std::fs::remove_file(&u.file);
+        }
+    }
+
+    /// What the model hears of the files attached to a request: names, kinds
+    /// and sizes, never what is in them.
+    fn attached_line(&self, ids: &[String]) -> Option<String> {
+        let all = self.uploads.lock().unwrap();
+        let parts: Vec<String> = ids
+            .iter()
+            .filter_map(|id| all.get(id))
+            .filter(|u| u.ready())
+            .map(|u| {
+                let kind = match u.kind {
+                    DocKind::Text => "text",
+                    DocKind::Image => "image",
+                    DocKind::File => "file",
+                };
+                let key = if u.key_like.is_some() { ", looks like it has a key — the user chose to keep it" } else { "" };
+                format!("{} {} ({kind}, {}{key})", u.id, u.name, knowledge::size_text(u.bytes))
+            })
+            .collect();
+        (!parts.is_empty()).then(|| format!("[Files the user attached: {}]", parts.join("; ")))
     }
 
     /// One request from the person: the secretary looks things up and
-    /// prepares what is asked, then answers.
-    pub async fn ask(&self, provider: &Provider, office: &Office, text: &str, on_step: &(dyn Fn(&Step) + Send + Sync)) -> Result<Reply, String> {
+    /// prepares what is asked, then answers. `uploads`: the files attached to it.
+    pub async fn ask(&self, provider: &Provider, office: &Office, text: &str, uploads: &[String], on_step: &(dyn Fn(&Step) + Send + Sync)) -> Result<Reply, String> {
         if self.busy.swap(true, Ordering::SeqCst) {
             return Err("The secretary is still on the last request.".into());
         }
-        let result = self.run(provider, office, text, on_step).await;
+        let text = match self.attached_line(uploads) {
+            Some(line) => format!("{text}\n\n{line}"),
+            None => text.to_string(),
+        };
+        let result = self.run(provider, office, &text, on_step).await;
         self.busy.store(false, Ordering::SeqCst);
         result
     }
@@ -226,14 +381,22 @@ impl Secretary {
         if p.state != "open" {
             return Err("That proposal was already dealt with.".into());
         }
+        let uploads = self.uploads.lock().unwrap().clone();
         let done = match p.kind.as_str() {
-            "team" => create_team(&p.payload, office, create_folder).await,
+            "team" => create_team(&p.payload, office, create_folder, &uploads).await,
+            "knowledge" => add_knowledge(&p.payload, office, &uploads),
             "instruction" => instruct(&p.payload, office),
             "action" => act(&p.payload, office, create_folder).await,
             _ => Err("Unknown proposal.".into()),
         };
         match done {
-            Ok(outcome) => Ok(self.settle(id, "done", &outcome).unwrap()),
+            Ok(outcome) => {
+                // Copied in: the attached files have done their part.
+                for used in &p.uses {
+                    self.upload_remove(used);
+                }
+                Ok(self.settle(id, "done", &outcome).unwrap())
+            }
             Err(err) => {
                 self.settle(id, "failed", &err);
                 Err(err)
@@ -259,12 +422,14 @@ impl Secretary {
             "propose_team" => self.propose_team(a, office).map(Called::Proposed),
             "propose_instruction" => self.propose_instruction(a, office).map(Called::Proposed),
             "propose_team_action" => self.propose_action(a, office).map(Called::Proposed),
+            "propose_knowledge" => self.propose_knowledge(a, office).map(Called::Proposed),
             other => Err(format!("There is no tool '{other}'.")),
         }
     }
 
     fn add(&self, kind: &str, title: String, lines: Vec<String>, confirm: &str, payload: Value) -> Proposal {
         let mut all = self.proposals.lock().unwrap();
+        let uses = payload["knowledge"].as_array().into_iter().flatten().filter_map(|k| k["upload"].as_str()).filter(|u| !u.is_empty()).map(str::to_string).collect();
         let p = Proposal {
             id: format!("P-{}", all.len() + 1),
             kind: kind.into(),
@@ -273,6 +438,7 @@ impl Secretary {
             confirm: confirm.into(),
             state: "open".into(),
             outcome: String::new(),
+            uses,
             payload,
         };
         all.push(p.clone());
@@ -318,6 +484,15 @@ impl Secretary {
             .to_string();
         let scope: Vec<String> = a.get("scope").and_then(Value::as_array).map(|s| s.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
         let start = a.get("start").and_then(Value::as_bool).unwrap_or(true);
+        let items = self.knowledge_items(a)?;
+        let from = match text(a, "knowledge_from") {
+            Some(given) => {
+                let (from_id, from_config) = find_team(office, &given)?;
+                let count = office.teams.kb(&from_id).load().docs.len();
+                Some((from_id, from_config.name, count))
+            }
+            None => None,
+        };
         let config = json!({
             "id": "draft",
             "name": name,
@@ -339,12 +514,70 @@ impl Secretary {
             Folder::Blocked(why) => format!("({why})"),
         };
         lines.push(format!("工作資料夾:{work_dir}{note}"));
+        lines.extend(knowledge_lines(&items, from.as_ref().map(|(_, name, n)| (name.as_str(), *n))));
         for m in &draft.members {
             let model = if m.model.trim().is_empty() { "代理預設".to_string() } else { m.model.clone() };
             lines.push(format!("{}{} · {} · {} / {}{}", m.name, if m.id == draft.leader { "(Leader)" } else { "" }, if m.role.is_empty() { "—" } else { &m.role }, m.agent, model, if m.duty.is_empty() { String::new() } else { format!(" — {}", m.duty) }));
         }
         let confirm = if start { "建立並啟動" } else { "建立團隊" };
-        Ok(self.add("team", format!("新團隊「{}」", draft.name), lines, confirm, json!({ "config": config, "start": start })))
+        let knowledge = serde_json::to_value(&items).map_err(|e| e.to_string())?;
+        let from = from.map(|(id, _, _)| id).unwrap_or_default();
+        Ok(self.add("team", format!("新團隊「{}」", draft.name), lines, confirm, json!({ "config": config, "start": start, "knowledge": knowledge, "knowledgeFrom": from })))
+    }
+
+    /// The documents a proposal names, checked now so the card is honest:
+    /// attached files of this conversation, or full paths the person wrote.
+    fn knowledge_items(&self, a: &Value) -> Result<Vec<Item>, String> {
+        let Some(list) = a.get("knowledge").and_then(Value::as_array) else { return Ok(Vec::new()) };
+        let uploads = self.uploads.lock().unwrap();
+        let attached = || {
+            let ids: Vec<&str> = uploads.values().filter(|u| u.ready()).map(|u| u.id.as_str()).collect();
+            if ids.is_empty() { "none".to_string() } else { ids.join(", ") }
+        };
+        let mut out = Vec::new();
+        for (i, k) in list.iter().enumerate() {
+            let n = i + 1;
+            let visibility = if text(k, "visibility").as_deref() == Some("shared") { Visibility::Shared } else { Visibility::Leader };
+            let item = match (text(k, "upload"), text(k, "path")) {
+                (Some(id), None) => {
+                    let u = uploads.get(&id).filter(|u| u.ready()).ok_or_else(|| format!("Document {n}: there is no attached file '{id}'. Attached: {}.", attached()))?;
+                    Item { upload: id, path: String::new(), name: u.name.clone(), visibility, bytes: u.bytes, key_like: u.key_like.is_some() }
+                }
+                (None, Some(path)) => {
+                    if !Path::new(&path).is_absolute() {
+                        return Err(format!("Document {n}: '{path}' is not a full path. Use only paths the user wrote in full, or files they attached."));
+                    }
+                    let (name, bytes) = knowledge::read_source(Path::new(&path))?;
+                    let (kind, kept) = knowledge::classify(bytes);
+                    let key_like = kind == DocKind::Text && knowledge::find_key_like(&String::from_utf8_lossy(&kept)).is_some();
+                    Item { upload: String::new(), path, name, visibility, bytes: kept.len() as u64, key_like }
+                }
+                _ => return Err(format!("Document {n}: give either upload (an attached file's id) or path.")),
+            };
+            out.push(item);
+        }
+        if out.len() > knowledge::MAX_DOCS {
+            return Err(format!("A team keeps at most {} documents.", knowledge::MAX_DOCS));
+        }
+        if out.iter().map(|d| d.bytes).sum::<u64>() > knowledge::MAX_TOTAL {
+            return Err(format!("The documents come to more than {} MB.", knowledge::MAX_TOTAL / 1024 / 1024));
+        }
+        Ok(out)
+    }
+
+    /// Documents for a team that already exists.
+    fn propose_knowledge(&self, a: &Value, office: &Office) -> Result<Proposal, String> {
+        let (id, config) = find_team(office, &need(a, "team")?)?;
+        let items = self.knowledge_items(a)?;
+        if items.is_empty() {
+            return Err("knowledge is required: at least one document (an attached file or a full path).".into());
+        }
+        let mut lines = knowledge_lines(&items, None);
+        if office.teams.is_live(&id) {
+            lines.push("團隊執行中:加入後會通知 Leader;共享的文件也會通知其他成員。".into());
+        }
+        let knowledge = serde_json::to_value(&items).map_err(|e| e.to_string())?;
+        Ok(self.add("knowledge", format!("加入「{}」的知識庫", config.name), lines, "加入知識庫", json!({ "team": id, "knowledge": knowledge })))
     }
 
     fn propose_instruction(&self, a: &Value, office: &Office) -> Result<Proposal, String> {
@@ -393,6 +626,100 @@ impl Secretary {
 enum Called {
     Text(String),
     Proposed(Proposal),
+}
+
+/// The card's lines about a knowledge base: each document and who may read
+/// it, and the team whose documents come along.
+fn knowledge_lines(items: &[Item], from: Option<(&str, usize)>) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some((name, count)) = from {
+        out.push(format!("知識庫:沿用「{name}」的 {count} 份文件"));
+    }
+    if !items.is_empty() {
+        let docs: Vec<String> = items
+            .iter()
+            .map(|d| {
+                let who = if d.visibility == Visibility::Shared { "團隊共享" } else { "只有 Leader" };
+                let key = if d.key_like { " ⚠ 疑似含金鑰" } else { "" };
+                format!("{}({who}{key})", d.name)
+            })
+            .collect();
+        out.push(format!("知識庫:{}", docs.join("、")));
+    }
+    out
+}
+
+/// Copies a proposal's documents into a knowledge base: attached files from
+/// the uploads folder, paths from where they are. Each goes in or says why
+/// not; a text found to hold a key by its path is left out (an attached one
+/// the person already kept). Returns the documents added and what failed.
+fn fill_knowledge(kb: &Kb, items: &[Item], uploads: &BTreeMap<String, Upload>) -> (Vec<String>, Vec<String>) {
+    let mut added = Vec::new();
+    let mut failed = Vec::new();
+    for item in items {
+        let got = if item.upload.is_empty() {
+            knowledge::read_source(Path::new(&item.path)).map(|(_, bytes)| (bytes, item.path.clone(), false))
+        } else {
+            match uploads.get(&item.upload) {
+                Some(u) => std::fs::read(&u.file).map(|bytes| (bytes, u.origin.clone(), u.force)).map_err(|e| format!("Could not read {}: {e}", u.name)),
+                None => Err("the attached file is no longer there".to_string()),
+            }
+        };
+        let (bytes, source, force) = match got {
+            Ok(x) => x,
+            Err(err) => {
+                failed.push(format!("{}:{err}", item.name));
+                continue;
+            }
+        };
+        match kb.add(&item.name, bytes, &source, force) {
+            Ok(knowledge::Added { doc: Some(doc), .. }) => {
+                if item.visibility == Visibility::Shared {
+                    if let Err(err) = kb.update(&doc.id, Some(Visibility::Shared), None) {
+                        failed.push(format!("{}:沒能設成團隊共享({err})", item.name));
+                    }
+                }
+                added.push(doc.id);
+            }
+            Ok(_) => failed.push(format!("{} 看起來含有金鑰,沒有加入;請在團隊設定裡確認後手動加入", item.name)),
+            Err(err) => failed.push(format!("{}:{err}", item.name)),
+        }
+    }
+    (added, failed)
+}
+
+fn items_of(payload: &Value) -> Vec<Item> {
+    serde_json::from_value(payload["knowledge"].clone()).unwrap_or_default()
+}
+
+/// What happened to the documents, for the card and the model.
+fn knowledge_outcome(added: usize, failed: &[String]) -> String {
+    let mut out = if added > 0 { format!("{added} document(s) were put in its knowledge base") } else { String::new() };
+    if !failed.is_empty() {
+        if !out.is_empty() {
+            out.push_str("; ");
+        }
+        out.push_str(&format!("not added: {}", failed.join(";")));
+    }
+    out
+}
+
+/// A confirmed propose_knowledge: the documents go in, and a running team
+/// hears of them as if the person had added them in its setup.
+fn add_knowledge(payload: &Value, office: &Office, uploads: &BTreeMap<String, Upload>) -> Result<String, String> {
+    let team = s(payload, "team");
+    if !crate::team::is_plain_id(team) {
+        return Err("There is no such team.".into());
+    }
+    let (added, failed) = fill_knowledge(&office.teams.kb(team), &items_of(payload), uploads);
+    for doc in &added {
+        office.teams.knowledge_changed(team, KnowledgeChange::Added { doc: doc.clone() });
+    }
+    crate::log::line(format!("secretary: {} document(s) added to team {team}'s knowledge base, {} not", added.len(), failed.len()));
+    if added.is_empty() {
+        return Err(knowledge_outcome(0, &failed));
+    }
+    Ok(knowledge_outcome(added.len(), &failed))
 }
 
 fn need(a: &Value, key: &str) -> Result<String, String> {
@@ -528,6 +855,12 @@ fn team_detail(office: &Office, given: &str) -> Result<String, String> {
         format!("Team {} (id {}). Goal: {}", c.name, id, c.goal),
         format!("Work folder: {}. Leader: {}.", c.work_dir, c.leader),
     ];
+    // Its knowledge base by name and who may read each: never what is in them.
+    let docs = office.teams.kb(&id).load().docs;
+    if !docs.is_empty() {
+        let list: Vec<String> = docs.iter().map(|d| format!("{} ({})", d.name, if d.visibility == Visibility::Shared { "shared" } else { "leader only" })).collect();
+        out.push(format!("Knowledge base: {}.", list.join(", ")));
+    }
     let Some(p) = picture(office, &id) else {
         out.push("Never started. Members:".into());
         for m in &c.members {
@@ -850,7 +1183,7 @@ fn folder_error(dir: &str, e: &std::io::Error, creating: bool) -> String {
     }
 }
 
-async fn create_team(payload: &Value, office: &Office, create_folder: bool) -> Result<String, String> {
+async fn create_team(payload: &Value, office: &Office, create_folder: bool, uploads: &BTreeMap<String, Upload>) -> Result<String, String> {
     let dir = settings::team_configs_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let id = (1..1000)
@@ -868,11 +1201,26 @@ async fn create_team(payload: &Value, office: &Office, create_folder: bool) -> R
     let file = format!("{id}.json");
     std::fs::write(dir.join(&file), serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?).map_err(|e| format!("Could not save {file}: {e}"))?;
     crate::log::line(format!("secretary: created team {id}"));
+    // Its documents, before it starts: the members hear of them in their opening words.
+    let kb = office.teams.kb(&id);
+    let mut docs = String::new();
+    let from = s(payload, "knowledgeFrom");
+    if crate::team::is_plain_id(from) {
+        match office.teams.kb(from).copy_to(&kb) {
+            Ok(n) => docs.push_str(&format!("; {n} document(s) were copied from team {from}")),
+            Err(err) => docs.push_str(&format!("; the documents of team {from} were not copied: {err}")),
+        }
+    }
+    let (added, failed) = fill_knowledge(&kb, &items_of(payload), uploads);
+    let more = knowledge_outcome(added.len(), &failed);
+    if !more.is_empty() {
+        docs.push_str(&format!("; {more}"));
+    }
     if payload["start"].as_bool() == Some(true) {
         start(&config, office)?;
-        Ok(format!("team {} (id {id}) was created and started", config.name))
+        Ok(format!("team {} (id {id}) was created and started{docs}", config.name))
     } else {
-        Ok(format!("team {} (id {id}) was created, not started", config.name))
+        Ok(format!("team {} (id {id}) was created, not started{docs}", config.name))
     }
 }
 
@@ -933,6 +1281,7 @@ How you work:\n\
 - You cannot change anything yourself. To get something done (a new team, an instruction to a team, starting, pausing, resuming, stopping or archiving a team) you prepare it with a propose_* tool: it appears on the user's screen as a card, and it happens only if they click it. Never say something was done unless a [Coucou] note says the user confirmed it.\n\
 - Prefer one proposal that does what was asked. Ask a short question first only when something essential is missing, such as the work folder for a new team.\n\
 - For a new team: pick agents and models from list_agents (agent_models lists what an agent offers); give the leader the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
+- A team has a knowledge base: documents (design notes, specs, pictures, any file) its members work from. When the user attaches files or mentions design documents, specs or reference material for a team, put them in `knowledge` (propose_team for a new team, propose_knowledge for one that exists): attached files by their id (u…), or full paths the user wrote — never a path you guessed. Each is for the leader only unless the user says the whole team should see it (then visibility \"shared\"). You only see the files' names, never what is in them.\n\
 - Answer in the user's language (Traditional Chinese when they write Chinese), short and concrete: a few lines or a short list. Point out anything waiting for the user (permission cards, questions) first.\n\
 \n\
 Now: {} (the user's local time).",
@@ -956,6 +1305,15 @@ fn describe() -> Vec<Tool> {
         parameters: json!({ "type": "object", "properties": properties, "required": required }),
     };
     let team = json!({ "type": "string", "description": "The team's id or name." });
+    let knowledge = json!({
+        "type": "array",
+        "description": "Documents for the team's knowledge base: files the user attached (their id, e.g. u1a2b) or full paths the user wrote. visibility: \"leader\" (the default) or \"shared\" — shared only when the user said the whole team may see it.",
+        "items": { "type": "object", "properties": {
+            "upload": { "type": "string", "description": "An attached file's id." },
+            "path": { "type": "string", "description": "A full path the user wrote." },
+            "visibility": { "type": "string", "enum": ["leader", "shared"] },
+        } },
+    });
     vec![
         tool("list_teams", "Lists the teams: status, progress, turns, when they ran, and anything waiting for the user.", json!({ "include_archived": { "type": "boolean" } }), &[]),
         tool("team_detail", "One team in detail: members (agent, model, status, what they are on or waiting for, tokens), tasks, open questions, what was handed in.", json!({ "team": team }), &["team"]),
@@ -984,8 +1342,16 @@ fn describe() -> Vec<Tool> {
                 }, "required": ["name", "role", "agent"] } },
                 "leader": { "type": "string", "description": "The leader's name; the first member if empty." },
                 "start": { "type": "boolean", "description": "Start it as soon as it is created (default true)." },
+                "knowledge": knowledge.clone(),
+                "knowledge_from": { "type": "string", "description": "Another team (id or name) whose knowledge base the new team starts with, each document as it was shared." },
             }),
             &["name", "goal", "work_dir", "members"],
+        ),
+        tool(
+            "propose_knowledge",
+            "Prepares adding documents to an existing team's knowledge base, for the user to confirm. A running team's leader is told of them.",
+            json!({ "team": team, "knowledge": knowledge }),
+            &["team", "knowledge"],
         ),
         tool(
             "propose_instruction",
@@ -1029,6 +1395,7 @@ fn label(call: &Call, office: &Office) -> String {
         "propose_team" => format!("擬好新團隊「{}」", text(a, "name").unwrap_or_default()),
         "propose_instruction" => format!("擬好給「{}」的指令", team()),
         "propose_team_action" => format!("擬好「{}」的操作", team()),
+        "propose_knowledge" => format!("擬好「{}」的知識庫文件", team()),
         other => other.to_string(),
     }
 }
@@ -1071,12 +1438,109 @@ mod tests {
     #[test]
     fn the_tools_are_described_for_every_wire() {
         let tools = describe();
-        assert_eq!(tools.len(), 10);
+        assert_eq!(tools.len(), 11);
         for t in &tools {
             assert_eq!(t.parameters["type"], "object");
             assert!(t.description.len() > 20);
         }
-        assert!(tools.iter().filter(|t| t.name.starts_with("propose_")).count() == 3);
+        assert!(tools.iter().filter(|t| t.name.starts_with("propose_")).count() == 4);
+    }
+
+    fn uploads_in(name: &str) -> (Secretary, std::path::PathBuf) {
+        let base = std::env::temp_dir().join(format!("coucou-sec-uploads-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        (Secretary::at(base.join("uploads")), base)
+    }
+
+    #[test]
+    fn attached_files_are_kept_aside_and_the_model_hears_only_their_names() {
+        let (sec, base) = uploads_in("names");
+        let brand = sec.upload("品牌指南.md", "主色:藍".as_bytes().to_vec(), r"D:\Docs\品牌指南.md").unwrap();
+        let pic = sec.upload("首頁.png", b"\x89PNG\r\n\x1a\nxx".to_vec(), "").unwrap();
+        let env = sec.upload("env.md", b"OPENAI=sk-proj-abcdefghijklmnopqrstuvwx".to_vec(), "").unwrap();
+        assert_eq!((brand.kind, pic.kind), (DocKind::Text, DocKind::Image));
+        assert!(env.key_like.is_some() && !env.force);
+
+        let ids = vec![brand.id.clone(), pic.id.clone(), env.id.clone(), "u0000".into()];
+        let line = sec.attached_line(&ids).unwrap();
+        assert!(line.contains(&format!("{} 品牌指南.md (text, 1 KB)", brand.id)) && line.contains(&format!("{} 首頁.png (image", pic.id)));
+        // Nothing of what is in them, and not the one still waiting for the person's word on a key.
+        assert!(!line.contains("主色") && !line.contains("env.md"));
+        sec.upload_force(&env.id).unwrap();
+        assert!(sec.attached_line(&ids).unwrap().contains("env.md (text, 1 KB, looks like it has a key — the user chose to keep it)"));
+
+        sec.upload_remove(&pic.id);
+        assert!(!sec.attached_line(&ids).unwrap().contains("首頁.png"));
+        assert_eq!(std::fs::read_dir(base.join("uploads")).unwrap().count(), 2);
+        sec.reset();
+        assert!(!base.join("uploads").exists());
+        assert!(sec.attached_line(&ids).is_none());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_proposal_names_only_attached_files_and_full_paths_and_says_who_may_read_them() {
+        let (sec, base) = uploads_in("items");
+        let brand = sec.upload("品牌指南.md", b"blue".to_vec(), "").unwrap();
+        let env = sec.upload("env.md", b"OPENAI=sk-proj-abcdefghijklmnopqrstuvwx".to_vec(), "").unwrap();
+        std::fs::create_dir_all(&base).unwrap();
+        let spec = base.join("spec.md");
+        std::fs::write(&spec, b"# spec").unwrap();
+
+        let items = sec
+            .knowledge_items(&json!({ "knowledge": [
+                { "upload": brand.id, "visibility": "shared" },
+                { "path": spec.to_string_lossy() },
+            ] }))
+            .unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!((items[0].visibility, items[1].visibility), (Visibility::Shared, Visibility::Leader));
+        assert_eq!(knowledge_lines(&items, Some(("購物網站", 3))), vec!["知識庫:沿用「購物網站」的 3 份文件".to_string(), "知識庫:品牌指南.md(團隊共享)、spec.md(只有 Leader)".to_string()]);
+
+        for bad in [
+            json!({ "knowledge": [{ "upload": "u9999" }] }),
+            json!({ "knowledge": [{ "upload": env.id }] }),
+            json!({ "knowledge": [{ "path": "spec.md" }] }),
+            json!({ "knowledge": [{ "path": base.join("gone.md").to_string_lossy() }] }),
+            json!({ "knowledge": [{}] }),
+        ] {
+            assert!(sec.knowledge_items(&bad).is_err(), "{bad}");
+        }
+        sec.upload_force(&env.id).unwrap();
+        let kept = sec.knowledge_items(&json!({ "knowledge": [{ "upload": env.id }] })).unwrap();
+        assert!(kept[0].key_like);
+        assert!(knowledge_lines(&kept, None)[0].contains("⚠ 疑似含金鑰"));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_confirmed_proposal_copies_its_documents_in() {
+        let (sec, base) = uploads_in("fill");
+        let brand = sec.upload("品牌指南.md", b"blue".to_vec(), r"D:\Docs\品牌指南.md").unwrap();
+        let env = sec.upload("env.md", b"OPENAI=sk-proj-abcdefghijklmnopqrstuvwx".to_vec(), "").unwrap();
+        sec.upload_force(&env.id).unwrap();
+        std::fs::create_dir_all(&base).unwrap();
+        let leaked = base.join("leaked.md");
+        std::fs::write(&leaked, b"password = hunter2hunter2").unwrap();
+        let items = sec
+            .knowledge_items(&json!({ "knowledge": [
+                { "upload": brand.id, "visibility": "shared" },
+                { "upload": env.id },
+                { "path": leaked.to_string_lossy() },
+            ] }))
+            .unwrap();
+
+        let kb = Kb::at(base.join("kb"));
+        let uploads = sec.uploads.lock().unwrap().clone();
+        let (added, failed) = fill_knowledge(&kb, &items, &uploads);
+        assert_eq!(added.len(), 2);
+        assert_eq!(failed, vec!["leaked.md 看起來含有金鑰,沒有加入;請在團隊設定裡確認後手動加入".to_string()]);
+        let index = kb.load();
+        let brand_doc = index.docs.iter().find(|d| d.name == "品牌指南.md").unwrap();
+        assert_eq!((brand_doc.visibility, brand_doc.source.as_str()), (Visibility::Shared, r"D:\Docs\品牌指南.md"));
+        assert_eq!(index.docs.iter().find(|d| d.name == "env.md").unwrap().visibility, Visibility::Leader);
+        assert_eq!(knowledge_outcome(added.len(), &failed), "2 document(s) were put in its knowledge base; not added: leaked.md 看起來含有金鑰,沒有加入;請在團隊設定裡確認後手動加入");
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
@@ -1111,7 +1575,7 @@ mod tests {
             let office = Office::new(teams, &settings.agents, driver, 480, String::new());
             let secretary = Secretary::default();
             let step = |s: &Step| eprintln!("  step: {} ({})", s.label, s.tool);
-            let reply = secretary.ask(&provider, &office, "幫我分析「購物網站 DEMO」這 30 天的成本:為什麼這麼高?怎麼優化?", &step).await.expect("an answer");
+            let reply = secretary.ask(&provider, &office, "幫我分析「購物網站 DEMO」這 30 天的成本:為什麼這麼高?怎麼優化?", &[], &step).await.expect("an answer");
             eprintln!("\n{}", reply.text);
             assert!(reply.steps.iter().any(|s| s.tool == "cost_analysis"));
         });
@@ -1135,12 +1599,12 @@ mod tests {
             let secretary = Secretary::default();
             let step = |s: &Step| eprintln!("  step: {} ({})", s.label, s.tool);
 
-            let first = secretary.ask(&provider, &office, "各團隊現在的狀況如何?有沒有在等我處理的?", &step).await.expect("an answer");
+            let first = secretary.ask(&provider, &office, "各團隊現在的狀況如何?有沒有在等我處理的?", &[], &step).await.expect("an answer");
             eprintln!("Q1 → {}\n", first.text);
             assert!(first.steps.iter().any(|s| s.tool == "list_teams" || s.tool == "team_detail"));
 
             let second = secretary
-                .ask(&provider, &office, r"幫我開一個新團隊:在 D:\Temp\coucou-secretary-check 做一個顯示 Hello 的單頁網頁。兩個成員都用 cg2,隊長用 glm-5.3-flash,另一位用 deepseek-v4-flash。先不要啟動。", &step)
+                .ask(&provider, &office, r"幫我開一個新團隊:在 D:\Temp\coucou-secretary-check 做一個顯示 Hello 的單頁網頁。兩個成員都用 cg2,隊長用 glm-5.3-flash,另一位用 deepseek-v4-flash。先不要啟動。", &[], &step)
                 .await
                 .expect("an answer");
             eprintln!("Q2 → {}", second.text);

@@ -1215,6 +1215,7 @@ async fn secretary_ask(
     provider: Option<String>,
     tz_minutes: i64,
     name: Option<String>,
+    uploads: Option<Vec<String>>,
 ) -> Result<secretary::Reply, String> {
     let (provider, profiles) = {
         let settings = shared.settings.lock().unwrap();
@@ -1232,7 +1233,7 @@ async fn secretary_ask(
     let office = secretary::Office::new(teams.inner().clone(), &profiles, agents.inner().clone(), tz_minutes, name.unwrap_or_default());
     let window = app.clone();
     secretary
-        .ask(&provider, &office, &text, &move |step| {
+        .ask(&provider, &office, &text, &uploads.unwrap_or_default(), &move |step| {
             let _ = window.emit_to("team", "secretary-step", step.clone());
         })
         .await
@@ -1241,6 +1242,7 @@ async fn secretary_ask(
 /// The person clicked 確認 on one of the secretary's proposals — the only way any of them happens.
 #[tauri::command]
 async fn secretary_confirm(
+    app: AppHandle,
     shared: State<'_, Shared>,
     teams: State<'_, Arc<Teams>>,
     agents: State<'_, Arc<Agents>>,
@@ -1251,7 +1253,38 @@ async fn secretary_confirm(
 ) -> Result<secretary::Proposal, String> {
     let profiles = shared.settings.lock().unwrap().agents.clone();
     let office = secretary::Office::new(teams.inner().clone(), &profiles, agents.inner().clone(), tz_minutes, String::new());
-    secretary.confirm(&id, &office, create_folder.unwrap_or(false)).await
+    let done = secretary.confirm(&id, &office, create_folder.unwrap_or(false)).await;
+    // A new team or new documents: the window reads every knowledge base again.
+    if done.as_ref().is_ok_and(|p| p.kind == "team" || p.kind == "knowledge") {
+        let _ = app.emit_to("team", "team-knowledge-changed", serde_json::json!({ "team": "*" }));
+    }
+    done
+}
+
+/// A file attached in the secretary's conversation, by its path (picked or dropped).
+#[tauri::command]
+fn secretary_upload_path(secretary: State<Arc<secretary::Secretary>>, path: String) -> Result<secretary::UploadView, String> {
+    let (name, bytes) = knowledge::read_source(std::path::Path::new(&path))?;
+    secretary.upload(&name, bytes, &path)
+}
+
+/// The same from its bytes (a paste); the file name (URL-encoded) in a header.
+#[tauri::command]
+fn secretary_upload_bytes(secretary: State<Arc<secretary::Secretary>>, request: tauri::ipc::Request<'_>) -> Result<secretary::UploadView, String> {
+    let name = request.headers().get("x-file-name").and_then(|v| v.to_str().ok()).map(percent_decode).unwrap_or_else(|| "image.png".into());
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Err("expected the file's bytes".into()) };
+    secretary.upload(&name, bytes.clone(), "")
+}
+
+/// The person keeps an attached file that looks like it holds a key.
+#[tauri::command]
+fn secretary_upload_force(secretary: State<Arc<secretary::Secretary>>, id: String) -> Result<secretary::UploadView, String> {
+    secretary.upload_force(&id)
+}
+
+#[tauri::command]
+fn secretary_upload_remove(secretary: State<Arc<secretary::Secretary>>, id: String) {
+    secretary.upload_remove(&id);
 }
 
 /// Before confirming: the work folder proposal `id` needs that does not exist
@@ -1726,7 +1759,7 @@ pub fn run() {
         .manage(explain::Asked::default())
         .manage(Chat::default())
         .manage(agents.clone())
-        .manage(Arc::new(secretary::Secretary::default()))
+        .manage(Arc::new(secretary::Secretary::fresh()))
         .invoke_handler(tauri::generate_handler![
             boot,
             save_settings,
@@ -1814,6 +1847,10 @@ pub fn run() {
             cli_check_official,
             cli_run_install,
             secretary_decline,
+            secretary_upload_path,
+            secretary_upload_bytes,
+            secretary_upload_force,
+            secretary_upload_remove,
             secretary_reset,
             team_past,
             team_open_configs,

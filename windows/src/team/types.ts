@@ -383,12 +383,26 @@ export interface KnowledgeAdded {
 /** Something the secretary prepared; it happens only when the person clicks `confirm`. */
 export interface SecretaryProposal {
   id: string;
-  kind: "team" | "instruction" | "action";
+  kind: "team" | "instruction" | "action" | "knowledge";
   title: string;
   lines: string[];
   confirm: string;
   state: "open" | "done" | "declined" | "failed";
   outcome: string;
+  /** The attached files it would put in a knowledge base. */
+  uses?: string[];
+}
+
+/** A file attached in the secretary's conversation (secretary.rs UploadView). */
+export interface SecretaryUpload {
+  id: string;
+  name: string;
+  kind: KnowledgeKind;
+  bytes: number;
+  /** It looks like it holds a key… */
+  keyLike: { line: number; sample: string } | null;
+  /** …and the person said to keep it. */
+  force: boolean;
 }
 
 export interface SecretaryReply {

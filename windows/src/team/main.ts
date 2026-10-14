@@ -21,7 +21,7 @@ import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
 import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCompanyFps, type Tempo } from "./office/battle/session";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
-import { onStep as secretaryStep, secretaryName, secretaryPage, secretaryTitle, setSecretaryName, type SecretaryHost } from "./secretary";
+import { onStep as secretaryStep, secretaryAttachPaths, secretaryName, secretaryPage, secretaryTitle, setSecretaryName, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
 import { agentLabel, agentSource, agentsPage, baseOf, loadTeamAgents, sourceSwitch, teamAgents, teamProfiles, type AgentsHost } from "./agents";
@@ -1906,6 +1906,10 @@ async function start() {
       if (e.type === "enter" || e.type === "over") setDragging(true, knowledgeHost);
       else setDragging(false, knowledgeHost);
       if (e.type === "drop" && e.paths?.length) void addKnowledge(team, e.paths, knowledgeHost);
+      return;
+    }
+    if (target === "secretary") {
+      if (e.type === "drop" && e.paths?.length) void secretaryAttachPaths(e.paths, secretaryHost);
       return;
     }
     if (e.type !== "drop" || !e.paths?.length || target !== "attachment") return;

@@ -11,7 +11,8 @@ import "./secretary.css";
 import { Bridge, IS_TAURI } from "../core/bridge";
 import { h } from "../views/dom";
 import { dropdown, editableText } from "./ui";
-import type { SecretaryProposal, SecretaryReply, SecretaryStep } from "./types";
+import { kbSaid, sizeText } from "./knowledge";
+import type { SecretaryProposal, SecretaryReply, SecretaryStep, SecretaryUpload } from "./types";
 
 export interface SecretaryHost {
   render(): void;
@@ -26,6 +27,101 @@ interface Entry {
   text: string;
   steps?: SecretaryStep[];
   proposals?: SecretaryProposal[];
+  /** The files attached to what the person asked. */
+  files?: SecretaryUpload[];
+  /** Files attached to the question this answers that no card of it uses. */
+  unused?: SecretaryUpload[];
+}
+
+/** Files going with the next request. */
+let pending: SecretaryUpload[] = [];
+/** Attached files that look like they hold a key, waiting for the person's word. */
+let heldKey: SecretaryUpload[] = [];
+/** What went wrong attaching files, until the next attachment. */
+let uploadProblems: string[] = [];
+
+/** The files of `sent` that none of the answer's cards puts anywhere. */
+export function unusedUploads(sent: SecretaryUpload[], proposals: SecretaryProposal[]): SecretaryUpload[] {
+  return sent.filter((f) => !proposals.some((p) => p.uses?.includes(f.id)));
+}
+
+/** A file attached in the browser preview, where nothing is kept. */
+function demoUpload(name: string, bytes: number): SecretaryUpload {
+  const ext = name.toLowerCase().split(".").pop() ?? "";
+  const kind = ["png", "jpg", "jpeg", "gif", "webp"].includes(ext) ? "image" : ["md", "txt", "json", "csv"].includes(ext) ? "text" : "file";
+  return { id: `u${Math.random().toString(16).slice(2, 6)}`, name, kind, bytes, keyLike: /env|secret|key/i.test(name) ? { line: 1, sample: "sk-pr…" } : null, force: false };
+}
+
+async function attachAll(host: SecretaryHost, add: (() => Promise<SecretaryUpload>)[]) {
+  uploadProblems = [];
+  for (const one of add) {
+    try {
+      const got = await one();
+      if (got.keyLike && !got.force) heldKey.push(got);
+      else pending.push(got);
+    } catch (err) {
+      uploadProblems.push(kbSaid(String(err instanceof Error ? err.message : err)));
+    }
+  }
+  host.render();
+}
+
+/** Files dropped on the window while the secretary's page is open, or picked. */
+export function secretaryAttachPaths(paths: string[], host: SecretaryHost) {
+  return attachAll(
+    host,
+    paths.map((path) => () => (IS_TAURI ? Bridge.secretaryUploadPath(path) : Promise.resolve(demoUpload(path.split(/[\\/]/).pop() || path, 2048)))),
+  );
+}
+
+function attachFiles(files: File[], host: SecretaryHost) {
+  return attachAll(
+    host,
+    files.map((file) => async () => {
+      const name = file.name || `貼上的圖片-${Date.now()}.png`;
+      return IS_TAURI ? Bridge.secretaryUploadBytes(name, await file.arrayBuffer()) : demoUpload(name, file.size);
+    }),
+  );
+}
+
+function pickFiles(host: SecretaryHost) {
+  if (!IS_TAURI) return void secretaryAttachPaths(["D:\\Docs\\品牌指南.md", "D:\\Docs\\首頁草圖.png"], host);
+  Bridge.pickFiles("附加檔案給秘書")
+    .then((paths) => (paths.length ? secretaryAttachPaths(paths, host) : undefined))
+    .catch((err) => {
+      uploadProblems = [String(err instanceof Error ? err.message : err)];
+      host.render();
+    });
+}
+
+function dropUpload(id: string) {
+  pending = pending.filter((f) => f.id !== id);
+  heldKey = heldKey.filter((f) => f.id !== id);
+  if (IS_TAURI) void Bridge.secretaryUploadRemove(id);
+}
+
+async function keepKeyed(host: SecretaryHost, f: SecretaryUpload) {
+  heldKey = heldKey.filter((x) => x !== f);
+  try {
+    pending.push(IS_TAURI ? await Bridge.secretaryUploadForce(f.id) : { ...f, force: true });
+  } catch (err) {
+    uploadProblems = [String(err instanceof Error ? err.message : err)];
+  }
+  host.render();
+}
+
+const KIND_ICON: Record<SecretaryUpload["kind"], string> = { text: "📄", image: "🖼", file: "📎" };
+
+/** A file chip: on the way (with ✕), or sent with a question. */
+function fileChip(f: SecretaryUpload, remove?: () => void): HTMLElement {
+  return h(
+    "span",
+    { class: "attachment sec-file", title: `${f.name} · ${sizeText(f.bytes)}${f.keyLike ? " · 疑似含金鑰" : ""}` },
+    h("span", { "aria-hidden": "true", text: KIND_ICON[f.kind] }),
+    h("span", { class: "attachment-name", text: f.name }),
+    f.keyLike ? h("span", { class: "sec-file-key", text: "⚠" }) : null,
+    remove ? h("button", { type: "button", class: "attachment-x", "aria-label": `移除 ${f.name}`, onClick: remove }, "×") : null,
+  );
 }
 
 const SUGGESTIONS = ["各團隊現在狀況如何?", "有什麼在等我處理?", "這週花了多少錢?", "幫我開一個新團隊…"];
@@ -94,23 +190,28 @@ async function ensureProviders(host: SecretaryHost) {
 export async function consult(text: string, render: () => void): Promise<string> {
   if (waiting) return "秘書還在處理上一件事,稍等一下再試。";
   if (!providers) await ensureProviders({ render, reload: async () => {}, openTeam: () => {} });
-  await ask({ render, reload: async () => {}, openTeam: () => {} }, text);
+  await ask({ render, reload: async () => {}, openTeam: () => {} }, text, false);
   const last = entries[entries.length - 1];
   return last?.who === "error" ? `沒有成功:${last.text}` : (last?.text ?? "");
 }
 
-async function ask(host: SecretaryHost, text: string) {
+async function ask(host: SecretaryHost, text: string, withFiles = true) {
   const words = text.trim();
   if (!words || waiting) return;
-  entries.push({ who: "you", text: words });
+  const files = withFiles ? pending : [];
+  if (withFiles) pending = [];
+  entries.push({ who: "you", text: words, files });
   draft = "";
   waiting = true;
   live = [];
   stick = true;
   host.render();
   try {
-    const reply: SecretaryReply = IS_TAURI ? await Bridge.secretaryAsk(words, provider || null, tz(), name) : await (await import("./demo")).demoSecretary(words);
-    entries.push({ who: "secretary", text: reply.text, steps: reply.steps, proposals: reply.proposals });
+    const reply: SecretaryReply = IS_TAURI
+      ? await Bridge.secretaryAsk(words, provider || null, tz(), name, files.map((f) => f.id))
+      : await (await import("./demo")).demoSecretary(words);
+    const unused = unusedUploads(files, reply.proposals);
+    entries.push({ who: "secretary", text: reply.text, steps: reply.steps, proposals: reply.proposals, unused: unused.length ? unused : undefined });
   } catch (err) {
     entries.push({ who: "error", text: String(err instanceof Error ? err.message : err) });
   }
@@ -289,14 +390,60 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
     );
   }
   for (const e of entries) {
-    if (e.who === "you") list.append(h("div", { class: "sec-row you" }, h("div", { class: "sec-bubble you", text: e.text })));
+    if (e.who === "you")
+      list.append(
+        h(
+          "div",
+          { class: "sec-row you" },
+          h("div", { class: "sec-bubble you" }, h("span", { text: e.text }), e.files?.length ? h("div", { class: "attachments sec-files" }, ...e.files.map((f) => fileChip(f))) : null),
+        ),
+      );
     else if (e.who === "error") list.append(h("div", { class: "sec-row" }, h("div", { class: "problem", text: e.text })));
     else
       list.append(
         h(
           "div",
           { class: "sec-row" },
-          h("div", { class: "sec-bubble" }, steps(e.steps ?? [], false), words(e.text), ...(e.proposals ?? []).map((p) => card(host, p))),
+          h(
+            "div",
+            { class: "sec-bubble" },
+            steps(e.steps ?? [], false),
+            words(e.text),
+            ...(e.proposals ?? []).map((p) => card(host, p)),
+            e.unused?.length
+              ? h(
+                  "div",
+                  { class: "sec-unused" },
+                  h("span", { class: "hint", text: `附加的 ${e.unused.length} 個檔案還沒放進任何團隊` }),
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      class: "link",
+                      onClick: () => {
+                        pending = [...pending, ...e.unused!.filter((f) => !pending.some((x) => x.id === f.id))];
+                        e.unused = undefined;
+                        host.render();
+                      },
+                    },
+                    "放回輸入列",
+                  ),
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      class: "link quiet-danger",
+                      onClick: () => {
+                        for (const f of e.unused ?? []) dropUpload(f.id);
+                        e.unused = undefined;
+                        host.render();
+                      },
+                    },
+                    "丟掉",
+                  ),
+                )
+              : null,
+          ),
         ),
       );
   }
@@ -309,6 +456,13 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
   const input = h("textarea", { class: "field sec-input", rows: "2", "data-key": "secretary-input", placeholder: "例如:各團隊現在怎麼樣?/幫我開一個做官網的團隊,資料夾 D:\\Code\\site", spellcheck: "false" }) as HTMLTextAreaElement;
   input.value = draft;
   input.addEventListener("input", () => (draft = input.value));
+  // A pasted picture (or file) goes with the request.
+  input.addEventListener("paste", (e) => {
+    const files = [...(e.clipboardData?.files ?? [])];
+    if (!files.length) return;
+    e.preventDefault();
+    void attachFiles(files, host);
+  });
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
@@ -323,6 +477,21 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
     h(
       "div",
       { class: "sec-composer" },
+      uploadProblems.length ? h("div", { class: "problem", role: "alert" }, ...uploadProblems.map((p) => h("div", { text: p }))) : null,
+      ...heldKey.map((f) =>
+        h(
+          "div",
+          { class: "kb-held", role: "alert" },
+          h("p", {}, h("b", { text: f.name }), ` 第 ${f.keyLike?.line ?? "?"} 行看起來有金鑰(${f.keyLike?.sample ?? ""})。放進知識庫後,看得到它的成員都會讀到,並送到它們的模型服務。`),
+          h(
+            "div",
+            { class: "row end" },
+            h("button", { type: "button", class: "btn plain", onClick: () => (dropUpload(f.id), host.render()) }, "取消"),
+            h("button", { type: "button", class: "btn danger", onClick: () => void keepKeyed(host, f) }, "仍要加入"),
+          ),
+        ),
+      ),
+      pending.length ? h("div", { class: "attachments sec-files" }, ...pending.map((f) => fileChip(f, () => (dropUpload(f.id), host.render())))) : null,
       input,
       h(
         "div",
@@ -330,6 +499,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
         choices.length
           ? dropdown({ value: provider, choices, className: "sec-model", title: "秘書用哪個聊天模型(設定 → Chat providers)", onChange: (v) => ((provider = v), store("coucou.secretary.provider", v), host.render()) })
           : h("span", { class: "hint", text: providers ? "還沒有聊天模型:到「設定 → Chat providers」新增一個" : "" }),
+        h("button", { class: "link sec-attach", type: "button", title: "附加檔案(也可以拖進視窗或貼上圖片):要放進團隊知識庫的設計稿、規格、圖片…", disabled: waiting, onClick: () => pickFiles(host) }, "📎 附加檔案"),
         h("span", { class: "grow" }),
         entries.length
           ? h(
@@ -340,6 +510,9 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
                 disabled: waiting,
                 onClick: () => {
                   entries = [];
+                  pending = [];
+                  heldKey = [];
+                  uploadProblems = [];
                   void Bridge.secretaryReset();
                   host.render();
                 },

@@ -7,7 +7,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentCheck, AgentProfile, ModelChoice, Provider, Settings } from "./state";
 import type { Dock } from "./dock";
-import type { Constitution, ConstitutionLevel, Found, KnowledgeAdded, KnowledgeDoc, KnowledgeView, KnowledgeVisibility, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
+import type { Constitution, ConstitutionLevel, Found, KnowledgeAdded, KnowledgeDoc, KnowledgeView, KnowledgeVisibility, SecretaryUpload, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -222,7 +222,16 @@ export const Bridge = {
   /** The chat providers the secretary can think with: (id, name, model). */
   secretaryProviders: () => call<[string, string, string][]>("secretary_providers"),
   /** The person asks the secretary; its steps arrive as `secretary-step` while it works. */
-  secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string) => callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name }),
+  secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string, uploads: string[] = []) =>
+    callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name, uploads }),
+  /** A file attached in the secretary's conversation, by its path (picked or dropped). */
+  secretaryUploadPath: (path: string) => callOrThrow<SecretaryUpload>("secretary_upload_path", { path }),
+  /** The same from its bytes (a paste). */
+  secretaryUploadBytes: (name: string, bytes: ArrayBuffer) =>
+    invoke<SecretaryUpload>("secretary_upload_bytes", new Uint8Array(bytes), { headers: { "x-file-name": encodeURIComponent(name) } }),
+  /** Keeps an attached file that looks like it holds a key. */
+  secretaryUploadForce: (id: string) => callOrThrow<SecretaryUpload>("secretary_upload_force", { id }),
+  secretaryUploadRemove: (id: string) => call<void>("secretary_upload_remove", { id }),
   /** Carries out one of its proposals — only ever from the click on its card. */
   secretaryConfirm: (id: string, tzMinutes: number, createFolder = false) => callOrThrow<SecretaryProposal>("secretary_confirm", { id, tzMinutes, createFolder }),
   /** The work folder a proposal needs that does not exist yet (null when there is none to create). */

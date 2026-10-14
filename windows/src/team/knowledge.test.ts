@@ -57,3 +57,15 @@ describe("where a dropped file goes", () => {
     expect(dropTarget("cost", "monitor")).toBeNull();
   });
 });
+
+describe("files attached to a question for the secretary", () => {
+  it("are left over when no card of the answer uses them", async () => {
+    const { unusedUploads } = await import("./secretary");
+    const file = (id: string) => ({ id, name: `${id}.md`, kind: "text" as const, bytes: 1, keyLike: null, force: false });
+    const card = (uses?: string[]) => ({ id: "P-1", kind: "team" as const, title: "", lines: [], confirm: "", state: "open" as const, outcome: "", uses });
+    expect(unusedUploads([file("u1"), file("u2")], [card(["u1"])]).map((f) => f.id)).toEqual(["u2"]);
+    expect(unusedUploads([file("u1")], [card()]).map((f) => f.id)).toEqual(["u1"]);
+    expect(unusedUploads([file("u1")], [card(["u1"]), card()])).toEqual([]);
+    expect(unusedUploads([], [])).toEqual([]);
+  });
+});

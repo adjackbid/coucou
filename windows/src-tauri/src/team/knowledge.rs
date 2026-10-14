@@ -181,7 +181,7 @@ fn now_ms() -> u64 {
 }
 
 /// Random hex digits, from the system's random source through std.
-fn random_hex(digits: usize) -> String {
+pub(crate) fn random_hex(digits: usize) -> String {
     use std::hash::{BuildHasher, Hasher};
     let mut out = String::new();
     let mut i = 0u64;
