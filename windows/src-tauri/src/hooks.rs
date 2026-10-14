@@ -789,6 +789,9 @@ mod tests {
         let pre = after["hooks"]["PreToolUse"].as_array().unwrap();
         assert!(pre.iter().any(|e| serde_json::to_string(e).unwrap().contains("other-tool.exe")));
         assert!(status(Agent::Claude).installed);
+        // Right after installing, a reinstall would change nothing: Settings
+        // reads a diff here as "needs update".
+        assert_eq!(preview(Agent::Claude, true).unwrap().diff, "No change.");
 
         // A file that moved since the preview is refused, and left alone.
         let stale = preview(Agent::Claude, false).unwrap();
@@ -816,6 +819,7 @@ mod tests {
         assert_eq!(written["hooks"]["PermissionRequest"][0]["args"], json!(["--agent", "copilot", "PermissionRequest"]));
         assert_eq!(written["hooks"]["PermissionRequest"][0]["timeoutSec"], 120);
         assert!(status(Agent::Copilot).installed);
+        assert_eq!(preview(Agent::Copilot, true).unwrap().diff, "No change.");
         let plan = preview(Agent::Copilot, false).unwrap();
         write(Agent::Copilot, false, &plan.fingerprint).expect("copilot uninstall should succeed");
         assert!(!file.exists());
@@ -840,6 +844,7 @@ mod tests {
         // cmd /c gets it with Antigravity's escaping: a quote would break it.
         assert!(!written["coucou"]["Stop"][0]["command"].as_str().unwrap().contains('"'));
         assert!(status(Agent::Antigravity).installed);
+        assert_eq!(preview(Agent::Antigravity, true).unwrap().diff, "No change.");
         let plan = preview(Agent::Antigravity, false).unwrap();
         write(Agent::Antigravity, false, &plan.fingerprint).expect("antigravity uninstall should succeed");
         let cleaned: Value = serde_json::from_slice(&std::fs::read(&agy).unwrap()).unwrap();

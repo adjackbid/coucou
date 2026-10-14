@@ -62,6 +62,9 @@ pub struct Settings {
     /// tray's reset): see `from_page`.
     #[serde(default)]
     pub dock: Dock,
+    /// "system" = the Windows display language, or "zh-TW" | "en". See i18n.rs.
+    #[serde(default = "default_language")]
+    pub language: String,
 }
 
 /// The edge the island is docked to. The bottom one is the work area's: the
@@ -103,6 +106,10 @@ impl Dock {
     pub fn is_vertical(&self) -> bool {
         self.edge == "left" || self.edge == "right"
     }
+}
+
+fn default_language() -> String {
+    "system".into()
 }
 
 fn default_true() -> bool {
@@ -212,6 +219,7 @@ impl Default for Settings {
             agents: vec![AgentProfile::copilot()],
             session_names: Default::default(),
             dock: Dock::default(),
+            language: default_language(),
         }
     }
 }

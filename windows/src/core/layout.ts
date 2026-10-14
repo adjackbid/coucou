@@ -2,6 +2,8 @@
 // + IslandRootView.botPosition. All values are logical pixels, identical to the
 // macOS app's points.
 
+import { tr } from "./i18n";
+
 export type IslandMode = "hidden" | "compact" | "expanded";
 
 export type IslandViewName =
@@ -154,7 +156,7 @@ export function questionHeight(
   if (!q) return QUESTION_MIN_H;
   const textLines = Math.min(3, Math.max(1, Math.ceil(q.text.length * 7.5 / QUESTION_TEXT_W)));
   const field = q.fields[q.current];
-  const choices = field ? [...field.choices, ...(field.required ? [] : ["Skip"])] : [];
+  const choices = field ? [...field.choices, ...(field.required ? [] : [tr("略過", "Skip")])] : [];
   const labelled = q.fields.length > 1 || (field?.title ?? "") !== "";
   let rows = 0;
   let used = 0;

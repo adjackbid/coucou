@@ -1008,13 +1008,13 @@ function setup(file: TeamFile): HTMLElement {
       "＋ 加入成員",
     ),
     agents.length
-      ? h("p", { class: "hint" }, "代理在 ", h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsWindow() }, "設定 → Agents"), " 裡新增與修改", agentSource() === "team" ? h("span", {}, ";現在只列 ", h("button", { class: "link", type: "button", onClick: () => { place = "agents"; render(); } }, "Agent 設定"), " 裡的團隊 Agent") : null, "。 ",
+      ? h("p", { class: "hint" }, "代理在 ", h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, "設定 → Agents"), " 裡新增與修改", agentSource() === "team" ? h("span", {}, ";現在只列 ", h("button", { class: "link", type: "button", onClick: () => { place = "agents"; render(); } }, "Agent 設定"), " 裡的團隊 Agent") : null, "。 ",
           h("button", { class: "link", type: "button", disabled: doctor === "running", title: "逐一確認每個代理的 CLI 找不找得到、能不能回答版本;找得到就等於重新定位成功", onClick: () => {
             doctor = "running";
             render();
             Bridge.agentsDoctor(agents).then((r) => { doctor = r; render(); }, (e) => { doctor = String(e); render(); });
           } }, doctor === "running" ? "檢查中…" : "檢查代理"))
-      : h("p", { class: "problem" }, "還沒有任何代理。請先到 ", h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsWindow() }, "設定 → Agents"), " 建立。"),
+      : h("p", { class: "problem" }, "還沒有任何代理。請先到 ", h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, "設定 → Agents"), " 建立。"),
     Array.isArray(doctor)
       ? h("div", { class: "agent-doctor" }, ...doctor.map((c) =>
           h("p", { class: c.error ? "problem" : "hint" },
@@ -1666,7 +1666,7 @@ const agentsHost: AgentsHost = {
   render: () => render(),
   natives: () => agents,
   usedBy: (id) => files.filter((f) => f.config?.members.some((m) => m.agent === id)).map((f) => f.config!.name || f.file),
-  openSettings: () => void Bridge.openSettingsWindow(),
+  openSettings: () => void Bridge.openSettingsPage("agents"),
 };
 
 /** Every agent a member may name, for names and default models: native and team. */
@@ -1962,6 +1962,13 @@ async function start() {
     void load().then(() => {
       if (!unsaved) render();
     });
+  });
+  // The settings window's "Open the secretary ↗" / "Agent settings ↗".
+  await onEvent<string>("team-goto", (page) => {
+    if (page === "secretary" || page === "agents") {
+      place = page;
+      render();
+    }
   });
   // Agents may have been added in the settings window meanwhile.
   await onEvent<{ agents: AgentProfile[] }>("settings-changed", (s) => {

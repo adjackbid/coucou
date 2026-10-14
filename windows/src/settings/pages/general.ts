@@ -1,158 +1,91 @@
-// Sound, the island's behaviour and where it lives, the shortcut, startup.
+// General: the language, sound, starting with Windows, and about Coucou.
 
-import { Bridge, onEvent } from "../../core/bridge";
+import { tr } from "../../core/i18n";
 import type { Settings } from "../../core/state";
-import { h, clear } from "../../views/dom";
-import { settings, save, replaceSettings } from "../store";
-import { toggle } from "../ui";
+import { h } from "../../views/dom";
+import type { Page } from "../nav";
+import { chooseLanguage } from "../nav";
+import { save, settings, version } from "../store";
+import { card, field, pageHeader, row, toggle } from "../ui";
+import { icon } from "../icons";
 
-export function generalSection(): HTMLElement {
-  const volume = h("input", {
-    type: "range", min: "0", max: "0.2", step: "0.005",
-    value: String(settings.soundVolume),
-  }) as HTMLInputElement;
-  volume.addEventListener("input", () => {
-    settings.soundVolume = Number(volume.value);
-    void save();
-  });
-
-  const autoClose = h("input", {
-    type: "number", min: "3", max: "120", step: "1",
-    value: String(Math.round(settings.autoCloseInterval)),
-    style: "width:72px",
-  }) as HTMLInputElement;
-  autoClose.addEventListener("change", () => {
-    settings.autoCloseInterval = Math.max(3, Math.min(120, Number(autoClose.value) || 15));
-    autoClose.value = String(settings.autoCloseInterval);
-    void save();
-  });
-
-  // The second countdown: how long the small bar lingers before vanishing.
-  const hideAfter = h("input", {
-    type: "number", min: "3", max: "600", step: "1",
-    value: String(Math.round(settings.hideAfter || 60)),
-    style: "width:72px",
-  }) as HTMLInputElement;
-  hideAfter.addEventListener("change", () => {
-    settings.hideAfter = Math.max(3, Math.min(600, Number(hideAfter.value) || 60));
-    hideAfter.value = String(settings.hideAfter);
-    void save();
-  });
-
-  // How many finished sessions may sit side by side as cards before the rest
-  // go to the pills; the island widens by one card each.
-  const cards = h("input", {
-    type: "number", min: "1", max: "3", step: "1",
-    value: String(settings.maxSessionCards || 2),
-    style: "width:72px",
-  }) as HTMLInputElement;
-  cards.addEventListener("change", () => {
-    settings.maxSessionCards = Math.max(1, Math.min(3, Number(cards.value) || 2));
-    cards.value = String(settings.maxSessionCards);
-    void save();
-  });
-
-  // Written as the global-shortcut plugin reads it: modifiers and a key joined
-  // by "+", e.g. Ctrl+Shift+Space, Ctrl+Alt+F12. Empty turns it off.
-  const hotkey = h("input", {
-    type: "text",
-    value: settings.hotkey,
-    placeholder: "Ctrl+Shift+Space",
-    spellcheck: "false",
-    style: "width:180px",
-  }) as HTMLInputElement;
-  const hotkeyNote = h("div", {});
-  // A key another program already owns registers nothing and says nothing on
-  // its own; this is where it gets said.
-  async function checkHotkey() {
-    const error = await Bridge.hotkeyStatus();
-    clear(hotkeyNote);
-    if (error) hotkeyNote.append(h("div", { class: "notice warn", text: error }));
-  }
-  hotkey.addEventListener("change", async () => {
-    settings.hotkey = hotkey.value.trim();
-    await save();
-    await checkHotkey();
-  });
-  void checkHotkey();
-
-  const screen = h("select", {}) as HTMLSelectElement;
-  // "Where I put it" exists once the island has been dragged onto a display.
-  function fillScreens() {
-    screen.replaceChildren(
-      h("option", { value: "primary", text: "Main display" }),
-      h("option", { value: "cursor", text: "Display under the cursor" }),
-    );
-    if (settings.dock?.monitor) screen.append(h("option", { value: "docked", text: "Where I put it" }));
-    screen.value = settings.screen;
-  }
-  fillScreens();
-  screen.addEventListener("change", () => {
-    settings.screen = screen.value as Settings["screen"];
-    // Rust forgets the dragged-to display once another choice is made.
-    if (settings.screen !== "docked") settings.dock = { ...settings.dock, monitor: "" };
-    void save().then(fillScreens);
-  });
-  // A drag while this window is open changes where the island lives.
-  void onEvent<Settings>("settings-changed", (s) => {
-    if (s.screen !== screen.value || !!s.dock?.monitor !== !!screen.querySelector('[value="docked"]')) {
-      replaceSettings({ ...settings, screen: s.screen, dock: s.dock });
-      fillScreens();
+/**
+ * Three buttons: 中文, English, follow Windows. Saving tells every window; a
+ * choice that keeps the same language (Follow Windows on a Chinese Windows
+ * after 中文) redraws only this.
+ */
+export function languagePicker(onData: (fn: () => void) => void): HTMLElement {
+  const box = h("div", { class: "segmented", role: "radiogroup", "aria-label": tr("語言", "Language") });
+  onData(() => {
+    for (const b of box.querySelectorAll<HTMLButtonElement>("button")) {
+      const on = b.dataset.value === settings.language;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-checked", String(on));
     }
   });
-  const resetPosition = h("button", {
-    text: "Reset position",
-    title: "Back to the top centre of the screen",
-    onclick: () => void Bridge.resetDock(),
-  });
-
-  return h(
-    "section",
-    {},
-    h("h2", {}, h("span", { text: "General" })),
-    h("div", { class: "row" },
-      h("label", { text: "Sound" }),
-      toggle(settings.soundEnabled, (v) => { settings.soundEnabled = v; void save(); }),
-      volume,
-    ),
-    h("div", { class: "row" },
-      h("label", { text: "Auto-close" }),
-      autoClose,
-      h("span", { class: "hint", text: "seconds after you leave the island" }),
-    ),
-    h("div", { class: "row" },
-      h("label", { text: "Island lives on" }),
-      screen,
-    ),
-    h("div", { class: "row" },
-      h("label", { text: "Position" }),
-      resetPosition,
-      h("span", { class: "hint", text: "drag the island to move it to any edge of the screen" }),
-    ),
-    h("div", { class: "row" },
-      h("label", { text: "Hide after" }),
-      hideAfter,
-      h("span", { class: "hint", text: "seconds the small bar stays once the mouse leaves" }),
-    ),
-    h("div", { class: "row" },
-      h("label", { text: "Always visible" }),
-      toggle(settings.alwaysVisible, (v) => { settings.alwaysVisible = v; void save(); }),
-      h("span", { class: "hint", text: "the island never hides; closing it leaves the small bar" }),
-    ),
-    h("div", { class: "row" },
-      h("label", { text: "Session cards" }),
-      cards,
-      h("span", { class: "hint", text: "sessions shown side by side (1–3); the rest become pills" }),
-    ),
-    h("div", { class: "row" },
-      h("label", { text: "Shortcut" }),
-      hotkey,
-      h("span", { class: "hint", text: "opens and closes the island from anywhere" }),
-    ),
-    hotkeyNote,
-    h("div", { class: "row" },
-      h("label", { text: "Launch at startup" }),
-      toggle(settings.autostart, (v) => { settings.autostart = v; void save(); }),
-    ),
-  );
+  const choices: [Settings["language"], string][] = [
+    ["zh-TW", "中文"],
+    ["en", "English"],
+    ["system", tr("跟著 Windows", "Follow Windows")],
+  ];
+  for (const [value, label] of choices) {
+    box.append(h("button", {
+      type: "button",
+      role: "radio",
+      class: settings.language === value ? "on" : "",
+      "data-value": value,
+      "aria-checked": settings.language === value,
+      text: label,
+      onclick: () => void chooseLanguage(value),
+    }));
+  }
+  return box;
 }
+
+export const generalPage: Page = {
+  id: "general",
+  icon: "general",
+  name: () => tr("一般", "General"),
+  render(ctx) {
+    const volume = h("input", { type: "range", min: "0", max: "0.2", step: "0.005", value: String(settings.soundVolume), "aria-label": tr("音量", "Volume") }) as HTMLInputElement;
+    volume.addEventListener("input", () => {
+      settings.soundVolume = Number(volume.value);
+      void save();
+    });
+    return h(
+      "div",
+      { class: "page-body" },
+      pageHeader("general", tr("一般", "General"), tr("語言、音效、開機啟動，以及關於 Coucou。", "Language, sound, startup, and about Coucou.")),
+      card({
+        anchor: "language",
+        title: h("div", { class: "title-icon" }, icon("language", 20), h("h2", { text: tr("語言", "Language") })),
+        body: [
+          languagePicker(ctx.onData),
+          h("p", { class: "field-help", text: tr("所有視窗會立刻換成這個語言。", "Every window changes right away.") }),
+        ],
+      }),
+      card({
+        anchor: "general",
+        title: tr("音效與啟動", "Sound and startup"),
+        body: [
+          field(tr("音效", "Sound"), [toggle(settings.soundEnabled, (v) => { settings.soundEnabled = v; void save(); }, tr("音效", "Sound")), volume]),
+          field(tr("開機時啟動", "Launch at startup"), toggle(settings.autostart, (v) => { settings.autostart = v; void save(); }, tr("開機時啟動", "Launch at startup"))),
+        ],
+      }),
+      card({
+        anchor: "guide",
+        title: h("div", { class: "title-icon" }, icon("guide", 20), h("h2", { text: tr("開始設定引導", "Setup guide") })),
+        lead: tr("一步一步帶你連結 agent、選聊天模型、設好瀏海島。", "Walks you through connecting your agents, picking a chat model and setting up the island."),
+        body: [row(h("button", { type: "button", text: tr("重新開始引導", "Run the setup guide again"), onclick: () => ctx.openGuide() }))],
+      }),
+      card({
+        anchor: "about",
+        title: tr("關於", "About"),
+        body: [
+          h("p", {}, h("b", { text: "Coucou" }), " ", h("span", { class: "hint", text: version })),
+          h("p", { class: "hint", text: tr("沒有遙測。網路請求只會送到你自己設定的服務。", "No telemetry. Network requests only go to the services you set up yourself.") }),
+        ],
+      }),
+    );
+  },
+};

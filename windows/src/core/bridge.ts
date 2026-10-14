@@ -7,6 +7,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentCheck, AgentProfile, ModelChoice, Provider, Settings } from "./state";
 import type { Dock } from "./dock";
+import { tr } from "./i18n";
 import type { Constitution, ConstitutionLevel, Found, KnowledgeAdded, KnowledgeDoc, KnowledgeView, KnowledgeVisibility, SecretaryUpload, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
 
 export const IS_TAURI =
@@ -49,6 +50,8 @@ export interface BootInfo {
   screen: DockPlacement & { x: number; y: number; width: number; height: number; scale: number };
   version: string;
   hookPath: string;
+  /** The language every window draws in (settings.language resolved by Rust). */
+  lang: "zh-TW" | "en";
 }
 
 /** One CLI of 安裝 CLI — mirror of cli_install.rs. */
@@ -106,6 +109,9 @@ export const Bridge = {
   quit: () => call<void>("quit_app"),
 
   openSettingsWindow: () => call<void>("open_settings_window"),
+  /** The settings window on one page, scrolled to a card; `action` starts something there ("connect"). */
+  openSettingsPage: (page: string, anchor: string | null = null, action: string | null = null) =>
+    call<void>("open_settings_page", { page, anchor, action }),
 
   /** Writes to %LOCALAPPDATA%\Coucou\coucou.log, next to the Rust lines. */
   log: (message: string) => call<void>("log_line", { message }),
@@ -143,7 +149,7 @@ export const Bridge = {
    * as the raw request body; the name, URL-encoded, in a header.
    */
   ingestBytes: (name: string, bytes: ArrayBuffer) => {
-    if (!IS_TAURI) throw new Error("not running inside Coucou");
+    if (!IS_TAURI) throw new Error(tr("不是在 Coucou 裡執行", "not running inside Coucou"));
     return invoke<DroppedFile>("ingest_bytes", new Uint8Array(bytes), {
       headers: { "x-file-name": encodeURIComponent(name) },
     });
@@ -191,6 +197,8 @@ export const Bridge = {
 
   // ── Teams ─────────────────────────────────────────────────────────────────
   openTeamWindow: () => call<void>("open_team_window"),
+  /** Teamwork on one of its pages ("secretary", "agents"); null keeps the page it was on. */
+  openTeamPage: (page: string | null) => call<void>("open_team_page", { page }),
   /** The team files in %APPDATA%\Coucou\teams, each with what stops it from starting. */
   teamFiles: () => call<{ dir: string; files: TeamFile[] }>("team_files"),
   teamSnapshots: () => call<Snapshot[]>("team_snapshots"),
@@ -388,7 +396,7 @@ export interface HookPreview {
 
 /** Same as `call`, but surfaces the error so the UI can show what went wrong. */
 async function callOrThrow<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (!IS_TAURI) throw new Error("not running inside Coucou");
+  if (!IS_TAURI) throw new Error(tr("不是在 Coucou 裡執行", "not running inside Coucou"));
   return invoke<T>(cmd, args);
 }
 

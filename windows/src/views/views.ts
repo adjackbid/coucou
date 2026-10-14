@@ -211,7 +211,7 @@ function buildOverview(actions: ViewActions): ViewHost {
       cardKey = "";
       State.notify();
     },
-    openSettings: () => actions.openSettingsWindow(),
+    openSettings: (id) => (id ? void Bridge.openSettingsPage("integrations", id) : actions.openSettingsWindow()),
   };
 
   return {

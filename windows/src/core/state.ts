@@ -300,6 +300,8 @@ export interface Settings {
   sessionNames: Record<string, string>;
   /** Where the island sits. Rust alone writes it (a drag, Reset position). */
   dock: Dock;
+  /** "system" follows the Windows display language. */
+  language: "system" | "zh-TW" | "en";
 }
 
 /** A folder as a key: no trailing slash, and case-blind like Windows paths. */
@@ -343,6 +345,7 @@ export const DEFAULT_SETTINGS: Settings = {
   agents: [DEFAULT_AGENT],
   sessionNames: {},
   dock: { ...DEFAULT_DOCK },
+  language: "system",
 };
 
 type Listener = () => void;

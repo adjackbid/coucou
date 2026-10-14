@@ -53,7 +53,7 @@ const OPEN_URLS: Record<string, string> = {
   integration_calcom: "https://app.cal.com/bookings",
 };
 
-function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
+function idleCard(task: AgentTask, openSettings: (id?: string) => void): HTMLElement {
   const info = State.integrations[task.id];
   const configured = info?.configured ?? false;
   const error = info?.error ?? null;
@@ -104,7 +104,7 @@ function idleCard(task: AgentTask, openSettings: () => void): HTMLElement {
     );
   } else if (!configured) {
     actions.append(
-      h("button", { class: "link-btn", style: "color:#8e939c", text: "Settings…", onclick: openSettings }),
+      h("button", { class: "link-btn", style: "color:#8e939c", text: "Settings…", onclick: () => openSettings(task.id) }),
     );
   }
 
@@ -379,7 +379,8 @@ export interface IntegrationCardHooks {
   detailOpen: boolean;
   openDetail(): void;
   closeDetail(): void;
-  openSettings(): void;
+  /** The settings window, on this integration's row when `id` is given. */
+  openSettings(id?: string): void;
 }
 
 /** True when this integration has data worth showing instead of the idle card. */

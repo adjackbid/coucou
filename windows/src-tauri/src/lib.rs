@@ -1,5 +1,7 @@
 // Coucou for Windows — app wiring and the commands the island calls.
 
+#[macro_use]
+mod i18n;
 mod acp;
 mod cli_install;
 mod agy;
@@ -68,6 +70,8 @@ pub struct BootInfo {
     screen: ScreenInfo,
     version: String,
     hook_path: String,
+    /// "zh-TW" or "en": the language every window draws in.
+    lang: &'static str,
 }
 
 #[tauri::command]
@@ -83,6 +87,7 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
         screen,
         version: env!("CARGO_PKG_VERSION").to_string(),
         hook_path: settings::hook_exe_path().to_string_lossy().to_string(),
+        lang: i18n::current(),
     }
 }
 
@@ -144,6 +149,11 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
     }
     if let Err(err) = settings::save(&settings) {
         eprintln!("[coucou] could not save settings: {err}");
+    }
+    if i18n::set(&settings.language) {
+        // Every window redraws in the new language; the tray menu is relabelled.
+        let _ = app.emit("lang-changed", i18n::current());
+        tray::relabel(&app);
     }
     if autostart_changed {
         let manager = app.autolaunch();
@@ -1673,6 +1683,18 @@ fn open_settings_window(app: AppHandle) {
     show_settings_window(&app);
 }
 
+/// Opens the settings window on one page, scrolled to one card
+/// (`settings-goto`). The window is made at start, so it is always listening.
+#[tauri::command]
+fn open_settings_page(app: AppHandle, page: String, anchor: Option<String>, action: Option<String>) {
+    show_settings_window(&app);
+    let _ = app.emit_to(
+        "settings",
+        "settings-goto",
+        serde_json::json!({ "page": page, "anchor": anchor, "action": action }),
+    );
+}
+
 /// #0B0C0E at 45 %, as 0xAABBGGRR: dark enough that light text reads over
 /// a white window behind, thin enough that the desktop still shows.
 const GLASS_TINT: u32 = 0x730E_0C0B;
@@ -1763,8 +1785,18 @@ fn open_team_window(app: AppHandle) {
     show_team_window(&app);
 }
 
+/// Opens Teamwork on one of its pages ("secretary", "agents"), or as it was.
+#[tauri::command]
+fn open_team_page(app: AppHandle, page: Option<String>) {
+    show_team_window(&app);
+    if let Some(page) = page {
+        let _ = app.emit_to("team", "team-goto", page);
+    }
+}
+
 pub fn run() {
     let loaded = settings::load();
+    i18n::set(&loaded.language);
     let gate = Arc::new(PollGate::new());
     let agents = Arc::new(Agents::default());
 
@@ -1824,6 +1856,7 @@ pub fn run() {
             refresh_integration,
             open_n8n,
             open_settings_window,
+            open_settings_page,
             set_paused,
             hotkey_status,
             provider_test,
@@ -1903,6 +1936,7 @@ pub fn run() {
             team_knowledge_open,
             team_window,
             open_team_window,
+            open_team_page,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
