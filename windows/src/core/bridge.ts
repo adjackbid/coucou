@@ -7,7 +7,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentCheck, AgentProfile, ModelChoice, Provider, Settings } from "./state";
 import type { Dock } from "./dock";
-import type { Constitution, ConstitutionLevel, Found, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
+import type { Constitution, ConstitutionLevel, Found, KnowledgeAdded, KnowledgeDoc, KnowledgeView, KnowledgeVisibility, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -290,6 +290,27 @@ export const Bridge = {
   teamNew: () => callOrThrow<string>("team_new"),
   /** The system's folder dialog; null when cancelled. */
   pickFolder: (start: string, title: string) => callOrThrow<string | null>("pick_folder", { start, title }),
+  /** The system's file dialog, several files at once; empty when cancelled. */
+  pickFiles: (title: string) => callOrThrow<string[]>("pick_files", { title }),
+  /** A team's knowledge base: its documents and limits. */
+  teamKnowledgeList: (team: string) => callOrThrow<KnowledgeView>("team_knowledge_list", { team }),
+  /** Copies a file in, for the leader only; `force` after the person said yes to a key-like text. */
+  teamKnowledgeAddPath: (team: string, path: string, force = false) => callOrThrow<KnowledgeAdded>("team_knowledge_add_path", { team, path, force }),
+  /** The same from bytes (a paste). */
+  teamKnowledgeAddBytes: (team: string, name: string, bytes: ArrayBuffer, force = false) =>
+    invoke<KnowledgeAdded>("team_knowledge_add_bytes", new Uint8Array(bytes), {
+      headers: { "x-team": encodeURIComponent(team), "x-file-name": encodeURIComponent(name), "x-force": force ? "1" : "0" },
+    }),
+  /** Who may read a document, and its note. */
+  teamKnowledgeUpdate: (team: string, doc: string, visibility: KnowledgeVisibility | null, note: string | null) =>
+    callOrThrow<KnowledgeDoc>("team_knowledge_update", { team, doc, visibility, note }),
+  teamKnowledgeReimport: (team: string, doc: string, force = false) => callOrThrow<KnowledgeAdded>("team_knowledge_reimport", { team, doc, force }),
+  teamKnowledgeRemove: (team: string, doc: string) => callOrThrow<void>("team_knowledge_remove", { team, doc }),
+  /** A text's or a picture's bytes, for the preview. */
+  teamKnowledgePreview: (team: string, doc: string) => callOrThrow<ArrayBuffer>("team_knowledge_preview", { team, doc }),
+  teamKnowledgeReveal: (team: string, doc: string) => callOrThrow<void>("team_knowledge_reveal", { team, doc }),
+  /** With the system's program for it; never a program or a script. */
+  teamKnowledgeOpen: (team: string, doc: string) => callOrThrow<void>("team_knowledge_open", { team, doc }),
   /** The Teamwork window draws its own title bar: minimize, maximize, drag, close. */
   teamWindow: (action: "minimize" | "maximize" | "drag" | "close") => call<void>("team_window", { action }),
 };

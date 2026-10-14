@@ -344,6 +344,42 @@ export interface SecretaryStep {
   label: string;
 }
 
+// ── A team's knowledge base — mirror of team/knowledge.rs ─────────────────────
+
+export type KnowledgeVisibility = "leader" | "shared";
+/** text and image are read to members by Coucou; any other file is handed over as a path. */
+export type KnowledgeKind = "text" | "image" | "file";
+
+export interface KnowledgeDoc {
+  id: string;
+  name: string;
+  kind: KnowledgeKind;
+  bytes: number;
+  visibility: KnowledgeVisibility;
+  addedAt: number;
+  /** Where it was copied from (empty for a paste). */
+  source: string;
+  note: string;
+  /** Its copy is no longer in the knowledge folder. */
+  missing: boolean;
+  /** The original is still there, to import again. */
+  sourceExists: boolean;
+  /** A program, script or shortcut: kept, never opened. */
+  program: boolean;
+}
+
+export interface KnowledgeView {
+  docs: KnowledgeDoc[];
+  bytes: number;
+  limits: { maxDocs: number; maxBytes: number; maxText: number; maxImage: number; maxFile: number };
+}
+
+/** Added, or held back: it looks like it holds a key, and needs the person's yes. */
+export interface KnowledgeAdded {
+  doc: KnowledgeDoc | null;
+  keyLike: { line: number; sample: string } | null;
+}
+
 /** Something the secretary prepared; it happens only when the person clicks `confirm`. */
 export interface SecretaryProposal {
   id: string;

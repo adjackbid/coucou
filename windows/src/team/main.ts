@@ -25,6 +25,7 @@ import { onStep as secretaryStep, secretaryName, secretaryPage, secretaryTitle, 
 import { constitutionPage } from "./constitution";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
 import { agentLabel, agentSource, agentsPage, baseOf, loadTeamAgents, sourceSwitch, teamAgents, teamProfiles, type AgentsHost } from "./agents";
+import { addPaths as addKnowledge, dropTarget, knowledgeChanged, knowledgePanel, setDragging, type KnowledgeHost } from "./knowledge";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
@@ -1028,7 +1029,12 @@ function setup(file: TeamFile): HTMLElement {
   return h(
     "div",
     { class: "setup" },
-    h("div", { class: "setup-grid" }, goal, team),
+    h(
+      "div",
+      { class: "setup-grid" },
+      h("div", { class: "setup-col" }, goal, knowledgePanel(config.id, config.members.find((m) => m.id === config.leader)?.name ?? "", running, knowledgeHost)),
+      team,
+    ),
     stops.length ? h("div", { class: "problem" }, h("strong", { text: "啟動前還需要:" }), ...stops.map((p) => h("div", { text: `• ${said(p)}` }))) : null,
     h(
       "div",
@@ -1652,6 +1658,9 @@ const secretaryHost: SecretaryHost = {
   },
 };
 
+/** A team's 知識庫 panel, in its setup. */
+const knowledgeHost: KnowledgeHost = { render: () => render() };
+
 /** The Agent 設定 page: team agents built on Settings → Agents. */
 const agentsHost: AgentsHost = {
   render: () => render(),
@@ -1887,9 +1896,19 @@ async function start() {
     // Typing in the form is not interrupted by a team at work behind it.
     if (tab === "monitor" || !unsaved) render();
   });
-  // Files dragged onto the window go with the next instruction to the team on screen.
+  // Files dragged onto the window: into the knowledge base of the team being
+  // set up, or with the next instruction to the team on screen.
   await onDragDrop((e) => {
-    if (e.type !== "drop" || !e.paths?.length || tab !== "monitor") return;
+    const target = dropTarget(place, tab);
+    if (target === "knowledge") {
+      const team = files.find((f) => f.file === selected)?.config?.id;
+      if (!team) return;
+      if (e.type === "enter" || e.type === "over") setDragging(true, knowledgeHost);
+      else setDragging(false, knowledgeHost);
+      if (e.type === "drop" && e.paths?.length) void addKnowledge(team, e.paths, knowledgeHost);
+      return;
+    }
+    if (e.type !== "drop" || !e.paths?.length || target !== "attachment") return;
     const file = files.find((f) => f.file === selected);
     const team = file?.config ? runs.get(file.config.id) : undefined;
     if (!team) return;
@@ -1902,6 +1921,8 @@ async function start() {
   await onEvent<SecretaryStep>("secretary-step", (step) => secretaryStep(step, secretaryHost));
   // Each member's screen, as it happens: no redraw, just the lines.
   await onEvent<ScreenPatch>("team-screen", live.applyPatch);
+  // A team's documents changed: here, by its leader sharing one, or by the secretary.
+  await onEvent<{ team: string }>("team-knowledge-changed", ({ team }) => knowledgeChanged(team, knowledgeHost));
   // Team agents saved: what teams can start with may have changed.
   await onEvent("team-agents-changed", () => {
     void load().then(() => {
