@@ -33,6 +33,7 @@ const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 /// whole reply at once (the settings window's connection test).
 pub type OnDelta<'a> = Option<&'a (dyn Fn(&str) + Send + Sync)>;
 
+// i18n: model-facing
 pub const SYSTEM_PROMPT: &str = "You are Mochi, a personal AI assistant living at the top of the user's screen. \
 You can help with absolutely anything — research, coding, finding places, recommendations, tasks, questions. \
 Respond in the user's language. Be thorough and complete — use as much detail as the task requires. \
@@ -270,13 +271,13 @@ pub async fn send(
 ) -> Result<ChatReply, String> {
     let key = provider.secret();
     if key.is_none() && provider.needs_key() {
-        return Err(format!("No API key for {}. Open settings.", provider.name));
+        return Err(no_key(provider));
     }
     let caps = provider.caps();
 
     let mut parts: Vec<Part> = Vec::new();
     // File / window context rides along with the first message only, exactly
-    // like ClaudeService.chat() on macOS.
+    // like ClaudeService.chat() on macOS. (i18n: model-facing — for the model.)
     if chat.is_empty() {
         match &context {
             Some(ChatContext::File { name, path }) => {
@@ -312,7 +313,7 @@ pub async fn send(
         }
         Ok(_) => {
             chat.pop();
-            Err("No response text.".into())
+            Err(tr!("沒有收到回覆文字。", "No response text."))
         }
         Err(err) => {
             chat.pop(); // keep the history consistent with what the model saw
@@ -321,11 +322,17 @@ pub async fn send(
     }
 }
 
+/// What the chat says when the provider's key is missing.
+pub(crate) fn no_key(provider: &Provider) -> String {
+    let name = &provider.name;
+    tr!(format!("{name} 沒有 API 金鑰。請打開設定。"), format!("No API key for {name}. Open settings."))
+}
+
 /// The settings window's "Test" button: one tiny round trip, with the reply.
 pub async fn test(provider: &Provider) -> Result<String, String> {
     let key = provider.secret();
     if key.is_none() && provider.needs_key() {
-        return Err("No API key saved for this provider yet.".into());
+        return Err(tr!("這個聊天模型還沒有存 API 金鑰。", "No API key saved for this provider yet."));
     }
     let history = vec![Message {
         role: Role::User,
@@ -338,7 +345,8 @@ pub async fn test(provider: &Provider) -> Result<String, String> {
         openai::send(provider, key.as_deref(), &history, None).await?
     };
     let snippet: String = text.trim().chars().take(80).collect();
-    Ok(format!("{} answered: {snippet}", provider.model))
+    let model = &provider.model;
+    Ok(tr!(format!("{model} 回覆：{snippet}"), format!("{model} answered: {snippet}")))
 }
 
 /// The models the endpoint offers, for the settings window's drop-down. Both
@@ -351,7 +359,7 @@ pub async fn models(provider: &Provider) -> Result<Vec<String>, String> {
 /// the agent, not under a provider.
 pub async fn models_with_key(provider: &Provider, key: Option<String>) -> Result<Vec<String>, String> {
     if key.is_none() && provider.needs_key() {
-        return Err("Save the API key first.".into());
+        return Err(tr!("請先儲存 API 金鑰。", "Save the API key first."));
     }
     let url = provider.endpoint("models");
     check_url(provider, &url)?;
@@ -370,14 +378,15 @@ pub async fn models_with_key(provider: &Provider, key: Option<String>) -> Result
             .unwrap_or_else(|| text.chars().take(200).collect());
         return Err(format!("{} {status}: {detail}", provider.name));
     }
-    let v: Value = serde_json::from_str(&text).map_err(|e| format!("Bad response from {}: {e}", provider.name))?;
+    let v: Value = serde_json::from_str(&text).map_err(|e| bad_response(provider, &e))?;
     let mut ids: Vec<String> = v
         .get("data")
         .and_then(Value::as_array)
         .map(|items| items.iter().filter_map(|m| m.get("id").and_then(Value::as_str)).map(str::to_string).collect())
         .unwrap_or_default();
     if ids.is_empty() {
-        return Err(format!("{} listed no models.", provider.name));
+        let name = &provider.name;
+        return Err(tr!(format!("{name} 沒有列出任何模型。"), format!("{name} listed no models.")));
     }
     ids.sort();
     ids.dedup();
@@ -399,23 +408,38 @@ pub(super) fn client() -> Result<reqwest::Client, String> {
 fn check_url(provider: &Provider, url: &str) -> Result<(), String> {
     reqwest::Url::parse(url)
         .map(|_| ())
-        .map_err(|e| format!("{}'s endpoint URL \"{}\" is not valid: {e}", provider.name, provider.base_url))
+        .map_err(|e| {
+            let (name, base) = (&provider.name, &provider.base_url);
+            tr!(format!("{name} 的端點網址「{base}」無效：{e}"), format!("{name}'s endpoint URL \"{base}\" is not valid: {e}"))
+        })
+}
+
+fn bad_response(provider: &Provider, e: &serde_json::Error) -> String {
+    let name = &provider.name;
+    tr!(format!("{name} 的回應看不懂：{e}"), format!("Bad response from {name}: {e}"))
 }
 
 /// Turns a reqwest error into a sentence, and leaves a line in the log with
 /// the provider and URL, which the island's note view does not have room for.
 fn describe(provider: &Provider, url: &str, err: reqwest::Error) -> String {
-    let what = if err.is_builder() {
-        "could not build the request — check the endpoint URL, the key and any custom header for stray characters".to_string()
+    let (kind, what): (&str, String) = if err.is_builder() {
+        (
+            "builder",
+            tr!(
+                "無法建立請求：請檢查端點網址、金鑰和自訂標頭裡有沒有多餘的字元",
+                "could not build the request — check the endpoint URL, the key and any custom header for stray characters"
+            ),
+        )
     } else if err.is_timeout() {
-        "timed out".to_string()
+        ("timeout", tr!("逾時", "timed out"))
     } else if err.is_connect() {
-        format!("could not connect ({err})")
+        ("connect", tr!(format!("連不上（{err}）"), format!("could not connect ({err})")))
     } else {
-        format!("network error: {err}")
+        ("network", tr!(format!("網路錯誤：{err}"), format!("network error: {err}")))
     };
-    crate::log::line(format!("llm {} {url}: {what}", provider.name));
-    format!("{}: {what}", provider.name)
+    crate::log::line(format!("llm {} {url}: {kind} error: {err}", provider.name));
+    let name = &provider.name;
+    tr!(format!("{name}：{what}"), format!("{name}: {what}"))
 }
 
 /// POSTs JSON, authorised. A server-sent-event reply is fed to `on_event` one
@@ -462,9 +486,7 @@ pub(super) async fn post(
             crate::log::line(format!("llm {} {url}: HTTP {status}: {detail}", provider.name));
             return Err(format!("{} {status}: {detail}", provider.name));
         }
-        return serde_json::from_str(&text)
-            .map(Some)
-            .map_err(|e| format!("Bad response from {}: {e}", provider.name));
+        return serde_json::from_str(&text).map(Some).map_err(|e| bad_response(provider, &e));
     }
 
     let mut pending: Vec<u8> = Vec::new();
@@ -537,6 +559,7 @@ pub(super) fn error_message(v: &Value) -> Option<String> {
 
 /// PDF → a PDF part, image → an image part, text/code → inline text. What the
 /// provider cannot take is left out, with a line saying so rather than silence.
+// i18n: model-facing
 fn file_parts(path: &str, caps: &Caps) -> Vec<Part> {
     let ext = std::path::Path::new(path)
         .extension()

@@ -152,6 +152,7 @@ async fn handle(app: AppHandle, mut pipe: NamedPipeServer) {
         if let Some((level, rule)) = crate::constitution::rule_for_hook(&payload) {
             let word = if level == crate::constitution::Level::Never { "refuse" } else { "ask" };
             log::line(format!("hook {agent} PreToolUse: {word} by the constitution — {}", rule.text));
+            // i18n: model-facing (the CLI hands the reason to its model)
             let reason = format!("{} (the user's constitution in Coucou)", rule.text);
             let _ = pipe.write_all(format!("{word}\t{}\n", reason.replace(['\n', '\r', '\t'], " ")).as_bytes()).await;
             let _ = pipe.flush().await;
@@ -175,6 +176,7 @@ async fn handle(app: AppHandle, mut pipe: NamedPipeServer) {
     let ruled = crate::constitution::rule_for_hook(&payload);
     if let Some((crate::constitution::Level::Never, rule)) = &ruled {
         log::line(format!("hook {agent} PermissionRequest refused by the constitution — {}", rule.text));
+        // i18n: model-facing (the CLI hands the reason to its model)
         let reason = format!("Refused by the user's constitution in Coucou: {}", rule.text);
         let _ = pipe.write_all(format!("deny\t{}\n", reason.replace(['\n', '\r', '\t'], " ")).as_bytes()).await;
         let _ = pipe.flush().await;

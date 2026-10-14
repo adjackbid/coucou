@@ -11,7 +11,7 @@ import { Nav } from "./nav";
 import { guideFlag, openGuide, redrawGuide } from "./guide";
 import { shouldAutoShowGuide, type PageId } from "./status";
 import {
-  hooks, refreshClis, refreshHooks, refreshHotkey, refreshPresent, refreshTeamAgents,
+  hooks, refreshClis, refreshHooks, refreshHotkey, refreshPresent, refreshTeamAgents, relabelClis,
   replaceSettings, setVersion, settings,
 } from "./store";
 import { overviewPage } from "./pages/overview";
@@ -49,6 +49,9 @@ async function main() {
   onLangChange(() => {
     nav.redraw();
     redrawGuide();
+    void relabelClis();
+    // Rust words the shortcut's error again in the new language.
+    void refreshHotkey();
   });
   void onEvent<string>("lang-changed", (l) => setLang(l));
   void onEvent<Settings>("settings-changed", (s) => replaceSettings({ ...settings, ...s }));

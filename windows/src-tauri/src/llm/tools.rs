@@ -45,7 +45,7 @@ pub struct Reply {
 pub async fn complete(provider: &Provider, system: &str, turns: &[Turn], tools: &[Tool]) -> Result<Reply, String> {
     let key = provider.secret();
     if key.is_none() && provider.needs_key() {
-        return Err(format!("No API key for {}. Open settings.", provider.name));
+        return Err(super::no_key(provider));
     }
     let (url, headers, body) = if provider.is_anthropic() {
         (provider.endpoint("messages"), vec![("anthropic-version", ANTHROPIC_VERSION)], anthropic_body(provider, system, turns, tools))
@@ -56,7 +56,10 @@ pub async fn complete(provider: &Provider, system: &str, turns: &[Turn], tools: 
     };
     let response = super::post(provider, key.as_deref(), &url, &headers, &body, &mut |_| Ok(()))
         .await?
-        .ok_or_else(|| format!("{} streamed an answer that was asked for whole.", provider.name))?;
+        .ok_or_else(|| -> String {
+            let name = &provider.name;
+            tr!(format!("{name} 用串流回覆了，但這裡要的是一次完整的回覆。"), format!("{name} streamed an answer that was asked for whole."))
+        })?;
     if let Some(err) = super::error_message(&response) {
         return Err(err);
     }
@@ -162,7 +165,7 @@ fn chat_body(provider: &Provider, system: &str, turns: &[Turn], tools: &[Tool]) 
 fn chat_reply(response: &Value) -> Result<Reply, String> {
     let message = response
         .pointer("/choices/0/message")
-        .ok_or("Unexpected API response: no choices.")?;
+        .ok_or_else(|| -> String { tr!("API 的回應不如預期：沒有 choices。", "Unexpected API response: no choices.") })?;
     let text = super::openai::content_text(message.get("content"));
     let calls = message
         .get("tool_calls")

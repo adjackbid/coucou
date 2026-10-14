@@ -57,8 +57,27 @@ pub struct ClaudeState {
     usage: crate::usage::Totals,
 }
 
-/// Said instead of starting a turn that cannot run.
-pub const SIGNED_OUT: &str = "Claude Code is not signed in. Open a terminal, run `claude`, and sign in with /login.";
+/// Said instead of starting a turn that cannot run. (Teamwork recognises the
+/// English text in older logs; keep its first sentence as it is.)
+pub fn signed_out() -> String {
+    tr!(
+        "Claude Code 還沒登入。請打開終端機執行 `claude`，再用 /login 登入。",
+        "Claude Code is not signed in. Open a terminal, run `claude`, and sign in with /login."
+    )
+}
+
+fn went_away() -> String {
+    tr!("Claude Code 已經結束了。", "Claude Code went away.")
+}
+
+/// A step's title on the island and in the team's monitor.
+pub(crate) fn run_title(command: &str) -> String {
+    tr!(format!("執行 {command}"), format!("Run {command}"))
+}
+
+pub(crate) fn edit_title(paths: &str) -> String {
+    tr!(format!("編輯 {paths}"), format!("Edit {paths}"))
+}
 
 /// What the driver adds to the profile's own arguments: the protocol, the
 /// permission route, the model and the session's MCP servers.
@@ -109,15 +128,18 @@ async fn control(running: &Running, request: Value, timeout: Duration) -> Result
     match tokio::time::timeout(timeout, rx).await {
         Ok(Ok(v)) => {
             if v.get("subtype").and_then(Value::as_str) == Some("error") {
-                Err(v.get("error").and_then(Value::as_str).unwrap_or("Claude Code refused the request.").to_string())
+                Err(v.get("error").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| tr!("Claude Code 拒絕了這個請求。", "Claude Code refused the request.")))
             } else {
                 Ok(v.get("response").cloned().unwrap_or(Value::Null))
             }
         }
-        Ok(Err(_)) => Err("Claude Code went away.".into()),
+        Ok(Err(_)) => Err(went_away()),
         Err(_) => {
             running.claude.control.lock().unwrap().remove(&id);
-            Err("Claude Code did not answer in time. If it has never been used here, run `claude` once in a terminal to log in.".into())
+            Err(tr!(
+                "Claude Code 沒有及時回應。如果這台電腦還沒用過它，請先在終端機執行一次 `claude` 登入。",
+                "Claude Code did not answer in time. If it has never been used here, run `claude` once in a terminal to log in."
+            ))
         }
     }
 }
@@ -155,7 +177,7 @@ pub async fn setup(running: &mut Running, key: &str, launch: &Launch, timeout: D
 
 pub async fn prompt(running: &Running, text: String, timeout: Duration) -> Result<AcpOutcome, String> {
     if running.claude.signed_out.load(Ordering::SeqCst) {
-        return Err(SIGNED_OUT.into());
+        return Err(signed_out());
     }
     let (tx, rx) = oneshot::channel();
     *running.claude.done.lock().unwrap() = Some(tx);
@@ -172,8 +194,8 @@ pub async fn prompt(running: &Running, text: String, timeout: Duration) -> Resul
     }
     match tokio::time::timeout(timeout, rx).await {
         Ok(Ok(result)) => result.map(|stop_reason| AcpOutcome { stop_reason }),
-        Ok(Err(_)) => Err("Claude Code went away.".into()),
-        Err(_) => Err("Claude Code did not finish the turn in time.".into()),
+        Ok(Err(_)) => Err(went_away()),
+        Err(_) => Err(tr!("Claude Code 沒有及時完成這一輪。", "Claude Code did not finish the turn in time.")),
     }
 }
 
@@ -184,6 +206,7 @@ pub async fn cancel(running: &Running) -> Result<(), String> {
 }
 
 /// The person's answer to a card: allow hands the tool its input back.
+// i18n: model-facing (the deny message is Claude Code's)
 pub fn permission_reply(state: &crate::claude::ClaudeState, request_id: &Value, option_id: Option<&str>) -> String {
     let id = request_id.as_str().unwrap_or_default().to_string();
     let input = state.asked.lock().unwrap().remove(&id).unwrap_or_else(|| json!({}));
@@ -195,6 +218,7 @@ pub fn permission_reply(state: &crate::claude::ClaudeState, request_id: &Value, 
 }
 
 /// A request the constitution forbids: refused, with the rule, so Claude Code knows why.
+// i18n: model-facing
 fn refusal_reply(state: &crate::claude::ClaudeState, request_id: &str, rule: &str) -> String {
     state.asked.lock().unwrap().remove(request_id);
     let decision = json!({ "behavior": "deny", "message": format!("Refused by the user's constitution: {rule}. Do not try this again; find another way or tell the leader.") });
@@ -221,12 +245,12 @@ pub fn request_of(tool: &str, input: &Value) -> (policy::Request, String, &'stat
     match tool {
         "Bash" | "PowerShell" => {
             let command = text("command");
-            (request(Kind::Execute, Some(command.clone()), vec![]), format!("Run {command}"), "execute")
+            (request(Kind::Execute, Some(command.clone()), vec![]), run_title(&command), "execute")
         }
         "Edit" | "Write" | "MultiEdit" | "NotebookEdit" => {
             let path = [text("file_path"), text("notebook_path")].into_iter().find(|p| !p.is_empty()).unwrap_or_default();
             let paths = if path.is_empty() { vec![] } else { vec![path.clone()] };
-            (request(Kind::Edit, None, paths), format!("Edit {path}"), "edit")
+            (request(Kind::Edit, None, paths), edit_title(&path), "edit")
         }
         // Where it reads, so a private folder is seen (policy::Private); reading is allowed anywhere else.
         "Read" | "Glob" | "Grep" | "LS" => {
@@ -386,7 +410,7 @@ pub async fn dispatch(route: &Route, state: &ClaudeState, msg: Value) {
             let subtype = msg.get("subtype").and_then(Value::as_str).unwrap_or("success");
             let outcome = if failed || subtype != "success" {
                 let text = msg.get("result").and_then(Value::as_str).unwrap_or("");
-                Err(if text.is_empty() { format!("Claude Code stopped: {subtype}") } else { text.to_string() })
+                Err(if text.is_empty() { tr!(format!("Claude Code 停下來了：{subtype}"), format!("Claude Code stopped: {subtype}")) } else { text.to_string() })
             } else {
                 Ok("end_turn".to_string())
             };

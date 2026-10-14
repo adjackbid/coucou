@@ -8,7 +8,13 @@ use serde_json::{json, Value};
 
 use super::{Message, OnDelta, Part, Provider, Role, SYSTEM_PROMPT};
 
-const FILTERED: &str = "The provider's content filter declined this one.";
+fn filtered() -> String {
+    tr!("供應商的內容過濾拒絕了這一則。", "The provider's content filter declined this one.")
+}
+
+fn cut_short(reason: &str) -> String {
+    tr!(format!("回覆被中途截斷：{reason}。"), format!("The response was cut short: {reason}."))
+}
 
 pub async fn send(
     provider: &Provider,
@@ -56,10 +62,10 @@ async fn send_chat(
         return Err(err);
     }
     let Some(choice) = response.get("choices").and_then(Value::as_array).and_then(|c| c.first()) else {
-        return Err("Unexpected API response: no choices.".into());
+        return Err(tr!("API 的回應不如預期：沒有 choices。", "Unexpected API response: no choices."));
     };
     if choice.get("finish_reason").and_then(Value::as_str) == Some("content_filter") {
-        return Err(FILTERED.into());
+        return Err(filtered());
     }
     Ok(content_text(choice.get("message").and_then(|m| m.get("content"))))
 }
@@ -74,7 +80,7 @@ fn chat_stream_event(event: &Value) -> Result<Option<String>, String> {
         return Ok(None);
     };
     if choice.get("finish_reason").and_then(Value::as_str) == Some("content_filter") {
-        return Err(FILTERED.into());
+        return Err(filtered());
     }
     let piece = content_text(choice.get("delta").and_then(|d| d.get("content")));
     Ok((!piece.is_empty()).then_some(piece))
@@ -154,7 +160,7 @@ async fn send_responses(
         return Err(err);
     }
     let Some(output) = response.get("output").and_then(Value::as_array) else {
-        return Err("Unexpected API response: no output.".into());
+        return Err(tr!("API 的回應不如預期：沒有 output。", "Unexpected API response: no output."));
     };
     // Reasoning items, tool calls and the like sit beside the message; only
     // the message's output_text parts are the answer.
@@ -169,7 +175,7 @@ async fn send_responses(
         .join("\n");
     if text.is_empty() {
         if let Some(reason) = incomplete_reason(&response) {
-            return Err(format!("The response was cut short: {reason}."));
+            return Err(cut_short(reason));
         }
     }
     Ok(text)
@@ -191,17 +197,17 @@ fn responses_stream_event(event: &Value) -> Result<Option<String>, String> {
         Some("response.failed") => Err(event
             .get("response")
             .and_then(super::error_message)
-            .unwrap_or_else(|| "The response failed.".into())),
+            .unwrap_or_else(|| tr!("回覆失敗了。", "The response failed."))),
         Some("response.incomplete") => {
             let reason = event.get("response").and_then(incomplete_reason).unwrap_or("unknown reason");
-            Err(format!("The response was cut short: {reason}."))
+            Err(cut_short(reason))
         }
         Some("error") => Err(event
             .get("message")
             .and_then(Value::as_str)
             .map(str::to_string)
             .or_else(|| super::error_message(event))
-            .unwrap_or_else(|| "The stream reported an error.".into())),
+            .unwrap_or_else(|| tr!("串流回報了錯誤。", "The stream reported an error."))),
         _ => Ok(None),
     }
 }
@@ -289,7 +295,7 @@ mod tests {
         assert_eq!(chat_stream_event(&json!({ "choices": [{ "delta": {}, "finish_reason": "stop" }] })).unwrap(), None);
         assert_eq!(chat_stream_event(&json!({ "choices": [], "usage": { "total_tokens": 9 } })).unwrap(), None);
         let filtered = json!({ "choices": [{ "delta": {}, "finish_reason": "content_filter" }] });
-        assert_eq!(chat_stream_event(&filtered).unwrap_err(), FILTERED);
+        assert_eq!(chat_stream_event(&filtered).unwrap_err(), super::filtered());
         let error = json!({ "error": { "message": "model not found" } });
         assert_eq!(chat_stream_event(&error).unwrap_err(), "model not found");
     }

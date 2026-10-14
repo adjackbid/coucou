@@ -144,8 +144,13 @@ fn read_settings() -> Result<Value, String> {
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(json!({})),
         // A lock, a permission problem, a bad drive: all of them mean we do not
         // know what is in there, and not knowing is not the same as empty.
-        Err(err) => Err(format!("Can't read {}: {err}", path.display())),
+        Err(err) => Err(cant_read(&path, &err)),
     }
+}
+
+fn cant_read(path: &Path, err: &std::io::Error) -> String {
+    let p = path.display();
+    tr!(format!("讀不到 {p}：{err}"), format!("Can't read {p}: {err}"))
 }
 
 /// The parsing half of `read_settings`, split out so it can be tested without a
@@ -160,9 +165,13 @@ fn parse_settings(bytes: &[u8], path: &str) -> Result<Value, String> {
     }
     match serde_json::from_slice::<Value>(text) {
         Ok(v) if v.is_object() => Ok(v),
-        Ok(_) => Err(format!("{path} isn't a JSON object — Coucou won't touch it.")),
-        Err(err) => Err(format!(
-            "{path} isn't valid JSON ({err}). Fix or move it, then try again — Coucou won't overwrite it."
+        Ok(_) => Err(tr!(
+            format!("{path} 不是 JSON 物件，Coucou 不會動它。"),
+            format!("{path} isn't a JSON object — Coucou won't touch it.")
+        )),
+        Err(err) => Err(tr!(
+            format!("{path} 不是有效的 JSON（{err}）。請修好或移走它再試一次，Coucou 不會覆寫它。"),
+            format!("{path} isn't valid JSON ({err}). Fix or move it, then try again — Coucou won't overwrite it.")
         )),
     }
 }
@@ -383,7 +392,7 @@ fn read_hook_file(agent: Agent) -> Result<String, String> {
             Ok(String::from_utf8_lossy(text).to_string())
         }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(err) => Err(format!("Can't read {}: {err}", path.display())),
+        Err(err) => Err(cant_read(&path, &err)),
     }
 }
 
@@ -486,15 +495,16 @@ pub fn write(agent: Agent, install: bool, fingerprint: &str) -> Result<String, S
     // anything at all.
     let (_, after) = before_and_after(agent, install)?;
     if current_fingerprint(agent) != fingerprint {
-        return Err(format!(
-            "{} changed since the preview. Nothing was written — review the new diff.",
-            path.display()
+        let p = path.display();
+        return Err(tr!(
+            format!("{p} 在預覽之後被改過了。什麼都沒有寫入，請看新的差異。"),
+            format!("{p} changed since the preview. Nothing was written — review the new diff.")
         ));
     }
 
     let backup = backup_path(agent);
     if path.exists() {
-        std::fs::copy(&path, &backup).map_err(|e| format!("backup failed: {e}"))?;
+        std::fs::copy(&path, &backup).map_err(|e| -> String { tr!(format!("備份失敗：{e}"), format!("backup failed: {e}")) })?;
     }
 
     if after.is_empty() {
@@ -503,7 +513,7 @@ pub fn write(agent: Agent, install: bool, fingerprint: &str) -> Result<String, S
         match std::fs::remove_file(&path) {
             Ok(()) => {}
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-            Err(err) => return Err(format!("remove failed: {err}")),
+            Err(err) => return Err(tr!(format!("移除失敗：{err}"), format!("remove failed: {err}"))),
         }
         return Ok(backup.to_string_lossy().to_string());
     }
@@ -514,12 +524,16 @@ pub fn write(agent: Agent, install: bool, fingerprint: &str) -> Result<String, S
     // Write beside the target and rename over it: a crash or a full disk leaves
     // the original file intact rather than half a file.
     let temp = path.with_extension(format!("json.coucou-{}", std::process::id()));
-    std::fs::write(&temp, text.as_bytes()).map_err(|e| format!("write failed: {e}"))?;
+    std::fs::write(&temp, text.as_bytes()).map_err(|e| write_failed(&e))?;
     if let Err(err) = std::fs::rename(&temp, &path) {
         let _ = std::fs::remove_file(&temp);
-        return Err(format!("write failed: {err}"));
+        return Err(write_failed(&err));
     }
     Ok(backup.to_string_lossy().to_string())
+}
+
+fn write_failed(err: &std::io::Error) -> String {
+    tr!(format!("寫入失敗：{err}"), format!("write failed: {err}"))
 }
 
 /// Copies coucou-hook.exe into %LOCALAPPDATA%\Coucou\bin on launch.
@@ -651,6 +665,8 @@ fn unified_diff(before: &str, after: &str) -> String {
         .map(|(i, _)| i)
         .collect();
     if changed.is_empty() {
+        // Not translated: the settings window compares the diff with this
+        // exact text (settings/status.ts) to tell "connected" from "needs update".
         return "No change.".into();
     }
     let mut keep = vec![false; out.len()];

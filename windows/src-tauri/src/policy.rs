@@ -172,6 +172,7 @@ pub fn decide(scope: &Scope, request: &Request) -> Verdict {
 // ── Private folders ───────────────────────────────────────────────────────────
 
 /// What an agent is told when it reaches for a private folder.
+// i18n: model-facing
 pub const PRIVATE_REFUSAL: &str = "This is the team's private knowledge base; it is not for you. Do not try to read it another way.";
 
 /// Every team's knowledge base lives under a folder of this name

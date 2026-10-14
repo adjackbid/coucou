@@ -35,6 +35,7 @@ fn clip(s: &str, max: usize) -> String {
     format!("{}\n…(cut, {} more bytes)", &s[..end], s.len() - end)
 }
 
+// i18n: model-facing
 fn danger_word(d: &Danger) -> &'static str {
     match d {
         Danger::DeletesFolder => "deletes a folder or deletes recursively",
@@ -74,6 +75,7 @@ fn transcript_tail(path: &Path) -> Option<String> {
 }
 
 /// Everything the explanation may stand on, as one plain-text brief.
+// i18n: model-facing
 pub fn brief(payload: &Value, teams: &[crate::team::state::Snapshot]) -> String {
     let tool = payload.get("tool_name").and_then(Value::as_str).unwrap_or("(unknown tool)");
     let agent = payload.get("agent").and_then(Value::as_str).unwrap_or("a coding CLI");
@@ -136,6 +138,7 @@ pub fn brief(payload: &Value, teams: &[crate::team::state::Snapshot]) -> String 
 /// A team member's card, read the same way: the request as the agent sent it,
 /// Coucou's verdict on it, the member's task, and its own live screen as the
 /// account of what it was doing.
+// i18n: model-facing
 pub fn team_brief(snap: &crate::team::state::Snapshot, member: &str, request_json: &str) -> Option<String> {
     use crate::team::screen::LineKind;
     let m = snap.members.iter().find(|m| m.id == member)?;
@@ -185,12 +188,25 @@ pub fn team_brief(snap: &crate::team::state::Snapshot, member: &str, request_jso
 
 /// The team member's card, explained.
 pub async fn explain_team(provider: &crate::llm::Provider, snap: &crate::team::state::Snapshot, member: &str, request_json: &str) -> Result<String, String> {
-    let brief = team_brief(snap, member, request_json).ok_or("This request is no longer waiting.")?;
+    let brief = team_brief(snap, member, request_json)
+        .ok_or_else(|| -> String { tr!("這個請求已經不在等待了。", "This request is no longer waiting.") })?;
     let chat = crate::llm::Chat::default();
-    let reply = crate::llm::send(&chat, provider, format!("{SYSTEM}\n\n=== BRIEF ===\n{brief}"), None, None).await?;
+    let reply = crate::llm::send(&chat, provider, format!("{}\n\n=== BRIEF ===\n{brief}", system()), None, None).await?;
     Ok(reply.text)
 }
 
+/// The explanation is read by the person, so it comes in the app's language;
+/// the sections are named in that language too.
+// i18n: model-facing
+fn system() -> &'static str {
+    if crate::i18n::is_zh() {
+        SYSTEM
+    } else {
+        SYSTEM_EN
+    }
+}
+
+// i18n: model-facing
 pub const SYSTEM: &str = "You help a person decide whether to allow a coding agent's request on their Windows computer. \
 Answer in Traditional Chinese (繁體中文), plainly, for someone who may not read code. Use exactly these sections:\n\
 【目的】what the agent is trying to achieve and why now (from its transcript and the request).\n\
@@ -202,10 +218,22 @@ Answer in Traditional Chinese (繁體中文), plainly, for someone who may not r
 Rules: rely only on the brief. Coucou's rule check is computed by code and is reliable — never contradict it. \
 Do not invent files, intentions or effects. If the brief does not let you tell, say so instead of guessing. Keep it under 250 Chinese characters per section.";
 
+// i18n: model-facing
+pub const SYSTEM_EN: &str = "You help a person decide whether to allow a coding agent's request on their Windows computer. \
+Answer in English, plainly, for someone who may not read code. Use exactly these sections:\n\
+[Purpose] what the agent is trying to achieve and why now (from its transcript and the request).\n\
+[What it does] step by step, what this exact command or edit does when allowed.\n\
+[What it touches] which files/folders it reads, writes or deletes; whether it stays inside the session folder; whether it uses the network.\n\
+[Risk] Low / Medium / High, then the reasons. Say whether the effect can be undone.\n\
+[Advice] Allow / Deny / Check something first — and why in one or two sentences.\n\
+[Not sure] what you cannot tell from what you were given (omit the section if nothing).\n\
+Rules: rely only on the brief. Coucou's rule check is computed by code and is reliable — never contradict it. \
+Do not invent files, intentions or effects. If the brief does not let you tell, say so instead of guessing. Keep it under 120 words per section.";
+
 /// The question the secretary's model is asked, and the model to ask it.
 pub async fn explain(provider: &crate::llm::Provider, payload: &Value, teams: &[crate::team::state::Snapshot]) -> Result<String, String> {
     let chat = crate::llm::Chat::default();
-    let question = format!("{SYSTEM}\n\n=== BRIEF ===\n{}", brief(payload, teams));
+    let question = format!("{}\n\n=== BRIEF ===\n{}", system(), brief(payload, teams));
     let reply = crate::llm::send(&chat, provider, question, None, None).await?;
     Ok(reply.text)
 }

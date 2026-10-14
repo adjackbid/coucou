@@ -286,7 +286,9 @@ describe("every interface string comes in both languages", () => {
     for (const f of sources) {
       const toks = tokenize(f.text);
       const { cov } = covered(toks);
+      const lines = f.text.split("\n");
       toks.forEach((tk, i) => {
+        if (/i18n-ok/.test(lines[tk.line - 1] ?? "")) return;
         if (tk.t === "str" && CJK.test(tk.v) && !cov.has(i) && !SAME_IN_BOTH.has(tk.v.trim())) {
           found.push(`${f.path}:${tk.line} ${JSON.stringify(tk.v.slice(0, 50))}`);
         }

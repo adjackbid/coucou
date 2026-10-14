@@ -13,7 +13,9 @@ pub const ANTHROPIC_VERSION: &str = "2023-06-01";
 /// a fallback model inside the same call, so the island never shows a dead end.
 const FALLBACK_BETA: &str = "server-side-fallback-2026-07-01";
 const MAX_TOKENS: u32 = 4096;
-const DECLINED: &str = "Claude declined this one.";
+fn declined() -> String {
+    tr!("Claude 拒絕回答這一則。", "Claude declined this one.")
+}
 
 pub async fn send(
     provider: &Provider,
@@ -63,7 +65,7 @@ pub async fn send(
         return Err(refusal_text(response.get("stop_details")));
     }
     let Some(blocks) = response.get("content").and_then(Value::as_array) else {
-        return Err("Unexpected API response.".into());
+        return Err(tr!("API 的回應不如預期。", "Unexpected API response."));
     };
     Ok(blocks
         .iter()
@@ -77,8 +79,8 @@ fn refusal_text(details: Option<&Value>) -> String {
     details
         .and_then(|d| d.get("explanation"))
         .and_then(Value::as_str)
-        .unwrap_or(DECLINED)
-        .to_string()
+        .map(str::to_string)
+        .unwrap_or_else(declined)
 }
 
 /// One event of a streamed reply: the text it adds, if any, or the error it
@@ -99,7 +101,7 @@ fn stream_event(event: &Value) -> Result<Option<String>, String> {
             }
             Ok(None)
         }
-        Some("error") => Err(super::error_message(event).unwrap_or_else(|| "The stream reported an error.".into())),
+        Some("error") => Err(super::error_message(event).unwrap_or_else(|| tr!("串流回報了錯誤。", "The stream reported an error."))),
         _ => Ok(None),
     }
 }
@@ -161,7 +163,7 @@ mod tests {
         assert_eq!(stream_event(&json!({ "type": "message_delta", "delta": { "stop_reason": "end_turn" } })).unwrap(), None);
 
         let refused = json!({ "type": "message_delta", "delta": { "stop_reason": "refusal" } });
-        assert_eq!(stream_event(&refused).unwrap_err(), DECLINED);
+        assert_eq!(stream_event(&refused).unwrap_err(), declined());
         let error = json!({ "type": "error", "error": { "type": "overloaded_error", "message": "Overloaded" } });
         assert_eq!(stream_event(&error).unwrap_err(), "Overloaded");
     }

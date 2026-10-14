@@ -243,15 +243,21 @@ pub async fn proxy_prices(base: &str, key: Option<String>, label: &str) -> Resul
                 let info: Value = resp.json().await.map_err(|e| e.to_string())?;
                 let found = pricing::from_model_info(&info, label);
                 if found.is_empty() {
-                    return Err("The endpoint answered, but listed no prices for its models.".into());
+                    return Err(tr!("端點有回應，但沒有列出任何模型的價格。", "The endpoint answered, but listed no prices for its models."));
                 }
                 return Ok(found);
             }
-            Ok(resp) => last = format!("{} answered {}", path, resp.status()),
+            Ok(resp) => {
+                let status = resp.status();
+                last = tr!(format!("{path} 回應 {status}"), format!("{path} answered {status}"));
+            }
             Err(e) => last = e.to_string(),
         }
     }
-    Err(format!("This endpoint does not give its prices (it is not a LiteLLM proxy, or the key may not read them): {last}"))
+    Err(tr!(
+        format!("這個端點不提供價格（它不是 LiteLLM proxy，或這把金鑰沒有讀取價格的權限）：{last}"),
+        format!("This endpoint does not give its prices (it is not a LiteLLM proxy, or the key may not read them): {last}")
+    ))
 }
 
 /// What an agent's endpoint (a LiteLLM proxy) has billed its key: the
@@ -272,11 +278,15 @@ pub struct KeySpend {
 /// Asks the endpoint what it billed the agent's key (LiteLLM's `/key/info`).
 pub async fn key_spend(base: &str, key: Option<String>) -> Result<KeySpend, String> {
     let root = base.trim_end_matches('/').trim_end_matches("/v1");
-    let key = key.ok_or("This agent has no key to ask with.")?;
+    let key = key.ok_or_else(|| -> String { tr!("這個 agent 沒有可以用來查詢的金鑰。", "This agent has no key to ask with.") })?;
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
     let resp = client.get(format!("{root}/key/info")).bearer_auth(&key).send().await.map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
-        return Err(format!("The endpoint does not tell what its key has spent (it answered {}; it may not be a LiteLLM proxy).", resp.status()));
+        let status = resp.status();
+        return Err(tr!(
+            format!("這個端點沒有提供這把金鑰花了多少（它回應 {status}；可能不是 LiteLLM proxy）。"),
+            format!("The endpoint does not tell what its key has spent (it answered {status}; it may not be a LiteLLM proxy).")
+        ));
     }
     let body: Value = resp.json().await.map_err(|e| e.to_string())?;
     Ok(spend_of(&body["info"]))
@@ -303,12 +313,13 @@ pub async fn fetch_list() -> Result<Table, String> {
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
     let resp = client.get(pricing::LITELLM_URL).send().await.map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
-        return Err(format!("The price list answered {}", resp.status()));
+        let status = resp.status();
+        return Err(tr!(format!("價目表回應 {status}"), format!("The price list answered {status}")));
     }
     let all: Value = resp.json().await.map_err(|e| e.to_string())?;
     let models = pricing::reduce_litellm(&all);
     if models.len() < 100 {
-        return Err("The price list came back nearly empty; the copy in use was kept.".into());
+        return Err(tr!("抓回來的價目表幾乎是空的，繼續使用原本的那份。", "The price list came back nearly empty; the copy in use was kept."));
     }
     Ok(Table { source: "LiteLLM model_prices_and_context_window.json".into(), fetched_at: crate::team::store::now_ms(), models })
 }

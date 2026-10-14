@@ -99,20 +99,23 @@ fn apply_hotkey(app: &AppHandle, hotkey: &str) {
     let shortcuts = app.global_shortcut();
     let _ = shortcuts.unregister_all();
     let hotkey = hotkey.trim();
-    let result = if hotkey.is_empty() {
+    let result: Result<(), String> = if hotkey.is_empty() {
         Ok(())
     } else {
         hotkey
             .parse::<Shortcut>()
-            .map_err(|err| format!("'{hotkey}' is not a shortcut I understand: {err}"))
+            .map_err(|err| -> String {
+                tr!(format!("看不懂「{hotkey}」這個快速鍵：{err}"), format!("'{hotkey}' is not a shortcut I understand: {err}"))
+            })
             .and_then(|parsed| {
-                shortcuts.register(parsed).map_err(|err| {
+                shortcuts.register(parsed).map_err(|err| -> String {
                     // The plugin's wording names its own types; say it plainly.
+                    // (The plugin's own English text, not ours: kept as it is.)
                     let taken = err.to_string().contains("already registered");
                     if taken {
-                        format!("{hotkey} is already taken by another program.")
+                        tr!(format!("{hotkey} 已經被別的程式占用了。"), format!("{hotkey} is already taken by another program."))
                     } else {
-                        format!("{hotkey} could not be registered: {err}")
+                        tr!(format!("無法註冊 {hotkey}：{err}"), format!("{hotkey} could not be registered: {err}"))
                     }
                 })
             })
@@ -144,16 +147,19 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
         *current = settings.clone();
         (settings, screen_changed, autostart_changed, hotkey_changed)
     };
-    if hotkey_changed {
+    let lang_changed = i18n::set(&settings.language);
+    // A new language also rewrites why the shortcut is not active.
+    if hotkey_changed || lang_changed {
         apply_hotkey(&app, &settings.hotkey);
     }
     if let Err(err) = settings::save(&settings) {
         eprintln!("[coucou] could not save settings: {err}");
     }
-    if i18n::set(&settings.language) {
+    if lang_changed {
         // Every window redraws in the new language; the tray menu is relabelled.
         let _ = app.emit("lang-changed", i18n::current());
         tray::relabel(&app);
+        window_titles(&app);
     }
     if autostart_changed {
         let manager = app.autolaunch();
@@ -334,7 +340,7 @@ fn set_paused(paused: bool) {
 // ── Claude Code hooks ─────────────────────────────────────────────────────────
 
 fn agent(name: &str) -> Result<Agent, String> {
-    Agent::parse(name).ok_or_else(|| format!("unknown agent {name}"))
+    Agent::parse(name).ok_or_else(|| tr!(format!("不認得的 agent：{name}"), format!("unknown agent {name}")))
 }
 
 #[tauri::command]
@@ -412,7 +418,7 @@ async fn chat_send(
         .unwrap()
         .active()
         .cloned()
-        .ok_or_else(|| "No provider configured. Open settings.".to_string())?;
+        .ok_or_else(|| -> String { tr!("還沒設定聊天模型。請打開設定。", "No chat model is set up. Open Settings.") })?;
     // The reply reaches the island piece by piece as it is written; the
     // command's own result is the whole of it, for the history.
     let emit = move |piece: &str| {
@@ -451,7 +457,7 @@ fn is_pty_pipe(name: &str) -> bool {
 fn pty_send(pipe: String, text: String) -> Result<(), String> {
     use std::io::Write;
     if !is_pty_pipe(&pipe) {
-        return Err("That is not a Coucou terminal.".into());
+        return Err(tr!("這不是 Coucou 的終端機。", "That is not a Coucou terminal."));
     }
     // A bare "\r" is a deliberate Enter (accept the highlighted choice,
     // skip an optional field); anything else is typed, trimmed.
@@ -460,12 +466,12 @@ fn pty_send(pipe: String, text: String) -> Result<(), String> {
         return Ok(());
     }
     if text.len() > 16 * 1024 {
-        return Err("That is too long to type into a terminal.".into());
+        return Err(tr!("太長了，沒辦法打進終端機。", "That is too long to type into a terminal."));
     }
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .open(&pipe)
-        .map_err(|_| "That terminal is gone, or was not started through coucou-pty.".to_string())?;
+        .map_err(|_| -> String { tr!("這個終端機已經關了，或不是透過 coucou-pty 啟動的。", "That terminal is gone, or was not started through coucou-pty.") })?;
     file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
     log::line(format!("pty {pipe}: sent {} characters", text.chars().count()));
     Ok(())
@@ -489,7 +495,7 @@ async fn acp_send(
         .unwrap()
         .agent(&agent_id)
         .cloned()
-        .ok_or_else(|| "That agent is not in settings any more.".to_string())?;
+        .ok_or_else(|| -> String { tr!("設定裡已經沒有這個 agent 了。", "That agent is not in settings any more.") })?;
     // The chat's agent: one session per profile, and a card for every request.
     agents.prompt(&acp::to_island(&app), &agent_id, &profile, &Launch::default(), text).await
 }
@@ -545,20 +551,28 @@ pub struct TeamFiles {
     files: Vec<TeamFile>,
 }
 
+fn no_such_team() -> String {
+    tr!("沒有這個團隊。", "There is no such team.")
+}
+
+fn expected_bytes() -> String {
+    tr!("沒有收到檔案的內容。", "expected the file's bytes")
+}
+
 /// A team file is named, never addressed: `shop.json`, in the teams folder.
 fn team_file_path(file: &str) -> Result<std::path::PathBuf, String> {
     let plain = file.strip_suffix(".json").map(team::is_plain_id).unwrap_or(false);
     if !plain {
-        return Err("That is not a team file.".into());
+        return Err(tr!("這不是團隊檔。", "That is not a team file."));
     }
     Ok(settings::team_configs_dir().join(file))
 }
 
 fn read_team_file(file: &str) -> Result<TeamConfig, String> {
-    let bytes = std::fs::read(team_file_path(file)?).map_err(|e| format!("Could not read {file}: {e}"))?;
+    let bytes = std::fs::read(team_file_path(file)?).map_err(|e| -> String { tr!(format!("讀不到 {file}：{e}"), format!("Could not read {file}: {e}")) })?;
     // PowerShell 5 and Notepad both write a BOM; it is not part of the JSON.
     let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(&bytes);
-    serde_json::from_slice(bytes).map_err(|e| format!("{file} is not a team file Coucou can read: {e}"))
+    serde_json::from_slice(bytes).map_err(|e| tr!(format!("{file} 不是 Coucou 讀得懂的團隊檔：{e}"), format!("{file} is not a team file Coucou can read: {e}")))
 }
 
 /// An example to start from, written once into an empty teams folder.
@@ -611,7 +625,10 @@ async fn team_start(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, fil
     let config = read_team_file(&file)?;
     let profiles = runnable(&shared);
     if !settings::team_mcp_exe_path().is_file() {
-        return Err("coucou-team-mcp.exe is missing from Coucou's bin folder, so members could not report. Reinstall or rebuild Coucou.".into());
+        return Err(tr!(
+            "Coucou 的 bin 資料夾裡少了 coucou-team-mcp.exe，成員沒辦法回報。請重新安裝或重新建置 Coucou。",
+            "coucou-team-mcp.exe is missing from Coucou's bin folder, so members could not report. Reinstall or rebuild Coucou."
+        ));
     }
     teams.start(config, &profiles)
 }
@@ -693,9 +710,9 @@ async fn team_recover(teams: State<'_, Arc<Teams>>, team: String, member: String
 const ATTACHMENT_MAX: usize = 30 * 1024 * 1024;
 
 fn attachment_path(teams: &Teams, team: &str, name: &str) -> Result<std::path::PathBuf, String> {
-    let work_dir = teams.get(team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or("There is no such team.")?;
+    let work_dir = teams.get(team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or_else(no_such_team)?;
     let dir = std::path::Path::new(&work_dir).join(".coucou").join("attachments");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not make {}: {e}", dir.display()))?;
+    std::fs::create_dir_all(&dir).map_err(|e| -> String { tr!(format!("無法建立 {}：{e}", dir.display()), format!("Could not make {}: {e}", dir.display())) })?;
     // A name that stays a name: no folders, nothing Windows refuses.
     let clean: String = std::path::Path::new(name)
         .file_name()
@@ -709,20 +726,25 @@ fn attachment_path(teams: &Teams, team: &str, name: &str) -> Result<std::path::P
     Ok(dir.join(format!("{stamp}-{clean}")))
 }
 
+fn too_large(name: &str) -> String {
+    let mb = ATTACHMENT_MAX / 1024 / 1024;
+    tr!(format!("{name} 超過 {mb} MB。"), format!("{name} is larger than {mb} MB."))
+}
+
 /// An image pasted or picked in the Teamwork window: its bytes as the request
 /// body, the team and the file name (URL-encoded) in headers. Returns where
 /// it now is.
 #[tauri::command]
 fn team_attach_bytes(teams: State<Arc<Teams>>, request: tauri::ipc::Request<'_>) -> Result<String, String> {
     let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(percent_decode);
-    let team = header("x-team").ok_or("Which team is this for?")?;
+    let team = header("x-team").ok_or_else(|| -> String { tr!("不知道這是給哪個團隊的。", "Which team is this for?") })?;
     let name = header("x-file-name").unwrap_or_else(|| "image.png".into());
-    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Err("expected the file's bytes".into()) };
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Err(expected_bytes()) };
     if bytes.len() > ATTACHMENT_MAX {
-        return Err(format!("{name} is larger than {} MB.", ATTACHMENT_MAX / 1024 / 1024));
+        return Err(too_large(&name));
     }
     let path = attachment_path(&teams, &team, &name)?;
-    std::fs::write(&path, bytes).map_err(|e| format!("Could not save {name}: {e}"))?;
+    std::fs::write(&path, bytes).map_err(|e| -> String { tr!(format!("無法儲存 {name}：{e}"), format!("Could not save {name}: {e}")) })?;
     Ok(path.to_string_lossy().to_string())
 }
 
@@ -730,15 +752,15 @@ fn team_attach_bytes(teams: State<Arc<Teams>>, request: tauri::ipc::Request<'_>)
 #[tauri::command]
 fn team_attach_path(teams: State<Arc<Teams>>, team: String, path: String) -> Result<String, String> {
     let from = std::path::Path::new(&path);
-    let size = std::fs::metadata(from).map_err(|e| format!("Could not read {path}: {e}"))?.len() as usize;
+    let size = std::fs::metadata(from).map_err(|e| -> String { tr!(format!("讀不到 {path}：{e}"), format!("Could not read {path}: {e}")) })?.len() as usize;
     if !from.is_file() {
-        return Err(format!("{path} is not a file."));
+        return Err(tr!(format!("{path} 不是檔案。"), format!("{path} is not a file.")));
     }
     if size > ATTACHMENT_MAX {
-        return Err(format!("{path} is larger than {} MB.", ATTACHMENT_MAX / 1024 / 1024));
+        return Err(too_large(&path));
     }
     let to = attachment_path(&teams, &team, &from.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default())?;
-    std::fs::copy(from, &to).map_err(|e| format!("Could not copy {path}: {e}"))?;
+    std::fs::copy(from, &to).map_err(|e| -> String { tr!(format!("無法複製 {path}：{e}"), format!("Could not copy {path}: {e}")) })?;
     Ok(to.to_string_lossy().to_string())
 }
 
@@ -750,11 +772,11 @@ fn team_open(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<
         open_url(locator);
         return Ok(());
     }
-    let work_dir = teams.get(&team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or("There is no such team.")?;
+    let work_dir = teams.get(&team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or_else(no_such_team)?;
     let path = std::path::Path::new(&locator);
     let full = if path.is_absolute() { path.to_path_buf() } else { std::path::Path::new(&work_dir).join(path) };
     if !full.exists() {
-        return Err(format!("{} is no longer there.", full.display()));
+        return Err(tr!(format!("{} 已經不在了。", full.display()), format!("{} is no longer there.", full.display())));
     }
     let mut cmd = Command::new("explorer");
     if full.is_dir() {
@@ -772,13 +794,13 @@ fn team_open(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<
 fn team_open_image(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<(), String> {
     let lower = locator.trim().to_ascii_lowercase();
     if !["png", "jpg", "jpeg", "gif", "webp", "bmp"].iter().any(|ext| lower.ends_with(&format!(".{ext}"))) {
-        return Err("Not a picture.".into());
+        return Err(tr!("這不是圖片。", "Not a picture."));
     }
-    let work_dir = teams.get(&team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or("There is no such team.")?;
+    let work_dir = teams.get(&team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or_else(no_such_team)?;
     let path = std::path::Path::new(locator.trim());
     let full = if path.is_absolute() { path.to_path_buf() } else { std::path::Path::new(&work_dir).join(path) };
     if !full.is_file() {
-        return Err(format!("{} is no longer there.", full.display()));
+        return Err(tr!(format!("{} 已經不在了。", full.display()), format!("{} is no longer there.", full.display())));
     }
     // Explorer hands a file to the program registered for it, as a double-click does.
     Command::new("explorer").arg(&full).spawn().map(|_| ()).map_err(|e| e.to_string())
@@ -797,16 +819,16 @@ fn team_history(teams: State<Arc<Teams>>, team: String) -> Vec<team::orchestrato
 #[tauri::command]
 fn team_past(teams: State<Arc<Teams>>, team: String, archived_at: u64) -> Result<Snapshot, String> {
     if !team::is_plain_id(&team) {
-        return Err("There is no such team.".into());
+        return Err(no_such_team());
     }
-    teams.past(&team, archived_at).ok_or_else(|| "That run's log is no longer there.".into())
+    teams.past(&team, archived_at).ok_or_else(|| tr!("那一次執行的紀錄已經不在了。", "That run's log is no longer there."))
 }
 
 /// The bytes of a deliverable that is a picture in the team's work folder,
 /// for the Office's wall and drawer. See team::preview_path for what is refused.
 #[tauri::command]
 fn team_preview(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<tauri::ipc::Response, String> {
-    let work_dir = teams.get(&team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or("There is no such team.")?;
+    let work_dir = teams.get(&team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or_else(no_such_team)?;
     let path = team::preview_path(&work_dir, &locator)?;
     std::fs::read(path).map(tauri::ipc::Response::new).map_err(|e| e.to_string())
 }
@@ -819,7 +841,7 @@ fn team_save(teams: State<Arc<Teams>>, file: String, mut config: TeamConfig) -> 
     config.id = file.trim_end_matches(".json").to_string();
     let json = serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?;
     std::fs::create_dir_all(settings::team_configs_dir()).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| format!("Could not save {file}: {e}"))?;
+    std::fs::write(path, json).map_err(|e| -> String { tr!(format!("無法儲存 {file}：{e}"), format!("Could not save {file}: {e}")) })?;
     // Members' limits hold at once, even while the team runs.
     teams.update_limits(&config);
     Ok(())
@@ -833,7 +855,7 @@ fn team_new(shared: State<Shared>) -> Result<String, String> {
     let id = (1..1000)
         .map(|n| if n == 1 { "team".to_string() } else { format!("team-{n}") })
         .find(|id| !dir.join(format!("{id}.json")).exists())
-        .ok_or("There are too many team files.")?;
+        .ok_or_else(|| -> String { tr!("團隊檔太多了。", "There are too many team files.") })?;
     let natives = shared.settings.lock().unwrap().agents.clone();
     let agent = team_agents::current().choices(&natives).first().map(|a| a.id.clone()).unwrap_or_default();
     let config = serde_json::json!({
@@ -842,7 +864,7 @@ fn team_new(shared: State<Shared>) -> Result<String, String> {
     });
     let file = format!("{id}.json");
     std::fs::write(dir.join(&file), serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?)
-        .map_err(|e| format!("Could not create {file}: {e}"))?;
+        .map_err(|e| -> String { tr!(format!("無法建立 {file}：{e}"), format!("Could not create {file}: {e}")) })?;
     Ok(file)
 }
 
@@ -856,13 +878,14 @@ fn team_duplicate(file: String) -> Result<String, String> {
     let id = (1..1000)
         .map(|n| if n == 1 { format!("{base}-copy") } else { format!("{base}-copy-{n}") })
         .find(|id| !dir.join(format!("{id}.json")).exists())
-        .ok_or("There are too many copies of this team.")?;
+        .ok_or_else(|| -> String { tr!("這個團隊的複本太多了。", "There are too many copies of this team.") })?;
     let from = config.id.clone();
     config.id = id.clone();
-    config.name = if config.name.trim().is_empty() { String::new() } else { format!("{} (複本)", config.name.trim()) };
+    let name = config.name.trim().to_string();
+    config.name = if name.is_empty() { String::new() } else { tr!(format!("{name}(複本)"), format!("{name} (copy)")) };
     let copy = format!("{id}.json");
     std::fs::write(dir.join(&copy), serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?)
-        .map_err(|e| format!("Could not create {copy}: {e}"))?;
+        .map_err(|e| -> String { tr!(format!("無法建立 {copy}：{e}"), format!("Could not create {copy}: {e}")) })?;
     // The same documents, under a leader's folder of the copy's own.
     if team::is_plain_id(&from) {
         if let Err(err) = Kb::of(&from).copy_to(&Kb::of(&id)) {
@@ -880,14 +903,14 @@ fn team_delete(teams: State<Arc<Teams>>, file: String) -> Result<(), String> {
     let path = team_file_path(&file)?;
     let id = file.trim_end_matches(".json");
     if teams.is_live(id) {
-        return Err("This team is running. Stop it before deleting it.".into());
+        return Err(tr!("這個團隊正在執行。請先停止再刪除。", "This team is running. Stop it before deleting it."));
     }
     // The knowledge base goes by the id the file says (the example's is not its name).
     let said = read_team_file(&file).map(|c| c.id).ok().filter(|i| team::is_plain_id(i)).unwrap_or_else(|| id.to_string());
     let bin = settings::team_configs_dir().join(".deleted");
     std::fs::create_dir_all(&bin).map_err(|e| e.to_string())?;
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    std::fs::rename(&path, bin.join(format!("{id}-{stamp}.json"))).map_err(|e| format!("Could not delete {file}: {e}"))?;
+    std::fs::rename(&path, bin.join(format!("{id}-{stamp}.json"))).map_err(|e| -> String { tr!(format!("無法刪除 {file}：{e}"), format!("Could not delete {file}: {e}")) })?;
     // Its documents go aside with it, under the same time.
     let docs = knowledge::team_dir(&said);
     if docs.is_dir() {
@@ -910,11 +933,11 @@ fn team_archive(teams: State<Arc<Teams>>, file: String, archived: bool) -> Resul
     let path = team_file_path(&file)?;
     let mut config = read_team_file(&file)?;
     if archived && teams.is_live(&config.id) {
-        return Err("This team is running. Stop it before putting it away.".into());
+        return Err(tr!("這個團隊正在執行。請先停止再收起來。", "This team is running. Stop it before putting it away."));
     }
     config.archived = archived;
     let json = serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| format!("Could not save {file}: {e}"))?;
+    std::fs::write(path, json).map_err(|e| -> String { tr!(format!("無法儲存 {file}：{e}"), format!("Could not save {file}: {e}")) })?;
     log::line(format!("team {}: {}", config.id, if archived { "archived" } else { "taken out of the archive" }));
     Ok(())
 }
@@ -944,7 +967,7 @@ async fn pick_folder(app: AppHandle, start: String, title: String) -> Result<Opt
 /// after it, or (a file not saved from the form yet, such as the example) saying it.
 fn knowledge_of(team: &str) -> Result<Kb, String> {
     if !team::is_plain_id(team) {
-        return Err("There is no such team.".into());
+        return Err(no_such_team());
     }
     let named = team_file_path(&format!("{team}.json"))?.is_file();
     let says = || {
@@ -957,7 +980,7 @@ fn knowledge_of(team: &str) -> Result<Kb, String> {
             .any(|n| read_team_file(&n).is_ok_and(|c| c.id == team))
     };
     if !named && !says() {
-        return Err("There is no such team.".into());
+        return Err(no_such_team());
     }
     Ok(Kb::of(team))
 }
@@ -997,10 +1020,10 @@ fn team_knowledge_add_path(app: AppHandle, teams: State<Arc<Teams>>, team: Strin
 #[tauri::command]
 fn team_knowledge_add_bytes(app: AppHandle, teams: State<Arc<Teams>>, request: tauri::ipc::Request<'_>) -> Result<Added, String> {
     let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(percent_decode);
-    let team = header("x-team").ok_or("Which team is this for?")?;
+    let team = header("x-team").ok_or_else(|| -> String { tr!("不知道這是給哪個團隊的。", "Which team is this for?") })?;
     let name = header("x-file-name").unwrap_or_else(|| "image.png".into());
     let force = header("x-force").as_deref() == Some("1");
-    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Err("expected the file's bytes".into()) };
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Err(expected_bytes()) };
     let kb = knowledge_of(&team)?;
     let added = kb.add(&name, bytes.clone(), "", force)?;
     after_add(&app, &teams, &team, &added);
@@ -1046,10 +1069,10 @@ fn team_knowledge_remove(app: AppHandle, teams: State<Arc<Teams>>, team: String,
 fn knowledge_file(team: &str, doc: &str) -> Result<(knowledge::Doc, std::path::PathBuf), String> {
     let kb = knowledge_of(team)?;
     let index = kb.load();
-    let found = Kb::find(&index, doc).cloned().ok_or("There is no such document.")?;
+    let found = Kb::find(&index, doc).cloned().ok_or_else(|| -> String { tr!("沒有這份文件。", "There is no such document.") })?;
     let path = kb.path_of(&index, &found);
     if !path.is_file() {
-        return Err(format!("{} is no longer in the knowledge folder.", found.name));
+        return Err(tr!(format!("{} 已經不在知識庫資料夾裡了。", found.name), format!("{} is no longer in the knowledge folder.", found.name)));
     }
     Ok((found, path))
 }
@@ -1059,7 +1082,7 @@ fn knowledge_file(team: &str, doc: &str) -> Result<(knowledge::Doc, std::path::P
 fn team_knowledge_preview(team: String, doc: String) -> Result<tauri::ipc::Response, String> {
     let (found, path) = knowledge_file(&team, &doc)?;
     if found.kind == knowledge::DocKind::File {
-        return Err("This kind of file has no preview: open it instead.".into());
+        return Err(tr!("這種檔案沒有預覽，請直接打開。", "This kind of file has no preview: open it instead."));
     }
     std::fs::read(path).map(tauri::ipc::Response::new).map_err(|e| e.to_string())
 }
@@ -1077,7 +1100,10 @@ fn team_knowledge_reveal(team: String, doc: String) -> Result<(), String> {
 fn team_knowledge_open(team: String, doc: String) -> Result<(), String> {
     let (found, path) = knowledge_file(&team, &doc)?;
     if knowledge::is_program(&found.name) {
-        return Err("Coucou does not open programs, scripts or shortcuts. Show it in Explorer instead.".into());
+        return Err(tr!(
+            "Coucou 不會打開程式、指令碼或捷徑。請改用「在檔案總管中顯示」。",
+            "Coucou does not open programs, scripts or shortcuts. Show it in Explorer instead."
+        ));
     }
     Command::new("explorer").arg(&path).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
@@ -1172,9 +1198,9 @@ async fn pricing_fetch_list() -> Result<usize, String> {
 /// the agent's own key. Returns how many models it priced.
 #[tauri::command]
 async fn pricing_from_agent(shared: State<'_, Shared>, agent: String) -> Result<usize, String> {
-    let profile = shared.settings.lock().unwrap().agents.iter().find(|a| a.id == agent).cloned().ok_or("There is no such agent.")?;
+    let profile = shared.settings.lock().unwrap().agents.iter().find(|a| a.id == agent).cloned().ok_or_else(|| -> String { tr!("沒有這個 agent。", "There is no such agent.") })?;
     let base = profile.env.get("COPILOT_PROVIDER_BASE_URL").map(|s| s.trim().to_string()).filter(|s| !s.is_empty() && !s.contains('…'));
-    let base = base.ok_or("This agent has no endpoint of its own to ask for prices.")?;
+    let base = base.ok_or_else(|| -> String { tr!("這個 agent 沒有自己的端點可以查價格。", "This agent has no endpoint of its own to ask for prices.") })?;
     let secret = secrets::get(&profile.secret_key()).unwrap_or_default();
     let key = profile.env.get("COPILOT_PROVIDER_API_KEY").map(|v| v.replace("{secret}", &secret)).filter(|k| !k.trim().is_empty());
     let label = base.trim_start_matches("https://").trim_start_matches("http://").split('/').next().unwrap_or(&base).to_string();
@@ -1190,9 +1216,9 @@ async fn pricing_from_agent(shared: State<'_, Shared>, agent: String) -> Result<
 /// What an agent's own endpoint (a LiteLLM proxy) has billed the agent's key.
 #[tauri::command]
 async fn endpoint_spend(shared: State<'_, Shared>, agent: String) -> Result<cost::KeySpend, String> {
-    let profile = shared.settings.lock().unwrap().agents.iter().find(|a| a.id == agent).cloned().ok_or("There is no such agent.")?;
+    let profile = shared.settings.lock().unwrap().agents.iter().find(|a| a.id == agent).cloned().ok_or_else(|| -> String { tr!("沒有這個 agent。", "There is no such agent.") })?;
     let base = profile.env.get("COPILOT_PROVIDER_BASE_URL").map(|s| s.trim().to_string()).filter(|s| !s.is_empty() && !s.contains('…'));
-    let base = base.ok_or("This agent has no endpoint of its own.")?;
+    let base = base.ok_or_else(|| -> String { tr!("這個 agent 沒有自己的端點。", "This agent has no endpoint of its own.") })?;
     let secret = secrets::get(&profile.secret_key()).unwrap_or_default();
     let key = profile.env.get("COPILOT_PROVIDER_API_KEY").map(|v| v.replace("{secret}", &secret)).filter(|k| !k.trim().is_empty());
     cost::key_spend(&base, key).await
@@ -1209,6 +1235,10 @@ fn secretary_providers(shared: State<Shared>) -> Vec<(String, String, String)> {
         out.insert(0, first);
     }
     out
+}
+
+fn needs_chat_model() -> String {
+    tr!("秘書需要一個聊天模型：請先在 設定 → 聊天模型 加入。", "The secretary needs a chat model: add one in Settings → Chat models.")
 }
 
 /// 「Ask」on a permission card: the secretary's model explains what the
@@ -1229,15 +1259,15 @@ async fn explain_request(
             .or_else(|| settings.providers.first())
             .cloned()
     };
-    let provider = provider.ok_or("秘書需要一個聊天模型:請先在 設定 → Chat providers 加入。")?;
+    let provider = provider.ok_or_else(needs_chat_model)?;
     // A team member's card: `team:<team>:<member>:<request id as JSON>`.
     if let Some(rest) = request_id.strip_prefix("team:") {
         let mut parts = rest.splitn(3, ':');
         let (team, member, req) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""), parts.next().unwrap_or("null"));
-        let snap = teams.snapshots().into_iter().find(|s| s.id == team).ok_or("That team is not running.")?;
+        let snap = teams.snapshots().into_iter().find(|s| s.id == team).ok_or_else(|| -> String { tr!("這個團隊沒有在執行。", "That team is not running.") })?;
         return explain::explain_team(&provider, &snap, member, req).await;
     }
-    let payload = asked.0.lock().unwrap().get(&request_id).cloned().ok_or("This request is no longer waiting.")?;
+    let payload = asked.0.lock().unwrap().get(&request_id).cloned().ok_or_else(|| -> String { tr!("這個請求已經不在等待了。", "This request is no longer waiting.") })?;
     explain::explain(&provider, &payload, &teams.snapshots()).await
 }
 
@@ -1268,7 +1298,7 @@ async fn secretary_ask(
             .cloned();
         (found, settings.agents.clone())
     };
-    let provider = provider.ok_or("The secretary needs a chat model: add one in Settings → Chat providers.")?;
+    let provider = provider.ok_or_else(needs_chat_model)?;
     let office = secretary::Office::new(teams.inner().clone(), &profiles, agents.inner().clone(), tz_minutes, name.unwrap_or_default());
     let window = app.clone();
     secretary
@@ -1311,7 +1341,7 @@ fn secretary_upload_path(secretary: State<Arc<secretary::Secretary>>, path: Stri
 #[tauri::command]
 fn secretary_upload_bytes(secretary: State<Arc<secretary::Secretary>>, request: tauri::ipc::Request<'_>) -> Result<secretary::UploadView, String> {
     let name = request.headers().get("x-file-name").and_then(|v| v.to_str().ok()).map(percent_decode).unwrap_or_else(|| "image.png".into());
-    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Err("expected the file's bytes".into()) };
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Err(expected_bytes()) };
     secretary.upload(&name, bytes.clone(), "")
 }
 
@@ -1462,7 +1492,7 @@ fn ingest_bytes(request: tauri::ipc::Request<'_>) -> Result<DroppedFile, String>
         .unwrap_or_else(|| "file".into());
     match request.body() {
         tauri::ipc::InvokeBody::Raw(bytes) => files::ingest_bytes(&name, bytes),
-        _ => Err("expected the file's bytes".into()),
+        _ => Err(expected_bytes()),
     }
 }
 
@@ -1585,7 +1615,7 @@ fn create_settings_window(app: &AppHandle) {
         .unwrap_or((1000.0, 760.0));
     match WebviewWindowBuilder::new(app, "settings", url)
         .additional_browser_args(BROWSER_ARGS)
-        .title("Settings — Coucou")
+        .title(settings_title())
         .inner_size(width, height)
         .min_inner_size(460.0, 480.0)
         .resizable(true)
@@ -1665,6 +1695,18 @@ mod settings_place {
             let (p, s) = (m.position(), m.size());
             x >= p.x && y >= p.y && x < p.x + s.width as i32 && y < p.y + s.height as i32
         })
+    }
+}
+
+fn settings_title() -> String {
+    tr!("設定 — Coucou", "Settings — Coucou")
+}
+
+/// The settings window's title (taskbar, Alt+Tab) in the language of the
+/// moment. Teamwork's is a name and stays as it is.
+fn window_titles(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("settings") {
+        let _ = win.set_title(&settings_title());
     }
 }
 

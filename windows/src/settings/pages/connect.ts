@@ -194,7 +194,10 @@ function agentCard(agent: HookAgent, ctx: PageCtx, start?: string): HTMLElement 
         ? trf("下面就是 {file} 會改的地方。你自己的 hooks 都不會動。", "This is exactly what will change in your {file}. Your own hooks are left untouched.", { file: fileName(agent) })
         : tr("這只會移除 Coucou 自己的項目，你自己的 hooks 都不會動。", "This removes Coucou's entries only. Your own hooks are left untouched.") }),
       h("p", { class: "field-help", text: tr("+ 開頭的是新增的行，- 開頭的是移除的行，其他內容維持原樣。", "Lines with + are added, lines with - are removed. Everything else in the file stays as it is.") }),
-      renderDiff(plan.diff),
+      // Rust's "No change." is compared elsewhere, so it is translated here.
+      plan.diff.trim() === "No change." // i18n-ok: Rust's own answer, compared
+        ? h("p", { class: "hint", text: tr("檔案已經是最新的，不會改任何地方。", "The file is already up to date; nothing will change.") })
+        : renderDiff(plan.diff),
       h("p", { class: "path", text: `${tr("備份", "Backup")} → ${plan.backup}` }),
     );
     const confirm = h("button", { type: "button", class: install ? "primary" : "danger", text: install ? tr("備份並寫入", "Back up and write") : tr("備份並移除", "Back up and remove") }) as HTMLButtonElement;

@@ -415,7 +415,11 @@ pub async fn doctor(profiles: Vec<AgentProfile>) -> Vec<AgentCheck> {
         match resolve_agent_exe(&p.command) {
             None => {
                 let dirs: Vec<String> = fallback_dirs().iter().map(|d| d.display().to_string()).collect();
-                check.error = Some(format!("'{}' was not found on PATH nor in {}. Reinstall it, or put its full path in the profile.", p.command, dirs.join(", ")));
+                let (command, dirs) = (&p.command, dirs.join(", "));
+                check.error = Some(tr!(
+                    format!("在 PATH 和 {dirs} 裡都找不到「{command}」。請重新安裝，或在設定裡填上它的完整路徑。"),
+                    format!("'{command}' was not found on PATH nor in {dirs}. Reinstall it, or put its full path in the profile.")
+                ));
             }
             Some(exe) => {
                 check.found = Some(exe.display().to_string());
@@ -432,10 +436,11 @@ pub async fn doctor(profiles: Vec<AgentProfile>) -> Vec<AgentCheck> {
                 #[cfg(windows)]
                 cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
                 match tokio::time::timeout(std::time::Duration::from_secs(15), cmd.output()).await {
-                    Err(_) => check.error = Some("It did not answer `--version` within 15 s.".into()),
-                    Ok(Err(e)) => check.error = Some(format!("It could not be started: {e}")),
+                    Err(_) => check.error = Some(tr!("它在 15 秒內沒有回應 `--version`。", "It did not answer `--version` within 15 s.")),
+                    Ok(Err(e)) => check.error = Some(tr!(format!("沒辦法啟動它：{e}"), format!("It could not be started: {e}"))),
                     Ok(Ok(out_)) if !out_.status.success() && out_.stdout.is_empty() => {
-                        check.error = Some(format!("`--version` failed: {}", String::from_utf8_lossy(&out_.stderr).trim()))
+                        let said = String::from_utf8_lossy(&out_.stderr).trim().to_string();
+                        check.error = Some(tr!(format!("`--version` 失敗：{said}"), format!("`--version` failed: {said}")))
                     }
                     Ok(Ok(out_)) => {
                         let text = String::from_utf8_lossy(&out_.stdout);
@@ -483,7 +488,7 @@ fn copilot_mcp_file(servers: &[McpServer]) -> Result<std::path::PathBuf, String>
     }
     let text = json!({ "mcpServers": map }).to_string();
     let dir = std::env::temp_dir().join("coucou-mcp");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not prepare the agent's MCP servers: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|e| mcp_unprepared(&e))?;
     if let Ok(entries) = std::fs::read_dir(&dir) {
         let old = std::time::SystemTime::now() - Duration::from_secs(2 * 24 * 3600);
         for entry in entries.flatten() {
@@ -497,8 +502,24 @@ fn copilot_mcp_file(servers: &[McpServer]) -> Result<std::path::PathBuf, String>
     let mut h = std::collections::hash_map::DefaultHasher::new();
     text.hash(&mut h);
     let file = dir.join(format!("{:016x}.json", h.finish()));
-    std::fs::write(&file, text).map_err(|e| format!("Could not prepare the agent's MCP servers: {e}"))?;
+    std::fs::write(&file, text).map_err(|e| mcp_unprepared(&e))?;
     Ok(file)
+}
+
+fn mcp_unprepared(e: &std::io::Error) -> String {
+    tr!(format!("沒辦法準備 agent 的 MCP 伺服器：{e}"), format!("Could not prepare the agent's MCP servers: {e}"))
+}
+
+fn prompt_unprepared(e: &std::io::Error) -> String {
+    tr!(format!("沒辦法準備 agent 的系統提示：{e}"), format!("Could not prepare the agent's system prompt: {e}"))
+}
+
+/// What the person is told when an agent's CLI cannot be found.
+pub(crate) fn not_on_path(command: &str) -> String {
+    tr!(
+        format!("在 PATH 上找不到「{command}」。在團隊設定按「檢查代理」可以重新檢測與定位。"),
+        format!("'{command}' was not found on PATH. Press 'Check agents' in the team's setup to look for it again.")
+    )
 }
 
 /// A team agent's system prompt as a file, for Claude Code's
@@ -506,12 +527,12 @@ fn copilot_mcp_file(servers: &[McpServer]) -> Result<std::path::PathBuf, String>
 /// command line that goes through cmd.exe. Named after what is in it.
 fn prompt_file(words: &str) -> Result<std::path::PathBuf, String> {
     let dir = std::env::temp_dir().join("coucou-prompts");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not prepare the agent's system prompt: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|e| prompt_unprepared(&e))?;
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     words.hash(&mut h);
     let file = dir.join(format!("{:016x}.md", h.finish()));
-    std::fs::write(&file, words).map_err(|e| format!("Could not prepare the agent's system prompt: {e}"))?;
+    std::fs::write(&file, words).map_err(|e| prompt_unprepared(&e))?;
     Ok(file)
 }
 
@@ -534,12 +555,12 @@ fn runs_copilot(profile: &AgentProfile) -> bool {
 }
 
 fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, String> {
-    let exe = resolve_agent_exe(&profile.command)
-        .ok_or_else(|| format!("'{}' was not found on PATH. 在團隊設定按「檢查代理」可以重新檢測與定位。", profile.command))?;
+    let exe = resolve_agent_exe(&profile.command).ok_or_else(|| not_on_path(&profile.command))?;
     let secret = secrets::get(&profile.secret_key()).unwrap_or_default();
     let cwd = working_dir(profile, launch);
     if !cwd.is_dir() {
-        return Err(format!("The folder {} does not exist.", cwd.display()));
+        let d = cwd.display();
+        return Err(tr!(format!("資料夾 {d} 不存在。"), format!("The folder {d} does not exist.")));
     }
 
     let mut cmd = Command::new(&exe);
@@ -603,9 +624,12 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
     if let (Protocol::Acp, Some(m)) = (&profile.protocol, launch.model.as_deref().map(str::trim).filter(|m| !m.is_empty())) {
         cmd.env("COPILOT_MODEL", m);
     }
-    let mut child = cmd.spawn().map_err(|e| format!("Could not start {}: {e}", exe.display()))?;
-    let stdin = child.stdin.take().ok_or("no stdin")?;
-    let stdout = child.stdout.take().ok_or("no stdout")?;
+    let mut child = cmd.spawn().map_err(|e| -> String {
+        let x = exe.display();
+        tr!(format!("沒辦法啟動 {x}：{e}"), format!("Could not start {x}: {e}"))
+    })?;
+    let stdin = child.stdin.take().ok_or_else(|| -> String { tr!("沒有拿到 agent 的輸入管道。", "no stdin") })?;
+    let stdout = child.stdout.take().ok_or_else(|| -> String { tr!("沒有拿到 agent 的輸出管道。", "no stdout") })?;
     Ok(Transport { reader: Box::new(stdout), writer: Box::new(stdin), child: Some(child) })
 }
 
@@ -614,7 +638,7 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
 async fn copilot_models(profile: &AgentProfile) -> Result<Vec<ModelChoice>, String> {
     let base = profile.env.get("COPILOT_PROVIDER_BASE_URL").map(|s| s.trim()).filter(|s| !s.is_empty() && !s.contains('…'));
     let Some(base) = base else {
-        return Err("This agent does not list its models here; type the model's name.".into());
+        return Err(tr!("這個 agent 不會在這裡列出它的模型，請直接輸入模型名稱。", "This agent does not list its models here; type the model's name."));
     };
     let secret = secrets::get(&profile.secret_key()).unwrap_or_default();
     let key = profile.env.get("COPILOT_PROVIDER_API_KEY").map(|v| v.replace("{secret}", &secret)).filter(|k| !k.trim().is_empty());
@@ -762,7 +786,7 @@ async fn setup(running: &mut Running, key: &str, profile: &AgentProfile, launch:
     .await?;
     if let Some(methods) = init.get("authMethods").and_then(Value::as_array) {
         if !methods.is_empty() && init.get("agentCapabilities").is_none() {
-            return Err("The agent wants a login first. Run it once in a terminal.".into());
+            return Err(tr!("這個 agent 要先登入。請先在終端機執行它一次。", "The agent wants a login first. Run it once in a terminal."));
         }
     }
     let agent_name = init
@@ -787,9 +811,10 @@ async fn setup(running: &mut Running, key: &str, profile: &AgentProfile, launch:
         // Copilot without a GitHub login and without BYOK variables answers
         // exactly this; say what to do about it.
         if e.contains("Authentication required") {
-            format!(
-                "{agent_name} wants to be logged in: run `{} login` in a terminal, or give the profile the provider environment (BYOK) it needs.",
-                profile.command
+            let command = &profile.command;
+            tr!(
+                format!("{agent_name} 要先登入：請在終端機執行 `{command} login`，或在設定裡替它加上供應商需要的環境變數（BYOK）。"),
+                format!("{agent_name} wants to be logged in: run `{command} login` in a terminal, or give the profile the provider environment (BYOK) it needs.")
             )
         } else {
             e
@@ -798,7 +823,7 @@ async fn setup(running: &mut Running, key: &str, profile: &AgentProfile, launch:
     running.session_id = session
         .get("sessionId")
         .and_then(Value::as_str)
-        .ok_or("session/new returned no sessionId")?
+        .ok_or_else(|| -> String { tr!("agent 的 session/new 沒有回傳 sessionId。", "session/new returned no sessionId") })?
         .to_string();
     log::line(format!(
         "acp {key}: {agent_name} session {} in {} ({} MCP server(s), {})",
@@ -822,10 +847,10 @@ pub(crate) async fn request(running: &Running, method: &str, params: Value, time
     }
     match tokio::time::timeout(timeout, rx).await {
         Ok(Ok(result)) => result,
-        Ok(Err(_)) => Err("The agent went away.".into()),
+        Ok(Err(_)) => Err(tr!("agent 已經結束了。", "The agent went away.")),
         Err(_) => {
             running.pending.lock().unwrap().remove(&id);
-            Err(format!("The agent did not answer {method} in time."))
+            Err(tr!(format!("agent 沒有及時回應 {method}。"), format!("The agent did not answer {method} in time.")))
         }
     }
 }
@@ -891,11 +916,7 @@ async fn dispatch(route: &Route, msg: Value) {
             let Some(id) = id.as_u64() else { return };
             if let Some(tx) = route.pending.lock().unwrap().remove(&id) {
                 let result = if let Some(err) = msg.get("error") {
-                    Err(err
-                        .get("message")
-                        .and_then(Value::as_str)
-                        .unwrap_or("agent error")
-                        .to_string())
+                    Err(err.get("message").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| tr!("agent 發生錯誤", "agent error")))
                 } else {
                     Ok(msg.get("result").cloned().unwrap_or(Value::Null))
                 };
@@ -919,7 +940,7 @@ async fn dispatch(route: &Route, msg: Value) {
                         .and_then(Value::as_array)
                         .cloned()
                         .unwrap_or_default();
-                    let title = tool.get("title").and_then(Value::as_str).unwrap_or("A tool call").to_string();
+                    let title = tool.get("title").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| tr!("一個工具呼叫", "A tool call"));
                     let kind = tool.get("kind").and_then(Value::as_str).unwrap_or("other").to_string();
 
                     // The constitution first: what it forbids is refused here,
@@ -986,6 +1007,7 @@ async fn dispatch(route: &Route, msg: Value) {
                 _ => {
                     let reply = json!({
                         "jsonrpc": "2.0", "id": id,
+                        // The agent's own protocol: not for the person.
                         "error": { "code": -32601, "message": format!("{method} is not offered by this client") },
                     });
                     let _ = write_line(&route.writer, &reply.to_string()).await;
@@ -994,6 +1016,10 @@ async fn dispatch(route: &Route, msg: Value) {
         }
         (None, None) => {}
     }
+}
+
+fn not_running() -> String {
+    tr!("這個 agent 沒有在執行。", "that agent is not running")
 }
 
 // ── Entry points (the Tauri commands and the team orchestrator call these) ────
@@ -1084,12 +1110,12 @@ impl Agents {
 
     /// Answers the agent's permission request with one of its options.
     pub async fn answer_permission(&self, key: &str, request_id: Value, option_id: Option<String>) -> Result<(), String> {
-        let running = self.running(key).ok_or("that agent is not running")?;
+        let running = self.running(key).ok_or_else(not_running)?;
         let reply = match running.profile.protocol {
             Protocol::Codex => crate::codex::permission_reply(&request_id, option_id.as_deref()),
             Protocol::Claude => crate::claude::permission_reply(&running.claude, &request_id, option_id.as_deref()),
             // agy's requests wait at the team's gate, not on its connection.
-            Protocol::Agy => return Err("Antigravity's requests are answered at the team's gate.".into()),
+            Protocol::Agy => return Err(tr!("Antigravity 的請求在團隊的關卡回答。", "Antigravity's requests are answered at the team's gate.")),
             Protocol::Acp => permission_reply(&request_id, option_id.as_deref()),
         };
         write_line(&running.writer, &reply).await
@@ -1097,7 +1123,7 @@ impl Agents {
 
     /// Interrupts the current turn.
     pub async fn cancel(&self, key: &str) -> Result<(), String> {
-        let running = self.running(key).ok_or("that agent is not running")?;
+        let running = self.running(key).ok_or_else(not_running)?;
         match running.profile.protocol {
             Protocol::Codex => return crate::codex::cancel(&running).await,
             Protocol::Claude => return crate::claude::cancel(&running).await,
@@ -1131,7 +1157,10 @@ impl Agents {
             return copilot_models(profile).await;
         }
         if profile.protocol == Protocol::Agy {
-            let exe = resolve_agent_exe(&profile.command).ok_or_else(|| format!("'{}' was not found on PATH.", profile.command))?;
+            let exe = resolve_agent_exe(&profile.command).ok_or_else(|| -> String {
+                let command = &profile.command;
+                tr!(format!("在 PATH 上找不到「{command}」。"), format!("'{command}' was not found on PATH."))
+            })?;
             return crate::agy::models(&exe.to_string_lossy()).await;
         }
         let nowhere: Sink = Arc::new(|_| {});
@@ -1164,9 +1193,10 @@ impl Agents {
         let running = start(&self.opener, &nowhere, &format!("test:{}", profile.id), profile, &Launch::default()).await?;
         stop(&running).await;
         if running.claude.signed_out.load(Ordering::SeqCst) {
-            return Err(crate::claude::SIGNED_OUT.into());
+            return Err(crate::claude::signed_out());
         }
-        Ok(format!("{} answered the handshake and opened a session.", profile.name))
+        let name = &profile.name;
+        Ok(tr!(format!("{name} 回應了連線，也開好了工作階段。"), format!("{name} answered the handshake and opened a session.")))
     }
 
     pub async fn shutdown(&self) {

@@ -46,20 +46,32 @@ pub fn get(key: &str) -> Option<String> {
     entry(key)?.get_password().ok().filter(|v| !v.is_empty())
 }
 
+fn unknown_key(key: &str) -> String {
+    tr!(format!("不認得的金鑰名稱：{key}"), format!("unknown key {key}"))
+}
+
 pub fn set(key: &str, value: &str) -> Result<(), String> {
-    let entry = entry(key).ok_or_else(|| format!("unknown key {key}"))?;
+    let entry = entry(key).ok_or_else(|| unknown_key(key))?;
     if value.is_empty() {
         let _ = entry.delete_credential();
         return Ok(());
     }
-    entry.set_password(value).map_err(|e| e.to_string())
+    entry.set_password(value).map_err(|e| {
+        tr!(
+            format!("無法把金鑰存進 Windows 認證管理員：{e}"),
+            format!("Could not store the key in Windows Credential Manager: {e}")
+        )
+    })
 }
 
 pub fn clear(key: &str) -> Result<(), String> {
-    let entry = entry(key).ok_or_else(|| format!("unknown key {key}"))?;
+    let entry = entry(key).ok_or_else(|| unknown_key(key))?;
     match entry.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(e.to_string()),
+        Err(e) => Err(tr!(
+            format!("無法從 Windows 認證管理員移除金鑰：{e}"),
+            format!("Could not remove the key from Windows Credential Manager: {e}")
+        )),
     }
 }
 

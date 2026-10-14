@@ -26,16 +26,16 @@ pub fn inbox_dir() -> PathBuf {
 /// A file the OS handed us by path (Tauri's own drag events).
 pub fn ingest(source: &str) -> Result<DroppedFile, String> {
     let src = Path::new(source);
-    let meta = std::fs::metadata(src).map_err(|e| format!("cannot read {source}: {e}"))?;
+    let meta = std::fs::metadata(src).map_err(|e| -> String { tr!(format!("讀不到 {source}：{e}"), format!("cannot read {source}: {e}")) })?;
     if meta.is_dir() {
-        return Err("Folders can't be dropped yet.".into());
+        return Err(tr!("還不能拖放資料夾。", "Folders can't be dropped yet."));
     }
     let name = src
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "file".into());
     let (dir, dest) = unique_dest(&name)?;
-    std::fs::copy(src, &dest).map_err(|e| format!("cannot copy: {e}"))?;
+    std::fs::copy(src, &dest).map_err(|e| -> String { tr!(format!("無法複製：{e}"), format!("cannot copy: {e}")) })?;
     // CopyFileEx carries the source's timestamps across, so a file last edited
     // three years ago would arrive already older than the sweep window and be
     // deleted on the spot. The inbox ages from when *we* copied it.
@@ -56,7 +56,7 @@ pub fn ingest_bytes(name: &str, bytes: &[u8]) -> Result<DroppedFile, String> {
         .filter(|n| !n.is_empty() && n != "." && n != "..")
         .unwrap_or_else(|| "file".into());
     let (dir, dest) = unique_dest(&name)?;
-    std::fs::write(&dest, bytes).map_err(|e| format!("cannot write: {e}"))?;
+    std::fs::write(&dest, bytes).map_err(|e| -> String { tr!(format!("無法寫入：{e}"), format!("cannot write: {e}")) })?;
     sweep(&dir);
     Ok(DroppedFile { name, path: dest.to_string_lossy().to_string(), size: bytes.len() as u64 })
 }

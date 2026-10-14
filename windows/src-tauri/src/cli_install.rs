@@ -54,100 +54,156 @@ struct Row {
     id: &'static str,
     name: &'static str,
     command: &'static str,
-    purpose: &'static str,
+    /// In the language of the moment, like each method's note.
+    purpose: String,
     docs: &'static str,
-    methods: &'static [(&'static str, &'static str, &'static str)],
+    /// (label, command, note)
+    methods: Vec<(&'static str, &'static str, String)>,
 }
 
-/// From the vendors' own install pages (each row's `docs`).
-const TABLE: &[Row] = &[
-    Row {
-        id: "claude",
-        name: "Claude Code",
-        command: "claude",
-        purpose: "Anthropic's coding agent: hooks in the island, and an agent for teams.",
-        docs: "https://code.claude.com/docs/en/setup",
-        methods: &[
-            ("PowerShell", "irm https://claude.ai/install.ps1 | iex", "Recommended. Native install that updates itself; no Node.js needed."),
-            ("WinGet", "winget install Anthropic.ClaudeCode", "Does not update itself: winget upgrade Anthropic.ClaudeCode."),
-            ("npm", "npm install -g @anthropic-ai/claude-code", "Needs Node.js 22 or later."),
-        ],
-    },
-    Row {
-        id: "codex",
-        name: "Codex CLI",
-        command: "codex",
-        purpose: "OpenAI's coding agent (codex app-server).",
-        docs: "https://github.com/openai/codex",
-        methods: &[
-            ("PowerShell", "irm https://chatgpt.com/codex/install.ps1 | iex", "Official Windows installer."),
-            ("npm", "npm install -g @openai/codex", "Needs Node.js."),
-        ],
-    },
-    Row {
-        id: "copilot",
-        name: "Copilot CLI",
-        command: "copilot",
-        purpose: "GitHub Copilot in the terminal (ACP). Needs a Copilot subscription and PowerShell 6+.",
-        docs: "https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli",
-        methods: &[
-            ("WinGet", "winget install GitHub.Copilot", "Official Windows package."),
-            ("npm", "npm install -g @github/copilot", "Needs Node.js 22 or later."),
-        ],
-    },
-    Row {
-        id: "agy",
-        name: "Antigravity CLI (agy)",
-        command: "agy",
-        purpose: "Google Antigravity's agent in headless mode. Signs in with a Google account on first run.",
-        docs: "https://antigravity.google/docs/getting-started?tab=cli",
-        methods: &[("PowerShell", "irm https://antigravity.google/cli/install.ps1 | iex", "Official Windows installer.")],
-    },
-    Row {
-        id: "gemini",
-        name: "Gemini CLI",
-        command: "gemini",
-        purpose: "Google's Gemini agent, added in Settings → Agents as an ACP agent.",
-        docs: "https://github.com/google-gemini/gemini-cli",
-        methods: &[("npm", "npm install -g @google/gemini-cli", "Needs Node.js.")],
-    },
-    Row {
-        id: "node",
-        name: "Node.js",
-        command: "node",
-        purpose: "Needed by every npm install above (Copilot CLI and Claude Code over npm need version 22+).",
-        docs: "https://nodejs.org/en/download",
-        methods: &[("WinGet", "winget install OpenJS.NodeJS.LTS", "The LTS release from the WinGet catalog; nodejs.org also offers a Windows installer.")],
-    },
-    Row {
-        id: "git",
-        name: "Git for Windows",
-        command: "git",
-        purpose: "Recommended by Claude Code (its Bash tool uses Git Bash), and used by most agents.",
-        docs: "https://git-scm.com/downloads/win",
-        methods: &[("WinGet", "winget install --id Git.Git -e --source winget", "Official WinGet command from git-scm.com.")],
-    },
-];
+/// From the vendors' own install pages (each row's `docs`). Made when it is
+/// asked for: the purposes and notes are in the language of the moment.
+fn rows() -> Vec<Row> {
+    let needs_node: String = tr!("需要 Node.js。", "Needs Node.js.");
+    let needs_node_22: String = tr!("需要 Node.js 22 或更新版本。", "Needs Node.js 22 or later.");
+    let official_installer: String = tr!("官方的 Windows 安裝程式。", "Official Windows installer.");
+    vec![
+        Row {
+            id: "claude",
+            name: "Claude Code",
+            command: "claude",
+            purpose: tr!(
+                "Anthropic 的程式設計 agent：在瀏海島上顯示 hooks，也能當團隊的 agent。",
+                "Anthropic's coding agent: hooks in the island, and an agent for teams."
+            ),
+            docs: "https://code.claude.com/docs/en/setup",
+            methods: vec![
+                (
+                    "PowerShell",
+                    "irm https://claude.ai/install.ps1 | iex",
+                    tr!("建議使用。原生安裝，會自己更新；不需要 Node.js。", "Recommended. Native install that updates itself; no Node.js needed."),
+                ),
+                (
+                    "WinGet",
+                    "winget install Anthropic.ClaudeCode",
+                    tr!("不會自己更新：請用 winget upgrade Anthropic.ClaudeCode。", "Does not update itself: winget upgrade Anthropic.ClaudeCode."),
+                ),
+                ("npm", "npm install -g @anthropic-ai/claude-code", needs_node_22.clone()),
+            ],
+        },
+        Row {
+            id: "codex",
+            name: "Codex CLI",
+            command: "codex",
+            purpose: tr!("OpenAI 的程式設計 agent（codex app-server）。", "OpenAI's coding agent (codex app-server)."),
+            docs: "https://github.com/openai/codex",
+            methods: vec![
+                ("PowerShell", "irm https://chatgpt.com/codex/install.ps1 | iex", official_installer.clone()),
+                ("npm", "npm install -g @openai/codex", needs_node.clone()),
+            ],
+        },
+        Row {
+            id: "copilot",
+            name: "Copilot CLI",
+            command: "copilot",
+            purpose: tr!(
+                "在終端機裡用 GitHub Copilot（ACP）。需要 Copilot 訂閱和 PowerShell 6 以上。",
+                "GitHub Copilot in the terminal (ACP). Needs a Copilot subscription and PowerShell 6+."
+            ),
+            docs: "https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli",
+            methods: vec![
+                ("WinGet", "winget install GitHub.Copilot", tr!("官方的 Windows 套件。", "Official Windows package.")),
+                ("npm", "npm install -g @github/copilot", needs_node_22.clone()),
+            ],
+        },
+        Row {
+            id: "agy",
+            name: "Antigravity CLI (agy)",
+            command: "agy",
+            purpose: tr!(
+                "Google Antigravity 的 agent，以無介面模式執行。第一次執行時用 Google 帳號登入。",
+                "Google Antigravity's agent in headless mode. Signs in with a Google account on first run."
+            ),
+            docs: "https://antigravity.google/docs/getting-started?tab=cli",
+            methods: vec![("PowerShell", "irm https://antigravity.google/cli/install.ps1 | iex", official_installer.clone())],
+        },
+        Row {
+            id: "gemini",
+            name: "Gemini CLI",
+            command: "gemini",
+            purpose: tr!(
+                "Google 的 Gemini agent，在 設定 → Agents 裡加成 ACP agent。",
+                "Google's Gemini agent, added in Settings → Agents as an ACP agent."
+            ),
+            docs: "https://github.com/google-gemini/gemini-cli",
+            methods: vec![("npm", "npm install -g @google/gemini-cli", needs_node)],
+        },
+        Row {
+            id: "node",
+            name: "Node.js",
+            command: "node",
+            purpose: tr!(
+                "上面每一種 npm 安裝都需要它（用 npm 裝 Copilot CLI 和 Claude Code 需要 22 以上的版本）。",
+                "Needed by every npm install above (Copilot CLI and Claude Code over npm need version 22+)."
+            ),
+            docs: "https://nodejs.org/en/download",
+            methods: vec![(
+                "WinGet",
+                "winget install OpenJS.NodeJS.LTS",
+                tr!(
+                    "WinGet 目錄裡的 LTS 版本；nodejs.org 也有 Windows 安裝程式。",
+                    "The LTS release from the WinGet catalog; nodejs.org also offers a Windows installer."
+                ),
+            )],
+        },
+        Row {
+            id: "git",
+            name: "Git for Windows",
+            command: "git",
+            purpose: tr!(
+                "Claude Code 建議安裝（它的 Bash 工具用 Git Bash），大多數 agent 也會用到。",
+                "Recommended by Claude Code (its Bash tool uses Git Bash), and used by most agents."
+            ),
+            docs: "https://git-scm.com/downloads/win",
+            methods: vec![(
+                "WinGet",
+                "winget install --id Git.Git -e --source winget",
+                tr!("git-scm.com 上官方的 WinGet 指令。", "Official WinGet command from git-scm.com."),
+            )],
+        },
+    ]
+}
 
 fn table() -> Vec<Cli> {
-    TABLE
-        .iter()
+    rows()
+        .into_iter()
         .map(|r| Cli {
             id: r.id.into(),
             name: r.name.into(),
             command: r.command.into(),
-            purpose: r.purpose.into(),
+            purpose: r.purpose,
             docs: r.docs.into(),
-            methods: r.methods.iter().map(|(label, command, note)| Method { label: (*label).into(), command: (*command).into(), note: (*note).into(), source: "built-in".into() }).collect(),
+            methods: r.methods.into_iter().map(|(label, command, note)| Method { label: label.into(), command: command.into(), note, source: "built-in".into() }).collect(),
             found: None,
             version: None,
         })
         .collect()
 }
 
-/// The table with the official pages' corrections, once they were checked.
+/// The table with the official pages' corrections, once they were checked —
+/// its purposes and notes in the language of the moment, whenever they were checked.
 fn current() -> Vec<Cli> {
-    CHECKED.lock().unwrap().clone().unwrap_or_else(table)
+    let Some(mut checked) = CHECKED.lock().unwrap().clone() else { return table() };
+    let fresh = table();
+    for cli in checked.iter_mut() {
+        if let Some(row) = fresh.iter().find(|r| r.id == cli.id) {
+            cli.purpose = row.purpose.clone();
+            for (m, r) in cli.methods.iter_mut().zip(&row.methods) {
+                m.note = r.note.clone();
+            }
+        }
+    }
+    checked
 }
 
 static CHECKED: std::sync::Mutex<Option<Vec<Cli>>> = std::sync::Mutex::new(None);
@@ -369,7 +425,10 @@ pub async fn check_official() -> Result<Vec<Cli>, String> {
         }
     }
     if reached == 0 {
-        return Err("None of the official pages could be reached; the built-in commands are shown.".into());
+        return Err(tr!(
+            "連不上任何一個官方頁面；下面顯示的是內建的指令。",
+            "None of the official pages could be reached; the built-in commands are shown."
+        ));
     }
     *CHECKED.lock().unwrap() = Some(list.clone());
     Ok(list)
@@ -381,21 +440,28 @@ pub async fn check_official() -> Result<Vec<Cli>, String> {
 /// command from the table (or its checked replacement), never text from the page.
 pub fn run(id: &str, method: usize) -> Result<String, String> {
     let list = current();
-    let cli = list.iter().find(|c| c.id == id).ok_or("Unknown CLI.")?;
-    let m = cli.methods.get(method).ok_or("Unknown install method.")?;
+    let cli = list.iter().find(|c| c.id == id).ok_or_else(|| -> String { tr!("不認得的 CLI。", "Unknown CLI.") })?;
+    let m = cli.methods.get(method).ok_or_else(|| -> String { tr!("不認得的安裝方式。", "Unknown install method.") })?;
     if !plain(&m.command) {
-        return Err("That command has characters Coucou will not run.".into());
+        return Err(tr!("這條指令裡有 Coucou 不會執行的字元。", "That command has characters Coucou will not run."));
     }
+    // What the window says before and after; the name is from the table, and
+    // neither line holds a quote that would end PowerShell's '…'.
+    let name = &cli.name;
+    let before: String = tr!(format!("Coucou：正在安裝 {name}，指令："), format!("Coucou: installing {name} with:"));
+    let after: String = tr!(
+        "完成。請關掉這個視窗，再到 Coucou 設定按「重新檢查」。",
+        "Done. Close this window, then click Check again in Coucou Settings."
+    );
     let script = format!(
-        "Write-Host 'Coucou: installing {name} with:' -ForegroundColor Cyan; Write-Host '  {cmd}'; Write-Host ''; {cmd}; Write-Host ''; Write-Host 'Done. Close this window, then click Check again in Coucou Settings.' -ForegroundColor Cyan",
-        name = cli.name,
+        "Write-Host '{before}' -ForegroundColor Cyan; Write-Host '  {cmd}'; Write-Host ''; {cmd}; Write-Host ''; Write-Host '{after}' -ForegroundColor Cyan",
         cmd = m.command
     );
     let mut cmd = std::process::Command::new("powershell.exe");
     cmd.args(["-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script]);
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NEW_CONSOLE);
-    cmd.spawn().map_err(|e| format!("Could not open PowerShell: {e}"))?;
+    cmd.spawn().map_err(|e| -> String { tr!(format!("無法打開 PowerShell：{e}"), format!("Could not open PowerShell: {e}")) })?;
     crate::log::line(format!("cli install: {} via {}", cli.id, m.label));
     Ok(m.command.clone())
 }

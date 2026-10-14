@@ -73,7 +73,10 @@ fn merge(path: &std::path::Path, set: impl FnOnce(&mut Map<String, Value>)) -> R
     set(&mut root);
     std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
     let text = serde_json::to_string_pretty(&Value::Object(root)).map_err(|e| e.to_string())?;
-    std::fs::write(path, text).map_err(|e| format!("Could not write {}: {e}", path.display()))
+    std::fs::write(path, text).map_err(|e| {
+        let p = path.display();
+        tr!(format!("無法寫入 {p}：{e}"), format!("Could not write {p}: {e}"))
+    })
 }
 
 /// The team's tools and Coucou's gate, in the folder the member works in.
@@ -121,8 +124,8 @@ pub async fn prompt(running: &Running, text: String, timeout: Duration) -> Resul
     }
     match tokio::time::timeout(timeout, rx).await {
         Ok(Ok(result)) => result.map(|stop_reason| AcpOutcome { stop_reason }),
-        Ok(Err(_)) => Err("Antigravity went away.".into()),
-        Err(_) => Err("Antigravity did not finish the turn in time.".into()),
+        Ok(Err(_)) => Err(tr!("Antigravity 已經結束了。", "Antigravity went away.")),
+        Err(_) => Err(tr!("Antigravity 沒有及時完成這一輪。", "Antigravity did not finish the turn in time.")),
     }
 }
 
@@ -138,8 +141,8 @@ pub async fn models(command: &str) -> Result<Vec<ModelChoice>, String> {
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     let out = tokio::time::timeout(Duration::from_secs(60), cmd.output())
         .await
-        .map_err(|_| "agy models did not answer in time.".to_string())?
-        .map_err(|e| format!("Could not run agy models: {e}"))?;
+        .map_err(|_| -> String { tr!("agy models 沒有及時回應。", "agy models did not answer in time.") })?
+        .map_err(|e| -> String { tr!(format!("無法執行 agy models：{e}"), format!("Could not run agy models: {e}")) })?;
     let text = String::from_utf8_lossy(&out.stdout);
     let list: Vec<ModelChoice> = text
         .lines()
@@ -150,7 +153,11 @@ pub async fn models(command: &str) -> Result<Vec<ModelChoice>, String> {
         })
         .collect();
     if list.is_empty() {
-        return Err(format!("agy models listed nothing{}", if out.status.success() { "." } else { ": is agy signed in?" }));
+        return Err(if out.status.success() {
+            tr!("agy models 什麼都沒有列出來。", "agy models listed nothing.")
+        } else {
+            tr!("agy models 什麼都沒有列出來：agy 登入了嗎？", "agy models listed nothing: is agy signed in?")
+        });
     }
     Ok(list)
 }
@@ -162,18 +169,28 @@ fn text(args: &Value, keys: &[&str]) -> String {
 /// A step's title and ACP kind, for the screens.
 pub fn title_of(tool: &str, args: &Value) -> (String, &'static str) {
     match tool {
-        "run_command" | "send_command_input" => (format!("Run {}", text(args, &["CommandLine", "Input"])), "execute"),
+        "run_command" | "send_command_input" => (crate::claude::run_title(&text(args, &["CommandLine", "Input"])), "execute"),
         "write_to_file" | "replace_file_content" | "multi_replace_file_content" | "sed_file" | "notebook_edit" => {
-            (format!("Edit {}", text(args, &["TargetFile", "AbsolutePath", "File"])), "edit")
+            (crate::claude::edit_title(&text(args, &["TargetFile", "AbsolutePath", "File"])), "edit")
         }
-        "view_file" => (format!("Read {}", text(args, &["AbsolutePath", "File"])), "read"),
-        "list_dir" => (format!("Read {}", text(args, &["DirectoryPath"])), "read"),
-        "grep_search" | "find_by_name" => (format!("Search {}", text(args, &["Query", "Pattern", "SearchPath", "SearchDirectory"])), "search"),
-        "read_url_content" | "search_web" | "open_browser_url" | "read_browser_page" => (format!("Fetch {}", text(args, &["Url", "Query"])), "fetch"),
+        "view_file" => (read_title(&text(args, &["AbsolutePath", "File"])), "read"),
+        "list_dir" => (read_title(&text(args, &["DirectoryPath"])), "read"),
+        "grep_search" | "find_by_name" => {
+            let what = text(args, &["Query", "Pattern", "SearchPath", "SearchDirectory"]);
+            (tr!(format!("搜尋 {what}"), format!("Search {what}")), "search")
+        }
+        "read_url_content" | "search_web" | "open_browser_url" | "read_browser_page" => {
+            let what = text(args, &["Url", "Query"]);
+            (tr!(format!("讀取網頁 {what}"), format!("Fetch {what}")), "fetch")
+        }
         "call_mcp_tool" => (format!("{}.{}", text(args, &["ServerName"]), text(args, &["ToolName"])), "other"),
-        "generate_image" => ("Generate an image".into(), "other"),
+        "generate_image" => (tr!("產生圖片", "Generate an image"), "other"),
         other => (other.to_string(), "other"),
     }
+}
+
+fn read_title(what: &str) -> String {
+    tr!(format!("讀取 {what}"), format!("Read {what}"))
 }
 
 /// A step as the rules read it, for the gate.
@@ -269,7 +286,12 @@ pub async fn dispatch(route: &Route, state: &AgyState, msg: Value) {
             let outcome = match status {
                 "SUCCESS" => Ok("end_turn".to_string()),
                 "CANCELLED" | "CANCELED" | "INTERRUPTED" => Ok("cancelled".to_string()),
-                _ => Err(result.get("error").and_then(Value::as_str).filter(|e| !e.is_empty()).unwrap_or("Antigravity ended the turn on an error.").to_string()),
+                _ => Err(result
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .filter(|e| !e.is_empty())
+                    .map(str::to_string)
+                    .unwrap_or_else(|| tr!("Antigravity 因為錯誤結束了這一輪。", "Antigravity ended the turn on an error."))),
             };
             if let Some(tx) = state.done.lock().unwrap().take() {
                 let _ = tx.send(outcome);

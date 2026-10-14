@@ -133,12 +133,20 @@ fn is_new(key: &'static str, id: &str) -> bool {
     }
 }
 
-fn status_error(code: u16, unauthorised_hint: &str) -> String {
+fn status_error(code: u16, unauthorised_hint: String) -> String {
     match code {
-        401 => "Invalid API key (401)".into(),
-        403 => unauthorised_hint.into(),
-        _ => format!("API error {code}"),
+        401 => tr!("API 金鑰無效（401）", "Invalid API key (401)"),
+        403 => unauthorised_hint,
+        _ => tr!(format!("API 錯誤 {code}"), format!("API error {code}")),
     }
+}
+
+fn no_connection(e: &reqwest::Error) -> String {
+    tr!(format!("連不上：{e}"), format!("No connection: {e}"))
+}
+
+fn lacks_access(what: String) -> String {
+    tr!(format!("{what}沒有需要的權限"), format!("{what} lacks access"))
 }
 
 // ── Stripe ────────────────────────────────────────────────────────────────────
@@ -180,7 +188,7 @@ async fn poll_stripe(app: AppHandle) {
             emit(&app, IntegrationUpdate {
                 id: "integration_stripe",
                 data: json!({}),
-                error: Some(status_error(code, "Use a secret key (sk_live_… not pk_live_…)")),
+                error: Some(status_error(code, tr!("請用秘密金鑰（sk_live_…，不是 pk_live_…）", "Use a secret key (sk_live_… not pk_live_…)"))),
                 event: None,
             });
             return;
@@ -189,7 +197,7 @@ async fn poll_stripe(app: AppHandle) {
             emit(&app, IntegrationUpdate {
                 id: "integration_stripe",
                 data: json!({}),
-                error: Some(format!("No connection: {e}")),
+                error: Some(no_connection(&e)),
                 event: None,
             });
             return;
@@ -280,7 +288,7 @@ async fn poll_github(app: AppHandle) {
         emit(&app, IntegrationUpdate {
             id: "integration_github",
             data: json!({}),
-            error: Some(status_error(response.status().as_u16(), "Token lacks the needed scope")),
+            error: Some(status_error(response.status().as_u16(), tr!("權杖沒有需要的權限範圍", "Token lacks the needed scope"))),
             event: None,
         });
         return;
@@ -338,7 +346,7 @@ async fn poll_vercel(app: AppHandle) {
         emit(&app, IntegrationUpdate {
             id: "integration_vercel",
             data: json!({}),
-            error: Some(status_error(response.status().as_u16(), "Token lacks access")),
+            error: Some(status_error(response.status().as_u16(), lacks_access(tr!("權杖", "Token")))),
             event: None,
         });
         return;
@@ -410,7 +418,7 @@ async fn poll_resend(app: AppHandle) {
         emit(&app, IntegrationUpdate {
             id: "integration_resend",
             data: json!({}),
-            error: Some(status_error(response.status().as_u16(), "Key lacks access")),
+            error: Some(status_error(response.status().as_u16(), lacks_access(tr!("金鑰", "Key")))),
             event: None,
         });
         return;
@@ -472,7 +480,7 @@ async fn poll_notion(app: AppHandle) {
         emit(&app, IntegrationUpdate {
             id: "integration_notion",
             data: json!({}),
-            error: Some(status_error(response.status().as_u16(), "Integration lacks access")),
+            error: Some(status_error(response.status().as_u16(), lacks_access(tr!("整合", "Integration")))),
             event: None,
         });
         return;
@@ -559,7 +567,7 @@ async fn poll_calcom(app: AppHandle) {
         emit(&app, IntegrationUpdate {
             id: "integration_calcom",
             data: json!({}),
-            error: Some(status_error(response.status().as_u16(), "Key lacks access")),
+            error: Some(status_error(response.status().as_u16(), lacks_access(tr!("金鑰", "Key")))),
             event: None,
         });
         return;
@@ -664,7 +672,8 @@ async fn poll_n8n(app: AppHandle) {
         format!("{base}/rest/executions/{id}?includeData=true"),
         format!("{base}/rest/executions/{id}"),
     ];
-    let mut name = "Workflow".to_string();
+    let workflow: String = tr!("工作流程", "Workflow");
+    let mut name = workflow.clone();
     let mut detail = None;
     for url in &detail_urls {
         let Ok(response) = http.get(url).header("X-N8N-API-KEY", &key).header("Accept", "application/json").send().await
@@ -680,8 +689,8 @@ async fn poll_n8n(app: AppHandle) {
             .and_then(|w| w.get("name"))
             .and_then(Value::as_str)
             .or_else(|| json.get("name").and_then(Value::as_str))
-            .unwrap_or("Workflow")
-            .to_string();
+            .map(str::to_string)
+            .unwrap_or_else(|| workflow.clone());
         detail = n8n_detail(&json, success);
         break;
     }
@@ -734,7 +743,10 @@ fn n8n_detail(json: &Value, success: bool) -> Option<String> {
         .first()?
         .as_array()?;
     let count = items.len();
-    let header = format!("→ {last_node} · {count} item{}", if count == 1 { "" } else { "s" });
+    let header: String = tr!(
+        format!("→ {last_node} · {count} 筆"),
+        format!("→ {last_node} · {count} item{}", if count == 1 { "" } else { "s" })
+    );
 
     let fields = items
         .first()

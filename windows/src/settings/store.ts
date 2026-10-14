@@ -95,6 +95,19 @@ export async function refreshClis() {
   changed();
 }
 
+/**
+ * After a language change: the CLIs' purposes and notes again, in the new
+ * language (Rust writes them), keeping what was found on this PC.
+ */
+export async function relabelClis() {
+  if (!clis) return;
+  const defs = await Bridge.cliList();
+  if (!defs) return;
+  const before = clis;
+  clis = defs.map((c) => ({ ...c, found: before.find((o) => o.id === c.id)?.found ?? null, version: before.find((o) => o.id === c.id)?.version ?? null }));
+  changed();
+}
+
 export function setClis(next: CliInfo[]) {
   clis = next;
   changed();

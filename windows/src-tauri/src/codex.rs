@@ -133,7 +133,7 @@ pub async fn setup(
     .await
     .map_err(|e| {
         if e.to_lowercase().contains("auth") || e.to_lowercase().contains("login") {
-            "Codex wants to be logged in: run `codex login` in a terminal.".to_string()
+            tr!("Codex 要先登入：請在終端機執行 `codex login`。", "Codex wants to be logged in: run `codex login` in a terminal.")
         } else {
             e
         }
@@ -142,7 +142,7 @@ pub async fn setup(
         .get("thread")
         .and_then(|t| t.get("id"))
         .and_then(Value::as_str)
-        .ok_or("thread/start returned no thread id")?
+        .ok_or_else(|| -> String { tr!("Codex 的 thread/start 沒有回傳 thread id。", "thread/start returned no thread id") })?
         .to_string();
     *running.codex.thread.lock().unwrap() = thread.clone();
     if let Some(m) = started.get("model").and_then(Value::as_str) {
@@ -183,8 +183,8 @@ pub async fn prompt(running: &Running, text: String, timeout: Duration) -> Resul
     }
     let outcome = match tokio::time::timeout(timeout, rx).await {
         Ok(Ok(result)) => result,
-        Ok(Err(_)) => Err("Codex went away.".into()),
-        Err(_) => Err("Codex did not finish the turn in time.".into()),
+        Ok(Err(_)) => Err(tr!("Codex 已經結束了。", "Codex went away.")),
+        Err(_) => Err(tr!("Codex 沒有及時完成這一輪。", "Codex did not finish the turn in time.")),
     };
     running.codex.turn.lock().unwrap().take();
     outcome.map(|stop_reason| AcpOutcome { stop_reason })
@@ -226,18 +226,18 @@ fn update(route: &Route, update: Value) {
 fn title_of(item: &Value) -> Option<(String, &'static str)> {
     let text = |k: &str| item.get(k).and_then(Value::as_str).unwrap_or("").to_string();
     match item.get("type").and_then(Value::as_str)? {
-        "commandExecution" => Some((format!("Run {}", text("command")), "execute")),
+        "commandExecution" => Some((crate::claude::run_title(&text("command")), "execute")),
         "fileChange" => {
             let paths: Vec<String> = item
                 .get("changes")
                 .and_then(Value::as_array)
                 .map(|c| c.iter().filter_map(|x| x.get("path").and_then(Value::as_str)).map(str::to_string).collect())
                 .unwrap_or_default();
-            Some((format!("Edit {}", paths.join(", ")), "edit"))
+            Some((crate::claude::edit_title(&paths.join(", ")), "edit"))
         }
         "mcpToolCall" => Some((format!("{}.{}", text("server"), text("tool")), "other")),
-        "webSearch" => Some(("Search the web".into(), "fetch")),
-        "imageGeneration" => Some(("Generate an image".into(), "other")),
+        "webSearch" => Some((tr!("搜尋網路", "Search the web"), "fetch")),
+        "imageGeneration" => Some((tr!("產生圖片", "Generate an image"), "other")),
         _ => None,
     }
 }
@@ -387,8 +387,8 @@ pub async fn dispatch(route: &Route, state: &CodexState, msg: Value) {
                         .get("error")
                         .and_then(|e| e.get("message"))
                         .and_then(Value::as_str)
-                        .unwrap_or("Codex reported a failed turn.")
-                        .to_string()),
+                        .map(str::to_string)
+                        .unwrap_or_else(|| tr!("Codex 回報這一輪失敗了。", "Codex reported a failed turn."))),
                     "interrupted" => Ok("cancelled".to_string()),
                     _ => Ok("end_turn".to_string()),
                 };
@@ -406,7 +406,7 @@ pub async fn dispatch(route: &Route, state: &CodexState, msg: Value) {
     let request = match method {
         "item/commandExecution/requestApproval" => {
             let command = params.get("command").and_then(Value::as_str).unwrap_or("").to_string();
-            Some((policy::Request { kind: Kind::Execute, command: Some(command.clone()), paths: vec![] }, format!("Run {command}"), "execute"))
+            Some((policy::Request { kind: Kind::Execute, command: Some(command.clone()), paths: vec![] }, crate::claude::run_title(&command), "execute"))
         }
         "item/fileChange/requestApproval" => {
             let item = params.get("itemId").and_then(Value::as_str).unwrap_or("");
@@ -415,7 +415,7 @@ pub async fn dispatch(route: &Route, state: &CodexState, msg: Value) {
             if let Some(root) = params.get("grantRoot").and_then(Value::as_str) {
                 paths.push(root.to_string());
             }
-            let title = format!("Edit {}", if paths.is_empty() { "files".to_string() } else { paths.join(", ") });
+            let title = crate::claude::edit_title(&if paths.is_empty() { tr!("檔案", "files") } else { paths.join(", ") });
             Some((policy::Request { kind: Kind::Edit, command: None, paths }, title, "edit"))
         }
         _ => None,
