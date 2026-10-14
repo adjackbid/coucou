@@ -9,7 +9,7 @@
 // the live pieces (live.ts): each member's Mochi, bubble and screen, which
 // stream between pictures (`team-screen`) and are moved into each new one.
 
-import { onLangChange, setLang } from "../core/i18n";
+import { onLangChange, setLang, tr, trf } from "../core/i18n";
 import "./team.css";
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import type { AgentProfile, ModelChoice } from "../core/state";
@@ -135,26 +135,41 @@ const YOU = "you";
 /** Coucou's own accents, for members that were given no colour. */
 const PALETTE = ["#3B9EFF", "#34D399", "#A78BFA", "#F5A524", "#F472B6", "#22D3EE"];
 
-const STATUS: Record<MemberStatus, { label: string; mark: string }> = {
-  working: { label: "工作中", mark: "◔" },
-  waitingDelivery: { label: "等待交付", mark: "⧖" },
-  waitingReply: { label: "等待回覆", mark: "…" },
-  waitingYou: { label: "等你處理", mark: "!" },
-  idle: { label: "待命", mark: "○" },
-  done: { label: "已完成", mark: "✓" },
-  lost: { label: "失聯", mark: "×" },
-};
+/** A member's state in words, in the language of the moment. */
+function memberStatus(): Record<MemberStatus, { label: string; mark: string }> {
+  return {
+    working: { label: tr("工作中", "Working"), mark: "◔" },
+    waitingDelivery: { label: tr("等待交付", "Waiting for a handoff"), mark: "⧖" },
+    waitingReply: { label: tr("等待回覆", "Waiting for a reply"), mark: "…" },
+    waitingYou: { label: tr("等你處理", "Needs you"), mark: "!" },
+    idle: { label: tr("待命", "Idle"), mark: "○" },
+    done: { label: tr("已完成", "Done"), mark: "✓" },
+    lost: { label: tr("失聯", "Disconnected"), mark: "×" },
+  };
+}
 
-const TEAM_STATUS: Record<Snapshot["status"], string> = {
-  idle: "尚未啟動",
-  running: "執行中",
-  paused: "已暫停",
-  finished: "已完成",
-};
+function teamStatusLabels(): Record<Snapshot["status"], string> {
+  return {
+    idle: tr("尚未啟動", "Not started"),
+    running: tr("執行中", "Running"),
+    paused: tr("已暫停", "Paused"),
+    finished: tr("已完成", "Finished"),
+  };
+}
 
 /** A team's state in words: one the person ended reads as such, not as done. */
 function teamStatus(snap: Snapshot): string {
-  return snap.status === "finished" && snap.ended ? "已結束" : TEAM_STATUS[snap.status];
+  return snap.status === "finished" && snap.ended ? tr("已結束", "Ended") : teamStatusLabels()[snap.status];
+}
+
+/** "、" between names in Chinese, ", " in English. */
+function joinNames(names: string[]): string {
+  return names.join(tr("、", ", "));
+}
+
+/** "3 位 AI 成員" / "3 AI members". */
+function aiMembers(n: number): string {
+  return n === 1 ? tr("1 位 AI 成員", "1 AI member") : trf("{n} 位 AI 成員", "{n} AI members", { n });
 }
 
 /** The team whose 結束團隊 has been pressed once, and until when it waits for the second press. */
@@ -168,7 +183,10 @@ function endButton(snap: Snapshot): HTMLElement {
     {
       class: `btn ${armed ? "danger" : "plain"} end-team`,
       type: "button",
-      title: "結束這個團隊:正在做的這一輪會被打斷,所有成員的代理都會停掉,未完成的任務就停在現在的樣子。做好的檔案都留著;之後再傳指示,團隊會重新開工。",
+      title: tr(
+        "結束這個團隊:正在做的這一輪會被打斷,所有成員的代理都會停掉,未完成的任務就停在現在的樣子。做好的檔案都留著;之後再傳指示,團隊會重新開工。",
+        "End this team: the turn under way is cut short, every member's agent stops, and unfinished tasks stay as they are now. Finished files are kept; send a new instruction later and the team gets back to work.",
+      ),
       onClick: () => {
         if (!armed) {
           ending = { team: snap.id, until: Date.now() + 5000 };
@@ -185,23 +203,29 @@ function endButton(snap: Snapshot): HTMLElement {
         void act(() => Bridge.teamEnd(snap.id));
       },
     },
-    armed ? "確定結束?再按一次" : "結束團隊",
+    armed ? tr("確定結束?再按一次", "End it? Press again") : tr("結束團隊", "End team"),
   );
 }
 
-const DANGER: Record<Danger, string> = {
-  "deletes-folder": "會刪除資料夾",
-  "deletes-many": "會一次刪除多個檔案",
-  installs: "會安裝套件或程式",
-  downloads: "會從網路下載東西",
-  "destructive-git": "這個 git 指令會丟掉變更",
-  "sends-out": "會對外發送或發布",
-  "outside-work-dir": "會動到工作資料夾以外的地方",
-  system: "會變更系統或其他程序",
-  opaque: "無法判讀這個指令在做什麼",
-};
+/** Why a step waits for approval, after "Needs your approval:". */
+function dangerLabel(d: Danger): string {
+  const labels: Record<Danger, string> = {
+    "deletes-folder": tr("會刪除資料夾", "it deletes a folder"),
+    "deletes-many": tr("會一次刪除多個檔案", "it deletes several files at once"),
+    installs: tr("會安裝套件或程式", "it installs packages or programs"),
+    downloads: tr("會從網路下載東西", "it downloads something from the internet"),
+    "destructive-git": tr("這個 git 指令會丟掉變更", "this git command throws away changes"),
+    "sends-out": tr("會對外發送或發布", "it sends or publishes something outside"),
+    "outside-work-dir": tr("會動到工作資料夾以外的地方", "it touches things outside the work folder"),
+    system: tr("會變更系統或其他程序", "it changes the system or other programs"),
+    opaque: tr("無法判讀這個指令在做什麼", "there's no telling what this command does"),
+  };
+  return labels[d];
+}
 
-const PRIORITY: Record<Task["priority"], string> = { high: "高", medium: "中", low: "低" };
+function priorityLabel(p: Task["priority"]): string {
+  return p === "high" ? tr("高", "High") : p === "medium" ? tr("中", "Medium") : tr("低", "Low");
+}
 
 // ── Small pieces ──────────────────────────────────────────────────────────────
 
@@ -211,29 +235,55 @@ const PRIORITY: Record<Task["priority"], string> = { high: "高", medium: "中",
  */
 function said(text: string): string {
   const rules: [RegExp, (m: RegExpMatchArray) => string][] = [
-    [/^It ended two turns in a row without a word about its open work\.$/, () => "連續兩輪結束時都沒有回報手上的工作"],
-    [/^Paused by the user\.$/, () => "由你暫停"],
-    [/^Ended by the user\.$/, () => "由你結束,未完成的任務停在原處"],
-    [/^(.+) reached its limit: (.+?)\.( Raise the limit in the team's setup and save, then resume\.)?$/, (m) => `${m[1]} 已達用量上限(${m[2]}),團隊先暫停。${m[3] ? "請先到團隊設定提高上限並儲存,再按繼續。" : "到團隊設定提高上限並儲存後,可以按繼續。"}`],
-    [/^The team has used its (\d+) turns\.$/, (m) => `已用完 ${m[1]} 回合的上限`],
-    [/^(TASK-\d+) was sent back (\d+) times\.$/, (m) => `${m[1]} 已被退回 ${m[2]} 次`],
-    [/^Coucou was closed while the team was running\.$/, () => "團隊執行中時 Coucou 被關閉"],
-    [/^interrupted$/, () => "被中斷"],
+    [/^It ended two turns in a row without a word about its open work\.$/, () => tr("連續兩輪結束時都沒有回報手上的工作", "Ended two turns in a row without a word about its open work")],
+    [/^Paused by the user\.$/, () => tr("由你暫停", "Paused by you")],
+    [/^Ended by the user\.$/, () => tr("由你結束,未完成的任務停在原處", "Ended by you; unfinished tasks stay where they are")],
+    [
+      /^(.+) reached its limit: (.+?)\.( Raise the limit in the team's setup and save, then resume\.)?$/,
+      (m) =>
+        trf("{who} 已達用量上限({limit}),團隊先暫停。{then}", "{who} reached its limit ({limit}), so the team paused. {then}", {
+          who: m[1],
+          limit: m[2],
+          then: m[3]
+            ? tr("請先到團隊設定提高上限並儲存,再按繼續。", "Raise the limit in the team's setup and save first, then press Continue.")
+            : tr("到團隊設定提高上限並儲存後,可以按繼續。", "Once you raise the limit in the team's setup and save, you can press Continue."),
+        }),
+    ],
+    [/^The team has used its (\d+) turns\.$/, (m) => trf("已用完 {n} 回合的上限", "Used up its limit of {n} turns", { n: m[1] })],
+    [/^(TASK-\d+) was sent back (\d+) times\.$/, (m) => trf("{task} 已被退回 {n} 次", "{task} was sent back {n} times", { task: m[1], n: m[2] })],
+    [/^Coucou was closed while the team was running\.$/, () => tr("團隊執行中時 Coucou 被關閉", "Coucou was closed while the team was running")],
+    [/^interrupted$/, () => tr("被中斷", "Interrupted")],
     // Why a team cannot start.
-    [/^The work folder (.+) does not exist\.$/, (m) => `工作資料夾 ${m[1]} 不存在`],
-    [/^The work folder must be a full path\.$/, () => "還沒有選擇工作資料夾"],
-    [/^(.+) runs as agent '(.*)', which is not in Settings → Agents( or Teamwork → Agent 設定)?\.$/, (m) => `${m[1]} 還沒有選擇代理${m[2] ? `(「${m[2]}」不在 設定 → Agents 或 Agent 設定 裡)` : ""}`],
-    [/^The leader '(.+)' is not a member\.$/, (m) => `Leader「${m[1]}」不是團隊成員`],
-    [/^The team has no goal\.$/, () => "還沒有填寫任務描述"],
-    [/^The team has no members\.$/, () => "團隊沒有成員"],
-    [/^Two members are called '(.+)'\.$/, (m) => `有兩位成員的 id 都是「${m[1]}」`],
-    [/^'(.+)' cannot be a member id\.$/, (m) => `「${m[1]}」不能當成員 id`],
-    [/^The team id may only use letters, digits, '-' and '_'\.$/, () => "團隊 id 只能用英數字、- 與 _"],
-    [/^A link joins '(.+)' and '(.+)', and one of them is not a member\.$/, (m) => `協作關係連到「${m[1]}」與「${m[2]}」,其中一個不是成員`],
-    [/^The team '(.+)' is already running\.$/, (m) => `團隊「${m[1]}」已經在執行中`],
-    [/^That is not a member of the team\.$/, () => "這不是團隊成員"],
-    [/^This team was loaded from an earlier run\. Press Continue to pick it up\.$/, () => "這是上次執行留下的紀錄:按上方「從中斷處繼續」,它會和其他成員一起重新啟動"],
-    [/^The team's record has no setup to pick up\.$/, () => "這份紀錄裡沒有團隊設定,沒辦法接著做;請到「團隊設定」重新開始"],
+    [/^The work folder (.+) does not exist\.$/, (m) => trf("工作資料夾 {p} 不存在", "The work folder {p} doesn't exist", { p: m[1] })],
+    [/^The work folder must be a full path\.$/, () => tr("還沒有選擇工作資料夾", "No work folder chosen yet")],
+    [
+      /^(.+) runs as agent '(.*)', which is not in Settings → Agents( or Teamwork → Agent 設定)?\.$/,
+      (m) =>
+        trf("{who} 還沒有選擇代理{why}", "{who} has no agent yet{why}", {
+          who: m[1],
+          why: m[2] ? trf("(「{id}」不在 設定 → Agents 或 Agent 設定 裡)", " (\"{id}\" isn't in Settings → Agents or Agent settings)", { id: m[2] }) : "",
+        }),
+    ],
+    [/^The leader '(.+)' is not a member\.$/, (m) => trf("Leader「{id}」不是團隊成員", "The Leader \"{id}\" isn't a member of the team", { id: m[1] })],
+    [/^The team has no goal\.$/, () => tr("還沒有填寫任務描述", "No task description yet")],
+    [/^The team has no members\.$/, () => tr("團隊沒有成員", "The team has no members")],
+    [/^Two members are called '(.+)'\.$/, (m) => trf("有兩位成員的 id 都是「{id}」", "Two members both have the id \"{id}\"", { id: m[1] })],
+    [/^'(.+)' cannot be a member id\.$/, (m) => trf("「{id}」不能當成員 id", "\"{id}\" can't be a member id", { id: m[1] })],
+    [/^The team id may only use letters, digits, '-' and '_'\.$/, () => tr("團隊 id 只能用英數字、- 與 _", "A team id may only use letters, digits, - and _")],
+    [
+      /^A link joins '(.+)' and '(.+)', and one of them is not a member\.$/,
+      (m) => trf("協作關係連到「{a}」與「{b}」,其中一個不是成員", "A link joins \"{a}\" and \"{b}\", but one of them isn't a member", { a: m[1], b: m[2] }),
+    ],
+    [/^The team '(.+)' is already running\.$/, (m) => trf("團隊「{name}」已經在執行中", "The team \"{name}\" is already running", { name: m[1] })],
+    [/^That is not a member of the team\.$/, () => tr("這不是團隊成員", "That isn't a member of the team")],
+    [
+      /^This team was loaded from an earlier run\. Press Continue to pick it up\.$/,
+      () => tr("這是上次執行留下的紀錄:按上方「從中斷處繼續」,它會和其他成員一起重新啟動", "This is the record of an earlier run: press \"Resume where it stopped\" above and it restarts with the rest of the team"),
+    ],
+    [
+      /^The team's record has no setup to pick up\.$/,
+      () => tr("這份紀錄裡沒有團隊設定,沒辦法接著做;請到「團隊設定」重新開始", "This record has no team setup to pick up from; start again from Team setup"),
+    ],
   ];
   for (const [pattern, to] of rules) {
     const m = text.match(pattern);
@@ -241,9 +291,15 @@ function said(text: string): string {
   }
   // Agents' own errors, wherever they sit in what came back.
   const inside: [RegExp, (m: RegExpMatchArray) => string][] = [
-    [/Claude Code is not signed in\./, () => "Claude Code 還沒登入:請在終端機執行 claude,輸入 /login 登入後,再按「重新啟動這位成員」"],
-    [/The '(.+?)' model is not supported when using Codex with a ChatGPT account/, (m) => `Codex 的 ChatGPT 帳號不能用「${m[1]}」模型,請在團隊設定替這位成員換一個模型`],
-    [/user rejected MCP tool call/, () => "Codex 擋下了團隊工具的呼叫"],
+    [
+      /Claude Code is not signed in\./,
+      () => tr("Claude Code 還沒登入:請在終端機執行 claude,輸入 /login 登入後,再按「重新啟動這位成員」", "Claude Code isn't signed in: run claude in a terminal, sign in with /login, then press \"Restart this member\""),
+    ],
+    [
+      /The '(.+?)' model is not supported when using Codex with a ChatGPT account/,
+      (m) => trf("Codex 的 ChatGPT 帳號不能用「{model}」模型,請在團隊設定替這位成員換一個模型", "Codex with a ChatGPT account can't use the \"{model}\" model; pick another model for this member in the team's setup", { model: m[1] }),
+    ],
+    [/user rejected MCP tool call/, () => tr("Codex 擋下了團隊工具的呼叫", "Codex blocked a call to the team tools")],
   ];
   for (const [pattern, to] of inside) {
     const m = text.match(pattern);
@@ -264,7 +320,7 @@ function colorOf(team: { members: { id: string; color: string }[] }, id: string)
 }
 
 function nameOf(snap: Snapshot, id: string): string {
-  if (id === YOU) return "你";
+  if (id === YOU) return tr("你", "You");
   if (id === "system") return "Coucou";
   return snap.members.find((m) => m.id === id)?.name ?? id;
 }
@@ -325,7 +381,7 @@ function sidebar(): HTMLElement {
   const row = (file: TeamFile, away: boolean): HTMLElement => {
     const run = file.config ? runs.get(file.config.id) : undefined;
     const busy = !!run && run.status !== "finished" && !run.detached;
-    const state = run ? teamStatus(run) : file.problems.length ? "尚未設定完成" : "可以啟動";
+    const state = run ? teamStatus(run) : file.problems.length ? tr("尚未設定完成", "Not fully set up") : tr("可以啟動", "Ready to start");
     const needsYou = run?.members.some((m) => m.status === "waitingYou" || m.status === "lost") ?? false;
     return (
       h(
@@ -341,8 +397,8 @@ function sidebar(): HTMLElement {
               render();
             },
           },
-          h("span", { class: "team-item-name", text: file.config?.name || "未命名的團隊" }),
-          h("span", { class: `team-item-state${run?.status === "running" ? " live" : ""}${needsYou ? " you" : ""}`, text: needsYou ? `${state} · 等你` : state }),
+          h("span", { class: "team-item-name", text: file.config?.name || tr("未命名的團隊", "Untitled team") }),
+          h("span", { class: `team-item-state${run?.status === "running" ? " live" : ""}${needsYou ? " you" : ""}`, text: needsYou ? trf("{state} · 等你", "{state} · needs you", { state }) : state }),
         ),
         h(
           "span",
@@ -351,8 +407,12 @@ function sidebar(): HTMLElement {
           h("button", {
             class: "icon-btn",
             type: "button",
-            title: away ? "取消封存:放回團隊清單和公司總覽" : busy ? "團隊執行中,先停下才能封存" : "封存(不刪除):不再顯示在團隊清單和公司總覽,可以在「已封存」找回",
-            "aria-label": away ? "取消封存" : "封存這個團隊",
+            title: away
+              ? tr("取消封存:放回團隊清單和公司總覽", "Unarchive: put it back in the team list and the company overview")
+              : busy
+                ? tr("團隊執行中,先停下才能封存", "The team is running; stop it before archiving it")
+                : tr("封存(不刪除):不再顯示在團隊清單和公司總覽,可以在「已封存」找回", "Archive (not delete): it leaves the team list and the company overview; you can find it again under Archived"),
+            "aria-label": away ? tr("取消封存", "Unarchive") : tr("封存這個團隊", "Archive this team"),
             disabled: !away && busy,
             html: away ? ICON_UNARCHIVE : ICON_ARCHIVE,
             onClick: () =>
@@ -364,8 +424,8 @@ function sidebar(): HTMLElement {
           h("button", {
             class: "icon-btn",
             type: "button",
-            title: "複製這個團隊",
-            "aria-label": "複製這個團隊",
+            title: tr("複製這個團隊", "Duplicate this team"),
+            "aria-label": tr("複製這個團隊", "Duplicate this team"),
             html: ICON_COPY,
             onClick: () =>
               void act(async () => {
@@ -379,7 +439,7 @@ function sidebar(): HTMLElement {
             ? h("button", {
                 class: "icon-btn armed",
                 type: "button",
-                title: "再按一次刪除(檔案會移到 .deleted,可以找回)",
+                title: tr("再按一次刪除(檔案會移到 .deleted,可以找回)", "Press again to delete (the file moves to .deleted, so you can get it back)"),
                 onClick: () =>
                   void act(async () => {
                     confirming = null;
@@ -387,12 +447,12 @@ function sidebar(): HTMLElement {
                     if (selected === file.file) selected = null;
                     await load();
                   }),
-              }, "刪除?")
+              }, tr("刪除?", "Delete?"))
             : h("button", {
                 class: "icon-btn",
                 type: "button",
-                title: busy ? "團隊執行中,先停下才能刪除" : "刪除這個團隊",
-                "aria-label": "刪除這個團隊",
+                title: busy ? tr("團隊執行中,先停下才能刪除", "The team is running; stop it before deleting it") : tr("刪除這個團隊", "Delete this team"),
+                "aria-label": tr("刪除這個團隊", "Delete this team"),
                 disabled: busy,
                 html: ICON_TRASH,
                 onClick: () => {
@@ -413,7 +473,7 @@ function sidebar(): HTMLElement {
   const inUse = files.filter((f) => !f.config?.archived);
   const away = files.filter((f) => f.config?.archived);
   for (const file of inUse) list.append(row(file, false));
-  if (!inUse.length) list.append(h("p", { class: "hint", text: away.length ? "團隊都已封存。" : "還沒有團隊。" }));
+  if (!inUse.length) list.append(h("p", { class: "hint", text: away.length ? tr("團隊都已封存。", "All teams are archived.") : tr("還沒有團隊。", "No teams yet.") }));
   // Teams put away: a quiet section at the end of the list, closed until asked for.
   if (away.length) {
     list.append(
@@ -421,7 +481,7 @@ function sidebar(): HTMLElement {
         "button",
         { class: `archive-toggle${showArchived ? " on" : ""}`, type: "button", "aria-expanded": String(showArchived), onClick: () => ((showArchived = !showArchived), render()) },
         h("span", { html: ICON_ARCHIVE }),
-        `已封存 ${away.length}`,
+        trf("已封存 {n}", "Archived {n}", { n: away.length }),
         h("i", { "aria-hidden": "true", text: showArchived ? "▾" : "▸" }),
       ),
     );
@@ -444,45 +504,45 @@ function sidebar(): HTMLElement {
     ? null
     : h(
         "div",
-        { class: "side-pop", role: "dialog", "aria-label": sidePop.which === "secretary" ? "秘書設定" : "公司設定", style: `top:${sidePop.top}px` },
+        { class: "side-pop", role: "dialog", "aria-label": sidePop.which === "secretary" ? tr("秘書設定", "Secretary settings") : tr("公司設定", "Company settings"), style: `top:${sidePop.top}px` },
         h("div", { class: "side-pop-head" },
-          h("b", { text: sidePop.which === "secretary" ? "秘書設定" : "公司設定" }),
-          h("button", { class: "side-pop-close", type: "button", "aria-label": "關閉", onClick: () => { sidePop = null; render(); } }, "✕")),
+          h("b", { text: sidePop.which === "secretary" ? tr("秘書設定", "Secretary settings") : tr("公司設定", "Company settings") }),
+          h("button", { class: "side-pop-close", type: "button", "aria-label": tr("關閉", "Close"), onClick: () => { sidePop = null; render(); } }, "✕")),
         sidePop.which === "secretary"
           ? h("div", { class: "side-pop-body" },
-              h("label", { text: "秘書名稱" }),
+              h("label", { text: tr("秘書名稱", "Secretary's name") }),
               h("input", {
-                value: secretaryName(), placeholder: "秘書",
+                value: secretaryName(), placeholder: tr("秘書", "Secretary"),
                 onChange: (e: Event) => { setSecretaryName((e.target as HTMLInputElement).value); render(); },
               }),
-              h("p", { class: "hint", text: "想叫它什麼都可以;改完馬上生效。" }),
-              h("label", { text: "開團隊使用的 Agent" }),
+              h("p", { class: "hint", text: tr("想叫它什麼都可以;改完馬上生效。", "Call it anything you like; the change applies right away.") }),
+              h("label", { text: tr("開團隊使用的 Agent", "Agents for new teams") }),
               sourceSwitch(() => render()),
               h("p", { class: "hint" }, agentSource() === "team"
-                ? "秘書開團隊、你新增團隊成員時,只從 "
-                : "秘書開團隊、你新增團隊成員時,用 設定 → Agents 的原生 Agent。切到「團隊定義的 Agent」就只從 ",
-                h("button", { class: "link", type: "button", onClick: () => { sidePop = null; place = "agents"; render(); } }, "Agent 設定"),
-                " 裡挑,秘書會照每個 Agent 的說明選人。已經設定好的團隊照舊能啟動。"))
+                ? tr("秘書開團隊、你新增團隊成員時,只從 ", "When the secretary starts a team or you add a member, agents come only from ")
+                : tr("秘書開團隊、你新增團隊成員時,用 設定 → Agents 的原生 Agent。切到「團隊定義的 Agent」就只從 ", "When the secretary starts a team or you add a member, the native agents in Settings → Agents are used. Switch to Team agents to pick only from "),
+                h("button", { class: "link", type: "button", onClick: () => { sidePop = null; place = "agents"; render(); } }, tr("Agent 設定", "Agent settings")),
+                tr(" 裡挑,秘書會照每個 Agent 的說明選人。已經設定好的團隊照舊能啟動。", ", and the secretary picks each one by its description. Teams already set up still start as before.")))
           : h("div", { class: "side-pop-body" },
-              h("label", { text: "公司名稱" }),
+              h("label", { text: tr("公司名稱", "Company name") }),
               h("input", {
-                value: companyName(), placeholder: "我的公司",
+                value: companyName(), placeholder: tr("我的公司", "My company"),
                 onChange: (e: Event) => { setCompanyName((e.target as HTMLInputElement).value); render(); },
               }),
-              h("label", { text: "戰鬥動畫流暢度(中二模式)" }),
+              h("label", { text: tr("戰鬥動畫流暢度(中二模式)", "Animation frame rate (Battle mode)") }),
               h("div", { class: "segmented" },
                 ...[20, 30, 60].map((n) =>
                   h("button", {
                     type: "button", class: office.companyFps === n ? "on" : "",
                     onClick: () => { office.companyFps = n; saveCompanyFps(n); render(); },
                   }, `${n} FPS`))),
-              h("p", { class: "hint", text: "公司總覽裡每間辦公室戰鬥動畫的更新頻率。團隊多的時候調低比較省效能,只有一兩個團隊時可以調高。" }),
-              h("label", { text: "玻璃濃度" }),
+              h("p", { class: "hint", text: tr("公司總覽裡每間辦公室戰鬥動畫的更新頻率。團隊多的時候調低比較省效能,只有一兩個團隊時可以調高。", "How often each office's battle animation updates in the company overview. Turn it down when you have many teams, to save power; with one or two teams you can turn it up.") }),
+              h("label", { text: tr("玻璃濃度", "Glass opacity") }),
               (() => {
                 const shown = h("b", { class: "sheet-value", text: `${sheet()}%` });
                 const slider = h("input", {
                   type: "range", min: "0", max: "100", step: "1", value: String(sheet()), class: "sheet-slider",
-                  "aria-label": "玻璃濃度",
+                  "aria-label": tr("玻璃濃度", "Glass opacity"),
                   // Dragging previews at once — the window itself is the preview.
                   onInput: (e: Event) => {
                     const v = Number((e.target as HTMLInputElement).value);
@@ -495,18 +555,18 @@ function sidebar(): HTMLElement {
                   h("button", { type: "button", onClick: () => { slider.value = String(v); applySheet(v); saveSheet(v); shown.textContent = `${v}%`; } }, label);
                 return h("div", { class: "sheet-row" },
                   h("div", { class: "sheet-line" }, slider, shown),
-                  h("div", { class: "segmented" }, preset("玻璃", SHEET_DEFAULT), preset("加深", 80), preset("不透明", 100)));
+                  h("div", { class: "segmented" }, preset(tr("玻璃", "Glass"), SHEET_DEFAULT), preset(tr("加深", "Darker"), 80), preset(tr("不透明", "Opaque"), 100)));
               })(),
-              h("p", { class: "hint", text: "越低,模糊的桌面透出越多;越高越接近實色。模糊本身的強度由 Windows 決定,無法調整。拖動時視窗會即時變化。" }),
-              h("label", { text: "戰鬥節奏(中二模式)" }),
+              h("p", { class: "hint", text: tr("越低,模糊的桌面透出越多;越高越接近實色。模糊本身的強度由 Windows 決定,無法調整。拖動時視窗會即時變化。", "Lower lets more of the blurred desktop show through; higher gets closer to a solid color. Windows sets how strong the blur is, and that can't be changed. The window changes as you drag.") }),
+              h("label", { text: tr("戰鬥節奏(中二模式)", "Battle pace (Battle mode)") }),
               h("div", { class: "segmented" },
-                ...([["calm", "平靜"], ["normal", "一般"], ["fierce", "激烈"]] as [Tempo, string][]).map(([v, label]) =>
+                ...([["calm", tr("平靜", "Calm")], ["normal", tr("一般", "Normal")], ["fierce", tr("激烈", "Fierce")]] as [Tempo, string][]).map(([v, label]) =>
                   h("button", { type: "button", class: battleTempo() === v ? "on" : "", onClick: () => { saveBattleTempo(v); render(); } }, label))),
-              h("p", { class: "hint", text: "AI 在工作時,英雄多久出手試探一次、魔王多常反擊。只是演出:不扣血、不出卡片,HP 只看真實的任務驗收。" }),
+              h("p", { class: "hint", text: tr("AI 在工作時,英雄多久出手試探一次、魔王多常反擊。只是演出:不扣血、不出卡片,HP 只看真實的任務驗收。", "While the AI works, how often the heroes probe and the boss strikes back. It's only a show: no HP lost, no cards; HP follows real task reviews only.") }),
               h("label", { class: "side-pop-check" },
                 h("input", { type: "checkbox", checked: ambientMotion(), onChange: (e: Event) => { saveAmbientMotion((e.target as HTMLInputElement).checked); render(); } }),
-                "場地微動(中二模式)"),
-              h("p", { class: "hint", text: "戰場上的餘燼、雪花、落葉、電花、星塵。只是氣氛,減少動態時一律停止。" })),
+                tr("場地微動(中二模式)", "Ambient motion (Battle mode)")),
+              h("p", { class: "hint", text: tr("戰場上的餘燼、雪花、落葉、電花、星塵。只是氣氛,減少動態時一律停止。", "Embers, snow, falling leaves, sparks and stardust on the battlefield. Just atmosphere; it always stops when motion is reduced.") })),
       );
   return h(
     "aside",
@@ -524,8 +584,8 @@ function sidebar(): HTMLElement {
         },
       },
       h("span", { class: "team-item-name", text: secretaryName() }),
-      h("span", { class: "team-item-state", text: "需要時叫我:查現況、開團隊" }),
-      gear("secretary", "秘書設定"),
+      h("span", { class: "team-item-state", text: tr("需要時叫我:查現況、開團隊", "Call me when you need me: check status, start teams") }),
+      gear("secretary", tr("秘書設定", "Secretary settings")),
     ),
     h(
       "button",
@@ -537,9 +597,9 @@ function sidebar(): HTMLElement {
           render();
         },
       },
-      h("span", { class: "team-item-name", text: "公司總覽" }),
-      h("span", { class: "team-item-state", text: office.demo ? "示範資料" : "所有團隊的辦公室" }),
-      gear("company", "公司設定"),
+      h("span", { class: "team-item-name", text: tr("公司總覽", "Company overview") }),
+      h("span", { class: "team-item-state", text: office.demo ? tr("示範資料", "Demo data") : tr("所有團隊的辦公室", "Every team's office") }),
+      gear("company", tr("公司設定", "Company settings")),
     ),
     h(
       "button",
@@ -551,8 +611,8 @@ function sidebar(): HTMLElement {
           render();
         },
       },
-      h("span", { class: "team-item-name", text: "成本與用量" }),
-      h("span", { class: "team-item-state", text: "Token 用量與預估費用" }),
+      h("span", { class: "team-item-name", text: tr("成本與用量", "Cost & usage") }),
+      h("span", { class: "team-item-state", text: tr("Token 用量與預估費用", "Token usage and estimated cost") }),
     ),
     h(
       "button",
@@ -564,8 +624,8 @@ function sidebar(): HTMLElement {
           render();
         },
       },
-      h("span", { class: "team-item-name", text: "憲法" }),
-      h("span", { class: "team-item-state", text: "所有成員都要遵守的規則" }),
+      h("span", { class: "team-item-name", text: tr("憲法", "Constitution") }),
+      h("span", { class: "team-item-state", text: tr("所有成員都要遵守的規則", "Rules every member follows") }),
     ),
     h(
       "button",
@@ -577,22 +637,22 @@ function sidebar(): HTMLElement {
           render();
         },
       },
-      h("span", { class: "team-item-name", text: "Agent 設定" }),
-      h("span", { class: "team-item-state", text: agentSource() === "team" ? "團隊 Agent · 使用中" : "團隊專用的 Agent" }),
+      h("span", { class: "team-item-name", text: tr("Agent 設定", "Agent settings") }),
+      h("span", { class: "team-item-state", text: agentSource() === "team" ? tr("團隊 Agent · 使用中", "Team agents · in use") : tr("團隊專用的 Agent", "Agents made for teams") }),
     ),
-    h("div", { class: "side-title", text: "團隊" }),
+    h("div", { class: "side-title", text: tr("團隊", "Teams") }),
     list,
     h(
       "div",
       { class: "side-foot" },
-      button("＋ 新增團隊", "plain", () =>
+      button(tr("＋ 新增團隊", "＋ New team"), "plain", () =>
         void act(async () => {
           const file = await Bridge.teamNew();
           await load();
           select(file);
         }),
       ),
-      h("button", { class: "link", type: "button", title: dir, onClick: () => void Bridge.teamOpenConfigs() }, "開啟團隊檔案的資料夾"),
+      h("button", { class: "link", type: "button", title: dir, onClick: () => void Bridge.teamOpenConfigs() }, tr("開啟團隊檔案的資料夾", "Open the team files folder")),
     ),
   );
 }
@@ -627,7 +687,7 @@ function trustedFolders(config: TeamConfig): HTMLElement {
   for (const [agent, path] of agentFolders ?? []) {
     if (used.has(agent)) byPath.set(path, [...(byPath.get(path) ?? []), allAgents().find((a) => a.id === agent)?.name ?? agent]);
   }
-  const own = [...byPath.entries()].map(([path, who]) => [path, who.join("、")] as const);
+  const own = [...byPath.entries()].map(([path, who]) => [path, joinNames(who)] as const);
   const dirs = config.trustedDirs ?? [];
   const toggle = h("input", { type: "checkbox", checked: !!config.agentFolders, disabled: !own.length }) as HTMLInputElement;
   toggle.addEventListener("change", () => {
@@ -638,7 +698,7 @@ function trustedFolders(config: TeamConfig): HTMLElement {
   return h(
     "div",
     { class: "trusted" },
-    h("label", { text: "也可以自動批准的資料夾" }),
+    h("label", { text: tr("也可以自動批准的資料夾", "Other folders that can be approved automatically") }),
     h(
       "label",
       { class: "trusted-check" },
@@ -646,10 +706,10 @@ function trustedFolders(config: TeamConfig): HTMLElement {
       h(
         "span",
         {},
-        h("b", { text: "代理自己的暫存資料夾" }),
+        h("b", { text: tr("代理自己的暫存資料夾", "The agents' own scratch folders") }),
         own.length
           ? h("span", { class: "trusted-paths" }, ...own.map(([path, who]) => h("span", {}, h("span", { class: "mono", text: path }), h("small", { text: ` · ${who}` }))))
-          : h("span", { class: "hint", text: "這個團隊用到的代理沒有已知的暫存資料夾。" }),
+          : h("span", { class: "hint", text: tr("這個團隊用到的代理沒有已知的暫存資料夾。", "The agents this team uses have no known scratch folders.") }),
       ),
     ),
     ...dirs.map((d, i) =>
@@ -669,16 +729,16 @@ function trustedFolders(config: TeamConfig): HTMLElement {
               render();
             },
           },
-          "移除",
+          tr("移除", "Remove"),
         ),
       ),
     ),
     h(
       "div",
       { class: "row" },
-      button("新增資料夾…", "plain", () =>
+      button(tr("新增資料夾…", "Add folder…"), "plain", () =>
         void act(async () => {
-          const picked = await Bridge.pickFolder(config.workDir, "選擇也可以自動批准的資料夾");
+          const picked = await Bridge.pickFolder(config.workDir, tr("選擇也可以自動批准的資料夾", "Choose a folder that can also be approved automatically"));
           if (picked && !dirs.some((d) => d.toLowerCase() === picked.toLowerCase())) {
             config.trustedDirs = [...dirs, picked];
             unsaved = true;
@@ -686,29 +746,43 @@ function trustedFolders(config: TeamConfig): HTMLElement {
         }),
       ),
     ),
-    h("p", { class: "hint", text: "預設都不勾。勾選或加入的資料夾,會和工作資料夾一樣:改檔、建置不會問你;刪資料夾、安裝、對外發送仍然會問。改了以後,團隊下次啟動時生效。" }),
+    h("p", {
+      class: "hint",
+      text: tr(
+        "預設都不勾。勾選或加入的資料夾,會和工作資料夾一樣:改檔、建置不會問你;刪資料夾、安裝、對外發送仍然會問。改了以後,團隊下次啟動時生效。",
+        "Nothing is checked by default. A folder you check or add is treated like the work folder: editing files and building won't ask you; deleting folders, installing and sending things out still will. Changes apply the next time the team starts.",
+      ),
+    }),
   );
 }
 
 /** What each field of a member means, for whoever sets a team up the first time. */
 function memberHelpCard(): HTMLElement {
   const item = (term: string, text: string, example = "") =>
-    h("div", { class: "help-item" }, h("dt", { text: term }), h("dd", {}, text, example ? h("span", { class: "help-eg", text: `例:${example}` }) : null));
+    h("div", { class: "help-item" }, h("dt", { text: term }), h("dd", {}, text, example ? h("span", { class: "help-eg", text: trf("例:{eg}", "e.g. {eg}", { eg: example }) }) : null));
   return h(
     "div",
     { class: "member-help", id: "member-help", role: "note" },
     h(
       "dl",
       {},
-      item("名稱", "畫面上和隊友之間稱呼這位成員的名字。", "AI 1、設計師"),
-      item("角色", "2～6 個字的職稱。全隊都看得到,Leader 依它決定任務派給誰;工位和 Office 的標籤也顯示它。", "網站開發、圖片生成、測試"),
-      item("代理", "這位成員用哪個 AI 工具工作。每位成員可以用不同的代理;要新增或修改代理,到「設定 → Agents」。"),
-      item("模型", "留空就用代理自己的預設模型。也可以指定一個:點這一欄會列出這個代理提供的模型。"),
-      item("職責", "一兩句只寫給這位成員的工作說明:負責什麼、交付什麼、不碰什麼。隊友看不到;空著也可以,它就只依角色和 Leader 派的任務做事。", "依需求產生商品圖,存到 public/images 交給網站開發;不改程式碼"),
-      item("Leader", "每個團隊一位。負責把目標拆成任務、派給隊友、驗收成果,最後向你回報。建議交給能力較強的代理或模型。"),
-      item("移除", "至少要留一位成員。團隊已經在執行時,要加人請到「工作監控」按「＋ 加人手」。"),
+      item(tr("名稱", "Name"), tr("畫面上和隊友之間稱呼這位成員的名字。", "What this member is called on screen and by its teammates."), tr("AI 1、設計師", "AI 1, Designer")),
+      item(
+        tr("角色", "Role"),
+        tr("2～6 個字的職稱。全隊都看得到,Leader 依它決定任務派給誰;工位和 Office 的標籤也顯示它。", "A job title of a word or two. The whole team sees it, the Leader decides who gets which task by it, and it labels the desk and the Office too."),
+        tr("網站開發、圖片生成、測試", "Web dev, Image generation, Testing"),
+      ),
+      item(tr("代理", "Agent"), tr("這位成員用哪個 AI 工具工作。每位成員可以用不同的代理;要新增或修改代理,到「設定 → Agents」。", "Which AI tool this member works with. Each member can use a different agent; to add or change agents, go to Settings → Agents.")),
+      item(tr("模型", "Model"), tr("留空就用代理自己的預設模型。也可以指定一個:點這一欄會列出這個代理提供的模型。", "Leave it empty to use the agent's own default model. Or pick one: click the field to list the models this agent offers.")),
+      item(
+        tr("職責", "Duty"),
+        tr("一兩句只寫給這位成員的工作說明:負責什麼、交付什麼、不碰什麼。隊友看不到;空著也可以,它就只依角色和 Leader 派的任務做事。", "A sentence or two for this member alone: what it's responsible for, what it hands in, what it leaves alone. Teammates don't see it. It can stay empty; the member then works from its role and the tasks the Leader gives it."),
+        tr("依需求產生商品圖,存到 public/images 交給網站開發;不改程式碼", "Make product images as asked, save them to public/images for the web developer; don't touch the code"),
+      ),
+      item("Leader", tr("每個團隊一位。負責把目標拆成任務、派給隊友、驗收成果,最後向你回報。建議交給能力較強的代理或模型。", "One per team. Splits the goal into tasks, hands them to teammates, reviews the results and reports back to you. Best given to a stronger agent or model.")),
+      item(tr("移除", "Remove"), tr("至少要留一位成員。團隊已經在執行時,要加人請到「工作監控」按「＋ 加人手」。", "At least one member has to stay. To add someone while the team is running, press \"＋ More hands\" in Monitor.")),
     ),
-    h("p", { class: "hint", text: "成員之間誰把成果交給誰、能不能直接對話,在「協作關係」設定。" }),
+    h("p", { class: "hint", text: tr("成員之間誰把成果交給誰、能不能直接對話,在「協作關係」設定。", "Who hands work to whom, and who may talk to whom directly, is set in Collaboration.") }),
   );
 }
 
@@ -723,12 +797,12 @@ function advanced(config: TeamConfig, m: TeamConfig["members"][number], at: numb
   const toggle = h(
     "button",
     { class: "link member-adv-toggle", type: "button", "aria-expanded": String(isOpen), onClick: () => (isOpen ? advancedOpen.delete(m.id) : advancedOpen.add(m.id), render()) },
-    `${isOpen ? "▾" : "▸"} 進階設定`,
-    limits.length ? h("span", { class: "chip", text: `上限 ${limits.join(" · ")}` }) : null,
+    `${isOpen ? "▾" : "▸"} ${tr("進階設定", "Advanced")}`,
+    limits.length ? h("span", { class: "chip", text: trf("上限 {v}", "Limit {v}", { v: limits.join(" · ") }) }) : null,
   );
   if (!isOpen) return toggle;
   const number = (key: string, value: number | undefined, set: (v: number | undefined) => void, attrs: Record<string, string>) =>
-    bound("input", `m${at}.${key}`, value ? String(value) : "", (v) => set(Number(v) > 0 ? Number(v) : undefined), { type: "number", min: "0", class: "field narrow member-limit", ...attrs });
+    bound("input", `m${at}.${key}`, value ? String(value) : "", (v) => set(Number(v) > 0 ? Number(v) : undefined), { type: "number", min: "0", class: "field narrow member-limit", ...attrs }); // i18n-ok: CSS classes
   const used = runs.get(config.id)?.members.find((x) => x.id === m.id)?.usage ?? [];
   const now = used.length ? usageSummary(used, () => render()) : null;
   return h(
@@ -738,12 +812,29 @@ function advanced(config: TeamConfig, m: TeamConfig["members"][number], at: numb
     h(
       "div",
       { class: "member-adv-body" },
-      h("label", { text: "這一輪最多用" }),
-      h("div", { class: "row nowrap" }, number("maxTokens", m.maxTokens, (v) => (m.maxTokens = v), { placeholder: "不限制", step: "100000" }), h("span", { class: "hint", text: "tokens(含快取)" })),
-      h("label", { text: "費用上限" }),
-      h("div", { class: "row nowrap" }, h("span", { class: "hint", text: "US$" }), number("maxCostUsd", m.maxCostUsd, (v) => (m.maxCostUsd = v), { placeholder: "不限制", step: "0.5" }), h("span", { class: "hint", text: "依「成本與用量」的價格表估算" })),
-      now ? h("p", { class: "hint", text: `這一輪目前已用 ${fmtTokens(now.tokens)} tokens${now.usd != null ? ` · ${fmtMoney(now.usd)}` : ""}。` }) : null,
-      h("p", { class: "hint", text: "留空就不限制(預設)。到達上限時,團隊會先暫停並中斷這位成員正在做的這一輪;提高上限並儲存後就生效(執行中也是),再按「繼續」。" }),
+      h("label", { text: tr("這一輪最多用", "Most it may use this run") }),
+      h("div", { class: "row nowrap" }, number("maxTokens", m.maxTokens, (v) => (m.maxTokens = v), { placeholder: tr("不限制", "No limit"), step: "100000" }), h("span", { class: "hint", text: tr("tokens(含快取)", "tokens (cache included)") })),
+      h("label", { text: tr("費用上限", "Cost limit") }),
+      h(
+        "div",
+        { class: "row nowrap" },
+        h("span", { class: "hint", text: "US$" }), // i18n-ok: a currency sign
+        number("maxCostUsd", m.maxCostUsd, (v) => (m.maxCostUsd = v), { placeholder: tr("不限制", "No limit"), step: "0.5" }),
+        h("span", { class: "hint", text: tr("依「成本與用量」的價格表估算", "Estimated from the price list in Cost & usage") }),
+      ),
+      now
+        ? h("p", {
+            class: "hint",
+            text: trf("這一輪目前已用 {tokens} tokens{usd}。", "Used so far this run: {tokens} tokens{usd}.", { tokens: fmtTokens(now.tokens), usd: now.usd != null ? ` · ${fmtMoney(now.usd)}` : "" }),
+          })
+        : null,
+      h("p", {
+        class: "hint",
+        text: tr(
+          "留空就不限制(預設)。到達上限時,團隊會先暫停並中斷這位成員正在做的這一輪;提高上限並儲存後就生效(執行中也是),再按「繼續」。",
+          "Leave it empty for no limit (the default). At the limit, the team pauses and this member's turn under way is stopped. A raised limit holds once you save it (even mid-run); then press Continue.",
+        ),
+      }),
     ),
   );
 }
@@ -802,25 +893,26 @@ function setup(file: TeamFile): HTMLElement {
   const newcomers = running && run ? config.members.filter((m) => !run.members.some((x) => x.id === m.id)) : [];
 
   // ── Left: what the team is for ──
-  const folder = bound("input", "workDir", config.workDir, (v) => (config.workDir = v), { placeholder: "選擇所有成員一起工作的資料夾" });
+  const folder = bound("input", "workDir", config.workDir, (v) => (config.workDir = v), { placeholder: tr("選擇所有成員一起工作的資料夾", "Choose the folder every member works in") });
   const goal = h(
     "section",
     { class: "panel form" },
-    h("h2", { text: "任務目標" }),
-    h("label", { text: "團隊名稱" }),
-    bound("input", "name", config.name, (v) => (config.name = v), { placeholder: "例如:購物網站團隊" }),
-    h("label", { text: "任務描述" }),
-    bound("textarea", "goal", config.goal, (v) => (config.goal = v), { rows: "5", placeholder: "要完成什麼、包含哪些功能、最後要交付什麼" }),
-    h("label", { text: "任務範圍(以逗號分隔)" }),
-    bound("input", "scope", config.scope.join("、"), (v) => (config.scope = v.split(/[,,、]/).map((x) => x.trim()).filter(Boolean)), { placeholder: "商品目錄、購物車、會員登入" }),
-    h("label", { text: "工作資料夾" }),
+    h("h2", { text: tr("任務目標", "Goal") }),
+    h("label", { text: tr("團隊名稱", "Team name") }),
+    bound("input", "name", config.name, (v) => (config.name = v), { placeholder: tr("例如:購物網站團隊", "e.g. Online shop team") }),
+    h("label", { text: tr("任務描述", "Task description") }),
+    bound("textarea", "goal", config.goal, (v) => (config.goal = v), { rows: "5", placeholder: tr("要完成什麼、包含哪些功能、最後要交付什麼", "What to build, which features it has, what to hand in at the end") }),
+    h("label", { text: tr("任務範圍(以逗號分隔)", "Scope (comma-separated)") }),
+    // Read back with any of the separators, whichever language wrote it.
+    bound("input", "scope", joinNames(config.scope), (v) => (config.scope = v.split(/[,,、]/).map((x) => x.trim()).filter(Boolean)), { placeholder: tr("商品目錄、購物車、會員登入", "Product catalog, cart, member login") }),
+    h("label", { text: tr("工作資料夾", "Work folder") }),
     h(
       "div",
       { class: "row nowrap" },
       folder,
-      button("選擇資料夾…", "plain", () =>
+      button(tr("選擇資料夾…", "Choose folder…"), "plain", () =>
         void act(async () => {
-          const picked = await Bridge.pickFolder(config.workDir, "選擇團隊的工作資料夾");
+          const picked = await Bridge.pickFolder(config.workDir, tr("選擇團隊的工作資料夾", "Choose the team's work folder"));
           if (picked) {
             config.workDir = picked;
             unsaved = true;
@@ -828,31 +920,38 @@ function setup(file: TeamFile): HTMLElement {
         }),
       ),
     ),
-    h("p", { class: "hint", text: "所有成員都在這個資料夾裡工作,交付的成果也放在這裡。" }),
-    h("label", { text: "工作模式" }),
+    h("p", { class: "hint", text: tr("所有成員都在這個資料夾裡工作,交付的成果也放在這裡。", "Every member works in this folder, and what they hand in goes here too.") }),
+    h("label", { text: tr("工作模式", "Work mode") }),
     h(
       "div",
       { class: "segmented" },
-      h("button", { type: "button", class: config.autoApprove ? "on" : "", onClick: () => ((config.autoApprove = true), (unsaved = true), render()) }, "自主協作"),
-      h("button", { type: "button", class: config.autoApprove ? "" : "on", onClick: () => ((config.autoApprove = false), (unsaved = true), render()) }, "逐步確認"),
+      h("button", { type: "button", class: config.autoApprove ? "on" : "", onClick: () => ((config.autoApprove = true), (unsaved = true), render()) }, tr("自主協作", "Autonomous mode")),
+      h("button", { type: "button", class: config.autoApprove ? "" : "on", onClick: () => ((config.autoApprove = false), (unsaved = true), render()) }, tr("逐步確認", "Confirm each step")),
     ),
     h("p", {
       class: "hint",
       text: config.autoApprove
-        ? "成員改檔、建置、跑測試不會問你;刪資料夾、安裝東西、對外發送等危險動作仍然會問。"
-        : "成員的每一個權限請求都會問你。",
+        ? tr("成員改檔、建置、跑測試不會問你;刪資料夾、安裝東西、對外發送等危險動作仍然會問。", "Members edit files, build and run tests without asking you; risky steps such as deleting folders, installing things or sending things out still ask.")
+        : tr("成員的每一個權限請求都會問你。", "You're asked about every permission request a member makes."),
     }),
     config.autoApprove ? trustedFolders(config) : null,
-    h("label", { text: "辦公室風格" }),
+    h("label", { text: tr("辦公室風格", "Office style") }),
     h(
       "div",
       { class: "segmented wrap" },
-      ...[["", "自動"], ...Object.entries(THEME_LABELS)].map(([key, label]) =>
+      ...[["", tr("自動", "Auto")], ...Object.entries(THEME_LABELS)].map(([key, label]) =>
         h("button", { type: "button", class: (config.officeTheme ?? "") === key ? "on" : "", onClick: () => ((config.officeTheme = key || undefined), (unsaved = true), render()) }, label),
       ),
     ),
-    h("p", { class: "hint", text: `Office 檢視裡這個團隊的辦公室長什麼樣子。自動:${LARGE_FROM} 位成員以上用高級辦公室(在公司總覽佔較大的格子),其他依團隊固定挑一種。` }),
-    h("label", { text: "中二模式戰場" }),
+    h("p", {
+      class: "hint",
+      text: trf(
+        "Office 檢視裡這個團隊的辦公室長什麼樣子。自動:{n} 位成員以上用高級辦公室(在公司總覽佔較大的格子),其他依團隊固定挑一種。",
+        "What this team's office looks like in the Office view. Auto: teams of {n} or more members get the deluxe office (a bigger tile in the company overview); every other team keeps one style picked for it.",
+        { n: LARGE_FROM },
+      ),
+    }),
+    h("label", { text: tr("中二模式戰場", "Battle mode arena") }),
     h(
       "div",
       { class: "segmented wrap" },
@@ -860,9 +959,9 @@ function setup(file: TeamFile): HTMLElement {
         h("button", { type: "button", class: savedWorld(config.id) === id ? "on" : "", title: WORLDS[id].label, onClick: () => { saveWorld(config.id, id); office.worldChanged(config.id); } }, WORLDS[id].label),
       ),
     ),
-    h("p", { class: "hint", text: "中二模式下這個團隊在哪個場地討伐哪隻魔王。只改變畫面,不影響工作、任務或 HP;改了馬上生效,不用儲存。" }),
-    h("label", { text: "回合上限" }),
-    h("div", { class: "row nowrap" }, bound("input", "maxTurns", String(config.maxTurns), (v) => (config.maxTurns = Math.max(1, Math.min(500, Number(v) || 60))), { type: "number", min: "1", max: "500", class: "field narrow" }), h("span", { class: "hint", text: "整個團隊用完這麼多回合後會暫停,等你決定要不要繼續。" })),
+    h("p", { class: "hint", text: tr("中二模式下這個團隊在哪個場地討伐哪隻魔王。只改變畫面,不影響工作、任務或 HP;改了馬上生效,不用儲存。", "Where this team fights which boss in Battle mode. It only changes the picture, not the work, the tasks or HP; it applies right away, no need to save.") }),
+    h("label", { text: tr("回合上限", "Turn limit") }),
+    h("div", { class: "row nowrap" }, bound("input", "maxTurns", String(config.maxTurns), (v) => (config.maxTurns = Math.max(1, Math.min(500, Number(v) || 60))), { type: "number", min: "1", max: "500", class: "field narrow" }), h("span", { class: "hint", text: tr("整個團隊用完這麼多回合後會暫停,等你決定要不要繼續。", "Once the whole team has used this many turns, it pauses until you decide whether to go on.") })),
   );
 
   // ── Right: who is in it ──
@@ -873,7 +972,7 @@ function setup(file: TeamFile): HTMLElement {
     const teamMode = agentSource() === "team";
     const hintOf = (a: AgentProfile) => {
       const own = teamAgents().find((t) => t.id === a.id);
-      if (own) return `團隊 Agent · 基底 ${agents.find((n) => n.id === own.base)?.name ?? own.base}`;
+      if (own) return trf("團隊 Agent · 基底 {base}", "Team agent · based on {base}", { base: agents.find((n) => n.id === own.base)?.name ?? own.base });
       return kindOf(a) !== a.name ? kindOf(a) : undefined;
     };
     const pool = teamMode ? teamProfiles(agents) : agents;
@@ -883,15 +982,15 @@ function setup(file: TeamFile): HTMLElement {
       const other = allAgents().find((a) => a.id === m.agent);
       agentChoices.unshift(
         other
-          ? { value: m.agent, label: other.name, hint: teamMode ? "原生 Agent(既有設定,照樣能啟動)" : "團隊 Agent(既有設定,照樣能啟動)" }
-          : { value: m.agent, label: `${m.agent}(不存在)`, hint: "不在 設定 → Agents 或 Agent 設定 裡" },
+          ? { value: m.agent, label: other.name, hint: teamMode ? tr("原生 Agent(既有設定,照樣能啟動)", "Native agent (set up earlier, still starts)") : tr("團隊 Agent(既有設定,照樣能啟動)", "Team agent (set up earlier, still starts)") }
+          : { value: m.agent, label: trf("{id}(不存在)", "{id} (missing)", { id: m.agent }), hint: tr("不在 設定 → Agents 或 Agent 設定 裡", "Not in Settings → Agents or Agent settings") },
       );
     }
     const agent = dropdown({
       value: m.agent,
       choices: agentChoices,
-      placeholder: "選擇代理…",
-      title: "這位成員用哪個代理執行",
+      placeholder: tr("選擇代理…", "Choose an agent…"),
+      title: tr("這位成員用哪個代理執行", "Which agent this member runs as"),
       onChange: (v) => {
         m.agent = v;
         unsaved = true;
@@ -904,20 +1003,20 @@ function setup(file: TeamFile): HTMLElement {
     const lister = baseOf(m.agent, agents);
     const known = lister ? modelLists.get(lister.id) : undefined;
     const model = bound("input", `m${at}.model`, m.model ?? "", (v) => (m.model = v.trim()), {
-      placeholder: profile?.model ? `模型:${profile.model}(代理預設)` : "模型:代理預設",
-      title: typeof known === "string" ? known : "留空就用代理自己的預設模型",
+      placeholder: profile?.model ? trf("模型:{model}(代理預設)", "Model: {model} (agent default)", { model: profile.model }) : tr("模型:代理預設", "Model: agent default"),
+      title: typeof known === "string" ? known : tr("留空就用代理自己的預設模型", "Leave it empty to use the agent's own default model"),
       autocomplete: "off",
     });
     suggest(model, () => {
-      const got = lister ? modelLists.get(lister.id) : "這個代理不在 設定 → Agents 裡";
-      if (got === undefined) return "讀取這個代理提供的模型…";
+      const got = lister ? modelLists.get(lister.id) : tr("這個代理不在 設定 → Agents 裡", "This agent isn't in Settings → Agents");
+      if (got === undefined) return tr("讀取這個代理提供的模型…", "Reading the models this agent offers…");
       return Array.isArray(got) ? got.map((c) => ({ value: c.id, label: c.id, hint: c.label !== c.id ? c.label : undefined })) : got;
     });
     // The list is asked for the first time the field is used: a handshake
     // with the agent, nothing spent.
     model.addEventListener("focus", () => {
       if (!lister || modelLists.has(lister.id)) return;
-      modelLists.set(lister.id, "載入中…");
+      modelLists.set(lister.id, tr("載入中…", "Loading…"));
       Bridge.agentModels(lister)
         .then((found) => modelLists.set(lister.id, found))
         .catch((err) => modelLists.set(lister.id, String(err).replace(/^Error:\s*/, "")))
@@ -934,12 +1033,15 @@ function setup(file: TeamFile): HTMLElement {
           h(
             "div",
             { class: "row nowrap" },
-            bound("input", `m${at}.name`, m.name, (v) => (m.name = v), { placeholder: "名稱", class: "field name" }),
-            bound("input", `m${at}.role`, m.role, (v) => (m.role = v), { placeholder: "角色,例如:網站開發", title: "全隊看得到的短職稱,Leader 依它派工" }),
+            bound("input", `m${at}.name`, m.name, (v) => (m.name = v), { placeholder: tr("名稱", "Name"), class: "field name" }),
+            bound("input", `m${at}.role`, m.role, (v) => (m.role = v), { placeholder: tr("角色,例如:網站開發", "Role, e.g. Web dev"), title: tr("全隊看得到的短職稱,Leader 依它派工", "A short title the whole team sees; the Leader assigns work by it") }),
             agent,
           ),
           h("div", { class: "row nowrap" }, model),
-          bound("input", `m${at}.duty`, m.duty, (v) => (m.duty = v), { placeholder: "職責:這位成員負責什麼、交付什麼(只給它自己看)", title: "只寫給這位成員的工作說明" }),
+          bound("input", `m${at}.duty`, m.duty, (v) => (m.duty = v), {
+            placeholder: tr("職責:這位成員負責什麼、交付什麼(只給它自己看)", "Duty: what this member is responsible for and hands in (only it sees this)"),
+            title: tr("只寫給這位成員的工作說明", "Work notes for this member alone"),
+          }),
           advanced(config, m, at),
         ),
         h(
@@ -947,8 +1049,8 @@ function setup(file: TeamFile): HTMLElement {
           { class: "member-side" },
           h(
             "button",
-            { type: "button", class: `chip pick${isLeader ? " leader" : ""}`, title: "Leader 負責拆解需求、指派任務與審核成果", onClick: () => ((config.leader = m.id), (unsaved = true), render()) },
-            isLeader ? "♛ Leader" : "設為 Leader",
+            { type: "button", class: `chip pick${isLeader ? " leader" : ""}`, title: tr("Leader 負責拆解需求、指派任務與審核成果", "The Leader breaks the request down, assigns tasks and reviews the results"), onClick: () => ((config.leader = m.id), (unsaved = true), render()) },
+            isLeader ? "♛ Leader" : tr("設為 Leader", "Make Leader"),
           ),
           h(
             "button",
@@ -963,7 +1065,7 @@ function setup(file: TeamFile): HTMLElement {
                 render();
               },
             },
-            "移除",
+            tr("移除", "Remove"),
           ),
         ),
       ),
@@ -976,7 +1078,7 @@ function setup(file: TeamFile): HTMLElement {
     h(
       "div",
       { class: "panel-head" },
-      h("h2", {}, "團隊成員", h("span", { class: "count", text: String(config.members.length) })),
+      h("h2", {}, tr("團隊成員", "Members"), h("span", { class: "count", text: String(config.members.length) })),
       h(
         "button",
         {
@@ -984,14 +1086,14 @@ function setup(file: TeamFile): HTMLElement {
           class: `help-toggle${memberHelp ? " on" : ""}`,
           "aria-expanded": String(memberHelp),
           "aria-controls": "member-help",
-          title: memberHelp ? "收起說明" : "每一欄怎麼填",
+          title: memberHelp ? tr("收起說明", "Hide the help") : tr("每一欄怎麼填", "How to fill in each field"),
           onClick: () => {
             memberHelp = !memberHelp;
             render();
           },
         },
         h("b", { "aria-hidden": "true", text: "?" }),
-        memberHelp ? "收起說明" : "怎麼填",
+        memberHelp ? tr("收起說明", "Hide help") : tr("怎麼填", "How to fill in"),
       ),
     ),
     memberHelp ? memberHelpCard() : null,
@@ -1006,23 +1108,23 @@ function setup(file: TeamFile): HTMLElement {
           render();
         },
       },
-      "＋ 加入成員",
+      tr("＋ 加入成員", "＋ Add member"),
     ),
     agents.length
-      ? h("p", { class: "hint" }, "代理在 ", h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, "設定 → Agents"), " 裡新增與修改", agentSource() === "team" ? h("span", {}, ";現在只列 ", h("button", { class: "link", type: "button", onClick: () => { place = "agents"; render(); } }, "Agent 設定"), " 裡的團隊 Agent") : null, "。 ",
-          h("button", { class: "link", type: "button", disabled: doctor === "running", title: "逐一確認每個代理的 CLI 找不找得到、能不能回答版本;找得到就等於重新定位成功", onClick: () => {
+      ? h("p", { class: "hint" }, tr("代理在 ", "Add and edit agents in "), h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, tr("設定 → Agents", "Settings → Agents")), tr(" 裡新增與修改", ""), agentSource() === "team" ? h("span", {}, tr(";現在只列 ", "; only the team agents in "), h("button", { class: "link", type: "button", onClick: () => { place = "agents"; render(); } }, tr("Agent 設定", "Agent settings")), tr(" 裡的團隊 Agent", " are listed now")) : null, tr("。 ", ". "),
+          h("button", { class: "link", type: "button", disabled: doctor === "running", title: tr("逐一確認每個代理的 CLI 找不找得到、能不能回答版本;找得到就等於重新定位成功", "Checks each agent's CLI in turn: can it be found, does it answer with its version. Found means it was located again."), onClick: () => {
             doctor = "running";
             render();
             Bridge.agentsDoctor(agents).then((r) => { doctor = r; render(); }, (e) => { doctor = String(e); render(); });
-          } }, doctor === "running" ? "檢查中…" : "檢查代理"))
-      : h("p", { class: "problem" }, "還沒有任何代理。請先到 ", h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, "設定 → Agents"), " 建立。"),
+          } }, doctor === "running" ? tr("檢查中…", "Checking…") : tr("檢查代理", "Check agents")))
+      : h("p", { class: "problem" }, tr("還沒有任何代理。請先到 ", "No agents yet. Create one in "), h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, tr("設定 → Agents", "Settings → Agents")), tr(" 建立。", " first.")),
     Array.isArray(doctor)
       ? h("div", { class: "agent-doctor" }, ...doctor.map((c) =>
           h("p", { class: c.error ? "problem" : "hint" },
             h("b", { text: c.name }), " ",
-            c.error ? `✕ ${c.error}` : `✓ ${c.version || "有回應"} · ${c.found ?? ""} · ${c.tookMs} ms`)))
+            c.error ? `✕ ${c.error}` : `✓ ${c.version || tr("有回應", "responded")} · ${c.found ?? ""} · ${c.tookMs} ms`)))
       : typeof doctor === "string" && doctor !== "running"
-        ? h("p", { class: "problem", text: `檢查代理失敗:${doctor}` })
+        ? h("p", { class: "problem", text: trf("檢查代理失敗:{why}", "Checking the agents failed: {why}", { why: doctor }) })
         : null,
   );
 
@@ -1036,15 +1138,20 @@ function setup(file: TeamFile): HTMLElement {
       h("div", { class: "setup-col" }, goal, knowledgePanel(config.id, config.members.find((m) => m.id === config.leader)?.name ?? "", running, knowledgeHost)),
       team,
     ),
-    stops.length ? h("div", { class: "problem" }, h("strong", { text: "啟動前還需要:" }), ...stops.map((p) => h("div", { text: `• ${said(p)}` }))) : null,
+    stops.length ? h("div", { class: "problem" }, h("strong", { text: tr("啟動前還需要:", "Before it can start:") }), ...stops.map((p) => h("div", { text: `• ${said(p)}` }))) : null,
     h(
       "div",
-      { class: "row end bar" },
+      { class: "row end bar" }, // i18n-ok: CSS classes
       running
-        ? h("span", { class: "hint", text: newcomers.length ? `${newcomers.map((m) => m.name).join("、")} 可以馬上加入;其他修改下次啟動才會套用。` : "這個團隊正在執行;這裡的修改下次啟動才會套用。" })
+        ? h("span", {
+            class: "hint",
+            text: newcomers.length
+              ? trf("{names} 可以馬上加入;其他修改下次啟動才會套用。", "{names} can join right away; other changes apply at the next start.", { names: joinNames(newcomers.map((m) => m.name)) })
+              : tr("這個團隊正在執行;這裡的修改下次啟動才會套用。", "This team is running; changes made here apply at the next start."),
+          })
         : null,
       running && newcomers.length
-        ? button(`讓 ${newcomers.length} 位新成員加入 →`, "primary", () =>
+        ? button(newcomers.length === 1 ? tr("讓 1 位新成員加入 →", "Let the new member join →") : trf("讓 {n} 位新成員加入 →", "Let {n} new members join →", { n: newcomers.length }), "primary", () =>
             void act(async () => {
               if (!(await save())) return;
               const again = files.find((f) => f.file === selected);
@@ -1055,10 +1162,10 @@ function setup(file: TeamFile): HTMLElement {
             }),
           )
         : null,
-      again ? h("span", { class: "hint", text: "重新開始會從頭跑一次;上一次的紀錄會保留在團隊紀錄資料夾。" }) : null,
-      h("button", { class: `btn plain save${unsaved ? " due" : ""}`, type: "button", onClick: () => void act(save) }, "儲存"),
+      again ? h("span", { class: "hint", text: tr("重新開始會從頭跑一次;上一次的紀錄會保留在團隊紀錄資料夾。", "Starting again runs it from the top; the last run's record stays in the team's records folder.") }) : null,
+      h("button", { class: `btn plain save${unsaved ? " due" : ""}`, type: "button", onClick: () => void act(save) }, tr("儲存", "Save")), // i18n-ok: CSS classes
       button(
-        again ? "重新開始 →" : "啟動 Teamwork →",
+        again ? tr("重新開始 →", "Start again →") : tr("啟動 Teamwork →", "Start Teamwork →"),
         "primary",
         () =>
           void act(async () => {
@@ -1084,7 +1191,8 @@ const CROWN = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true
  */
 function desk(snap: Snapshot, m: MemberView): HTMLElement {
   // Planning and reviewing are kinds of work, said as such.
-  const status = m.phase ? { ...STATUS[m.status], label: m.phase === "planning" ? "規劃中" : "審核中" } : STATUS[m.status];
+  const statuses = memberStatus();
+  const status = m.phase ? { ...statuses[m.status], label: m.phase === "planning" ? tr("規劃中", "Planning") : tr("審核中", "Reviewing") } : statuses[m.status];
   const task = m.task ? snap.tasks.find((t) => t.id === m.task) : undefined;
   const { avatar, bubble, screen, pulse } = live.parts(snap, m);
   const big = focused === m.id;
@@ -1098,15 +1206,15 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
         "div",
         { class: "member-head" },
         h("div", { class: "member-name" }, h("span", { class: "name", text: m.name }), h("span", { class: `badge ${m.status}` }, h("b", { text: status.mark }), status.label)),
-        h("div", { class: "member-role", title: m.duty, text: m.isLeader ? `Leader · ${m.role}` : m.role }),
+        h("div", { class: "member-role", title: m.duty, text: m.isLeader ? `Leader · ${m.role}` : m.role }), // i18n-ok: "Leader" is the same in both
       ),
       h(
         "button",
         {
           class: "zoom",
           type: "button",
-          title: big ? "縮回" : "放大這位成員的畫面",
-          "aria-label": big ? "縮回" : "放大這位成員的畫面",
+          title: big ? tr("縮回", "Shrink back") : tr("放大這位成員的畫面", "Enlarge this member's screen"),
+          "aria-label": big ? tr("縮回", "Shrink back") : tr("放大這位成員的畫面", "Enlarge this member's screen"),
           onClick: () => {
             focused = big ? null : m.id;
             render();
@@ -1121,9 +1229,9 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
   // The things that wait for the person, answered right on the card.
   el.append(...asks(snap, m));
   if (m.status === "lost" && snap.detached) {
-    el.append(h("div", { class: "hint", text: "按上方「從中斷處繼續」,它會和其他成員一起重新啟動。" }));
+    el.append(h("div", { class: "hint", text: tr("按上方「從中斷處繼續」,它會和其他成員一起重新啟動。", "Press \"Resume where it stopped\" above and it restarts with the rest of the team.") }));
   } else if (m.status === "lost") {
-    el.append(h("div", { class: "row" }, button("重新啟動這位成員", "primary", () => void act(() => Bridge.teamRecover(snap.id, m.id)))));
+    el.append(h("div", { class: "row" }, button(tr("重新啟動這位成員", "Restart this member"), "primary", () => void act(() => Bridge.teamRecover(snap.id, m.id)))));
   }
 
   // Whether it is alive: its last sign of life, and — when it has gone quiet
@@ -1134,19 +1242,21 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
       { class: "pulse-row" },
       pulse,
       otherModel(m),
-      spend(m.usage, `${m.name} 這一輪用掉的 token`),
+      spend(m.usage, trf("{name} 這一輪用掉的 token", "Tokens {name} used this run", { name: m.name })),
       m.status === "working"
-        ? h("button", { class: "btn plain stall", type: "button", title: "停掉它這一輪;它下一輪會被提醒手上的工作", onClick: () => void act(() => Bridge.teamInterruptMember(snap.id, m.id)) }, "打斷這一輪")
+        ? h("button", { class: "btn plain stall", type: "button", title: tr("停掉它這一輪;它下一輪會被提醒手上的工作", "Stops its turn under way; on its next turn it's reminded of its open work"), onClick: () => void act(() => Bridge.teamInterruptMember(snap.id, m.id)) }, tr("打斷這一輪", "Interrupt this turn")) // i18n-ok: CSS classes
         : null,
     ),
   );
+  const runsAs = `${agentLabel(m.agent)}${m.model ? ` · ${m.model}` : ""}`;
+  const turns = m.turns === 1 ? trf("{agent} · 1 回合", "{agent} · 1 turn", { agent: runsAs }) : trf("{agent} · {n} 回合", "{agent} · {n} turns", { agent: runsAs, n: m.turns });
   el.append(
     screen,
     h(
       "footer",
       { class: "desk-foot" },
-      task ? h("span", { class: "chip task", title: task.detail || task.title, text: `${task.id} · ${task.title}` }) : h("span", { class: "chip", title: m.duty, text: "沒有進行中的任務" }),
-      h("span", { class: "chip agent", title: `使用的代理與模型 · 已進行的回合數\n${agentLabel(m.agent)}${m.model ? ` · ${m.model}` : ""} · ${m.turns} 回合`, text: `${agentLabel(m.agent)}${m.model ? ` · ${m.model}` : ""} · ${m.turns} 回合` }),
+      task ? h("span", { class: "chip task", title: task.detail || task.title, text: `${task.id} · ${task.title}` }) : h("span", { class: "chip", title: m.duty, text: tr("沒有進行中的任務", "No task in progress") }),
+      h("span", { class: "chip agent", title: `${tr("使用的代理與模型 · 已進行的回合數", "Agent and model in use · turns so far")}\n${turns}`, text: turns }),
     ),
   );
   return el;
@@ -1175,23 +1285,30 @@ function asks(snap: Snapshot, m: MemberView): HTMLElement[] {
       h(
         "div",
         { class: "ask" },
-        h("div", { class: "ask-why", text: p.rule ? `憲法要你批准:${p.rule}` : p.danger ? `要你批准:${DANGER[p.danger]}` : "要你批准" }),
+        h("div", {
+          class: "ask-why",
+          text: p.rule
+            ? trf("憲法要你批准:{rule}", "The constitution needs your approval: {rule}", { rule: p.rule })
+            : p.danger
+              ? trf("要你批准:{why}", "Needs your approval: {why}", { why: dangerLabel(p.danger) })
+              : tr("要你批准", "Needs your approval"),
+        }),
         h("div", { class: "ask-what mono", text: command || p.title }),
         more.length
           ? h(
               "details",
               { class: "ask-more" },
-              h("summary", { text: `還有 ${more.length} 個請求在排隊` }),
+              h("summary", { text: more.length === 1 ? tr("還有 1 個請求在排隊", "1 more request waiting") : trf("還有 {n} 個請求在排隊", "{n} more requests waiting", { n: more.length }) }),
               ...more.map((x) => h("div", { class: "ask-what mono", text: commandOf(x) })),
             )
           : null,
         h(
           "div",
           { class: "row" },
-          button("允許這一次", "primary", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null)), !allow),
-          button("拒絕", "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null))),
-          more.length ? button(`全部允許(${more.length + 1})`, "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null, true)), !allow) : null,
-          more.length ? button("全部拒絕", "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null, true))) : null,
+          button(tr("允許這一次", "Allow once"), "primary", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null)), !allow),
+          button(tr("拒絕", "Deny"), "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null))),
+          more.length ? button(trf("全部允許({n})", "Allow all ({n})", { n: more.length + 1 }), "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null, true)), !allow) : null,
+          more.length ? button(tr("全部拒絕", "Deny all"), "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null, true))) : null,
         ),
       ),
     );
@@ -1202,9 +1319,9 @@ function asks(snap: Snapshot, m: MemberView): HTMLElement[] {
       h(
         "div",
         { class: "ask" },
-        h("div", { class: "ask-why", text: "問你" }),
+        h("div", { class: "ask-why", text: tr("問你", "Asks you") }),
         h("div", { class: "ask-what", text: question.question }),
-        field(`answer:${snap.id}:${question.id}`, "輸入回覆後按 Enter", (text) =>
+        field(`answer:${snap.id}:${question.id}`, tr("輸入回覆後按 Enter", "Type a reply and press Enter"), (text) =>
           void act(
             () => Bridge.teamAnswer(snap.id, question.id, text),
             () => drafts.delete(`answer:${snap.id}:${question.id}`),
@@ -1226,14 +1343,14 @@ function stage(snap: Snapshot): HTMLElement {
     h(
       "div",
       { class: "stage-head" },
-      h("h2", { text: "團隊現場" }),
+      h("h2", { text: tr("團隊現場", "The team at work") }),
       snap.status !== "finished" && !snap.detached
         ? h(
             "button",
             {
-              class: "btn plain more-hands",
+              class: "btn plain more-hands", // i18n-ok: CSS classes
               type: "button",
-              title: "人手不夠時,加一位成員到這個執行中的團隊",
+              title: tr("人手不夠時,加一位成員到這個執行中的團隊", "Short-handed? Add a member to this running team"),
               onClick: () => {
                 if (!editing) return;
                 addMember(editing);
@@ -1242,10 +1359,10 @@ function stage(snap: Snapshot): HTMLElement {
                 root.querySelector(".member-row:last-of-type")?.scrollIntoView({ block: "center", behavior: "smooth" });
               },
             },
-            "＋ 加人手",
+            tr("＋ 加人手", "＋ More hands"),
           )
         : null,
-      h("span", { class: "hint", text: "每位成員說的話、跑的指令和結果都即時出現在它的畫面上;隊友之間的交辦、訊息與交付會從一位飛到另一位。" }),
+      h("span", { class: "hint", text: tr("每位成員說的話、跑的指令和結果都即時出現在它的畫面上;隊友之間的交辦、訊息與交付會從一位飛到另一位。", "What each member says, the commands it runs and their results show live on its screen; handoffs, messages and deliveries between teammates fly from one to the other.") }),
     ),
     h("div", { class: "desks" }, ...members.map((m) => desk(snap, m))),
   );
@@ -1255,22 +1372,26 @@ function taskCard(snap: Snapshot, t: Task): HTMLElement {
   const met = t.criteria.filter((c) => c.claimed).length;
   const waitsFor = t.status === "todo" ? t.dependsOn.map((d) => snap.tasks.find((x) => x.id === d)).filter((d) => d && d.status !== "delivered" && d.status !== "done") : [];
   const card = h("article", { class: `task${t.blocked ? " blocked" : ""}`, title: t.detail });
-  card.append(h("div", { class: "task-title" }, h("span", { text: t.title }), t.status === "done" ? h("span", { class: "tick", text: "✓", title: "已驗收" }) : null));
-  const sub = t.blocked ? `卡住:${t.blocked.reason}(等 ${nameOf(snap, t.blocked.on)})` : waitsFor.length ? `等待${waitsFor.map((d) => d!.title).join("、")}` : t.note || t.detail.split("\n")[0];
+  card.append(h("div", { class: "task-title" }, h("span", { text: t.title }), t.status === "done" ? h("span", { class: "tick", text: "✓", title: tr("已驗收", "Accepted") }) : null));
+  const sub = t.blocked
+    ? trf("卡住:{why}(等 {who})", "Stuck: {why} (waiting for {who})", { why: t.blocked.reason, who: nameOf(snap, t.blocked.on) })
+    : waitsFor.length
+      ? trf("等待{tasks}", "Waiting for {tasks}", { tasks: joinNames(waitsFor.map((d) => d!.title)) })
+      : t.note || t.detail.split("\n")[0];
   if (sub) card.append(h("div", { class: t.blocked ? "task-sub warn" : "task-sub", text: sub }));
   const marks = h("div", { class: "task-marks" });
-  if (t.status === "delivered") marks.append(h("span", { class: "chip pending", text: "已交付,待驗收" }));
-  if (t.criteria.length && t.status !== "done") marks.append(h("span", { class: "chip", title: t.criteria.map((c) => `${c.claimed ? "☑" : "☐"} ${c.text}`).join("\n"), text: `完成條件 ${met} / ${t.criteria.length}` }));
-  if (t.rejections) marks.append(h("span", { class: "chip warn", text: `退回 ${t.rejections} 次` }));
-  card.append(h("div", { class: "task-foot" }, who(snap, t.owner), marks, h("span", { class: `chip prio ${t.priority}`, title: "優先度", text: PRIORITY[t.priority] })));
+  if (t.status === "delivered") marks.append(h("span", { class: "chip pending", text: tr("已交付,待驗收", "Handed in, awaiting review") }));
+  if (t.criteria.length && t.status !== "done") marks.append(h("span", { class: "chip", title: t.criteria.map((c) => `${c.claimed ? "☑" : "☐"} ${c.text}`).join("\n"), text: trf("完成條件 {met} / {n}", "Criteria {met} / {n}", { met, n: t.criteria.length }) }));
+  if (t.rejections) marks.append(h("span", { class: "chip warn", text: t.rejections === 1 ? tr("退回 1 次", "Sent back once") : trf("退回 {n} 次", "Sent back {n} times", { n: t.rejections }) }));
+  card.append(h("div", { class: "task-foot" }, who(snap, t.owner), marks, h("span", { class: `chip prio ${t.priority}`, title: tr("優先度", "Priority"), text: priorityLabel(t.priority) })));
   return card;
 }
 
 function board(snap: Snapshot): HTMLElement {
   const columns: [string, string, Task[]][] = [
-    ["待處理", "todo", snap.tasks.filter((t) => t.status === "todo")],
-    ["進行中", "doing", snap.tasks.filter((t) => t.status === "doing")],
-    ["已完成", "done", snap.tasks.filter((t) => t.status === "delivered" || t.status === "done")],
+    [tr("待處理", "To do"), "todo", snap.tasks.filter((t) => t.status === "todo")],
+    [tr("進行中", "In progress"), "doing", snap.tasks.filter((t) => t.status === "doing")],
+    [tr("已完成", "Done"), "done", snap.tasks.filter((t) => t.status === "delivered" || t.status === "done")],
   ];
   const grid = h("div", { class: "board" });
   for (const [title, kind, tasks] of columns) {
@@ -1279,32 +1400,36 @@ function board(snap: Snapshot): HTMLElement {
     if (!tasks.length) col.append(h("div", { class: "empty", text: "—" }));
     grid.append(col);
   }
-  return h("section", { class: "panel" }, h("h2", { text: "任務看板" }), snap.tasks.length ? grid : h("p", { class: "dim", text: "Leader 還沒有建立任務。" }));
+  return h("section", { class: "panel" }, h("h2", { text: tr("任務看板", "Task board") }), snap.tasks.length ? grid : h("p", { class: "dim", text: tr("Leader 還沒有建立任務。", "The Leader hasn't created any tasks yet.") }));
 }
 
-const FEED_TITLE: Record<FeedItem["kind"], string> = {
-  message: "訊息",
-  task: "建立任務",
-  delivered: "已交付",
-  accepted: "驗收通過",
-  rejected: "退回",
-  blocked: "被卡住",
-  asked: "向你提問",
-  answered: "你的回覆",
-  lost: "失聯",
-  paused: "團隊暫停",
-  finished: "團隊完成",
-  ended: "由你結束",
-  joined: "加入團隊",
-  reopened: "再次開工",
-};
+/** What a line of the team's feed is, by its kind. */
+function feedTitle(kind: FeedItem["kind"]): string {
+  const titles: Record<FeedItem["kind"], string> = {
+    message: tr("訊息", "Message"),
+    task: tr("建立任務", "New task"),
+    delivered: tr("已交付", "Handed in"),
+    accepted: tr("驗收通過", "Accepted"),
+    rejected: tr("退回", "Sent back"),
+    blocked: tr("被卡住", "Stuck"),
+    asked: tr("向你提問", "Asked you"),
+    answered: tr("你的回覆", "Your reply"),
+    lost: tr("失聯", "Disconnected"),
+    paused: tr("團隊暫停", "Team paused"),
+    finished: tr("團隊完成", "Team finished"),
+    ended: tr("由你結束", "Ended by you"),
+    joined: tr("加入團隊", "Joined the team"),
+    reopened: tr("再次開工", "Back at work"),
+  };
+  return titles[kind];
+}
 
 function feed(snap: Snapshot): HTMLElement {
   const list = h("div", { class: "feed" });
   const items = [...snap.feed].reverse().slice(0, 40);
   for (const item of items) {
     const task = item.task ? snap.tasks.find((t) => t.id === item.task) : undefined;
-    const title = item.kind === "message" || !task ? FEED_TITLE[item.kind] : `${FEED_TITLE[item.kind]} · ${task.title}`;
+    const title = item.kind === "message" || !task ? feedTitle(item.kind) : `${feedTitle(item.kind)} · ${task.title}`;
     list.append(
       h(
         "div",
@@ -1317,8 +1442,8 @@ function feed(snap: Snapshot): HTMLElement {
       ),
     );
   }
-  if (!items.length) list.append(h("p", { class: "dim", text: "還沒有任何協作紀錄。" }));
-  return h("section", { class: "panel feed-panel" }, h("h2", { text: "最新協作" }), list);
+  if (!items.length) list.append(h("p", { class: "dim", text: tr("還沒有任何協作紀錄。", "Nothing has happened between members yet.") }));
+  return h("section", { class: "panel feed-panel" }, h("h2", { text: tr("最新協作", "Latest activity") }), list);
 }
 
 function deliverables(snap: Snapshot): HTMLElement {
@@ -1334,7 +1459,7 @@ function deliverables(snap: Snapshot): HTMLElement {
         {
           class: `deliverable${picture ? " picture" : ""}`,
           type: "button",
-          title: picture ? `看 ${d.locator}` : `開啟 ${d.locator}`,
+          title: picture ? trf("看 {path}", "View {path}", { path: d.locator }) : trf("開啟 {path}", "Open {path}", { path: d.locator }),
           // A picture opens large in the window; anything else in Explorer.
           onClick: () => (picture ? openImage(snap.id, pictures, pictures.indexOf(d.locator)) : void act(() => Bridge.teamOpen(snap.id, d.locator))),
         },
@@ -1346,12 +1471,15 @@ function deliverables(snap: Snapshot): HTMLElement {
           h("span", { class: "dim mono", text: d.locator }),
           h("span", { class: "dim", text: `${nameOf(snap, d.by)} · ${clock(d.at)} · ${d.summary}` }),
         ),
-        h("span", { class: `chip ${d.accepted === true ? "ok" : d.accepted === false ? "warn" : "pending"}`, text: d.accepted === true ? "已驗收" : d.accepted === false ? "已退回" : "待驗收" }),
+        h("span", {
+          class: `chip ${d.accepted === true ? "ok" : d.accepted === false ? "warn" : "pending"}`,
+          text: d.accepted === true ? tr("已驗收", "Accepted") : d.accepted === false ? tr("已退回", "Sent back") : tr("待驗收", "Awaiting review"),
+        }),
       ),
     );
   }
-  if (!snap.deliverables.length) row.append(h("p", { class: "dim", text: "還沒有成員交付成果。" }));
-  return h("section", { class: "panel" }, h("h2", { text: "已產生成果" }), row);
+  if (!snap.deliverables.length) row.append(h("p", { class: "dim", text: tr("還沒有成員交付成果。", "No member has handed anything in yet.") }));
+  return h("section", { class: "panel" }, h("h2", { text: tr("已產生成果", "Deliverables") }), row);
 }
 
 function composer(snap: Snapshot): HTMLElement {
@@ -1359,10 +1487,10 @@ function composer(snap: Snapshot): HTMLElement {
   const to = dropdown({
     value: recipient,
     choices: [
-      { value: "", label: "給 Leader", hint: leader?.name },
-      ...snap.members.filter((m) => !m.isLeader).map((m) => ({ value: m.id, label: `給 ${m.name}`, hint: m.role })),
+      { value: "", label: tr("給 Leader", "To the Leader"), hint: leader?.name },
+      ...snap.members.filter((m) => !m.isLeader).map((m) => ({ value: m.id, label: trf("給 {name}", "To {name}", { name: m.name }), hint: m.role })),
     ],
-    title: "傳給誰",
+    title: tr("傳給誰", "Send to"),
     className: "narrow",
     onChange: (v) => {
       recipient = v;
@@ -1371,12 +1499,18 @@ function composer(snap: Snapshot): HTMLElement {
   });
   const files = attachments.get(snap.id) ?? [];
   // The pictures go as full paths in the message: every agent can open an
-  // image file in the team's folder with its own tool.
+  // image file in the team's folder with its own tool. The words around them
+  // are the person's own message (the feed and the log show it as theirs), so
+  // they come in the person's language; every agent reads either.
   const send = (text: string) => {
     if (!text && !files.length) return;
-    let body = text || (files.some((f) => IMAGE.test(f.name)) ? "請看附上的圖片。" : "請看附上的檔案。");
+    let body = text || (files.some((f) => IMAGE.test(f.name)) ? tr("請看附上的圖片。", "Please look at the attached image.") : tr("請看附上的檔案。", "Please look at the attached file."));
     if (files.length) {
-      body += `\n\n附上的${files.every((f) => IMAGE.test(f.name)) ? "圖片" : "檔案"}(在團隊資料夾裡,請用你讀檔或看圖片的工具打開):\n${files.map((f) => `- ${f.path}`).join("\n")}`;
+      const pictures = files.every((f) => IMAGE.test(f.name));
+      const head = pictures
+        ? tr("附上的圖片(在團隊資料夾裡,請用你讀檔或看圖片的工具打開):", "Attached images (in the team's folder; open them with your file or image tool):")
+        : tr("附上的檔案(在團隊資料夾裡,請用你讀檔或看圖片的工具打開):", "Attached files (in the team's folder; open them with your file or image tool):");
+      body += `\n\n${head}\n${files.map((f) => `- ${f.path}`).join("\n")}`;
     }
     void act(
       () => Bridge.teamInstruct(snap.id, recipient, body),
@@ -1389,10 +1523,10 @@ function composer(snap: Snapshot): HTMLElement {
   };
   // A finished team is not closed: new words start it again, the leader first.
   const hint = snap.status === "finished" && snap.ended
-    ? "團隊已由你結束。要接著做,寫在這裡送出,Leader 會從現在的進度繼續,團隊會重新開工"
+    ? tr("團隊已由你結束。要接著做,寫在這裡送出,Leader 會從現在的進度繼續,團隊會重新開工", "You ended this team. To carry on, write here and send: the Leader goes on from where things stand and the team gets back to work")
     : snap.status === "finished"
-    ? "團隊已完成。對成果不滿意或有新需求,寫在這裡送出,Leader 會接著處理,團隊會繼續工作"
-    : "傳送新指示…可貼上、拖進或附上圖片(對方這一輪結束後才會讀到)";
+    ? tr("團隊已完成。對成果不滿意或有新需求,寫在這裡送出,Leader 會接著處理,團隊會繼續工作", "The team is done. Not happy with the result, or need something new? Write here and send: the Leader picks it up and the team keeps working")
+    : tr("傳送新指示…可貼上、拖進或附上圖片(對方這一輪結束後才會讀到)", "Send a new instruction… you can paste, drop or attach images (read once their turn under way ends)");
   const input = field(`instruct:${snap.id}`, hint, (t) => send(t));
   // Ctrl+V of a screenshot attaches it.
   input.addEventListener("paste", (e) => {
@@ -1406,7 +1540,17 @@ function composer(snap: Snapshot): HTMLElement {
     for (const f of picker.files ?? []) attachBlob(snap.id, f);
     picker.value = "";
   });
-  const clip = h("button", { class: "btn plain clip", type: "button", title: "附上圖片(也可以直接貼上或拖進視窗)", "aria-label": "附上圖片", onClick: () => picker.click() }, "＋圖");
+  const clip = h(
+    "button",
+    {
+      class: "btn plain clip", // i18n-ok: CSS classes
+      type: "button",
+      title: tr("附上圖片(也可以直接貼上或拖進視窗)", "Attach images (you can also paste them or drop them on the window)"),
+      "aria-label": tr("附上圖片", "Attach images"),
+      onClick: () => picker.click(),
+    },
+    tr("＋圖", "＋ Image"),
+  );
   const tray = files.length
     ? h(
         "div",
@@ -1420,8 +1564,8 @@ function composer(snap: Snapshot): HTMLElement {
             h("button", {
               type: "button",
               class: "attachment-x",
-              title: "拿掉",
-              "aria-label": `拿掉 ${f.name}`,
+              title: tr("拿掉", "Remove"),
+              "aria-label": trf("拿掉 {name}", "Remove {name}", { name: f.name }),
               onClick: () => {
                 if (f.preview) URL.revokeObjectURL(f.preview);
                 attachments.set(snap.id, files.filter((x) => x !== f));
@@ -1443,7 +1587,7 @@ function composer(snap: Snapshot): HTMLElement {
       clip,
       picker,
       input,
-      button("送出", "primary", () => send(input.value.trim())),
+      button(tr("送出", "Send"), "primary", () => send(input.value.trim())),
     ),
   );
 }
@@ -1460,13 +1604,13 @@ function monitor(snap: Snapshot): HTMLElement {
     h(
       "div",
       { class: "progress" },
-      h("span", { class: "progress-label", text: "整體進度" }),
-      h("span", { class: "progress-number", text: shared.percent === null ? "尚未派工" : `${percent}%` }),
+      h("span", { class: "progress-label", text: tr("整體進度", "Overall progress") }),
+      h("span", { class: "progress-number", text: shared.percent === null ? tr("尚未派工", "Nothing assigned yet") : `${percent}%` }),
       h("div", { class: "meter", role: "progressbar", "aria-valuenow": percent, "aria-valuemin": 0, "aria-valuemax": 100 }, h("i", { style: `width:${percent}%` })),
-      h("span", { class: "dim", text: `已驗收 ${snap.done} / ${snap.total} 項任務` }),
-      h("span", { class: "dim", text: `${snap.totalTurns} / ${snap.maxTurns} 回合` }),
-      h("span", { class: "dim", text: `已執行 ${minutes} 分鐘` }),
-      spend(snap.members.flatMap((m) => m.usage ?? []), "全隊這一輪用掉的 token"),
+      h("span", { class: "dim", text: trf("已驗收 {done} / {total} 項任務", "{done} / {total} tasks accepted", { done: snap.done, total: snap.total }) }),
+      h("span", { class: "dim", text: trf("{used} / {max} 回合", "{used} / {max} turns", { used: snap.totalTurns, max: snap.maxTurns }) }),
+      h("span", { class: "dim", text: trf("已執行 {n} 分鐘", "Running for {n} min", { n: minutes }) }),
+      spend(snap.members.flatMap((m) => m.usage ?? []), tr("全隊這一輪用掉的 token", "Tokens the whole team used this run")),
     ),
     stage(snap),
     h("div", { class: "split" }, board(snap), feed(snap)),
@@ -1481,29 +1625,29 @@ function monitor(snap: Snapshot): HTMLElement {
 function windowButtons(): HTMLElement {
   const b = (label: string, title: string, action: "minimize" | "maximize" | "close") =>
     h("button", { class: `win ${action}`, type: "button", title, "aria-label": title, onClick: () => void Bridge.teamWindow(action) }, label);
-  return h("div", { class: "window-buttons" }, b("–", "最小化", "minimize"), b("▢", "最大化", "maximize"), b("✕", "關閉", "close"));
+  return h("div", { class: "window-buttons" }, b("–", tr("最小化", "Minimize"), "minimize"), b("▢", tr("最大化", "Maximize"), "maximize"), b("✕", tr("關閉", "Close"), "close"));
 }
 
 function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
-  const name = snap?.name || editing?.name || file.config?.name || "未命名的團隊";
+  const name = snap?.name || editing?.name || file.config?.name || tr("未命名的團隊", "Untitled team");
   const goal = (snap?.goal ?? editing?.goal ?? "").split("\n")[0];
   const count = snap?.members.length ?? editing?.members.length ?? 0;
   const actions = h("div", { class: "row" });
   if (snap?.status === "running") {
     actions.append(
-      h("button", { class: "btn plain", type: "button", title: "不再開始新的回合;正在做的這一輪會做完", onClick: () => void act(() => Bridge.teamPause(snap.id)) }, "暫停"),
-      button("全部中斷", "danger", () => void act(() => Bridge.teamInterrupt(snap.id))),
+      h("button", { class: "btn plain", type: "button", title: tr("不再開始新的回合;正在做的這一輪會做完", "No new turns start; the turns under way finish"), onClick: () => void act(() => Bridge.teamPause(snap.id)) }, tr("暫停", "Pause")),
+      button(tr("全部中斷", "Interrupt all"), "danger", () => void act(() => Bridge.teamInterrupt(snap.id))),
       endButton(snap),
     );
   } else if (snap?.status === "paused") {
     // A team from an earlier run gets its agents back, and its members
     // their work, where it stopped.
-    actions.append(button(snap.detached ? "從中斷處繼續" : "繼續", "primary", () => void act(() => Bridge.teamResume(snap.id))));
+    actions.append(button(snap.detached ? tr("從中斷處繼續", "Resume where it stopped") : tr("繼續", "Continue"), "primary", () => void act(() => Bridge.teamResume(snap.id))));
     // Pausing hands out no new turns; the ones under way run to their end.
     // Whoever is still at it can be stopped now.
     const busy = snap.members.filter((m) => m.status === "working").length;
     if (busy && !snap.detached) {
-      actions.append(button(`立刻停下(${busy} 位還在做)`, "danger", () => void act(() => Bridge.teamInterrupt(snap.id))));
+      actions.append(button(trf("立刻停下({n} 位還在做)", "Stop now ({n} still working)", { n: busy }), "danger", () => void act(() => Bridge.teamInterrupt(snap.id))));
     }
     actions.append(endButton(snap));
   }
@@ -1514,14 +1658,18 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
       "div",
       { class: "top-title", "data-drag": "" },
       h("h1", { "data-drag": "" }, name, snap ? h("span", { class: `state ${snap.status}${snap.ended ? " ended" : ""}`, text: teamStatus(snap) }) : null),
-      h("p", { class: "dim", "data-drag": "", text: goal ? `${goal} · ${count} 位 AI 成員` : `${count} 位 AI 成員` }),
+      h("p", { class: "dim", "data-drag": "", text: goal ? `${goal} · ${aiMembers(count)}` : aiMembers(count) }),
       snap?.status === "paused" && snap.pausedWhy
         ? h("p", {
             class: "paused-why",
             text: snap.detached
-              ? `${said(snap.pausedWhy)} · 按「從中斷處繼續」接著做,或到「團隊設定」重新開始`
+              ? trf("{why} · 按「從中斷處繼續」接著做,或到「團隊設定」重新開始", "{why} · Press \"Resume where it stopped\" to carry on, or start again from Team setup", { why: said(snap.pausedWhy) })
               : snap.members.some((m) => m.status === "working")
-                ? `${said(snap.pausedWhy)} · 不再開始新的回合;還在做的成員會把這一輪做完,要馬上停請按「立刻停下」`
+                ? trf(
+                    "{why} · 不再開始新的回合;還在做的成員會把這一輪做完,要馬上停請按「立刻停下」",
+                    "{why} · No new turns start; members still at work finish the turn they're on. To stop them at once, press \"Stop now\"",
+                    { why: said(snap.pausedWhy) },
+                  )
                 : said(snap.pausedWhy),
           })
         : null,
@@ -1550,16 +1698,16 @@ function tabs(snap: Snapshot | undefined): HTMLElement {
   return h(
     "nav",
     { class: "tabs" },
-    item("團隊設定", "setup", true),
-    item("協作關係", "links", !!editing),
-    item("工作監控", "monitor", true, ""),
-    item("溝通紀錄", "log", !!snap, snap ? "" : "啟動後"),
+    item(tr("團隊設定", "Team setup"), "setup", true),
+    item(tr("協作關係", "Collaboration"), "links", !!editing),
+    item(tr("工作監控", "Monitor"), "monitor", true, ""),
+    item(tr("溝通紀錄", "Message log"), "log", !!snap, snap ? "" : tr("啟動後", "after start")),
     tab === "monitor"
       ? h(
           "div",
-          { class: "office-switch", role: "group", "aria-label": "看板或辦公室" },
-          h("button", { class: monitorMode === "board" ? "on" : "", type: "button", "aria-pressed": String(monitorMode === "board"), disabled: !snap, title: snap ? "" : "團隊啟動後才有看板", onClick: () => { monitorMode = "board"; render(); } }, "看板"),
-          h("button", { class: monitorMode === "office" ? "on" : "", type: "button", "aria-pressed": String(monitorMode === "office"), onClick: () => { monitorMode = "office"; render(); } }, "Office"),
+          { class: "office-switch", role: "group", "aria-label": tr("看板或辦公室", "Board or office") },
+          h("button", { class: monitorMode === "board" ? "on" : "", type: "button", "aria-pressed": String(monitorMode === "board"), disabled: !snap, title: snap ? "" : tr("團隊啟動後才有看板", "The board appears once the team has started"), onClick: () => { monitorMode = "board"; render(); } }, tr("看板", "Board")),
+          h("button", { class: monitorMode === "office" ? "on" : "", type: "button", "aria-pressed": String(monitorMode === "office"), onClick: () => { monitorMode = "office"; render(); } }, "Office"), // i18n-ok: the Office view's name in both languages
         )
       : null,
   );
@@ -1570,7 +1718,7 @@ function main(): HTMLElement {
     return h(
       "main",
       { class: "main pane" },
-      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": "位置" }, h("b", { text: "Agent 設定" })), windowButtons()),
+      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": tr("位置", "Location") }, h("b", { text: tr("Agent 設定", "Agent settings") })), windowButtons()),
       h("div", { class: "scroll" }, agentsPage(agentsHost)),
     );
   }
@@ -1578,7 +1726,7 @@ function main(): HTMLElement {
     return h(
       "main",
       { class: "main pane" },
-      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": "位置" }, h("b", { text: "憲法" })), windowButtons()),
+      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": tr("位置", "Location") }, h("b", { text: tr("憲法", "Constitution") })), windowButtons()),
       h("div", { class: "scroll" }, constitutionPage({ render: () => render() })),
     );
   }
@@ -1586,7 +1734,7 @@ function main(): HTMLElement {
     return h(
       "main",
       { class: "main pane" },
-      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": "位置" }, secretaryTitle(secretaryHost)), windowButtons()),
+      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": tr("位置", "Location") }, secretaryTitle(secretaryHost)), windowButtons()),
       secretaryPage(secretaryHost),
     );
   }
@@ -1594,7 +1742,7 @@ function main(): HTMLElement {
     return h(
       "main",
       { class: "main pane" },
-      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": "位置" }, h("b", { text: "成本與用量" })), windowButtons()),
+      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": tr("位置", "Location") }, h("b", { text: tr("成本與用量", "Cost & usage") })), windowButtons()),
       h("div", { class: "scroll" }, costPage(costHost)),
     );
   }
@@ -1608,10 +1756,10 @@ function main(): HTMLElement {
         { class: "top", "data-drag": "" },
         h(
           "nav",
-          { class: "crumbs", "data-drag": "", "aria-label": "位置" },
+          { class: "crumbs", "data-drag": "", "aria-label": tr("位置", "Location") },
           place === "office"
-            ? h("button", { class: "link", type: "button", onClick: () => { place = "company"; render(); } }, "公司總覽")
-            : h("b", { text: "公司總覽" }),
+            ? h("button", { class: "link", type: "button", onClick: () => { place = "company"; render(); } }, tr("公司總覽", "Company overview"))
+            : h("b", { text: tr("公司總覽", "Company overview") }),
           team ? h("span", { class: "dim", text: ` › ${team.name}` }) : null,
         ),
         windowButtons(),
@@ -1625,7 +1773,7 @@ function main(): HTMLElement {
       "main",
       { class: "main pane" },
       h("header", { class: "top", "data-drag": "" }, h("div", { "data-drag": "" }), windowButtons()),
-      h("div", { class: "welcome" }, teamMark(64), h("h1", { text: "Teamwork" }), h("p", { class: "dim", text: files.length ? "從左邊選一個團隊。" : "按左下角的「新增團隊」開始。" })),
+      h("div", { class: "welcome" }, teamMark(64), h("h1", { text: "Teamwork" }), h("p", { class: "dim", text: files.length ? tr("從左邊選一個團隊。", "Pick a team on the left.") : tr("按左下角的「新增團隊」開始。", "Press \"New team\" at the bottom left to start.") })),
     );
   }
   const snap = file.config ? runs.get(file.config.id) : undefined;
@@ -1692,7 +1840,11 @@ function otherModel(m: MemberView): HTMLElement | null {
   const same = (a: string, b: string) => norm(a).includes(norm(b)) || norm(b).includes(norm(a));
   const ran = (m.usage ?? []).map((u) => u.model).filter(Boolean);
   if (!m.model || !ran.length || ran.some((r) => same(r, m.model))) return null;
-  return h("span", { class: "chip warn", title: `指定的模型是 ${m.model},但實際送出的請求用的是 ${ran.join("、")}。請檢查這個代理的設定。`, text: `實際:${ran.join("、")}` });
+  return h("span", {
+    class: "chip warn",
+    title: trf("指定的模型是 {set},但實際送出的請求用的是 {ran}。請檢查這個代理的設定。", "The model set is {set}, but the requests actually sent used {ran}. Check this agent's settings.", { set: m.model, ran: joinNames(ran) }),
+    text: trf("實際:{ran}", "Actual: {ran}", { ran: joinNames(ran) }),
+  });
 }
 
 /** Tokens and cost beside a member or a team at work: "182K tokens · $0.04". */
@@ -1700,7 +1852,7 @@ function spend(usage: MemberView["usage"], title: string): HTMLElement | null {
   const s = usageSummary(usage, () => render());
   if (!s.tokens) return null;
   const text = `${fmtTokens(s.tokens)} tokens${s.usd != null ? ` · ${s.priced ? "" : "≥ "}${fmtMoney(s.usd)}` : ""}`;
-  return h("span", { class: "chip spend", title: `${title}。預估成本依「成本與用量」的價格表計算。`, text });
+  return h("span", { class: "chip spend", title: trf("{title}。預估成本依「成本與用量」的價格表計算。", "{title}. The estimated cost uses the price list in Cost & usage.", { title }), text });
 }
 
 /** The Office: the same record as the board, as rooms. `?office=mock` in a browser shows the spec's demo company. */
@@ -1894,7 +2046,7 @@ let firstLoad = true;
  * Anywhere else a dropped file is refused, never opened by the webview.
  */
 function wireDrops() {
-  const carriesFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes("Files");
+  const carriesFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes("Files"); // i18n-ok: a drag data type
   let depth = 0;
   const show = (on: boolean) => {
     const target = dropTarget(place, tab);
