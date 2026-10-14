@@ -847,14 +847,17 @@ fn team_duplicate(file: String) -> Result<String, String> {
         .map(|n| if n == 1 { format!("{base}-copy") } else { format!("{base}-copy-{n}") })
         .find(|id| !dir.join(format!("{id}.json")).exists())
         .ok_or("There are too many copies of this team.")?;
+    let from = config.id.clone();
     config.id = id.clone();
     config.name = if config.name.trim().is_empty() { String::new() } else { format!("{} (複本)", config.name.trim()) };
     let copy = format!("{id}.json");
     std::fs::write(dir.join(&copy), serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?)
         .map_err(|e| format!("Could not create {copy}: {e}"))?;
     // The same documents, under a leader's folder of the copy's own.
-    if let Err(err) = Kb::of(base).copy_to(&Kb::of(&id)) {
-        log::line(format!("team {id}: knowledge not copied from {base}: {err}"));
+    if team::is_plain_id(&from) {
+        if let Err(err) = Kb::of(&from).copy_to(&Kb::of(&id)) {
+            log::line(format!("team {id}: knowledge not copied from {from}: {err}"));
+        }
     }
     Ok(copy)
 }
@@ -869,15 +872,17 @@ fn team_delete(teams: State<Arc<Teams>>, file: String) -> Result<(), String> {
     if teams.is_live(id) {
         return Err("This team is running. Stop it before deleting it.".into());
     }
+    // The knowledge base goes by the id the file says (the example's is not its name).
+    let said = read_team_file(&file).map(|c| c.id).ok().filter(|i| team::is_plain_id(i)).unwrap_or_else(|| id.to_string());
     let bin = settings::team_configs_dir().join(".deleted");
     std::fs::create_dir_all(&bin).map_err(|e| e.to_string())?;
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     std::fs::rename(&path, bin.join(format!("{id}-{stamp}.json"))).map_err(|e| format!("Could not delete {file}: {e}"))?;
     // Its documents go aside with it, under the same time.
-    let docs = knowledge::team_dir(id);
+    let docs = knowledge::team_dir(&said);
     if docs.is_dir() {
         let aside = knowledge::root().join(".deleted");
-        let moved = std::fs::create_dir_all(&aside).and_then(|_| std::fs::rename(&docs, aside.join(format!("{id}-{stamp}"))));
+        let moved = std::fs::create_dir_all(&aside).and_then(|_| std::fs::rename(&docs, aside.join(format!("{said}-{stamp}"))));
         if let Err(err) = moved {
             log::line(format!("team {id}: knowledge folder not moved aside: {err}"));
         }
@@ -925,9 +930,23 @@ async fn pick_folder(app: AppHandle, start: String, title: String) -> Result<Opt
 // team (whose file `team_new` already made) can take documents before it is
 // saved for the first time.
 
-/// The team a knowledge call is about: a plain id with a team file.
+/// The team a knowledge call is about: a plain id with a team file — named
+/// after it, or (a file not saved from the form yet, such as the example) saying it.
 fn knowledge_of(team: &str) -> Result<Kb, String> {
-    if !team::is_plain_id(team) || !team_file_path(&format!("{team}.json"))?.is_file() {
+    if !team::is_plain_id(team) {
+        return Err("There is no such team.".into());
+    }
+    let named = team_file_path(&format!("{team}.json"))?.is_file();
+    let says = || {
+        std::fs::read_dir(settings::team_configs_dir())
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| n.ends_with(".json"))
+            .any(|n| read_team_file(&n).is_ok_and(|c| c.id == team))
+    };
+    if !named && !says() {
         return Err("There is no such team.".into());
     }
     Ok(Kb::of(team))
