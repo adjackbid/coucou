@@ -8,6 +8,7 @@
 // the same session give the same plans. SkillDirector adds the clock — the
 // 250 ms it waits for others, the 12 s before the next combo.
 
+import { tr } from "../../../core/i18n";
 import type { Id } from "../contracts";
 import type { HeroClass } from "./contracts";
 
@@ -32,22 +33,23 @@ export interface Skill {
 const SOLO: [number, number, number, number] = [120, 340, 500, 850];
 const COMBO: [number, number, number, number] = [160, 480, 650, 1200];
 
+/** Every move; a name is read when drawn, so it follows the language. */
 export const SKILLS: Record<SkillId, Skill> = {
-  fire_ember: { id: "fire_ember", name: "燼火彈", family: "elemental", element: "fire", durationMs: 850, phases: SOLO, palette: ["#FF9A32", "#FFD474", "#D95428"] },
-  ice_lance: { id: "ice_lance", name: "霜晶槍", family: "elemental", element: "ice", durationMs: 850, phases: SOLO, palette: ["#80DBFF", "#D5F5FF", "#5B9CDE"] },
-  wind_crescent: { id: "wind_crescent", name: "迴風刃", family: "elemental", element: "wind", durationMs: 850, phases: SOLO, palette: ["#54D9B1", "#B7FFDA", "#2B9E9A"] },
-  lightning_chain: { id: "lightning_chain", name: "星鏈雷", family: "elemental", element: "lightning", durationMs: 850, phases: SOLO, palette: ["#9292FF", "#64CCFF", "#FFE59A"] },
-  blade_crescent: { id: "blade_crescent", name: "月牙斬", family: "weapon", element: "physical", durationMs: 850, phases: SOLO, palette: ["#F5B641", "#FFF0A8"] },
-  blade_pierce: { id: "blade_pierce", name: "破陣刺", family: "weapon", element: "physical", durationMs: 850, phases: SOLO, palette: ["#E6B269", "#FFF2CF"] },
-  blade_counter: { id: "blade_counter", name: "盾返斬", family: "weapon", element: "physical", durationMs: 950, phases: [160, 400, 560, 950], palette: ["#A9B9FF", "#FFD78D"] },
-  blade_heavy: { id: "blade_heavy", name: "星落重擊", family: "weapon", element: "physical", durationMs: 1050, phases: [220, 450, 620, 1050], palette: ["#FFCE65", "#FFEEC4"] },
-  support_ward: { id: "support_ward", name: "守望結界", family: "support", element: "support", durationMs: 650, phases: [100, 300, 300, 650], palette: ["#B5A8FF", "#DFDAFF"] },
-  support_cleanse: { id: "support_cleanse", name: "回復清輝", family: "support", element: "support", durationMs: 650, phases: [100, 300, 300, 650], palette: ["#8DE9C5", "#F5BDD9"] },
-  support_seal: { id: "support_seal", name: "共鳴封印", family: "support", element: "support", durationMs: 700, phases: [100, 300, 300, 700], palette: ["#B99CFF", "#E2C58F"] },
-  combo_fire_wind: { id: "combo_fire_wind", name: "焰風雙奏", family: "combo", element: "any", durationMs: 1200, phases: COMBO, palette: ["#FFAA4A", "#66DBB1"] },
-  combo_ice_lightning: { id: "combo_ice_lightning", name: "霜雷共振", family: "combo", element: "any", durationMs: 1200, phases: COMBO, palette: ["#9FE9FF", "#AFA2FF"] },
-  combo_ward_blade: { id: "combo_ward_blade", name: "盾刃同盟", family: "combo", element: "any", durationMs: 1200, phases: COMBO, palette: ["#A7B5FF", "#FFD66A"] },
-  combo_trinity: { id: "combo_trinity", name: "三曜協奏", family: "combo", element: "any", durationMs: 1500, phases: [200, 600, 800, 1500], palette: ["#C5A1FF", "#FFD690", "#95E7FF"] },
+  fire_ember: { id: "fire_ember", get name() { return tr("燼火彈", "Ember Shot"); }, family: "elemental", element: "fire", durationMs: 850, phases: SOLO, palette: ["#FF9A32", "#FFD474", "#D95428"] },
+  ice_lance: { id: "ice_lance", get name() { return tr("霜晶槍", "Frost Lance"); }, family: "elemental", element: "ice", durationMs: 850, phases: SOLO, palette: ["#80DBFF", "#D5F5FF", "#5B9CDE"] },
+  wind_crescent: { id: "wind_crescent", get name() { return tr("迴風刃", "Gale Crescent"); }, family: "elemental", element: "wind", durationMs: 850, phases: SOLO, palette: ["#54D9B1", "#B7FFDA", "#2B9E9A"] },
+  lightning_chain: { id: "lightning_chain", get name() { return tr("星鏈雷", "Star-Chain Bolt"); }, family: "elemental", element: "lightning", durationMs: 850, phases: SOLO, palette: ["#9292FF", "#64CCFF", "#FFE59A"] },
+  blade_crescent: { id: "blade_crescent", get name() { return tr("月牙斬", "Crescent Slash"); }, family: "weapon", element: "physical", durationMs: 850, phases: SOLO, palette: ["#F5B641", "#FFF0A8"] },
+  blade_pierce: { id: "blade_pierce", get name() { return tr("破陣刺", "Rank Breaker"); }, family: "weapon", element: "physical", durationMs: 850, phases: SOLO, palette: ["#E6B269", "#FFF2CF"] },
+  blade_counter: { id: "blade_counter", get name() { return tr("盾返斬", "Shield Riposte"); }, family: "weapon", element: "physical", durationMs: 950, phases: [160, 400, 560, 950], palette: ["#A9B9FF", "#FFD78D"] },
+  blade_heavy: { id: "blade_heavy", get name() { return tr("星落重擊", "Starfall Smash"); }, family: "weapon", element: "physical", durationMs: 1050, phases: [220, 450, 620, 1050], palette: ["#FFCE65", "#FFEEC4"] },
+  support_ward: { id: "support_ward", get name() { return tr("守望結界", "Watchful Ward"); }, family: "support", element: "support", durationMs: 650, phases: [100, 300, 300, 650], palette: ["#B5A8FF", "#DFDAFF"] },
+  support_cleanse: { id: "support_cleanse", get name() { return tr("回復清輝", "Healing Radiance"); }, family: "support", element: "support", durationMs: 650, phases: [100, 300, 300, 650], palette: ["#8DE9C5", "#F5BDD9"] },
+  support_seal: { id: "support_seal", get name() { return tr("共鳴封印", "Resonant Seal"); }, family: "support", element: "support", durationMs: 700, phases: [100, 300, 300, 700], palette: ["#B99CFF", "#E2C58F"] },
+  combo_fire_wind: { id: "combo_fire_wind", get name() { return tr("焰風雙奏", "Flame & Gale Duet"); }, family: "combo", element: "any", durationMs: 1200, phases: COMBO, palette: ["#FFAA4A", "#66DBB1"] },
+  combo_ice_lightning: { id: "combo_ice_lightning", get name() { return tr("霜雷共振", "Frost-Thunder Resonance"); }, family: "combo", element: "any", durationMs: 1200, phases: COMBO, palette: ["#9FE9FF", "#AFA2FF"] },
+  combo_ward_blade: { id: "combo_ward_blade", get name() { return tr("盾刃同盟", "Shield & Blade Pact"); }, family: "combo", element: "any", durationMs: 1200, phases: COMBO, palette: ["#A7B5FF", "#FFD66A"] },
+  combo_trinity: { id: "combo_trinity", get name() { return tr("三曜協奏", "Trinity Concerto"); }, family: "combo", element: "any", durationMs: 1500, phases: [200, 600, 800, 1500], palette: ["#C5A1FF", "#FFD690", "#95E7FF"] },
 };
 
 /** What a member can show when its work is accepted: four elements, four blades. */

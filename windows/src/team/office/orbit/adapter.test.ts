@@ -2,6 +2,7 @@
 // the team file's links, real messages once each, nothing invented.
 
 import { describe, expect, it } from "vitest";
+import { setLang } from "../../../core/i18n";
 import type { CompanySnapshot, DomainEvent, Message, Artifact } from "../contracts";
 import { OfficeStore } from "../store";
 import { OrbitFeed, agentStatus, hubOf, sceneFrom, teamColor } from "./adapter";
@@ -174,7 +175,11 @@ describe("OrbitFeed", () => {
     const a: Artifact = { ...v, artifactId: "t2:d1", teamId: "t2", runId: "t2@r", taskId: "t2:k", authorMemberId: "ai3", name: "商品頁設計.png", kind: "image", artifactVersion: 1, resourceRef: "x.png" };
     s.receive(event(1, [{ entityKind: "artifact", entityKey: "t2:d1", revision: 2, op: "upsert", value: a }]));
     const out = feed.pull(s, Date.parse(now));
-    expect(out).toEqual([expect.objectContaining({ type: "message_sent", fromAgentId: "t2/ai3", toAgentId: "t2/ai1", summary: "交付 · 商品頁設計.png" })]);
+    setLang("zh-TW");
+    expect(out).toEqual([expect.objectContaining({ type: "message_sent", fromAgentId: "t2/ai3", toAgentId: "t2/ai1", summary: "交付 · 商品頁設計.png", delivery: true })]);
+    // Its words are read when shown: the same event, in English.
+    setLang("en");
+    expect(out[0]).toEqual(expect.objectContaining({ summary: "Delivered · 商品頁設計.png" }));
     expect(feed.pull(s, Date.parse(now))).toEqual([]);
   });
 });

@@ -10,6 +10,7 @@
 // observer, listener and GPU resource; the Office keeps one view at a time.
 
 import { h } from "../../../views/dom";
+import { onLangChange, tr, trf } from "../../../core/i18n";
 import { STATUS_LABEL, type AgentStatus, type OrbitAgent, type OrbitEvent, type OrbitMessageEvent, type OrbitPreset, type OrbitRelation, type OrbitScene, type OrbitTeam } from "./contracts";
 import { ClusterLayout, clamp, curve, memberPosition, orbitPoint, type Vec3 } from "./layout";
 import { backgroundPoint, colour, glow, makeStars, NEBULAE, paintEnergyRing, ringAppearance } from "./paint";
@@ -117,6 +118,11 @@ export class OrbitView {
   /** Where the camera controls begin, from the top of the scene: rings and titles stay above it. */
   private controlsTop = 0;
   private presets = new Map<OrbitPreset, HTMLButtonElement>();
+  /** Every fixed word of the view, set again when the language changes (relabel). */
+  private words: (() => void)[] = [];
+  private unlang: () => void = () => {};
+  /** The last transfer told under the scene, to tell it again in another language. */
+  private told: { e: OrbitMessageEvent; suffix: () => string } | null = null;
 
   private scene: OrbitScene = { schemaVersion: "1.0.0", mode: "live", teams: [], agents: [], relations: [] };
   private nodes = new Map<string, Node>();
@@ -161,7 +167,7 @@ export class OrbitView {
     this.state.pitch = clamp(this.state.pitch, PITCH[0], PITCH[1]);
     this.state.zoom = clamp(this.state.zoom, ZOOM[0], ZOOM[1]);
 
-    this.fallback = h("canvas", { class: "orbit-fallback", role: "img", "aria-label": "Agent 以彩色光環和光芯呈現,在星塵和柔光緩慢流動的宇宙中漂浮;同團隊以常駐光線連結,傳送資料時沿連線出現更亮的光流。" });
+    this.fallback = h("canvas", { class: "orbit-fallback", role: "img" });
     this.ctx = this.fallback.getContext("2d")!;
     this.glHost = h("div", { class: "orbit-webgl", "aria-hidden": "true" });
     this.labels = h("div", { class: "orbit-labels" });
@@ -169,37 +175,62 @@ export class OrbitView {
     this.motionState = h("span", { class: "orbit-motion-state", role: "status" });
     this.legend = h("div", { class: "orbit-legend" });
     this.zoomValue = h("span", { class: "orbit-zoom-value", "aria-live": "polite" });
-    this.eventLine = h("span", { class: "orbit-event", "aria-live": "polite", text: "協作連線常亮 · 資料傳送時光流加亮" });
-    const preset = (view: OrbitPreset, label: string) => {
-      const b = h("button", { type: "button", "aria-pressed": "false", onClick: () => this.setPreset(view) }, label) as HTMLButtonElement;
+    this.eventLine = h("span", { class: "orbit-event", "aria-live": "polite" });
+    /** An element whose words are set now and again whenever the language changes. */
+    const say = <T extends HTMLElement>(el: T, words: (el: T) => void): T => {
+      this.words.push(() => words(el));
+      return el;
+    };
+    /** Its name, as its tooltip and what a screen reader says. */
+    const named = (el: HTMLElement, name: () => string) => say(el, (b) => { b.title = name(); b.setAttribute("aria-label", name()); });
+    const preset = (view: OrbitPreset, label: () => string) => {
+      const b = say(h("button", { type: "button", "aria-pressed": "false", onClick: () => this.setPreset(view) }) as HTMLButtonElement, (x) => (x.textContent = label()));
       this.presets.set(view, b);
       return b;
     };
+    const group = (cls: string, name: () => string, ...kids: HTMLElement[]) => say(h("div", { class: cls, role: "group" }, ...kids), (g) => g.setAttribute("aria-label", name()));
     const controls = h(
       "div",
       { class: "orbit-controls" },
-      h("div", { class: "orbit-presets", role: "group", "aria-label": "視角" },
-        h("button", { type: "button", "aria-label": "向左轉動視角", title: "向左轉動視角", onClick: () => this.turn(-0.2) }, "↶"),
-        preset("oblique", "斜視"), preset("top", "俯視"), preset("side", "側視"),
-        h("button", { type: "button", "aria-label": "向右轉動視角", title: "向右轉動視角", onClick: () => this.turn(0.2) }, "↷")),
-      h("div", { class: "orbit-zoom", role: "group", "aria-label": "縮放" },
-        h("button", { type: "button", "aria-label": "縮小", title: "縮小", onClick: () => { this.zoomBy(1 / 1.2); this.persist(); } }, "−"),
+      group("orbit-presets", () => tr("視角", "View"),
+        named(h("button", { type: "button", onClick: () => this.turn(-0.2) }, "↶"), () => tr("向左轉動視角", "Turn the view left")),
+        preset("oblique", () => tr("斜視", "Angled")), preset("top", () => tr("俯視", "Top")), preset("side", () => tr("側視", "Side")),
+        named(h("button", { type: "button", onClick: () => this.turn(0.2) }, "↷"), () => tr("向右轉動視角", "Turn the view right"))),
+      group("orbit-zoom", () => tr("縮放", "Zoom"),
+        named(h("button", { class: "orbit-zoom-step", type: "button", onClick: () => { this.zoomBy(1 / 1.2); this.persist(); } }, "−"), () => tr("縮小", "Zoom out")),
         this.zoomValue,
-        h("button", { type: "button", "aria-label": "放大", title: "放大", onClick: () => { this.zoomBy(1.2); this.persist(); } }, "＋"),
-        h("button", { class: "orbit-overview", type: "button", title: "相機回到預設角度與 100%;不改變選擇", onClick: () => this.resetView() }, "全景")),
+        // The full-width plus, a sign the same in both languages.
+        named(h("button", { class: "orbit-zoom-step", type: "button", onClick: () => { this.zoomBy(1.2); this.persist(); } }, "\uFF0B"), () => tr("放大", "Zoom in")),
+        say(h("button", { class: "orbit-overview", type: "button", onClick: () => this.resetView() }), (b) => {
+          b.title = tr("相機回到預設角度與 100%;不改變選擇", "Camera back to the default angle and 100%; the selection stays");
+          b.textContent = tr("全景", "Overview");
+        })),
     );
     this.controls = controls;
-    this.el = h(
-      "div",
-      { class: "orbit-world", role: "group", "aria-label": "可旋轉、縮放的 Agent 協作星域", tabindex: "0", "data-renderer": "none" },
-      this.fallback,
-      this.glHost,
-      this.labels,
-      this.agents,
-      h("div", { class: "orbit-scene-top" }, h("span", { text: opts.demo ? "協作軌道 · 示意資料" : "協作軌道" }), this.motionState),
-      controls,
-      h("div", { class: "orbit-scene-bottom" }, this.legend, h("span", { class: "orbit-gesture", text: "拖曳旋轉 · 滾輪縮放 · 點光環看協作關係" })),
+    this.el = say(
+      h(
+        "div",
+        { class: "orbit-world", role: "group", tabindex: "0", "data-renderer": "none" },
+        this.fallback,
+        this.glHost,
+        this.labels,
+        this.agents,
+        h("div", { class: "orbit-scene-top" }, say(h("span"), (s) => (s.textContent = opts.demo ? tr("協作軌道 · 示意資料", "Team orbits · sample data") : tr("協作軌道", "Team orbits"))), this.motionState),
+        controls,
+        h("div", { class: "orbit-scene-bottom" }, this.legend, say(h("span", { class: "orbit-gesture" }), (s) => (s.textContent = tr("拖曳旋轉 · 滾輪縮放 · 點光環看協作關係", "Drag to turn · scroll to zoom · click a ring to see who it works with")))),
+      ),
+      (el) => el.setAttribute("aria-label", tr("可旋轉、縮放的 Agent 協作星域", "A universe of your agents and how they work together, to turn and zoom")),
     );
+    say(this.fallback, (c) => c.setAttribute("aria-label", tr(
+      "Agent 以彩色光環和光芯呈現,在星塵和柔光緩慢流動的宇宙中漂浮;同團隊以常駐光線連結,傳送資料時沿連線出現更亮的光流。",
+      "Agents are coloured rings with glowing cores, drifting in a slow universe of stardust and soft light; teammates are joined by standing lines, and a brighter stream runs along a line when data is sent.",
+    )));
+    say(this.eventLine, (l) => {
+      if (this.told) this.describe(this.told.e, this.told.suffix);
+      else l.textContent = tr("協作連線常亮 · 資料傳送時光流加亮", "Team lines stay lit · they glow brighter when data is sent");
+    });
+    for (const w of this.words) w();
+    this.unlang = onLangChange(() => this.relabel());
     this.pointer();
     this.el.addEventListener("keydown", (e) => this.key(e));
     this.ro = new ResizeObserver(() => this.layoutSize());
@@ -275,7 +306,7 @@ export class OrbitView {
       if (!c) {
         const title = h("span", { class: "orbit-team-name" });
         const count = h("small");
-        const label = h("button", { class: "orbit-team-title", type: "button", title: "看這個團隊的摘要", onClick: () => this.host.onPickTeam(t.id) }, h("b", { "aria-hidden": "true" }), title, count);
+        const label = h("button", { class: "orbit-team-title", type: "button", onClick: () => this.host.onPickTeam(t.id) }, h("b", { "aria-hidden": "true" }), title, count);
         this.labels.append(label);
         const target = this.layout.centre(t.id, { vertical: this.vertical });
         c = { team: t, size, slot, centre: [...target] as Vec3, target, label, title, count };
@@ -286,7 +317,8 @@ export class OrbitView {
       c.slot = slot;
       c.target = this.layout.centre(t.id, { vertical: this.vertical });
       c.title.textContent = t.name;
-      c.count.textContent = `${size} 位 Agents`;
+      c.label.title = tr("看這個團隊的摘要", "See this team's summary");
+      c.count.textContent = trf("{n} 位 Agents", size === 1 ? "{n} agent" : "{n} agents", { n: size });
       (c.label.firstElementChild as HTMLElement).style.background = t.color;
     }
     const ids = new Set(scene.agents.map((a) => a.id));
@@ -325,7 +357,9 @@ export class OrbitView {
       n.role.textContent = a.role;
       n.dot.textContent = DOT_GLYPH[a.status];
       n.button.dataset.status = a.status;
-      n.button.setAttribute("aria-label", `${c?.team.name ?? ""} ${a.name},${a.role},${STATUS_LABEL[a.status]}`);
+      // The words after an error, offline or unknown name (orbit.css draws them).
+      n.name.dataset.state = STATUS_LABEL[a.status];
+      n.button.setAttribute("aria-label", `${c?.team.name ?? ""} ${[a.name, a.role, STATUS_LABEL[a.status]].join(tr(",", ", "))}`);
       n.button.setAttribute("aria-pressed", String(this.selected === a.id));
     }
     if (this.selected && !this.nodes.has(this.selected)) this.selected = null;
@@ -370,12 +404,22 @@ export class OrbitView {
     this.wake();
   }
 
-  private describe(e: OrbitMessageEvent, suffix = "") {
+  /** The line under the scene: this transfer, its words picked now (and again on a language change). */
+  private describe(e: OrbitMessageEvent, suffix: () => string = () => "") {
     const from = this.nodes.get(e.fromAgentId), to = this.nodes.get(e.toAgentId);
     if (!from || !to) return;
+    this.told = { e, suffix };
     const team = this.clusters.get(from.agent.teamId)?.team.name ?? "";
     const cross = from.agent.teamId !== to.agent.teamId ? ` → ${this.clusters.get(to.agent.teamId)?.team.name ?? ""}` : "";
-    this.eventLine.textContent = `${team}${cross} · ${from.agent.name} → ${to.agent.name} · ${e.summary}${suffix}`;
+    this.eventLine.textContent = `${team}${cross} · ${from.agent.name} → ${to.agent.name} · ${e.summary}${suffix()}`;
+  }
+
+  /** The language changed: every fixed word, the legend and the camera's state in the new one. */
+  private relabel() {
+    if (this.disposed) return;
+    for (const w of this.words) w();
+    this.setScene(this.scene);
+    this.sync();
   }
 
   private send(e: OrbitMessageEvent, now: number) {
@@ -385,10 +429,11 @@ export class OrbitView {
     if (open) {
       open.count += 1;
       open.summary = e.summary;
-      this.describe(e, ` · 共 ${open.count} 則`);
+      const count = open.count;
+      this.describe(e, () => trf(" · 共 {n} 則", " · {n} in all", { n: count }));
       return;
     }
-    const color = e.summary.startsWith("交付") ? "#86e7c4" : "#8ed8ff";
+    const color = e.delivery ? "#86e7c4" : "#8ed8ff";
     this.packets.push({ key, messageId: e.messageId, from: e.fromAgentId, to: e.toAgentId, color, start: now, count: 1, summary: e.summary, received: false, still });
     // A path no standing line covers (across teams, say) gets one for the duration.
     const pk = pairKey(e.fromAgentId, e.toAgentId);
@@ -399,7 +444,7 @@ export class OrbitView {
       const to = this.nodes.get(e.toAgentId)!;
       to.litUntil = now + STILL_MS;
       this.later(() => this.wake(), STILL_MS + 20);
-      this.describe(e, " · 已送出(靜態顯示)");
+      this.describe(e, () => tr(" · 已送出(靜態顯示)", " · sent (shown still)"));
     } else this.describe(e);
   }
 
@@ -407,7 +452,7 @@ export class OrbitView {
     const p = this.packets.find((x) => x.messageId === e.messageId && x.to === e.toAgentId);
     if (p) {
       p.received = true;
-      this.describe(e, " · 已收到");
+      this.describe(e, () => tr(" · 已收到", " · received"));
       return;
     }
     // Read before this window saw it sent: only the arrival shows.
@@ -417,7 +462,7 @@ export class OrbitView {
       this.nodes.get(e.toAgentId)!.litUntil = now + STILL_MS;
       this.later(() => this.wake(), STILL_MS + 20);
     }
-    this.describe(e, " · 已收到");
+    this.describe(e, () => tr(" · 已收到", " · received"));
   }
 
   /** The lights under way at this moment, and the ones that have ended dropped. */
@@ -442,7 +487,7 @@ export class OrbitView {
     const pick = (from.length ? from : rels).slice(0, 3);
     pick.forEach((r, i) => {
       const fwd = this.selected && r.toAgentId === this.selected ? { from: r.toAgentId, to: r.fromAgentId } : { from: r.fromAgentId, to: r.toAgentId };
-      this.later(() => this.push([{ id: `demo:${Date.now()}:${i}`, type: "message_sent", messageId: `demo:${Date.now()}:${i}`, fromAgentId: fwd.from, toAgentId: fwd.to, summary: "示範資料", occurredAt: new Date().toISOString() }]), i * 900);
+      this.later(() => this.push([{ id: `demo:${Date.now()}:${i}`, type: "message_sent", messageId: `demo:${Date.now()}:${i}`, fromAgentId: fwd.from, toAgentId: fwd.to, get summary() { return tr("示範資料", "Sample data"); }, occurredAt: new Date().toISOString() }]), i * 900);
     });
     return true;
   }
@@ -531,7 +576,7 @@ export class OrbitView {
   /** The controls show the camera as it is. */
   private sync() {
     const reduce = this.host.reduce();
-    this.motionState.textContent = reduce ? "減少動態" : this.state.paused ? "漂浮已暫停" : "緩慢漂浮中";
+    this.motionState.textContent = reduce ? tr("減少動態", "Reduced motion") : this.state.paused ? tr("漂浮已暫停", "Drift paused") : tr("緩慢漂浮中", "Drifting slowly");
     this.zoomValue.textContent = `${Math.round(this.state.zoom * 100)}%`;
     for (const [view, b] of this.presets) b.setAttribute("aria-pressed", String(view === this.state.view));
     this.el.dataset.zoom = this.state.zoom.toFixed(3);
@@ -1019,6 +1064,7 @@ export class OrbitView {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.unlang();
     this.stop();
     for (const id of this.timers) window.clearTimeout(id);
     this.timers.clear();

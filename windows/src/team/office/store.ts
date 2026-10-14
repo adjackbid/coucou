@@ -34,7 +34,8 @@ const KINDS: Kind[] = ["agent", "team", "run", "member", "task", "message", "art
 
 export const memberKey = (runId: Id, memberId: Id) => `${runId}/${memberId}`;
 
-function keyOf<K extends Kind>(kind: K, v: EntityMap[K]): string {
+/** An entity's key in the store (and in an event's entityKey). */
+export function keyOf<K extends Kind>(kind: K, v: EntityMap[K]): string {
   switch (kind) {
     case "agent": return (v as Agent).agentId;
     case "team": return (v as Team).teamId;

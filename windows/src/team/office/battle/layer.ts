@@ -14,6 +14,7 @@
 
 import type { BotEngine } from "../../../mochi/engine";
 import { h } from "../../../views/dom";
+import { tr, trf } from "../../../core/i18n";
 import { sceneArt, wake, type BossState as Look, type SceneLayer, type Sprite, type TeamScene, type WorldArt } from "../scene";
 import { DESIGN, type BattleSignal, type BattleViewModel, type HeroClass } from "./contracts";
 import { EffectQueue, type Effect } from "./effects";
@@ -170,23 +171,23 @@ function holdings(hero: HeroClass, cx: number, cy: number, rx: number, ry: numbe
 /** The front line first: who stands nearest the boss. */
 const LINE: Record<HeroClass, number> = { guardian: 0, warrior: 1, captain: 2, support: 3, mage: 4 };
 
-/** Each move's card: its sign, its family's word and colours. */
+/** Each move's card: its sign, its family's word (read when drawn) and colours. */
 const CARD: Record<SkillId | "victory" | "neutral", { icon: string; word: string; tone: string }> = {
-  fire_ember: { icon: "flame", word: "火", tone: "fire" },
-  ice_lance: { icon: "snow", word: "冰", tone: "ice" },
-  wind_crescent: { icon: "wind", word: "風", tone: "wind" },
-  lightning_chain: { icon: "bolt", word: "雷", tone: "bolt" },
+  fire_ember: { icon: "flame", get word() { return tr("火", "Fire"); }, tone: "fire" },
+  ice_lance: { icon: "snow", get word() { return tr("冰", "Ice"); }, tone: "ice" },
+  wind_crescent: { icon: "wind", get word() { return tr("風", "Wind"); }, tone: "wind" },
+  lightning_chain: { icon: "bolt", get word() { return tr("雷", "Thunder"); }, tone: "bolt" },
   blade_crescent: { icon: "moon", word: "", tone: "blade" },
   blade_pierce: { icon: "arrow", word: "", tone: "blade" },
   blade_counter: { icon: "shield", word: "", tone: "blade" },
   blade_heavy: { icon: "star", word: "", tone: "blade" },
-  support_ward: { icon: "shield", word: "支援", tone: "ward" },
-  support_cleanse: { icon: "heart", word: "支援", tone: "heal" },
-  support_seal: { icon: "seal", word: "支援", tone: "seal" },
-  combo_fire_wind: { icon: "combo", word: "合體技", tone: "combo" },
-  combo_ice_lightning: { icon: "combo", word: "合體技", tone: "combo" },
-  combo_ward_blade: { icon: "combo", word: "合體技", tone: "combo" },
-  combo_trinity: { icon: "trinity", word: "合體技", tone: "combo" },
+  support_ward: { icon: "shield", get word() { return tr("支援", "Support"); }, tone: "ward" },
+  support_cleanse: { icon: "heart", get word() { return tr("支援", "Support"); }, tone: "heal" },
+  support_seal: { icon: "seal", get word() { return tr("支援", "Support"); }, tone: "seal" },
+  combo_fire_wind: { icon: "combo", get word() { return tr("合體技", "Combo"); }, tone: "combo" },
+  combo_ice_lightning: { icon: "combo", get word() { return tr("合體技", "Combo"); }, tone: "combo" },
+  combo_ward_blade: { icon: "combo", get word() { return tr("合體技", "Combo"); }, tone: "combo" },
+  combo_trinity: { icon: "trinity", get word() { return tr("合體技", "Combo"); }, tone: "combo" },
   victory: { icon: "crown", word: "", tone: "win" },
   neutral: { icon: "star", word: "", tone: "blade" },
 };
@@ -206,15 +207,21 @@ const ICON: Record<string, string> = {
   crown: '<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5Z"/>',
 };
 
-/** What the boss says, now and then. */
-const SAYS: Partial<Record<BattleSignal["kind"], string[]>> = {
-  scope_added: ["還不夠…還要更多!", "需求,再來一點!"],
-  review_returned: ["哼,重做吧!"],
-  boss_counter: ["給我停下!", "卡住了吧!"],
-  seal_wait: ["被…封住了…?"],
-  victory: ["我…還會回來的…"],
-  reopen: ["需求…又來了!"],
-};
+/** What the boss says, now and then: picked when it speaks, so in the language of the moment. */
+function says(kind: BattleSignal["kind"]): string[] | undefined {
+  switch (kind) {
+    case "scope_added": return [tr("還不夠…還要更多!", "Not enough… I want more!"), tr("需求,再來一點!", "More asks, keep them coming!")];
+    case "review_returned": return [tr("哼,重做吧!", "Hmph, do it over!")];
+    case "boss_counter": return [tr("給我停下!", "Stop right there!"), tr("卡住了吧!", "Stuck, aren't you?")];
+    case "seal_wait": return [tr("被…封住了…?", "Sealed… by you…?")];
+    case "victory": return [tr("我…還會回來的…", "I… shall return…")];
+    case "reopen": return [tr("需求…又來了!", "The asks… are back!")];
+    default: return undefined;
+  }
+}
+
+/** The ` · ` between a move's family and its name, as each language writes it. */
+const dot = () => tr("・", " · ");
 
 /**
  * The fight's rhythm — every number a play-test may want to turn, in one place.
@@ -630,9 +637,9 @@ export class BattleLayer implements SceneLayer {
     const move = BOSS_MOVES[cue.moveId];
     this.bossCue = { cue, move, signal: s, startedAt: this.now(), fired: new Set(), sparks: 0 };
     const world = WORLDS[this.worldId];
-    const kindWord = { attack: "", ultimate: "絕招・", guard: "防守・", regen: "回血・" }[cue.kind];
-    const damage = cue.kind === "regen" && cue.scopeGrowthLabelHp ? `+${cue.scopeGrowthLabelHp} HP` : null;
-    this.showBossCard(move, `${kindWord}${move.name}`, `${world.bossName} · ${s.reasonLabel} · 0 傷害${cue.kind === "regen" ? "" : " · 工作照常"}`, damage);
+    const kindWord = { attack: "", ultimate: tr("絕招・", "Ultimate · "), guard: tr("防守・", "Guard · "), regen: tr("回血・", "Regen · ") }[cue.kind];
+    const damage = cue.kind === "regen" && cue.scopeGrowthLabelHp ? `+${cue.scopeGrowthLabelHp} HP` : null; // i18n-ok: HP is the same in both languages
+    this.showBossCard(move, `${kindWord}${move.name}`, `${world.bossName} · ${s.reasonLabel} · ${tr("0 傷害", "0 damage")}${cue.kind === "regen" ? "" : tr(" · 工作照常", " · work goes on")}`, damage);
     this.say(s.kind);
   }
 
@@ -734,13 +741,13 @@ export class BattleLayer implements SceneLayer {
     const signal: BattleSignal = {
       teamId: vm.teamId, runId: vm.runId, signalId: `turns|${Date.now()}`, kind: "boss_counter",
       source: { teamId: vm.teamId, runId: vm.runId, kind: "manual_replay", streamId: null, domainSeq: null, taskIds: [], memberIds: members.slice(0, 3), questionIds: [] },
-      reasonLabel: "回合快速消耗", hpBefore: null, hpAfter: null, maxHpBefore: null, maxHpAfter: null, displayDelta: null,
+      reasonLabel: tr("回合快速消耗", "Turns burned fast"), hpBefore: null, hpAfter: null, maxHpBefore: null, maxHpAfter: null, displayDelta: null,
       actorMemberId: null, observedAt: new Date().toISOString(), evidence: "observed_transition", replay: true,
     };
     const cue: BossCue = { moveId: move.moveId, kind: move.kind, consumedSourceSignalIds: [], sourceTaskIds: [], heroHpDelta: 0, extraBossDamage: 0, scopeGrowthLabelHp: 0, durationMs: move.phases[2], animated: true };
     this.bossCue = { cue, move, signal, startedAt: this.now(), fired: new Set(), sparks: 0 };
-    this.showBossCard(move, `絕招・${move.name}`, `${world.bossName} · 短時間消耗 ${burned} 回合 · 0 傷害 · 工作照常`, null);
-    this.float({ text: `-${burned} 回合`, sub: "我方 HP", tone: "hit" }, { ...this.scene.screen(3.6, 3.2) });
+    this.showBossCard(move, `${tr("絕招・", "Ultimate · ")}${move.name}`, trf("{boss} · 短時間消耗 {n} 回合 · 0 傷害 · 工作照常", "{boss} · {n} turns burned fast · 0 damage · work goes on", { boss: world.bossName, n: burned }), null);
+    this.float({ text: trf("-{n} 回合", "-{n} turns", { n: burned }), sub: tr("我方 HP", "Party HP"), tone: "hit" }, { ...this.scene.screen(3.6, 3.2) });
     this.say("boss_counter");
     wake();
   }
@@ -749,7 +756,7 @@ export class BattleLayer implements SceneLayer {
   memberDown(memberId: string, why: string) {
     const m = this.scene.mochi(memberId);
     if (!m || this.still) return;
-    this.float({ text: "陣亡", sub: `${this.host.name(memberId)} · ${why}`, tone: "hit" }, { x: m.x, y: m.y - m.size * 0.9 });
+    this.float({ text: tr("陣亡", "Fallen"), sub: `${this.host.name(memberId)} · ${why}`, tone: "hit" }, { x: m.x, y: m.y - m.size * 0.9 });
     this.spark(null, m.x, m.y + m.size * 0.2, 8, "#8A93A8", { speed: 60, up: 90, size: 2.6 });
     wake();
   }
@@ -758,7 +765,7 @@ export class BattleLayer implements SceneLayer {
   memberUp(memberId: string) {
     const m = this.scene.mochi(memberId);
     if (!m || this.still) return;
-    this.float({ text: "復活!", sub: this.host.name(memberId), tone: "heal" }, { x: m.x, y: m.y - m.size * 0.9 });
+    this.float({ text: tr("復活!", "Revived!"), sub: this.host.name(memberId), tone: "heal" }, { x: m.x, y: m.y - m.size * 0.9 });
     this.spark(null, m.x, m.y + m.size * 0.2, 10, "#8DE9C5", { speed: 50, up: 130, kind: "plus", size: 3 });
     wake();
   }
@@ -776,7 +783,7 @@ export class BattleLayer implements SceneLayer {
       "div",
       { class: `bt-card c-boss${this.frozen !== null ? " still" : ""}`, role: "status", style: `--c1:${move.palette[1]};--c2:${move.palette[0]}` },
       h("span", { class: "bt-card-icon", "aria-hidden": "true", html: `<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON.combo}</svg>` }),
-      h("span", { class: "bt-card-text" }, h("b", {}, h("span", { class: "bt-card-word", text: "魔王・" }), title), h("small", { text: sub })),
+      h("span", { class: "bt-card-text" }, h("b", {}, h("span", { class: "bt-card-word", text: tr("魔王・", "Boss · ") }), title), h("small", { text: sub })),
       damage ? h("em", { class: "heal", text: damage }) : null,
     );
     this.scene.overlayEl.append(el);
@@ -813,7 +820,7 @@ export class BattleLayer implements SceneLayer {
       this.host.planned?.(plan);
       const signal = this.accepted.get(plan.sourceSignalIds[0]);
       if (!signal) continue;
-      const name = plan.skillId ? SKILLS[plan.skillId].name : "驗收命中";
+      const name = plan.skillId ? SKILLS[plan.skillId].name : tr("驗收命中", "Accepted!");
       if (plan.kind === "text_only" && (calm || plan.memberIds.length)) {
         // Still: the number and the move's name, where the blow would land.
         const b = this.bossPoints();
@@ -847,24 +854,24 @@ export class BattleLayer implements SceneLayer {
     this.play({
       teamId: vm.teamId, runId: vm.runId, signalId: `${vm.runId}|victory|replay@${Date.now()}`, kind: "victory",
       source: { teamId: vm.teamId, runId: vm.runId, kind: "manual_replay", streamId: null, domainSeq: null, taskIds: [], memberIds: [], questionIds: [] },
-      reasonLabel: "重播", hpBefore: 0, hpAfter: 0, maxHpBefore: vm.maxHp, maxHpAfter: vm.maxHp, displayDelta: null, actorMemberId: null,
+      reasonLabel: tr("重播", "Replay"), hpBefore: 0, hpAfter: 0, maxHpBefore: vm.maxHp, maxHpAfter: vm.maxHp, displayDelta: null, actorMemberId: null,
       observedAt: new Date().toISOString(), evidence: "observed_transition", replay: true,
     });
   }
 
   private label(kind: BattleSignal["kind"], s: BattleSignal): { text: string; sub?: string; tone: string } | null {
     switch (kind) {
-      case "scope_added": return { text: `+${s.displayDelta ?? 100} HP`, sub: "需求增加", tone: "regen" };
-      case "delivery_waiting": return { text: "待驗收", tone: "shield" };
-      case "review_returned": return { text: s.evidence === "explicit_event" ? "需要修改" : "返回執行", tone: "counter" };
-      case "boss_counter": return { text: !s.source.taskIds.length ? "等你決定" : "受阻", sub: "守望結界", tone: "counter" };
-      case "unblock_support": return { text: "解除", sub: "回復清輝", tone: "heal" };
-      case "member_interrupted": return { text: "中斷", tone: "counter" };
-      case "seal_wait": return { text: "封印", sub: "共鳴封印", tone: "seal" };
-      case "victory": return { text: "討伐成功!", tone: "win" };
-      case "reopen": return { text: "新指示", tone: "seal" };
-      case "scope_adjusted": return { text: "範圍調整", tone: "quiet" };
-      case "pause": return { text: "戰場冰封", tone: "quiet" };
+      case "scope_added": return { text: `+${s.displayDelta ?? 100} HP`, sub: tr("需求增加", "More asks"), tone: "regen" }; // i18n-ok: HP is the same in both languages
+      case "delivery_waiting": return { text: tr("待驗收", "In review"), tone: "shield" };
+      case "review_returned": return { text: s.evidence === "explicit_event" ? tr("需要修改", "Needs changes") : tr("返回執行", "Back in progress"), tone: "counter" };
+      case "boss_counter": return { text: !s.source.taskIds.length ? tr("等你決定", "Your call") : tr("受阻", "Blocked"), sub: SKILLS.support_ward.name, tone: "counter" };
+      case "unblock_support": return { text: tr("解除", "Unblocked"), sub: SKILLS.support_cleanse.name, tone: "heal" };
+      case "member_interrupted": return { text: tr("中斷", "Interrupted"), tone: "counter" };
+      case "seal_wait": return { text: tr("封印", "Sealed"), sub: SKILLS.support_seal.name, tone: "seal" };
+      case "victory": return { text: tr("討伐成功!", "Victory!"), tone: "win" };
+      case "reopen": return { text: tr("新指示", "New orders"), tone: "seal" };
+      case "scope_adjusted": return { text: tr("範圍調整", "Scope adjusted"), tone: "quiet" };
+      case "pause": return { text: tr("戰場冰封", "Battlefield frozen"), tone: "quiet" };
       default: return null;
     }
   }
@@ -901,7 +908,7 @@ export class BattleLayer implements SceneLayer {
       "div",
       { class: `bt-card c-${c.tone}${this.frozen !== null ? " still" : ""}`, role: "status" },
       h("span", { class: "bt-card-icon", "aria-hidden": "true", html: `<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON[c.icon]}</svg>` }),
-      h("span", { class: "bt-card-text" }, h("b", {}, c.word ? h("span", { class: "bt-card-word", text: `${c.word}・` }) : null, title), h("small", { text: sub })),
+      h("span", { class: "bt-card-text" }, h("b", {}, c.word ? h("span", { class: "bt-card-word", text: `${c.word}${dot()}` }) : null, title), h("small", { text: sub })),
       damage ? h("em", { text: damage }) : null,
     );
     this.scene.overlayEl.append(el);
@@ -915,12 +922,12 @@ export class BattleLayer implements SceneLayer {
 
   /** The boss says something, now and then — never more than one line every few seconds. */
   private say(kind: BattleSignal["kind"]) {
-    const lines = SAYS[kind];
+    const lines = says(kind);
     const b = this.bossPoints();
     if (!lines || !b || this.now() - this.lastSaid < 2500) return;
     this.lastSaid = this.now();
     this.speech?.remove();
-    const el = h("span", { class: `bt-speech${this.frozen !== null ? " still" : ""}` }, h("b", { text: "需求魔王" }), h("span", { text: lines[Math.floor(Math.random() * lines.length)] }));
+    const el = h("span", { class: `bt-speech${this.frozen !== null ? " still" : ""}` }, h("b", { text: tr("需求魔王", "Requirements Overlord") }), h("span", { text: lines[Math.floor(Math.random() * lines.length)] }));
     this.scene.pinAt(el, b.top.x, b.top.y - 34);
     this.speech = el;
     if (this.frozen === null) window.setTimeout(() => {
@@ -1383,7 +1390,7 @@ export class BattleLayer implements SceneLayer {
         if (ms >= 360) {
           if (this.once(e, "ward")) {
             if (label) this.float(label, { x: at.x, y: at.y - 130 });
-            this.showCard("support_ward", SKILLS.support_ward.name, `${w.id ? this.host.name(w.id) : "團隊"} · ${!e.signal.source.taskIds.length ? "等你回覆或批准" : "任務受阻"} · 0 傷害`, null);
+            this.showCard("support_ward", SKILLS.support_ward.name, `${w.id ? this.host.name(w.id) : tr("團隊", "Team")} · ${!e.signal.source.taskIds.length ? tr("等你回覆或批准", "Waiting for your reply or approval") : tr("任務受阻", "Task blocked")} · ${tr("0 傷害", "0 damage")}`, null);
             this.spark(e, at.x + w.facing * 40, at.y, 10, "#DCD2FF", { speed: 140, kind: "streak" });
           }
           const k = ms - 360;
@@ -1398,7 +1405,7 @@ export class BattleLayer implements SceneLayer {
         if (ms >= 250) {
           if (this.once(e, "heal")) {
             if (label) this.float(label, { x: at.x, y: at.y - 130 });
-            this.showCard("support_cleanse", SKILLS.support_cleanse.name, `${w.id ? this.host.name(w.id) : "團隊"} · 你回覆了,工作繼續 · 0 傷害`, null);
+            this.showCard("support_cleanse", SKILLS.support_cleanse.name, `${w.id ? this.host.name(w.id) : tr("團隊", "Team")} · ${tr("你回覆了,工作繼續 · 0 傷害", "You replied, work goes on · 0 damage")}`, null);
             for (let i = 0; i < 6; i++) this.spark(e, at.x + (Math.random() - 0.5) * 80, at.y + 20, 1, "#8DE9C5", { speed: 30, up: 120, kind: "plus", size: 3.2, gravity: -40 });
           }
           const k = span(ms, 250, 650);
@@ -1426,7 +1433,7 @@ export class BattleLayer implements SceneLayer {
         glow(ctx, b.core.x, b.core.y, 60, "#B99CFF", 0.6 * fade);
         if (this.once(e, "seal")) {
           if (label) this.float(label, head);
-          this.showCard("support_seal", SKILLS.support_seal.name, "工作都已驗收 · 等待 Leader 結案", null);
+          this.showCard("support_seal", SKILLS.support_seal.name, tr("工作都已驗收 · 等待 Leader 結案", "All work accepted · waiting for the Leader to close it out"), null);
         }
         break;
       }
@@ -1439,7 +1446,7 @@ export class BattleLayer implements SceneLayer {
           const kc = ease(span(ms, 60, 420));
           glow(ctx, from.x, from.y - 30, 46 * (0.5 + kc), GOLD, 0.75 * kc);
           runeRing(ctx, from.x, from.y + 24, 42 * (0.6 + 0.4 * kc), ms / 300, GOLD, 0.85 * kc);
-          if (this.once(e, "callout")) this.float({ text: "最後一擊", sub: `Leader・${leaderId ? this.host.name(leaderId) : "隊長"}`, tone: "win" }, { x: from.x, y: from.y - 130 });
+          if (this.once(e, "callout")) this.float({ text: tr("最後一擊", "Final blow"), sub: `${tr("Leader・", "Leader · ")}${leaderId ? this.host.name(leaderId) : tr("隊長", "Captain")}`, tone: "win" }, { x: from.x, y: from.y - 130 });
         }
         if (ms >= 420 && ms < 760) {
           // The strike flies to the core.
@@ -1455,12 +1462,12 @@ export class BattleLayer implements SceneLayer {
           this.say("victory");
           this.hurtAt = this.now();
           const sliver = Math.max(1, Math.round((this.vm?.maxHp ?? 100) * 0.02));
-          this.float({ text: `-${sliver}`, sub: "Leader・最後一擊", tone: "hit" }, { x: b.hit.x + 70, y: b.hit.y - 40 });
+          this.float({ text: `-${sliver}`, sub: tr("Leader・最後一擊", "Leader · Final blow"), tone: "hit" }, { x: b.hit.x + 70, y: b.hit.y - 40 });
           this.spark(e, b.core.x, b.core.y, 12, "#ffffff", { speed: 220, size: 3 });
         }
         if (ms >= 900 && this.once(e, "burst")) {
           this.spark(e, b.core.x, b.core.y, 34, GOLD, { speed: 300, up: 160, kind: "streak", size: 4 });
-          this.showCard("victory", `${WORLDS[this.worldId].bossName} 討伐成功!`, "Leader 最後一擊 · 全部任務驗收", null);
+          this.showCard("victory", trf("{boss} 討伐成功!", "{boss} defeated!", { boss: WORLDS[this.worldId].bossName }), tr("Leader 最後一擊 · 全部任務驗收", "The Leader's final blow · every task accepted"), null);
         }
         if (ms >= 900) {
           ring(ctx, b.core.x, b.core.y, lerp(30, 260, ease(span(ms, 900, 1800))), GOLD, 1 - span(ms, 900, 1800), 8);
@@ -1492,8 +1499,8 @@ export class BattleLayer implements SceneLayer {
     // The card first: the move's name, who made it, what it hit.
     if (this.once(e, "card")) {
       const who = plan.memberIds.map((m) => this.host.name(m)).join(" + ");
-      const task = plan.taskIds.length === 1 ? this.host.taskTitle(plan.taskIds[0]) : `${plan.taskIds.length} 項任務`;
-      this.showCard(plan.skillId ?? "neutral", skill?.name ?? "驗收命中", `${who ? `${who} · ` : ""}${task} 驗收`, `-${plan.displayDamage}`);
+      const task = plan.taskIds.length === 1 ? this.host.taskTitle(plan.taskIds[0]) : trf("{n} 項任務", "{n} tasks", { n: plan.taskIds.length });
+      this.showCard(plan.skillId ?? "neutral", skill?.name ?? tr("驗收命中", "Accepted!"), `${who ? `${who} · ` : ""}${trf("{task} 驗收", "{task} accepted", { task })}`, `-${plan.displayDamage}`);
     }
     // The blow lands once: the boss flinches, the number shows, the sparks fly.
     if (ms >= c && this.once(e, "impact")) {
@@ -1508,7 +1515,7 @@ export class BattleLayer implements SceneLayer {
       const d = Math.hypot(target.x - fx, target.y - fy) || 1;
       this.knock = { x: (target.x - fx) / d, y: (target.y - fy) / d, at: this.now(), power };
       this.float({ text: `-${plan.displayDamage}`, tone: combo ? "hit big" : "hit" }, { x: b.hit.x + 80 * b.scale, y: b.hit.y - 10 });
-      if (combo) this.float({ text: `COMBO ×${plan.memberIds.length}`, tone: "combo" }, { x: b.hit.x + 80 * b.scale, y: b.hit.y + 48 });
+      if (combo) this.float({ text: `COMBO ×${plan.memberIds.length}`, tone: "combo" }, { x: b.hit.x + 80 * b.scale, y: b.hit.y + 48 }); // i18n-ok: the game's own word, the same in both languages
       this.weather?.stir(b.hit, combo ? 1.6 : 1);
       this.spark(e, target.x, target.y, combo ? 22 : 14, pal[0], { speed: 300, kind: "streak", size: 4.5 });
       this.spark(e, target.x, target.y, 8, pal[1] ?? "#ffffff", { speed: 180, size: 3 });

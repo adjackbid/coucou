@@ -12,6 +12,7 @@ import type {
   Message, MemberSnapshot, RunStatus, Task, TaskStatus, Team, TeamRun, WorkStatus, Capabilities, CommandRequest,
 } from "./contracts";
 import { calculateProgress } from "./contracts";
+import { tr } from "../../core/i18n";
 import { agentLabel } from "../agents";
 import type { MemberView, Snapshot, TeamFile, Task as CTask } from "../types";
 
@@ -66,11 +67,15 @@ function workStatus(m: MemberView, snap: Snapshot): WorkStatus {
   }
 }
 
-const NEXT: Partial<Record<WorkStatus, string>> = {
-  waiting_dependency: "收到交付後繼續",
-  waiting_input: "等你回覆或批准",
-  blocked: "等對方回覆",
-};
+/** What a waiting member does next, in the language of the moment (the Office feeds again when it changes). */
+function next(ws: WorkStatus): string {
+  switch (ws) {
+    case "waiting_dependency": return tr("收到交付後繼續", "Carries on once the hand-in arrives");
+    case "waiting_input": return tr("等你回覆或批准", "Waiting for your reply or approval");
+    case "blocked": return tr("等對方回覆", "Waiting for the other side to reply");
+    default: return "";
+  }
+}
 
 /** A team file as an earlier run recorded it: who was in it then, who led. */
 export function fileFromSnapshot(snap: Snapshot): TeamFile {
@@ -122,7 +127,7 @@ export function teamEntities(file: TeamFile, snap: Snapshot | undefined, revisio
         memberIds: m.waiting.on && m.waiting.on !== YOU ? [m.waiting.on] : [],
         taskIds: m.waiting.task ? [`${teamId}:${m.waiting.task}`] : [],
         expectedArtifact: depOn?.title ?? null,
-        nextAction: NEXT[ws] ?? "",
+        nextAction: next(ws),
       } : null,
       lastActivityAt: iso(Math.max(0, ...(m?.screen ?? []).map((l) => l.at))),
       displayName: c.name || c.id,
@@ -132,7 +137,7 @@ export function teamEntities(file: TeamFile, snap: Snapshot | undefined, revisio
   const msgs: Message[] = (snap?.messages ?? []).map((m) => ({
     ...v, messageId: `${teamId}:${m.id}`, teamId, runId, threadId: m.task ? `${teamId}:${m.task}` : `${teamId}:general`,
     taskId: m.task ? `${teamId}:${m.task}` : null,
-    from: m.from === YOU ? { kind: "user", userId: YOU, displayName: "你" } : m.from === SYSTEM ? { kind: "system" } : { kind: "member", memberId: m.from },
+    from: m.from === YOU ? { kind: "user", userId: YOU, displayName: tr("你", "You") } : m.from === SYSTEM ? { kind: "system" } : { kind: "member", memberId: m.from },
     toMemberIds: m.to && m.to !== YOU && m.to !== SYSTEM ? [m.to] : [],
     kind: m.from === YOU ? "instruction" : "message", text: m.text, deliveryStatus: m.heard ? "delivered" : "sent",
     artifactIds: [], occurredAt: iso(m.at),
@@ -151,7 +156,7 @@ export function teamEntities(file: TeamFile, snap: Snapshot | undefined, revisio
     const kind = /\.(png|jpe?g|gif|webp|svg)$/i.test(d.locator) ? "image" : /^https?:/i.test(d.locator) ? "website" : /\.(md|txt|pdf|docx?)$/i.test(d.locator) ? "document" : d.kind === "code" ? "code" : "bundle";
     return { ...v, artifactId: `${teamId}:${d.id}`, teamId, runId, taskId: `${teamId}:${d.task}`, authorMemberId: d.by, name: d.summary || d.locator, kind, artifactVersion: n, resourceRef: d.locator, updatedAt: iso(d.at) };
   });
-  const team: Team = { ...v, teamId, name: cfg.name || "未命名的團隊", goal: cfg.goal, memberIds: cfg.members.map((m) => m.id), leaderMemberId: cfg.leader, currentRunId: runId, officeLayoutId: file.config!.officeTheme || "auto", archived: !!file.config!.archived };
+  const team: Team = { ...v, teamId, name: cfg.name || tr("未命名的團隊", "Untitled team"), goal: cfg.goal, memberIds: cfg.members.map((m) => m.id), leaderMemberId: cfg.leader, currentRunId: runId, officeLayoutId: file.config!.officeTheme || "auto", archived: !!file.config!.archived };
   const run: TeamRun = { ...v, runId, teamId, status: runStatus(snap), progress: calculateProgress(tasks, runId) };
   const agents: Agent[] = cfg.members.map((c) => ({ ...v, agentId: c.agent || c.id, name: c.agent ? agentLabel(c.agent) : c.id, avatarKey: c.agent || c.id }));
   return { agents, team, run, members, tasks, messages: msgs, artifacts };
@@ -255,9 +260,9 @@ export class RealAdapter {
       canSendInstruction: talks,
       pauseMode: "cooperative",
       unavailableReasons: {
-        ...(live ? {} : { pause: status === "pausing" ? "正在暫停:還在做的成員會把這一輪做完" : "團隊沒有在執行" }),
-        ...(status === "paused" ? {} : { resume: "團隊沒有暫停" }),
-        ...(talks ? {} : { instruction: "團隊啟動後才能補充指示" }),
+        ...(live ? {} : { pause: status === "pausing" ? tr("正在暫停:還在做的成員會把這一輪做完", "Pausing: members at work finish this round first") : tr("團隊沒有在執行", "The team isn't running") }),
+        ...(status === "paused" ? {} : { resume: tr("團隊沒有暫停", "The team isn't paused") }),
+        ...(talks ? {} : { instruction: tr("團隊啟動後才能補充指示", "You can add instructions once the team has started") }),
       },
     };
   }

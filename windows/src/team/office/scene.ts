@@ -10,6 +10,7 @@
 import { BotEngine, hexToRGB } from "../../mochi/engine";
 import type { BotStateName } from "../../core/layout";
 import { h } from "../../views/dom";
+import { tr, trf } from "../../core/i18n";
 import type { Artifact, MemberSnapshot, Message, WorkStatus } from "./contracts";
 import type { OfficeStore } from "./store";
 
@@ -148,16 +149,16 @@ function toScreenIn(w: WorldToScreen, x: number, y: number, z = 0) {
 
 // ── The looks of an office ────────────────────────────────────────────────────
 
-/** Office looks, in the order the team settings offer them. */
+/** Office looks, in the order the team settings offer them; each name read when drawn. */
 export const THEME_LABELS: Record<string, string> = {
-  warm: "溫暖木質",
-  japandi: "日式靜謐",
-  industrial: "工業創作",
-  biophilic: "植感共創",
-  futurelab: "未來科技",
-  library: "書房策略",
-  premium: "高級辦公室",
-  penthouse: "頂樓景觀",
+  get warm() { return tr("溫暖木質", "Warm Wood"); },
+  get japandi() { return tr("日式靜謐", "Japandi Calm"); },
+  get industrial() { return tr("工業創作", "Industrial Studio"); },
+  get biophilic() { return tr("植感共創", "Green Studio"); },
+  get futurelab() { return tr("未來科技", "Future Lab"); },
+  get library() { return tr("書房策略", "Strategy Library"); },
+  get premium() { return tr("高級辦公室", "Premium Office"); },
+  get penthouse() { return tr("頂樓景觀", "Penthouse View"); },
 };
 /** The large rooms: a big team gets one of these, the same per team. */
 const LARGE = ["premium", "penthouse"];
@@ -253,18 +254,19 @@ export function desksFor(count: number): Desk[] {
 
 // ── What a status looks like ──────────────────────────────────────────────────
 
+/** Each status's words (read when drawn, so they follow the language), sign and tone. */
 export const STATUS: Record<WorkStatus, { label: string; icon: string; tone: "work" | "wait" | "alert" | "done" | "quiet" }> = {
-  planning: { label: "規劃中", icon: "✎", tone: "work" },
-  working: { label: "工作中", icon: "●", tone: "work" },
-  reviewing: { label: "審核中", icon: "◎", tone: "work" },
-  waiting_dependency: { label: "等待交付", icon: "◷", tone: "wait" },
-  waiting_input: { label: "等待回覆", icon: "?", tone: "alert" },
-  blocked: { label: "工作受阻", icon: "!", tone: "alert" },
-  completed: { label: "工作完成", icon: "✓", tone: "done" },
-  paused: { label: "已暫停", icon: "Ⅱ", tone: "quiet" },
-  error: { label: "執行失敗", icon: "✕", tone: "alert" },
-  idle: { label: "待命", icon: "○", tone: "quiet" },
-  unknown: { label: "狀態未知", icon: "…", tone: "quiet" },
+  planning: { get label() { return tr("規劃中", "Planning"); }, icon: "✎", tone: "work" },
+  working: { get label() { return tr("工作中", "Working"); }, icon: "●", tone: "work" },
+  reviewing: { get label() { return tr("審核中", "Reviewing"); }, icon: "◎", tone: "work" },
+  waiting_dependency: { get label() { return tr("等待交付", "Waiting for a hand-in"); }, icon: "◷", tone: "wait" },
+  waiting_input: { get label() { return tr("等待回覆", "Waiting for your reply"); }, icon: "?", tone: "alert" },
+  blocked: { get label() { return tr("工作受阻", "Blocked"); }, icon: "!", tone: "alert" },
+  completed: { get label() { return tr("工作完成", "Done"); }, icon: "✓", tone: "done" },
+  paused: { get label() { return tr("已暫停", "Paused"); }, icon: "Ⅱ", tone: "quiet" },
+  error: { get label() { return tr("執行失敗", "Failed"); }, icon: "✕", tone: "alert" },
+  idle: { get label() { return tr("待命", "Standing by"); }, icon: "○", tone: "quiet" },
+  unknown: { get label() { return tr("狀態未知", "Status unknown"); }, icon: "…", tone: "quiet" },
 };
 
 /** Nothing to do for now: these members go and sit in the lounge. */
@@ -494,7 +496,7 @@ export class TeamScene {
     const t = this.theme;
     if (!t) {
       // Without the art the office still works: the members as a list of buttons.
-      this.stage.append(h("div", { class: "office-noart", text: "辦公室圖片載入中…" }));
+      this.stage.append(h("div", { class: "office-noart", text: tr("辦公室圖片載入中…", "Loading the office…") }));
       return;
     }
     const [cw, ch] = t.room.canvas.map(H);
@@ -589,7 +591,7 @@ export class TeamScene {
         "button",
         {
           class: `office-wall office-frame-item ${a.kind}`, type: "button", tabindex: this.opts.mini ? "-1" : "0",
-          title: `${a.name}(v${a.artifactVersion})`, "aria-label": `成果:${a.name}`,
+          title: `${a.name}(v${a.artifactVersion})`, "aria-label": trf("成果:{name}", "Deliverable: {name}", { name: a.name }),
           onClick: (e: Event) => { e.stopPropagation(); this.opts.onArtifact?.(a); },
         },
         url ? h("img", { src: url, alt: "", draggable: "false" }) : h("span", { class: "kind", text: KIND_ICON[a.kind] }),
@@ -605,7 +607,7 @@ export class TeamScene {
       const board = h(
         "div",
         { class: "office-wall office-plan", "aria-hidden": "true" },
-        h("b", { text: `計畫 ${done}/${tasks.length}` }),
+        h("b", { text: trf("計畫 {done}/{all}", "Plan {done}/{all}", { done, all: tasks.length }) }),
         ...tasks.slice(0, 6).map((t) => h("span", { class: t.status === "completed" ? "ok" : t.status === "running" || t.status === "reviewing" ? "now" : "" }, t.status === "completed" ? "✓ " : t.status === "running" || t.status === "reviewing" ? "▸ " : "○ ", t.title)),
       );
       onQuad(board, room.whiteboardQuad, 280, 200);
@@ -686,7 +688,12 @@ export class TeamScene {
 
   /** Read the store again and bring the scene up to it. */
   update() {
-    if (!art) return;
+    if (!art) {
+      // Still loading: only the words may have changed (the language).
+      const wait = this.stage.querySelector(".office-noart");
+      if (wait) wait.textContent = tr("辦公室圖片載入中…", "Loading the office…");
+      return;
+    }
     const team = this.store.team(this.teamId);
     if (!team) return;
     const members = this.store.members(this.teamId);
@@ -804,7 +811,7 @@ export class TeamScene {
     const st = STATUS[m.workStatus];
     const task = m.primaryTaskId ? this.store.task(m.primaryTaskId)?.title : "";
     const wait = m.workStatus === "waiting_dependency" && m.waitingFor
-      ? `等 ${m.waitingFor.memberIds.map((id) => this.store.member(this.teamId, id)?.displayName ?? id).join("、") || "交付"}${m.waitingFor.expectedArtifact ? ` · ${m.waitingFor.expectedArtifact}` : ""}`
+      ? `${trf("等 {who}", "Waiting on {who}", { who: m.waitingFor.memberIds.map((id) => this.store.member(this.teamId, id)?.displayName ?? id).join(tr("、", ", ")) || tr("交付", "a hand-in") })}${m.waitingFor.expectedArtifact ? ` · ${m.waitingFor.expectedArtifact}` : ""}`
       : "";
     const label = h(
       "button",
@@ -812,11 +819,11 @@ export class TeamScene {
         class: `office-label ${st.tone}${sel ? " on" : ""}${m.engineStatus === "offline" ? " offline" : ""}${lounge || (t.large && !sel) || (yaw !== null && !sel) ? " compact" : ""}`, type: "button",
         style: `--c:${color}`,
         "aria-pressed": sel ? "true" : "false",
-        "aria-label": `${m.displayName ?? m.memberId}${leader ? ",Leader" : ""},${m.roleLabel},${st.label}${task ? `,${task}` : ""}${m.engineStatus === "offline" ? ",未連線" : ""}`,
+        "aria-label": [m.displayName ?? m.memberId, leader ? "Leader" : "", m.roleLabel, st.label, task ?? "", m.engineStatus === "offline" ? tr("未連線", "offline") : ""].filter(Boolean).join(tr(",", ", ")),
         "data-member": m.memberId,
         onClick: () => this.opts.onSelect?.(m.memberId),
       },
-      h("span", { class: "who" }, leader ? h("i", { class: "crown", "aria-hidden": "true", text: "♛" }) : null, h("b", { text: m.displayName ?? m.memberId }), h("span", { class: "role", text: leader ? `Leader · ${m.roleLabel}` : m.roleLabel })),
+      h("span", { class: "who" }, leader ? h("i", { class: "crown", "aria-hidden": "true", text: "♛" }) : null, h("b", { text: m.displayName ?? m.memberId }), h("span", { class: "role", text: leader ? `Leader · ${m.roleLabel}` : m.roleLabel })), // i18n-ok: "Leader" is the same in both languages
       h("span", { class: "st" }, h("i", { "aria-hidden": "true", text: st.icon }), wait || (task ? `${st.label} · ${task}` : st.label)),
     );
     this.labels.set(m.memberId, label);
@@ -928,7 +935,7 @@ export class TeamScene {
     const speaker = from ? this.actors.get(from) : null;
     if (!speaker) return;
     const name = (id: string) => members.find((x) => x.memberId === id)?.displayName ?? id;
-    const to = msg.toMemberIds.map(name).join("、");
+    const to = msg.toMemberIds.map(name).join(tr("、", ", "));
     if (this.opts.mini) {
       const mark = h("span", { class: "office-bubble mini", title: `${name(from!)}${to ? ` → ${to}` : ""}:${msg.text}` }, "💬");
       this.pin(mark, parseFloat(speaker.canvas.style.left) + speaker.pad + speaker.size / 2 + 30, parseFloat(speaker.canvas.style.top) + speaker.pad + speaker.size / 2 - BODY / 2 - 40);

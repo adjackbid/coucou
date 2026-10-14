@@ -3,6 +3,8 @@
 // spec's 狀態未知 added. Everything here is a projection over OfficeStore
 // (see adapter.ts); nothing in the scene writes back to the work.
 
+import { tr } from "../../../core/i18n";
+
 export type AgentStatus = "busy" | "waiting" | "done" | "idle" | "error" | "offline" | "unknown";
 export type RelationKind = "team_connection" | "workflow" | "communication";
 
@@ -52,6 +54,8 @@ export interface OrbitMessageEvent extends EventBase {
   toAgentId: string;
   /** A short summary: the conversation itself never goes into the scene. */
   summary: string;
+  /** Coucou: a deliverable handed in, not a message (its light has its own colour). */
+  delivery?: boolean;
 }
 
 export interface OrbitStatusEvent extends EventBase {
@@ -74,14 +78,15 @@ export interface OrbitViewState {
   view: OrbitPreset;
 }
 
+/** A status in words; read when drawn, so it follows the language. */
 export const STATUS_LABEL: Record<AgentStatus, string> = {
-  busy: "工作中",
-  waiting: "等待協作",
-  done: "已完成",
-  idle: "待命",
-  error: "錯誤",
-  offline: "離線",
-  unknown: "狀態未知",
+  get busy() { return tr("工作中", "Working"); },
+  get waiting() { return tr("等待協作", "Waiting on others"); },
+  get done() { return tr("已完成", "Done"); },
+  get idle() { return tr("待命", "Standing by"); },
+  get error() { return tr("錯誤", "Error"); },
+  get offline() { return tr("離線", "Offline"); },
+  get unknown() { return tr("狀態未知", "Status unknown"); },
 };
 
 /** The scene's id for a team member. */

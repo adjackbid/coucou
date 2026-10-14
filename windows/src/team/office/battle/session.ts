@@ -4,6 +4,7 @@
 // whether 中二模式 is on or not, so the log is there when it is turned on;
 // effects are played only where a battle scene is on screen.
 
+import { tr } from "../../../core/i18n";
 import type { Id } from "../contracts";
 import type { OfficeStore } from "../store";
 import type { BattleSignal, BattleViewModel, HeroClass, Observation, PresentationMode } from "./contracts";
@@ -153,7 +154,14 @@ export function saveMode(mode: PresentationMode) {
   write("coucou.office.mode", mode);
 }
 
-export const HERO_LABELS: Record<HeroClass, string> = { captain: "隊長", mage: "法師", guardian: "守護者", warrior: "戰士", support: "支援者" };
+/** Each look's name, read when drawn. */
+export const HERO_LABELS: Record<HeroClass, string> = {
+  get captain() { return tr("隊長", "Captain"); },
+  get mage() { return tr("法師", "Mage"); },
+  get guardian() { return tr("守護者", "Guardian"); },
+  get warrior() { return tr("戰士", "Warrior"); },
+  get support() { return tr("支援者", "Support"); },
+};
 
 /**
  * A member's hero look: the person's choice, else one read from its role —

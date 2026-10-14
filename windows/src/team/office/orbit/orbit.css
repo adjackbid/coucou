@@ -182,20 +182,21 @@
   display: block;
 }
 
+/* The state's words come from the view (data-state), in the language in use. */
 .orbit-agent[data-status="error"] .orbit-agent-name::after {
-  content: " · 錯誤";
+  content: " · " attr(data-state);
   color: #ff9a9f;
   font-size: 11px;
 }
 
 .orbit-agent[data-status="offline"] .orbit-agent-name::after {
-  content: " · 離線";
+  content: " · " attr(data-state);
   color: #8ea0b3;
   font-size: 11px;
 }
 
 .orbit-agent[data-status="unknown"] .orbit-agent-name::after {
-  content: " · 狀態未知";
+  content: " · " attr(data-state);
   color: #8ea0b3;
   font-size: 11px;
 }
@@ -283,8 +284,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-.orbit-zoom button[aria-label="縮小"],
-.orbit-zoom button[aria-label="放大"] {
+/* Zoom out and in (a class, not their words: those change with the language). */
+.orbit-zoom button.orbit-zoom-step {
   font-size: 15px;
   padding: 2px 9px;
 }

@@ -2,10 +2,40 @@
 // Office without a team at work — four rooms, and the four events after the
 // snapshot played one by one. Every screen showing it says so. Commands are
 // answered the way a server would: accepted at once, applied by a later event.
+// The fixture is in Chinese; in English its words come from demo-en.json.
 
-import type { Capabilities, CommandAck, CommandRecord, CommandRequest, CompanySnapshot, DomainEvent, TeamRun } from "./contracts";
+import type { Capabilities, CommandAck, CommandRecord, CommandRequest, CompanySnapshot, DomainEvent, EntityMap, TeamRun } from "./contracts";
+import { lang, tr } from "../../core/i18n";
+import { keyOf } from "./store";
 import snapshotJson from "./fixtures/company.snapshot.json";
 import eventsJson from "./fixtures/events.json";
+import demoEn from "./fixtures/demo-en.json";
+
+const EN = demoEn as Record<string, string>;
+
+/** A copy of the demo's data in the language in use: the fixture's words, and "Name 2" for a copied team. */
+function localize<T>(x: T): T {
+  const copy = structuredClone(x);
+  if (lang() !== "en") return copy;
+  const word = (s: string) => {
+    if (EN[s]) return EN[s];
+    const n = /^(.*) (\d+)$/.exec(s);
+    return n && EN[n[1]] ? `${EN[n[1]]} ${n[2]}` : s;
+  };
+  const walk = (v: unknown): unknown => {
+    if (typeof v === "string") return word(v);
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, w]) => [k, walk(w)]));
+    return v;
+  };
+  return walk(copy) as T;
+}
+
+/** Where each kind of entity lives in a snapshot. */
+const LISTS: { [K in keyof EntityMap]: keyof CompanySnapshot } = {
+  agent: "agents", team: "teams", run: "runs", member: "members", task: "tasks",
+  message: "messages", artifact: "artifacts", layout: "layouts", command: "commands",
+};
 
 const PALETTE: Record<string, string> = {
   "agent-claude": "#F59E0B", "agent-codex": "#34D399", "agent-codex2": "#A78BFA",
@@ -21,6 +51,8 @@ export class MockAdapter {
   private next = 0;
   private commands = new Map<string, CommandRecord>();
   private emit: (e: DomainEvent) => void = () => {};
+  /** Every event sent so far, as recorded: a snapshot in another language includes them. */
+  private played: DomainEvent[] = [];
 
   /** `rooms` > 4 copies the demo teams, for checking a busy company (`?office=mock&rooms=20`). */
   constructor(rooms = 4) {
@@ -50,8 +82,27 @@ export class MockAdapter {
     m.color = PALETTE[agent?.avatarKey ?? ""] ?? "#3B9EFF";
   }
 
+  /** The company as it stands now — the fixture and every event sent since — in the language in use. */
   snapshot(): CompanySnapshot {
-    return structuredClone(this.snap);
+    const s = structuredClone(this.snap);
+    for (const e of this.played) {
+      for (const c of e.changes ?? []) {
+        const list = s[LISTS[c.entityKind]] as unknown as EntityMap[keyof EntityMap][];
+        const at = list.findIndex((v) => keyOf(c.entityKind, v as never) === c.entityKey);
+        if (c.op === "upsert") {
+          if (at < 0) list.push(c.value);
+          else list[at] = c.value;
+        } else if (at >= 0) list.splice(at, 1);
+      }
+      s.asOfSeq = Math.max(s.asOfSeq, e.seq);
+    }
+    return localize(s);
+  }
+
+  /** An event to the Office, in the language in use; kept as recorded for the next snapshot. */
+  private send(e: DomainEvent) {
+    this.played.push(e);
+    this.emit(localize(e));
   }
 
   subscribe(onEvent: (e: DomainEvent) => void) {
@@ -64,7 +115,7 @@ export class MockAdapter {
     if (!e) return false;
     const copy = structuredClone(e);
     for (const c of copy.changes ?? []) if (c.entityKind === "member" && c.op === "upsert") this.dress(c.value);
-    this.emit(copy);
+    this.send(copy);
     return true;
   }
 
@@ -74,9 +125,9 @@ export class MockAdapter {
       canPause: live, canResume: run?.status === "paused", canSendInstruction: !!run,
       pauseMode: "cooperative",
       unavailableReasons: {
-        ...(live ? {} : { pause: "團隊沒有在執行" }),
-        ...(run?.status === "paused" ? {} : { resume: "團隊沒有暫停" }),
-        ...(run ? {} : { instruction: "團隊還沒有開始" }),
+        ...(live ? {} : { pause: tr("團隊沒有在執行", "The team isn't running") }),
+        ...(run?.status === "paused" ? {} : { resume: tr("團隊沒有暫停", "The team isn't paused") }),
+        ...(run ? {} : { instruction: tr("團隊還沒有開始", "The team hasn't started yet") }),
       },
     };
   }
@@ -108,10 +159,10 @@ export class MockAdapter {
         const leader = this.snap.teams.find((t) => t.teamId === req.teamId)?.leaderMemberId;
         changes.push({ entityKind: "message", entityKey: `demo-msg-${rec.commandId}`, revision: 1, op: "upsert", value: {
           messageId: `demo-msg-${rec.commandId}`, teamId: req.teamId, runId: req.runId, threadId: "general", taskId: null,
-          from: { kind: "user", userId: "you", displayName: "你" }, toMemberIds: leader ? [leader] : [], kind: "instruction",
+          from: { kind: "user", userId: "you", displayName: tr("你", "You") }, toMemberIds: leader ? [leader] : [], kind: "instruction",
           text: req.payload.text, deliveryStatus: "delivered", artifactIds: [], occurredAt: applied.updatedAt, revision: 1, updatedAt: applied.updatedAt } });
       }
-      this.emit({ schemaVersion: 1, streamId: this.snap.streamId, eventId: `demo-${rec.commandId}`, seq: ++this.seq, occurredAt: applied.updatedAt, type: "command.updated", changes });
+      this.send({ schemaVersion: 1, streamId: this.snap.streamId, eventId: `demo-${rec.commandId}`, seq: ++this.seq, occurredAt: applied.updatedAt, type: "command.updated", changes });
     }, 1200);
     return { commandId: rec.commandId, clientRequestId: rec.clientRequestId, status: "accepted", acceptedAt: now };
   }

@@ -12,9 +12,7 @@ import { fill, setLang, tr, trf } from "./i18n";
  * Folders and files not moved to tr() yet. Each one leaves this list as it is
  * done. VITE_I18N_ALL=1 checks them anyway, to see what is left.
  */
-const PENDING: string[] = import.meta.env.VITE_I18N_ALL ? [] : [
-  "team/",
-];
+const PENDING: string[] = import.meta.env.VITE_I18N_ALL ? [] : [];
 
 /** Files whose strings are data, not interface text. */
 const SKIP = new Set(["core/i18n.ts"]);

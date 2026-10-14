@@ -2,6 +2,7 @@
 // run. Pure — the same input gives the same picture — and shared by the
 // company map and the team's office, so they can never disagree.
 
+import { trf } from "../../../core/i18n";
 import { calculateProgress, type Id, type Task, type WorkStatus } from "../contracts";
 import type { OfficeStore } from "../store";
 import { DESIGN, type BattleViewModel, type BossState, type ProjectionInput, type TaskInput } from "./contracts";
@@ -22,7 +23,7 @@ export function project(input: ProjectionInput): BattleViewModel {
   // The board's progress and these tasks must be the same count, or something is still arriving.
   const consistencyIssue =
     input.progress.total !== N || input.progress.completed !== D
-      ? `進度(${input.progress.completed}/${input.progress.total})和任務(${D}/${N})對不上,資料更新中`
+      ? trf("進度({p})和任務({t})對不上,資料更新中", "Progress ({p}) and tasks ({t}) don't match yet, updating", { p: `${input.progress.completed}/${input.progress.total}`, t: `${D}/${N}` })
       : null;
 
   let bossState: BossState;

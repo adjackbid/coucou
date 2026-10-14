@@ -7,6 +7,7 @@
 // crossed, no demo routes, no replay of what was already there when the scene
 // opened.
 
+import { trf } from "../../../core/i18n";
 import type { MemberSnapshot } from "../contracts";
 import type { OfficeStore } from "../store";
 import { agentKey, type AgentStatus, type OrbitAgent, type OrbitEvent, type OrbitRelation, type OrbitScene, type OrbitTeam } from "./contracts";
@@ -177,7 +178,9 @@ export class OrbitFeed {
           if (this.sent.has(key)) continue;
           this.sent.add(key);
           if (!this.primed || !fresh(a.updatedAt) || a.authorMemberId === hub || !ids.has(a.authorMemberId)) continue;
-          out.push({ id: `${key}:delivered`, type: "message_sent", messageId: key, fromAgentId: agentKey(team.teamId, a.authorMemberId), toAgentId: agentKey(team.teamId, hub), summary: `交付 · ${brief(a.name)}`, occurredAt: a.updatedAt });
+          const name = brief(a.name);
+          // Its words are read when shown, so the line under the scene follows the language.
+          out.push({ id: `${key}:delivered`, type: "message_sent", messageId: key, fromAgentId: agentKey(team.teamId, a.authorMemberId), toAgentId: agentKey(team.teamId, hub), get summary() { return trf("交付 · {name}", "Delivered · {name}", { name }); }, delivery: true, occurredAt: a.updatedAt });
         }
       }
     }
