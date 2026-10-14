@@ -533,12 +533,20 @@ export function knowledgePanel(team: string, leader: string, running: boolean, h
           : h("p", { class: "dim kb-empty", text: "還沒有文件。" }),
     h("p", { class: "hint", text: `只有 Leader:只有 ${leader || "Leader"} 讀得到。團隊共享:所有成員都讀得到。已經讀過的成員不會忘記內容。${running ? "團隊執行中:改動馬上生效。" : ""}` }),
   );
-  // Pasted pictures (or files) while the panel has the focus.
+  // Pasted pictures or files while the panel has the focus. Files copied in
+  // Explorer may reach the page as nothing it can read: their paths come
+  // from the clipboard itself.
   panel.addEventListener("paste", (e) => {
     const files = [...(e.clipboardData?.files ?? [])];
-    if (!files.length) return;
+    if (files.length) {
+      e.preventDefault();
+      void addFiles(team, files, host);
+      return;
+    }
+    const types = [...(e.clipboardData?.types ?? [])];
+    if (!IS_TAURI || types.includes("text/plain")) return;
     e.preventDefault();
-    void addFiles(team, files, host);
+    void Bridge.clipboardFiles().then((paths) => (paths.length ? addPaths(team, paths, host) : undefined));
   });
   return panel;
 }

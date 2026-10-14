@@ -1,7 +1,9 @@
 // "Choose a folder" and "Choose files": the system's own dialog, so a team's
 // work folder or its documents are picked, not typed. COM's file dialog wants
 // a thread of its own with an apartment; `pick` and `pick_files` are called
-// from one (see `pick_folder` and `pick_files` in lib.rs).
+// from one (see `pick_folder` and `pick_files` in lib.rs). And the files
+// copied in Explorer, for a paste: the page only sees what the clipboard
+// holds as data, not a copied file's path.
 
 use windows::core::HSTRING;
 use windows::Win32::Foundation::HWND;
@@ -27,6 +29,32 @@ pub fn pick(owner: Option<isize>, start: &str, title: &str) -> Result<Option<Str
         }
         result
     }
+}
+
+/// The files copied in Explorer (the clipboard's CF_HDROP), by their paths.
+/// Empty when the clipboard holds no files or cannot be opened.
+pub fn clipboard_files() -> Vec<String> {
+    use windows::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, IsClipboardFormatAvailable, OpenClipboard};
+    use windows::Win32::System::Ole::CF_HDROP;
+    use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
+    let format = CF_HDROP.0 as u32;
+    let mut out = Vec::new();
+    unsafe {
+        if IsClipboardFormatAvailable(format).is_err() || OpenClipboard(None).is_err() {
+            return out;
+        }
+        if let Ok(handle) = GetClipboardData(format) {
+            let drop = HDROP(handle.0);
+            for i in 0..DragQueryFileW(drop, u32::MAX, None) {
+                let len = DragQueryFileW(drop, i, None) as usize;
+                let mut buf = vec![0u16; len + 1];
+                DragQueryFileW(drop, i, Some(&mut buf));
+                out.push(String::from_utf16_lossy(&buf[..len]));
+            }
+        }
+        let _ = CloseClipboard();
+    }
+    out
 }
 
 /// Shows the dialog for one or more files. Empty when it was cancelled.

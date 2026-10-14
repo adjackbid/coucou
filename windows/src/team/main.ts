@@ -10,7 +10,7 @@
 // stream between pictures (`team-screen`) and are moved into each new one.
 
 import "./team.css";
-import { Bridge, IS_TAURI, onDragDrop, onEvent } from "../core/bridge";
+import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import type { AgentProfile, ModelChoice } from "../core/state";
 import { h, clear } from "../views/dom";
 import * as live from "./live";
@@ -21,11 +21,11 @@ import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
 import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCompanyFps, type Tempo } from "./office/battle/session";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
-import { onStep as secretaryStep, secretaryAttachPaths, secretaryName, secretaryPage, secretaryTitle, setSecretaryName, type SecretaryHost } from "./secretary";
+import { onStep as secretaryStep, secretaryAttachFiles, secretaryName, secretaryPage, secretaryTitle, setSecretaryDragging, setSecretaryName, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
 import { agentLabel, agentSource, agentsPage, baseOf, loadTeamAgents, sourceSwitch, teamAgents, teamProfiles, type AgentsHost } from "./agents";
-import { addPaths as addKnowledge, dropTarget, knowledgeChanged, knowledgePanel, setDragging, type KnowledgeHost } from "./knowledge";
+import { addFiles as addKnowledgeFiles, dropTarget, knowledgeChanged, knowledgePanel, setDragging, type KnowledgeHost } from "./knowledge";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
@@ -1883,6 +1883,60 @@ async function load() {
 }
 let firstLoad = true;
 
+/**
+ * Files dragged onto the window: into the knowledge base of the team being
+ * set up, to the secretary, or with the next instruction to the team on
+ * screen. Through the page's own HTML5 drag and drop (the window has no
+ * Tauri drop handler, see create_team_window): the files come as bytes.
+ * Anywhere else a dropped file is refused, never opened by the webview.
+ */
+function wireDrops() {
+  const carriesFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes("Files");
+  let depth = 0;
+  const show = (on: boolean) => {
+    const target = dropTarget(place, tab);
+    setDragging(on && target === "knowledge", knowledgeHost);
+    setSecretaryDragging(on && target === "secretary", secretaryHost);
+  };
+  window.addEventListener("dragenter", (e) => {
+    if (!carriesFiles(e)) return;
+    e.preventDefault();
+    if (depth++ === 0) show(true);
+  });
+  window.addEventListener("dragover", (e) => {
+    if (!carriesFiles(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = dropTarget(place, tab) ? "copy" : "none";
+  });
+  window.addEventListener("dragleave", (e) => {
+    if (!carriesFiles(e)) return;
+    if (--depth <= 0) {
+      depth = 0;
+      show(false);
+    }
+  });
+  window.addEventListener("drop", (e) => {
+    if (!carriesFiles(e)) return;
+    e.preventDefault();
+    depth = 0;
+    show(false);
+    const dropped = [...(e.dataTransfer?.files ?? [])];
+    if (!dropped.length) return;
+    const target = dropTarget(place, tab);
+    void Bridge.log(`team window: ${dropped.length} file(s) dropped on ${target ?? "nothing"}`);
+    if (target === "knowledge") {
+      const team = files.find((f) => f.file === selected)?.config?.id;
+      if (team) void addKnowledgeFiles(team, dropped, knowledgeHost);
+    } else if (target === "secretary") {
+      void secretaryAttachFiles(dropped, secretaryHost);
+    } else if (target === "attachment") {
+      const file = files.find((f) => f.file === selected);
+      const team = file?.config ? runs.get(file.config.id) : undefined;
+      if (team) for (const f of dropped) attachBlob(team.id, f);
+    }
+  });
+}
+
 async function start() {
   live.setSaid(said);
   await onEvent<Snapshot>("team-changed", (snap) => {
@@ -1896,31 +1950,7 @@ async function start() {
     // Typing in the form is not interrupted by a team at work behind it.
     if (tab === "monitor" || !unsaved) render();
   });
-  // Files dragged onto the window: into the knowledge base of the team being
-  // set up, or with the next instruction to the team on screen.
-  await onDragDrop((e) => {
-    const target = dropTarget(place, tab);
-    if (target === "knowledge") {
-      const team = files.find((f) => f.file === selected)?.config?.id;
-      if (!team) return;
-      if (e.type === "enter" || e.type === "over") setDragging(true, knowledgeHost);
-      else setDragging(false, knowledgeHost);
-      if (e.type === "drop" && e.paths?.length) void addKnowledge(team, e.paths, knowledgeHost);
-      return;
-    }
-    if (target === "secretary") {
-      if (e.type === "drop" && e.paths?.length) void secretaryAttachPaths(e.paths, secretaryHost);
-      return;
-    }
-    if (e.type !== "drop" || !e.paths?.length || target !== "attachment") return;
-    const file = files.find((f) => f.file === selected);
-    const team = file?.config ? runs.get(file.config.id) : undefined;
-    if (!team) return;
-    for (const path of e.paths) {
-      const name = path.split(/[\\/]/).pop() ?? path;
-      void attach(team.id, async () => ({ path: await Bridge.teamAttachPath(team.id, path), name, preview: null }));
-    }
-  });
+  wireDrops();
   // What the secretary is doing while it works on a request.
   await onEvent<SecretaryStep>("secretary-step", (step) => secretaryStep(step, secretaryHost));
   // Each member's screen, as it happens: no redraw, just the lines.

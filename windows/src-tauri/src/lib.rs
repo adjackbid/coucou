@@ -1072,6 +1072,16 @@ fn team_knowledge_open(team: String, doc: String) -> Result<(), String> {
     Command::new("explorer").arg(&path).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// The files copied in Explorer, for a paste in the Teamwork window.
+#[tauri::command]
+fn clipboard_files() -> Vec<String> {
+    let files = folder::clipboard_files();
+    if !files.is_empty() {
+        log::line(format!("paste: {} file(s) from the clipboard", files.len()));
+    }
+    files
+}
+
 /// The system's file dialog for one or more files, over the Teamwork window. Empty when cancelled.
 #[tauri::command]
 async fn pick_files(app: AppHandle, title: String) -> Result<Vec<String>, String> {
@@ -1707,6 +1717,10 @@ fn create_team_window(app: &AppHandle) {
         .transparent(true)
         .shadow(true)
         .visible(false)
+        // Files are dropped through the page's own HTML5 drag and drop, as on
+        // the island: WebView2 keeps the window OLE finds first in its own
+        // process, where wry's drop target does not reliably reach.
+        .disable_drag_drop_handler()
         .center();
     // Windows 10 has no DWM rounding and gets no acrylic: the page is told to
     // paint its own dark sheet with rounded corners.
@@ -1877,6 +1891,7 @@ pub fn run() {
             team_new,
             pick_folder,
             pick_files,
+            clipboard_files,
             team_knowledge_list,
             team_knowledge_add_path,
             team_knowledge_add_bytes,

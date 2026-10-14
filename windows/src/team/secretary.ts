@@ -74,6 +74,19 @@ export function secretaryAttachPaths(paths: string[], host: SecretaryHost) {
   );
 }
 
+/** Files are over the window while the secretary's page is open (or no longer). */
+let dragging = false;
+export function setSecretaryDragging(on: boolean, host: SecretaryHost) {
+  if (dragging === on) return;
+  dragging = on;
+  host.render();
+}
+
+/** Files dropped on the secretary's page, or pasted: they go with the next request. */
+export function secretaryAttachFiles(files: File[], host: SecretaryHost) {
+  return attachFiles(files, host);
+}
+
 function attachFiles(files: File[], host: SecretaryHost) {
   return attachAll(
     host,
@@ -453,15 +466,29 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
     requestAnimationFrame(() => (list.scrollTop = list.scrollHeight));
   }
 
-  const input = h("textarea", { class: "field sec-input", rows: "2", "data-key": "secretary-input", placeholder: "例如:各團隊現在怎麼樣?/幫我開一個做官網的團隊,資料夾 D:\\Code\\site", spellcheck: "false" }) as HTMLTextAreaElement;
+  const input = h("textarea", {
+    class: "field sec-input",
+    rows: "2",
+    "data-key": "secretary-input",
+    placeholder: dragging ? "放開就附加這些檔案" : "例如:各團隊現在怎麼樣?/幫我開一個做官網的團隊,資料夾 D:\\Code\\site(可以直接把檔案拖進來或貼上)",
+    spellcheck: "false",
+  }) as HTMLTextAreaElement;
   input.value = draft;
   input.addEventListener("input", () => (draft = input.value));
-  // A pasted picture (or file) goes with the request.
+  // A pasted picture or file goes with the request. Files copied in
+  // Explorer may reach the page as nothing it can read: their paths come
+  // from the clipboard itself.
   input.addEventListener("paste", (e) => {
     const files = [...(e.clipboardData?.files ?? [])];
-    if (!files.length) return;
+    if (files.length) {
+      e.preventDefault();
+      void attachFiles(files, host);
+      return;
+    }
+    const types = [...(e.clipboardData?.types ?? [])];
+    if (!IS_TAURI || types.includes("text/plain")) return;
     e.preventDefault();
-    void attachFiles(files, host);
+    void Bridge.clipboardFiles().then((paths) => (paths.length ? secretaryAttachPaths(paths, host) : undefined));
   });
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
@@ -476,7 +503,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
     list,
     h(
       "div",
-      { class: "sec-composer" },
+      { class: `sec-composer${dragging ? " over" : ""}` },
       uploadProblems.length ? h("div", { class: "problem", role: "alert" }, ...uploadProblems.map((p) => h("div", { text: p }))) : null,
       ...heldKey.map((f) =>
         h(

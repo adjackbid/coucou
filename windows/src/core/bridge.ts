@@ -299,6 +299,8 @@ export const Bridge = {
   teamNew: () => callOrThrow<string>("team_new"),
   /** The system's folder dialog; null when cancelled. */
   pickFolder: (start: string, title: string) => callOrThrow<string | null>("pick_folder", { start, title }),
+  /** The files copied in Explorer, by their paths (the page sees only what a copy holds as data). */
+  clipboardFiles: () => call<string[]>("clipboard_files").then((p) => p ?? []),
   /** The system's file dialog, several files at once; empty when cancelled. */
   pickFiles: (title: string) => callOrThrow<string[]>("pick_files", { title }),
   /** A team's knowledge base: its documents and limits. */
