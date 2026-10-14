@@ -246,6 +246,13 @@ pub fn team_configs_dir() -> PathBuf {
     config_dir().join("teams")
 }
 
+/// %APPDATA%\Coucou\team-knowledge — one folder per team, holding the
+/// documents the person gave it (team::knowledge). Not inside `teams`, where
+/// every .json is read as a team file.
+pub fn team_knowledge_dir() -> PathBuf {
+    config_dir().join("team-knowledge")
+}
+
 /// %LOCALAPPDATA%\Coucou\teams — one folder per team, holding its log.
 pub fn team_logs_dir() -> PathBuf {
     local_dir().join("teams")

@@ -9,6 +9,7 @@
 //   store.rs         the events on disk, one line each, replayed at start
 //   tools.rs         what a member can say and do: the eight team tools
 //   brief.rs         the words a member is given: its role, a task, a nudge
+//   knowledge.rs     the documents the person gave the team, and who may read them
 //   mcp.rs           the tools as an MCP server, behind coucou-team-mcp.exe
 //   orchestrator.rs  who gets the next turn, and what it is told
 //   screen.rs        what each member's agent is doing, for the live screens
@@ -17,6 +18,7 @@
 // what an agent wrote in passing.
 
 pub mod brief;
+pub mod knowledge;
 pub mod mcp;
 pub mod orchestrator;
 pub mod screen;
