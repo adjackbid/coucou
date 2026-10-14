@@ -10,6 +10,7 @@ import { onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
 import { State } from "../core/state";
 import type { Snapshot } from "../team/types";
+import { tr, trf } from "../core/i18n";
 import type { Island } from "./island";
 
 /** What each team last looked like, to tell news from a repeat. */
@@ -43,15 +44,21 @@ export function registerTeamHandlers(island: Island) {
 /** One line for the ticker: how far the team is, and who needs the person. */
 function summary(snap: Snapshot): string {
   const names = (status: string) => snap.members.filter((m) => m.status === status).map((m) => m.name);
-  const progress = snap.total ? `${snap.done}/${snap.total} done` : "planning";
-  if (snap.status === "finished") return `Finished · ${snap.done}/${snap.total} tasks`;
+  const join = (list: string[]) => list.join(tr("、", ", "));
+  const { done, total } = snap;
+  const p = total ? trf("完成 {done}/{total}", "{done}/{total} done", { done, total }) : tr("規劃中", "planning");
+  if (snap.status === "finished") return trf("完成了 · {done}/{total} 個任務", "Finished · {done}/{total} tasks", { done, total });
   const waiting = names("waitingYou");
-  if (waiting.length) return `${progress} · ${waiting.join(", ")} ${waiting.length > 1 ? "need" : "needs"} you`;
+  if (waiting.length) {
+    return waiting.length > 1
+      ? trf("{p} · {names} 在等你", "{p} · {names} need you", { p, names: join(waiting) })
+      : trf("{p} · {names} 在等你", "{p} · {names} needs you", { p, names: join(waiting) });
+  }
   const lost = names("lost");
-  if (lost.length) return `${progress} · ${lost.join(", ")} went quiet`;
-  if (snap.status === "paused") return `Paused · ${progress}`;
+  if (lost.length) return trf("{p} · {names} 沒有回應了", "{p} · {names} went quiet", { p, names: join(lost) });
+  if (snap.status === "paused") return trf("已暫停 · {p}", "Paused · {p}", { p });
   const working = names("working");
-  return working.length ? `${progress} · ${working.join(", ")} working` : progress;
+  return working.length ? trf("{p} · {names} 工作中", "{p} · {names} working", { p, names: join(working) }) : p;
 }
 
 function handle(island: Island, snap: Snapshot) {

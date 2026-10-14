@@ -6,6 +6,7 @@ import { ICONS } from "./icons";
 import { Bridge, type AcpUpdate, type ChatContext } from "../core/bridge";
 import { Sound } from "../core/sound";
 import { State, activeAgentId, type ChatMessage } from "../core/state";
+import { tr, trf } from "../core/i18n";
 import type { ViewHost } from "./views";
 
 let nextId = 1;
@@ -64,7 +65,7 @@ export function onAcpUpdate(update: AcpUpdate["update"]) {
       break;
     }
     case "tool_call": {
-      const line = `⚙ ${update.title ?? update.kind ?? "tool"}`;
+      const line = `⚙ ${update.title ?? update.kind ?? tr("工具", "tool")}`;
       // The streaming reply stays last so chunks keep landing in it.
       const streaming = last?.kind === "streaming" ? State.chatHistory.pop() : undefined;
       State.chatHistory.push({ id: 1e9 + toolId++, role: "assistant", content: line, kind: "tool" });
@@ -91,14 +92,14 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   const input = h("input", {
     type: "text",
     class: "chat-input",
-    placeholder: "Ask me anything…",
+    placeholder: tr("問我任何事…", "Ask me anything…"),
     spellcheck: "false",
   }) as HTMLInputElement;
-  const send = h("button", { class: "send-btn", title: "Send" }, svg(ICONS.arrowUp, 11));
+  const send = h("button", { class: "send-btn", title: tr("送出", "Send") }, svg(ICONS.arrowUp, 11));
   // Which provider the next question goes to; a click moves to the next one.
   // Spelled out here because a filled-in card in Settings is not necessarily
   // the one in use, and "builder error" from the wrong endpoint says nothing.
-  const provider = h("button", { class: "provider-btn", title: "Switch provider" });
+  const provider = h("button", { class: "provider-btn", title: tr("切換聊天模型", "Switch provider") });
   provider.addEventListener("click", () => {
     const list = targets();
     if (list.length < 2) return;
@@ -110,7 +111,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   });
   // A fresh conversation: the history, the file and the context all go, so a
   // long chat does not drag its whole past into every next question.
-  const fresh = h("button", { class: "chat-new", title: "Start a new conversation", text: "New" });
+  const fresh = h("button", { class: "chat-new", title: tr("開始新的對話", "Start a new conversation"), text: tr("新對話", "New") });
   fresh.addEventListener("click", () => {
     if (sending) return;
     State.chatHistory = [];
@@ -129,7 +130,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   const el = h(
     "div",
     { class: "view" },
-    h("div", { class: "card wash chat-card" }, h("div", { class: "chat-body" }, chipRow, log, bar)),
+    h("div", { class: "card wash chat-card" }, h("div", { class: "chat-body" }, chipRow, log, bar)), // i18n-ok: class names
   );
   (el.querySelector(".card") as HTMLElement).style.setProperty("--wash", "rgba(99,102,241,0.5)");
 
@@ -227,16 +228,16 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         log.scrollTop = log.scrollHeight;
       }
 
-      input.placeholder = State.chatHistory.length === 0 ? "Ask me anything…" : "Continue…";
+      input.placeholder = State.chatHistory.length === 0 ? tr("問我任何事…", "Ask me anything…") : tr("繼續問…", "Continue…");
       input.disabled = sending;
       fresh.style.display = State.chatHistory.length > 0 || State.droppedFile ? "" : "none";
 
       const list = targets();
       const active = list.find((t) => t.id === State.settings.activeProvider) ?? list[0];
-      provider.textContent = active ? active.name : "No provider";
+      provider.textContent = active ? active.name : tr("沒有聊天模型", "No provider");
       provider.title = active
-        ? `${active.name}${list.length > 1 ? " — click to switch" : ""}`
-        : "Add a provider in Settings";
+        ? list.length > 1 ? trf("{name} — 按一下切換", "{name} — click to switch", { name: active.name }) : active.name
+        : tr("到設定新增聊天模型", "Add a provider in Settings");
     },
     focus() {
       input.focus();

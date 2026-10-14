@@ -8,16 +8,23 @@ import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { SOURCE_LABELS, State, isAgentSource, type AgentTask } from "../core/state";
 import { Bridge } from "../core/bridge";
+import { date as fmtDate, time as fmtTime, tr, trf } from "../core/i18n";
 
 /** Same shape as the Swift `timeAgo` computed properties. */
 export function timeAgo(value: unknown): string {
   const date = typeof value === "number" ? new Date(value) : new Date(String(value));
   const diff = (Date.now() - date.getTime()) / 1000;
   if (!Number.isFinite(diff)) return "";
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-  return `${Math.floor(diff / 86400)}d`;
+  if (diff < 60) return tr("剛剛", "just now");
+  if (diff < 3600) return trf("{n} 分", "{n}m", { n: Math.floor(diff / 60) });
+  if (diff < 86400) return trf("{n} 小時", "{n}h", { n: Math.floor(diff / 3600) });
+  return trf("{n} 天", "{n}d", { n: Math.floor(diff / 86400) });
+}
+
+/** "5m ago"; "just now" as it is. */
+function timeAgoLong(value: unknown): string {
+  const t = timeAgo(value);
+  return t === tr("剛剛", "just now") ? t : trf("{t}前", "{t} ago", { t });
 }
 
 function header(color: string, name: string, kind: string, extra?: Node): HTMLElement {
@@ -60,8 +67,10 @@ function idleCard(task: AgentTask, openSettings: (id?: string) => void): HTMLEle
   // An agent pill is about hooks, not a key — the macOS wording would be
   // misleading here.
   const agent = isAgentSource(task.source);
-  const missing = agent ? "Hooks not installed" : "Key not configured";
-  const label = error ?? (configured ? (agent ? "Hooks installed · waiting for a session" : "Connected · loading…") : missing);
+  const missing = agent ? tr("尚未連結", "Hooks not installed") : tr("還沒設定金鑰", "Key not configured");
+  const label = error ?? (configured
+    ? (agent ? tr("已連結 · 等待工作階段", "Hooks installed · waiting for a session") : tr("已連結 · 載入中…", "Connected · loading…"))
+    : missing);
   const statusColor = error || !configured ? "#F4505E" : "#22C55E";
 
   const actions = h("div", { class: "int-actions" });
@@ -70,7 +79,7 @@ function idleCard(task: AgentTask, openSettings: (id?: string) => void): HTMLEle
       h("button", {
         class: "link-btn",
         style: `color:${task.color}b3`,
-        text: task.source === "claudeCode" ? "Open Visual Studio Code" : "Open the last folder",
+        text: task.source === "claudeCode" ? tr("打開 Visual Studio Code", "Open Visual Studio Code") : tr("打開上次的資料夾", "Open the last folder"),
         onclick: () => void Bridge.openInVSCode(task.sessionCwd ?? null),
       }),
     );
@@ -79,7 +88,7 @@ function idleCard(task: AgentTask, openSettings: (id?: string) => void): HTMLEle
       h("button", {
         class: "link-btn",
         style: `color:${task.color}d9`,
-        text: "Open n8n",
+        text: tr("打開 n8n", "Open n8n"),
         onclick: () => void Bridge.openN8n(),
       }),
     );
@@ -88,7 +97,7 @@ function idleCard(task: AgentTask, openSettings: (id?: string) => void): HTMLEle
       h("button", {
         class: "link-btn",
         style: `color:${task.color}d9`,
-        text: `Open ${task.name}`,
+        text: trf("打開 {name}", "Open {name}", { name: task.name }),
         onclick: () => void Bridge.openUrl(OPEN_URLS[task.id]),
       }),
     );
@@ -98,20 +107,20 @@ function idleCard(task: AgentTask, openSettings: (id?: string) => void): HTMLEle
       h("button", {
         class: "link-btn",
         style: `color:${task.color}d9`,
-        text: "Refresh",
+        text: tr("重新整理", "Refresh"),
         onclick: () => void Bridge.refreshIntegration(task.id),
       }),
     );
   } else if (!configured) {
     actions.append(
-      h("button", { class: "link-btn", style: "color:#8e939c", text: "Settings…", onclick: () => openSettings(task.id) }),
+      h("button", { class: "link-btn", style: "color:#8e939c", text: tr("設定…", "Settings…"), onclick: () => openSettings(task.id) }),
     );
   }
 
   return h(
     "div",
     { class: "int-card" },
-    header(task.color, task.id === "integration_claude" ? "VS Code" : task.name, agent ? SOURCE_LABELS[task.source] : "Integration"),
+    header(task.color, task.id === "integration_claude" ? "VS Code" : task.name, agent ? SOURCE_LABELS[task.source] : tr("整合", "Integration")),
     h("div", { class: "int-status" }, dot(statusColor, 5), h("span", { text: label })),
     actions,
   );
@@ -129,7 +138,7 @@ function vercelCard(onDetail: () => void): HTMLElement {
     if (i === 0) {
       const more = h(
         "button",
-        { class: "int-more", title: "Details", onclick: onDetail },
+        { class: "int-more", title: tr("詳細資訊", "Details"), onclick: onDetail },
         svg(ICONS.ellipsis, 8),
       );
       rows.append(listRow(accent, true, name, ago, more));
@@ -137,19 +146,19 @@ function vercelCard(onDetail: () => void): HTMLElement {
       rows.append(listRow(accent, false, name, ago));
     }
   });
-  return h("div", { class: "int-card" }, header("#7C5CFF", "Vercel", "Deployments"), rows);
+  return h("div", { class: "int-card" }, header("#7C5CFF", "Vercel", tr("部署", "Deployments")), rows);
 }
 
 function vercelDetail(onBack: () => void): HTMLElement {
   const d = arr("integration_vercel", "deployments")[0] ?? {};
   const success = d.state === "READY";
   const accent = success ? "#22C55E" : "#F4505E";
-  const status = success ? "Ready" : d.state === "CANCELED" ? "Canceled" : "Error";
+  const status = success ? tr("就緒", "Ready") : d.state === "CANCELED" ? tr("已取消", "Canceled") : tr("錯誤", "Error");
   const body = h("div", { class: "int-detail-body" });
   if (d.commitMessage) body.append(h("div", { class: "int-commit", text: String(d.commitMessage) }));
   const meta = h("div", { class: "int-meta" });
   if (d.branch) meta.append(h("span", { text: String(d.branch) }));
-  meta.append(h("span", { text: `${timeAgo(d.createdAt)} ago` }));
+  meta.append(h("span", { text: timeAgoLong(d.createdAt) }));
   body.append(meta);
   if (d.url) {
     body.append(
@@ -168,7 +177,7 @@ function vercelDetail(onBack: () => void): HTMLElement {
       { class: "int-detail-head" },
       h("button", { class: "int-back", onclick: onBack }, svg(ICONS.chevronLeft, 10, { stroke: 2.4 })),
       dot(accent, 6),
-      h("b", { text: String(d.projectName ?? "Deployment") }),
+      h("b", { text: String(d.projectName ?? tr("部署", "Deployment")) }),
       h("span", { class: "int-badge", style: `color:${accent};background:${accent}24`, text: status }),
     ),
     body,
@@ -197,7 +206,7 @@ function resendCard(): HTMLElement {
     if (i === 0 && e.subject) cells.push(h("span", { class: "int-sub", text: String(e.subject) }));
     rows.append(listRow(accent, i === 0, ...cells));
   });
-  return h("div", { class: "int-card" }, header("#22C55E", "Resend", "Emails", extra), rows);
+  return h("div", { class: "int-card" }, header("#22C55E", "Resend", tr("電子郵件", "Emails"), extra), rows);
 }
 
 // ── GitHub ────────────────────────────────────────────────────────────────────
@@ -220,12 +229,12 @@ function githubCard(): HTMLElement {
   return h(
     "div",
     { class: "int-card" },
-    header("#F4505E", "GitHub", "Overview"),
+    header("#F4505E", "GitHub", tr("總覽", "Overview")),
     h(
       "div",
       { class: "int-stats" },
-      statRow(ICONS.star, "#F5A524", "Total stars", fmt(stars)),
-      statRow(ICONS.stack, "#6B7079", "Repositories", String(repos)),
+      statRow(ICONS.star, "#F5A524", tr("星星總數", "Total stars"), fmt(stars)),
+      statRow(ICONS.stack, "#6B7079", tr("儲存庫", "Repositories"), String(repos)),
     ),
   );
 }
@@ -245,7 +254,7 @@ function stripeCard(): HTMLElement {
         "div",
         { class: "int-row" },
         dot(accent, 5),
-        h("span", { class: "int-name", text: String(p.description ?? "Payment") }),
+        h("span", { class: "int-name", text: String(p.description ?? tr("付款", "Payment")) }),
         h("span", {
           class: "int-amount",
           style: "color:#22c55e",
@@ -258,7 +267,7 @@ function stripeCard(): HTMLElement {
   return h(
     "div",
     { class: "int-card" },
-    header("#0570DE", "Stripe", "Payments"),
+    header("#0570DE", "Stripe", tr("付款", "Payments")),
     h("div", { class: "int-balance" }, h("span", { text: balance }), h("i", { text: currency })),
     rows,
   );
@@ -281,12 +290,12 @@ function notionCard(): HTMLElement {
         p.emoji
           ? h("span", { class: "int-emoji", text: String(p.emoji) })
           : h("i", { class: "int-emoji" }, svg(ICONS.doc, 9)),
-        h("span", { class: "int-name", text: String(p.title ?? "Untitled") }),
+        h("span", { class: "int-name", text: String(p.title ?? tr("未命名", "Untitled")) }),
         h("span", { class: "int-ago", text: timeAgo(p.lastEditedAt) }),
       ),
     );
   }
-  return h("div", { class: "int-card" }, header("#E8E8E8", "Notion", "Recent"), rows);
+  return h("div", { class: "int-card" }, header("#E8E8E8", "Notion", tr("最近", "Recent")), rows);
 }
 
 // ── Cal.com ───────────────────────────────────────────────────────────────────
@@ -297,23 +306,23 @@ function calcomCard(): HTMLElement {
     .sort((a, b) => new Date(String(a.start)).getTime() - new Date(String(b.start)).getTime());
   const rows = h("div", { class: "int-rows tight" });
   if (bookings.length === 0) {
-    rows.append(h("div", { class: "int-empty", text: "No calls scheduled" }));
+    rows.append(h("div", { class: "int-empty", text: tr("沒有排定的會議", "No calls scheduled") }));
   }
   for (const b of bookings.slice(0, 3)) {
     const when = new Date(String(b.start));
-    const day = when.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" });
-    const time = when.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    const day = fmtDate(when, { day: "2-digit", month: "2-digit" });
+    const time = fmtTime(when, { hour: "2-digit", minute: "2-digit" });
     rows.append(
       h(
         "div",
         { class: "int-row" },
         dot("#C9956A", 4),
         h("span", { class: "int-time", text: `${day} ${time}` }),
-        h("span", { class: "int-name", text: String(b.title ?? "Meeting") }),
+        h("span", { class: "int-name", text: String(b.title ?? tr("會議", "Meeting")) }),
       ),
     );
   }
-  return h("div", { class: "int-card" }, header("#C9956A", "Cal.com", "Schedule"), rows);
+  return h("div", { class: "int-card" }, header("#C9956A", "Cal.com", tr("行程", "Schedule")), rows);
 }
 
 // ── n8n ───────────────────────────────────────────────────────────────────────
@@ -326,7 +335,7 @@ function n8nCard(task: AgentTask, onDetail: () => void, openSettings: () => void
   return h(
     "div",
     { class: "int-card" },
-    header("#F29B38", "n8n", "Workflow"),
+    header("#F29B38", "n8n", tr("工作流程", "Workflow")),
     h(
       "div",
       { class: "int-actions" },
@@ -338,7 +347,7 @@ function n8nCard(task: AgentTask, onDetail: () => void, openSettings: () => void
           onclick: onDetail,
         },
         dot(accent, 5),
-        h("span", { class: "int-name", text: task.steps[0] ?? "Workflow" }),
+        h("span", { class: "int-name", text: task.steps[0] ?? tr("工作流程", "Workflow") }),
         svg(ICONS.ellipsis, 8),
       ),
     ),
@@ -357,18 +366,18 @@ function n8nDetail(task: AgentTask, onBack: () => void): HTMLElement {
       { class: "int-detail-head" },
       h("button", { class: "int-back", onclick: onBack }, svg(ICONS.chevronLeft, 10, { stroke: 2.4 })),
       dot(accent, 6),
-      h("b", { text: task.steps[0] ?? "Workflow" }),
+      h("b", { text: task.steps[0] ?? tr("工作流程", "Workflow") }),
       h("span", {
         class: "int-badge",
         style: `color:${accent};background:${accent}24`,
-        text: success ? "Success" : "Failed",
+        text: success ? tr("成功", "Success") : tr("失敗", "Failed"),
       }),
     ),
     detail
       ? h("pre", { class: "int-detail-text", text: detail })
       : h("div", {
           class: "int-status",
-          text: success ? "Completed successfully." : "No error details available.",
+          text: success ? tr("順利完成。", "Completed successfully.") : tr("沒有錯誤細節。", "No error details available."),
         }),
   );
 }

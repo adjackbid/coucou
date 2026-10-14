@@ -12,6 +12,7 @@ import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
 import { buildPrompt } from "./chat";
 import { buildChoose, buildUpload, buildUploading } from "./upload";
 import { renderIntegrationCard, type IntegrationCardHooks } from "./integrations";
+import { tr, trf } from "../core/i18n";
 
 export interface ViewActions {
   setView(v: IslandViewName): void;
@@ -106,9 +107,9 @@ const TEAM_MARK = `<svg viewBox="0 0 30 21" width="30" height="21" aria-hidden="
 </svg>`;
 
 export function buildHeader(actions: ViewActions): ViewHost {
-  const tabHome = h("button", { class: "tab", title: "Overview", onclick: () => go("overview") }, svg(ICONS.house, 13));
-  const tabChat = h("button", { class: "tab", title: "Ask", onclick: () => go("prompt") }, svg(ICONS.bubble, 13));
-  const tabDrop = h("button", { class: "tab", title: "Drop", onclick: () => go("upload") }, svg(ICONS.plus, 13));
+  const tabHome = h("button", { class: "tab", title: tr("總覽", "Overview"), onclick: () => go("overview") }, svg(ICONS.house, 13));
+  const tabChat = h("button", { class: "tab", title: tr("聊天", "Ask"), onclick: () => go("prompt") }, svg(ICONS.bubble, 13));
+  const tabDrop = h("button", { class: "tab", title: tr("放檔案", "Drop"), onclick: () => go("upload") }, svg(ICONS.plus, 13));
 
   // Teamwork is a window of its own, not a view of the island: its button
   // is the one mark in colour up here — three small Mochis side by side.
@@ -122,10 +123,10 @@ export function buildHeader(actions: ViewActions): ViewHost {
       actions.openTeamWindow();
     },
   });
-  const gearBtn = h("button", { title: "Settings", onclick: () => go("settings") }, svg(ICONS.gear, 14));
-  const soundBtn = h("button", { title: "Mute", onclick: () => actions.toggleSound() }, svg(ICONS.speakerOn, 14));
+  const gearBtn = h("button", { title: tr("設定", "Settings"), onclick: () => go("settings") }, svg(ICONS.gear, 14));
+  const soundBtn = h("button", { title: tr("靜音", "Mute"), onclick: () => actions.toggleSound() }, svg(ICONS.speakerOn, 14));
   // Always there, on every view: the island must never have to be waited out.
-  const closeBtn = h("button", { title: "Close", onclick: () => actions.collapse() }, svg(ICONS.xmark, 12));
+  const closeBtn = h("button", { title: tr("關閉", "Close"), onclick: () => actions.collapse() }, svg(ICONS.xmark, 12));
 
   function go(v: IslandViewName) {
     actions.blip();
@@ -166,12 +167,12 @@ function buildOverview(actions: ViewActions): ViewHost {
   const leftBody = h("div", { class: "left-body" });
   const jump = h(
     "button",
-    { class: "icon-btn jump", title: "Open", onclick: () => actions.openTarget() },
+    { class: "icon-btn jump", title: tr("打開", "Open"), onclick: () => actions.openTarget() },
     svg(ICONS.arrowUpRight, 8),
   );
   const left = card(null, leftBody, jump);
   // The ticker shows one line at a time; the card opens the whole session.
-  left.title = "Show the whole conversation";
+  left.title = tr("顯示完整對話", "Show the whole conversation");
   left.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("button")) return;
     const task = State.focusTask;
@@ -303,7 +304,7 @@ function buildOverview(actions: ViewActions): ViewHost {
  */
 function sessionCard(task: AgentTask, actions: ViewActions): HTMLElement {
   const reply = [...task.transcript].reverse().find((e) => e.role === "assistant")?.text
-    ?? task.steps.at(-1) ?? "Finished.";
+    ?? task.steps.at(-1) ?? tr("完成了。", "Finished.");
   const body = h("div", { class: "session-card" },
     createMiniBot(task, 40),
     h("div", { class: "session-text" },
@@ -311,14 +312,14 @@ function sessionCard(task: AgentTask, actions: ViewActions): HTMLElement {
         dot(task.color, 7),
         h("span", { class: "n", text: task.name }),
         // The colour and the Mochi already say which agent; the width is short.
-        h("span", { text: "finished" }),
+        h("span", { text: tr("完成了", "finished") }),
       ),
       h("div", { class: "session-reply", title: SOURCE_LABELS[task.source], text: reply.replace(/\s+/g, " ").trim() }),
     ),
   );
   const el = card("green", body);
   el.classList.add("session-card-shell");
-  el.title = "Show this session";
+  el.title = tr("顯示這個工作階段", "Show this session");
   el.addEventListener("click", () => actions.setFocus(task.id));
   return el;
 }
@@ -385,11 +386,11 @@ function buildEmpty(actions: ViewActions): ViewHost {
     h(
       "div",
       { style: "display:flex;flex-direction:column;gap:5px" },
-      h("div", { class: "title", text: "Nothing running right now." }),
-      h("div", { class: "sub", text: "Drop a file or window, or ask me anything." }),
+      h("div", { class: "title", text: tr("目前沒有在跑的工作。", "Nothing running right now.") }),
+      h("div", { class: "sub", text: tr("拖一個檔案或視窗進來，或問我任何事。", "Drop a file or window, or ask me anything.") }),
     ),
     h("div", { class: "grow" }),
-    btn("Ask Claude", "primary", () => actions.setView("prompt")),
+    btn(tr("問 Claude", "Ask Claude"), "primary", () => actions.setView("prompt")),
   );
   return { el: h("div", { class: "view" }, card(null, body)), sync() {} };
 }
@@ -422,7 +423,7 @@ function buildApproval(actions: ViewActions): ViewHost {
     sync() {
       const req = State.pendingApproval;
       clear(who);
-      who.append(agentWho(State.focusTask, "needs permission"));
+      who.append(agentWho(State.focusTask, tr("需要你允許", "needs permission")));
       // The whole point of approving here rather than in the terminal: the
       // headline is the file, the URL or the pattern being authorised, and the
       // body is the rest of the request in full — the command, the content a
@@ -444,14 +445,14 @@ function buildApproval(actions: ViewActions): ViewHost {
         body.style.display = sections.length ? "" : "none";
         body.scrollTop = 0;
         note.textContent = req?.truncated
-          ? "Too long to show in full here. The terminal has all of it."
+          ? tr("太長了，這裡放不下全部。終端機裡有完整內容。", "Too long to show in full here. The terminal has all of it.")
           : "";
         note.style.display = req?.truncated ? "" : "none";
         // Another request: back to its command; its explanation, if asked for, is one click away.
         explained.style.display = "none";
         State.approvalExplaining = false;
         el.classList.remove("explaining");
-        setAskLabel("Ask");
+        setAskLabel(tr("解讀", "Ask"));
       }
       // Built once per shape. Rebuilding the buttons between a mouse-down and a
       // mouse-up would swallow the click, and the shape only changes with the
@@ -472,14 +473,14 @@ function buildApproval(actions: ViewActions): ViewHost {
           el.classList.remove("explaining");
           explained.style.display = "none";
           body.style.display = (r.sections ?? []).length ? "" : "none";
-          setAskLabel("Ask");
+          setAskLabel(tr("解讀", "Ask"));
           actions.relayout();
           return;
         }
         body.style.display = "none";
         explained.style.display = "";
         el.classList.add("explaining");
-        setAskLabel("指令");
+        setAskLabel(tr("指令", "Command"));
         const cached = answers.get(r.requestId);
         if (cached) {
           explained.textContent = cached;
@@ -489,10 +490,16 @@ function buildApproval(actions: ViewActions): ViewHost {
         }
         const pending = actions.explain(r.requestId);
         if (!pending) {
-          explained.textContent = "這張卡片來自島上的代理聊天連線,秘書目前還不能解讀這一種。";
+          explained.textContent = tr(
+            "這張卡片來自瀏海島聊天啟動的 agent，秘書目前還不能解讀這一種。",
+            "This card comes from an agent the island's chat started; the secretary can't explain this kind yet.",
+          );
           return;
         }
-        explained.textContent = "秘書解讀中…(讀取完整指令、工作資料夾與這個工作階段最近的紀錄)";
+        explained.textContent = tr(
+          "秘書解讀中…（讀取完整指令、工作資料夾與這個工作階段最近的紀錄）",
+          "The secretary is reading it… (the full command, the working folder and this session's recent history)",
+        );
         const id = r.requestId;
         pending.then(
           (text) => {
@@ -500,19 +507,19 @@ function buildApproval(actions: ViewActions): ViewHost {
             if (State.pendingApproval?.requestId === id) explained.textContent = text;
           },
           (e) => {
-            if (State.pendingApproval?.requestId === id) explained.textContent = `秘書無法解讀:${String(e).replace(/^Error:\s*/, "")}`;
+            if (State.pendingApproval?.requestId === id) explained.textContent = trf("秘書無法解讀：{e}", "The secretary couldn't explain it: {e}", { e: String(e).replace(/^Error:\s*/, "") });
           },
         );
       };
-      askBtn = btn("Ask", "secondary", ask);
+      askBtn = btn(tr("解讀", "Ask"), "secondary", ask);
       row.append(
-        btn("Deny", "secondary", () => actions.decide("deny"), "N"),
+        btn(tr("拒絕", "Deny"), "secondary", () => actions.decide("deny"), "N"),
         askBtn,
         shape === "terminal"
-          ? btn("Ask in terminal", "primary", () => actions.decide("terminal"))
-          : btn("Allow", "primary", () => actions.decide("allow"), "Y"),
+          ? btn(tr("交給終端機", "Ask in terminal"), "primary", () => actions.decide("terminal"))
+          : btn(tr("允許", "Allow"), "primary", () => actions.decide("allow"), "Y"),
       );
-      if (more) row.append(btn(`Allow all ${more + 1}`, "secondary", () => actions.decide("allow-all")));
+      if (more) row.append(btn(trf("全部允許（{n} 個）", "Allow all {n}", { n: more + 1 }), "secondary", () => actions.decide("allow-all")));
     },
   };
 }
@@ -533,7 +540,7 @@ function buildQuestion(actions: ViewActions): ViewHost {
   const choices = h("div", { class: "q-choices" });
   const note = h("div", { class: "sub" });
   const input = h("input", { type: "text", class: "chat-input", spellcheck: "false" }) as HTMLInputElement;
-  const send = h("button", { class: "send-btn", title: "Type it into the terminal" }, svg(ICONS.arrowUp, 11));
+  const send = h("button", { class: "send-btn", title: tr("打進終端機", "Type it into the terminal") }, svg(ICONS.arrowUp, 11));
   const bar = h("div", { class: "chat-bar q-bar" }, input, send);
   const el = h("div", { class: "view" }, card("cyan", stack(116, 16, who, title, fieldLabel, choices, bar, note)));
   let key = "";
@@ -562,11 +569,13 @@ function buildQuestion(actions: ViewActions): ViewHost {
       const field = q?.fields[q.current] ?? null;
       const live = !!task?.pty;
       clear(who);
-      who.append(agentWho(task, "is asking you"));
-      title.textContent = q?.text ?? task?.steps.at(-1) ?? "Needs an answer.";
+      who.append(agentWho(task, tr("在問你", "is asking you")));
+      title.textContent = q?.text ?? task?.steps.at(-1) ?? tr("需要你回答。", "Needs an answer.");
       input.placeholder = field?.title
-        ? `Type your own answer for "${field.title}"…`
-        : `Type an answer into ${task?.name ?? "the"} terminal…`;
+        ? trf("自己輸入「{title}」的答案…", "Type your own answer for \"{title}\"…", { title: field.title })
+        : task?.name
+          ? trf("在 {name} 的終端機輸入答案…", "Type an answer into {name} terminal…", { name: task.name })
+          : tr("在終端機輸入答案…", "Type an answer into the terminal…");
       // Rebuilt only when the question or its field changes — never between
       // a mouse-down and its mouse-up, which would swallow the click.
       const next = [task?.id, q?.text, q?.current, field?.choices.join("|"), q?.answered ?? "", live].join("~");
@@ -576,7 +585,7 @@ function buildQuestion(actions: ViewActions): ViewHost {
       const n = q?.fields.length ?? 0;
       const prefix = q && n > 1 ? `${q.current + 1}/${n} · ` : "";
       fieldLabel.textContent = field && (n > 1 || field.title)
-        ? `${prefix}${field.title}${field.required ? "" : " (optional)"}`
+        ? `${prefix}${field.title}${field.required ? "" : tr("（選填）", " (optional)")}`
         : "";
       fieldLabel.style.display = fieldLabel.textContent && !q?.answered ? "" : "none";
       clear(choices);
@@ -588,14 +597,17 @@ function buildQuestion(actions: ViewActions): ViewHost {
       };
       if (field && !q?.answered) {
         field.choices.forEach((c, i) => chip(c, { choice: i }));
-        if (!field.required && field.choices.length === 0) chip("Skip", { skip: true });
+        if (!field.required && field.choices.length === 0) chip(tr("略過", "Skip"), { skip: true });
       }
       choices.style.display = choices.childElementCount ? "" : "none";
       bar.style.display = live && !q?.answered ? "" : "none";
       note.textContent = q?.answered
-        ? `Sent "${q.answered}" — waiting for the terminal.`
+        ? trf("已送出「{answer}」，等終端機接手。", "Sent \"{answer}\" — waiting for the terminal.", { answer: q.answered })
         : live ? ""
-        : "Answer in the terminal — or start it through coucou-pty (Settings) to answer here.";
+        : tr(
+          "請在終端機裡回答，或透過 coucou-pty 啟動它（見設定），就能在這裡回答。",
+          "Answer in the terminal — or start it through coucou-pty (Settings) to answer here.",
+        );
       note.style.display = note.textContent ? "" : "none";
     },
   };
@@ -605,11 +617,11 @@ function buildQuestion(actions: ViewActions): ViewHost {
 
 function buildError(actions: ViewActions): ViewHost {
   const who = h("div");
-  const title = h("div", { class: "title", text: "Workflow stopped." });
+  const title = h("div", { class: "title", text: tr("工作流程停止了。", "Workflow stopped.") });
   const detail = h("div", { class: "detail" });
   const row = h("div", { class: "actions" },
-    btn("Retry", "primary", () => actions.setView(State.defaultView())),
-    btn("Open in n8n", "secondary", () => actions.openUrl("")),
+    btn(tr("重試", "Retry"), "primary", () => actions.setView(State.defaultView())),
+    btn(tr("在 n8n 打開", "Open in n8n"), "secondary", () => actions.openUrl("")),
   );
   const el = h("div", { class: "view" }, card("red", stack(116, 16, who, title, detail, row)));
   return {
@@ -618,8 +630,10 @@ function buildError(actions: ViewActions): ViewHost {
       const task = State.focusTask;
       clear(who);
       who.append(agentWho(task, task?.source === "n8n" ? "n8n" : "Claude Code"));
-      title.textContent = task?.source === "n8n" ? "Workflow stopped." : "Session stopped on an error.";
-      detail.textContent = task?.steps.at(-1) ?? "No detail available.";
+      title.textContent = task?.source === "n8n"
+        ? tr("工作流程停止了。", "Workflow stopped.")
+        : tr("工作階段因為錯誤停下來了。", "Session stopped on an error.");
+      detail.textContent = task?.steps.at(-1) ?? tr("沒有更多細節。", "No detail available.");
     },
   };
 }
@@ -642,13 +656,16 @@ function buildFinished(actions: ViewActions): ViewHost {
       // Being on screen is being read.
       if (task) State.markRead(task);
       clear(who);
-      who.append(agentWho(task, `${task ? SOURCE_LABELS[task.source] : "Claude Code"} finished`));
-      title.textContent = task?.steps.at(-1) ?? "Session finished";
+      who.append(agentWho(task, trf("{who} 完成了", "{who} finished", { who: task ? SOURCE_LABELS[task.source] : "Claude Code" })));
+      title.textContent = task?.steps.at(-1) ?? tr("工作階段完成了", "Session finished");
 
       const others = State.unreadTasks.filter((t) => t.id !== task?.id);
       more.textContent = others.length === 0 ? ""
-        : others.length === 1 ? `${others[0].name} also replied`
-        : `${others.length} more replied: ${others.map((t) => t.name).join(", ")}`;
+        : others.length === 1 ? trf("{name} 也回覆了", "{name} also replied", { name: others[0].name })
+        : trf("還有 {n} 個回覆了：{names}", "{n} more replied: {names}", {
+          n: others.length,
+          names: others.map((t) => t.name).join(tr("、", ", ")),
+        });
       more.style.display = others.length ? "" : "none";
 
       // Rebuilt only when the choice changes, never between a press and a release.
@@ -656,15 +673,15 @@ function buildFinished(actions: ViewActions): ViewHost {
       if (key === rowKey) return;
       rowKey = key;
       clear(row);
-      row.append(btn("Open terminal", "primary", () => actions.openTerminal()));
+      row.append(btn(tr("打開終端機", "Open terminal"), "primary", () => actions.openTerminal()));
       if (others.length) {
         const next = others[0];
-        row.append(btn("Next", "secondary", () => {
+        row.append(btn(tr("下一個", "Next"), "secondary", () => {
           actions.setFocus(next.id);
           actions.setView("finished");
         }, "→"));
       } else {
-        row.append(btn("OK", "secondary", () => actions.collapse()));
+        row.append(btn(tr("好", "OK"), "secondary", () => actions.collapse()));
       }
     },
   };
@@ -719,15 +736,15 @@ function buildSession(actions: ViewActions): ViewHost {
   nameInput.addEventListener("blur", () => endRename(true));
 
   const row = h("div", { class: "actions" },
-    btn("Open terminal", "primary", () => actions.openTerminal()),
-    btn("Rename", "secondary", () => startRename()),
-    btn("Back", "secondary", () => actions.setView("overview")),
+    btn(tr("打開終端機", "Open terminal"), "primary", () => actions.openTerminal()),
+    btn(tr("重新命名", "Rename"), "secondary", () => startRename()),
+    btn(tr("返回", "Back"), "secondary", () => actions.setView("overview")),
   );
   // Typing into the session's own terminal — there only when the CLI was
   // started through coucou-pty, and only while it is not in the middle of a
   // turn: this is keystrokes into a TUI, and a busy one would mangle them.
   const input = h("input", { type: "text", class: "chat-input", spellcheck: "false" }) as HTMLInputElement;
-  const send = h("button", { class: "send-btn", title: "Type it into the terminal" }, svg(ICONS.arrowUp, 11));
+  const send = h("button", { class: "send-btn", title: tr("打進終端機", "Type it into the terminal") }, svg(ICONS.arrowUp, 11));
   const bar = h("div", { class: "chat-bar" }, input, send);
   const BUSY = new Set(["working", "thinking", "searching", "approval"]);
   const busy = () => BUSY.has(State.focusTask?.state ?? "idle");
@@ -768,7 +785,9 @@ function buildSession(actions: ViewActions): ViewHost {
       const task = State.focusTask;
       bar.style.display = task?.pty ? "" : "none";
       input.disabled = busy();
-      input.placeholder = busy() ? "Busy — wait for it to finish…" : `Type into ${task?.name ?? "the"} terminal…`;
+      input.placeholder = busy() ? tr("忙碌中，等它做完…", "Busy — wait for it to finish…")
+        : task?.name ? trf("打字到 {name} 的終端機…", "Type into {name} terminal…", { name: task.name })
+        : tr("打字到終端機…", "Type into the terminal…");
       if (renaming) {
         // Left alone while it is being typed in.
         if (nameInput.parentElement !== who) {
@@ -793,7 +812,7 @@ function buildSession(actions: ViewActions): ViewHost {
           log.append(h("div", { class: "session-tool", text: entry.text }));
         }
       }
-      if (entries.length === 0) log.append(h("div", { class: "sub", text: "Nothing yet this session." }));
+      if (entries.length === 0) log.append(h("div", { class: "sub", text: tr("這個工作階段還沒有內容。", "Nothing yet this session.") }));
       log.scrollTop = log.scrollHeight;
     },
   };
@@ -805,8 +824,8 @@ function buildConfused(): ViewHost {
   const body = h(
     "div",
     { class: "stack", style: "padding:0 18px 0 128px" },
-    h("div", { class: "title", text: "Too many hits at once." }),
-    h("div", { class: "sub", text: "Give me a sec — back to work in three seconds." }),
+    h("div", { class: "title", text: tr("一次打太多下了。", "Too many hits at once.") }),
+    h("div", { class: "sub", text: tr("等我一下，三秒後回來工作。", "Give me a sec — back to work in three seconds.") }),
   );
   return { el: h("div", { class: "view" }, card("pink", body)), sync() {} };
 }
@@ -834,7 +853,7 @@ function buildSettings(actions: ViewActions): ViewHost {
   }) as HTMLInputElement;
   const autoLabel = h("span", {});
   const segButtons = [10, 15, 30].map((s) =>
-    h("button", { onclick: () => actions.setAutoClose(s) }, `${s}s`),
+    h("button", { onclick: () => actions.setAutoClose(s) }, trf("{s} 秒", "{s}s", { s })),
   );
   const claudeBadge = h("span", { class: "status-badge" });
   const apiBadge = h("span", { class: "status-badge" });
@@ -842,7 +861,7 @@ function buildSettings(actions: ViewActions): ViewHost {
   const rows = h(
     "div",
     { class: "settings-rows" },
-    h("div", { class: "settings-row" }, soundSwitch, h("span", { text: "Sound" }), volume),
+    h("div", { class: "settings-row" }, soundSwitch, h("span", { text: tr("音效", "Sound") }), volume),
     h(
       "div",
       { class: "settings-row" },
@@ -859,7 +878,7 @@ function buildSettings(actions: ViewActions): ViewHost {
       h("button", {
         class: "link-btn",
         style: "color:#8e939c;font-size:11.5px",
-        text: "Settings…",
+        text: tr("設定…", "Settings…"),
         onclick: () => actions.openSettingsWindow(),
       }),
     ),
@@ -875,7 +894,7 @@ function buildSettings(actions: ViewActions): ViewHost {
       soundSwitch.classList.toggle("on", s.soundEnabled);
       volume.value = String(s.soundVolume);
       volume.style.opacity = s.soundEnabled ? "1" : "0.4";
-      autoLabel.textContent = `Auto-close · ${Math.round(s.autoCloseInterval)}s`;
+      autoLabel.textContent = trf("自動關閉 · {n} 秒", "Auto-close · {n}s", { n: Math.round(s.autoCloseInterval) });
       segButtons.forEach((b, i) => b.classList.toggle("on", s.autoCloseInterval === [10, 15, 30][i]));
       clear(claudeBadge);
       claudeBadge.append(
@@ -922,8 +941,8 @@ export function buildViews(
   map.set("uploading", buildUploading());
   map.set("choose", buildChoose(actions));
   // Not in the Windows v1: sending a file by email, window attach + web result.
-  map.set("mail", buildPlaceholder("Sending by email isn't in this version.", ""));
-  map.set("searching", buildPlaceholder("Claude is searching…", ""));
-  map.set("result", buildPlaceholder("Result", ""));
+  map.set("mail", buildPlaceholder(tr("這個版本還不能用電子郵件寄出。", "Sending by email isn't in this version."), ""));
+  map.set("searching", buildPlaceholder(tr("Claude 搜尋中…", "Claude is searching…"), ""));
+  map.set("result", buildPlaceholder(tr("結果", "Result"), ""));
   return map;
 }

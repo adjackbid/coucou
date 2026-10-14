@@ -13,12 +13,7 @@ import { fill, setLang, tr, trf } from "./i18n";
  * done. VITE_I18N_ALL=1 checks them anyway, to see what is left.
  */
 const PENDING: string[] = import.meta.env.VITE_I18N_ALL ? [] : [
-  "island/",
-  "main.ts",
-  "mochi/",
   "team/",
-  "upload/",
-  "views/",
 ];
 
 /** Files whose strings are data, not interface text. */

@@ -22,6 +22,7 @@ import { UploadCanvas } from "../upload/canvas";
 import { USC, UploadSeq } from "../upload/sequence";
 import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../views/views";
 import { h } from "../views/dom";
+import { tr, trf } from "../core/i18n";
 import { IslandStateMachine } from "./fsm";
 import { nextTeamCard, teamTaskId } from "./team";
 import type { Danger, MemberView, Snapshot } from "../team/types";
@@ -34,7 +35,7 @@ const MAX_DROP_BYTES = 64 * 1024 * 1024;
 /** Reads a dropped File and hands it to Rust, which writes it into the inbox. */
 async function readDropped(file: File): Promise<DroppedFile> {
   if (file.size > MAX_DROP_BYTES) {
-    throw new Error(`${file.name} is over 64 MB — too big to drop here.`);
+    throw new Error(trf("{name} 超過 64 MB，太大了，不能拖到這裡。", "{name} is over 64 MB — too big to drop here.", { name: file.name }));
   }
   const bytes = await file.arrayBuffer();
   return Bridge.ingestBytes(file.name, bytes);
@@ -56,17 +57,20 @@ const PRE_PROGRESS = USC.T_PROG_START - USC.T_DROP;
 const modeOrder = (m: IslandMode) => (m === "hidden" ? 0 : m === "compact" ? 1 : 2);
 
 /** Why a team member's request waits for the person, in the island's words. */
-const DANGER_WORDS: Record<Danger, string> = {
-  "deletes-folder": "Deletes a folder",
-  "deletes-many": "Deletes several files at once",
-  installs: "Installs a package or a program",
-  downloads: "Downloads something from the internet",
-  "destructive-git": "This git command throws changes away",
-  "sends-out": "Sends or publishes something outside",
-  "outside-work-dir": "Touches something outside the team's folder",
-  system: "Changes the system or other programs",
-  opaque: "Coucou cannot tell what this command does",
-};
+function dangerWords(d: Danger): string {
+  const words: Record<Danger, string> = {
+    "deletes-folder": tr("會刪除資料夾", "Deletes a folder"),
+    "deletes-many": tr("會一次刪除多個檔案", "Deletes several files at once"),
+    installs: tr("會安裝套件或程式", "Installs a package or a program"),
+    downloads: tr("會從網路下載東西", "Downloads something from the internet"),
+    "destructive-git": tr("這個 git 指令會丟掉變更", "This git command throws changes away"),
+    "sends-out": tr("會對外發送或發布", "Sends or publishes something outside"),
+    "outside-work-dir": tr("會動到團隊資料夾以外的地方", "Touches something outside the team's folder"),
+    system: tr("會變更系統或其他程式", "Changes the system or other programs"),
+    opaque: tr("Coucou 看不出這個指令在做什麼", "Coucou cannot tell what this command does"),
+  };
+  return words[d];
+}
 
 export class Island {
   readonly fsm = new IslandStateMachine();
@@ -276,7 +280,8 @@ export class Island {
         } else {
           writes.push("\r");
         }
-        const label = field.title ? `${field.title}: ${said || "(skipped)"}` : said || "(skipped)";
+        const skipped = tr("（略過）", "(skipped)");
+        const label = field.title ? `${field.title}: ${said || skipped}` : said || skipped;
         try {
           for (const [i, w] of writes.entries()) {
             if (i > 0) await new Promise((r) => window.setTimeout(r, 400));
@@ -490,7 +495,7 @@ export class Island {
     // so while the drop zone is up a press outside is the drag beginning, not
     // a dismissal. The × and the shortcut still close it.
     if (State.fileDragOver || UPLOAD_VIEWS.has(State.view)) return;
-    void Bridge.log("click outside — shutting the island");
+    void Bridge.log("click outside — shutting the island"); // i18n-ok: log line
     this.collapse();
   }
 
@@ -541,14 +546,14 @@ export class Island {
     const sections = Object.entries(input)
       .filter(([, v]) => v != null)
       .map(([label, v]) => ({ label, value: typeof v === "string" ? v : JSON.stringify(v, null, 2) }));
-    if (p.danger) sections.unshift({ label: "why", value: DANGER_WORDS[p.danger] });
-    if (p.rule) sections.unshift({ label: "憲法", value: p.rule });
+    if (p.danger) sections.unshift({ label: tr("原因", "why"), value: dangerWords(p.danger) });
+    if (p.rule) sections.unshift({ label: tr("憲法", "constitution"), value: p.rule });
     if (m.morePermissions.length) {
       const queued = m.morePermissions.map((x) => {
         const raw = (x.rawInput && typeof x.rawInput === "object" ? x.rawInput : {}) as Record<string, unknown>;
         return typeof raw.command === "string" ? raw.command : x.title;
       });
-      sections.push({ label: `${queued.length} more waiting`, value: queued.join("\n") });
+      sections.push({ label: trf("還有 {n} 個在等", "{n} more waiting", { n: queued.length }), value: queued.join("\n") });
     }
     const taskId = teamTaskId(snap.id);
     State.pendingApproval = {
@@ -600,7 +605,7 @@ export class Island {
     const sections = Object.entries(input)
       .filter(([, v]) => v != null)
       .map(([label, v]) => ({ label, value: typeof v === "string" ? v : JSON.stringify(v, null, 2) }));
-    if (p.rule) sections.unshift({ label: "憲法", value: p.rule });
+    if (p.rule) sections.unshift({ label: tr("憲法", "constitution"), value: p.rule });
     const command = `${agent?.name ?? p.agentId} · ${p.title}`;
     State.pendingApproval = {
       requestId: `acp:${p.agentId}`,
@@ -653,7 +658,7 @@ export class Island {
           this.setView(State.defaultView());
           return;
         }
-        this.swallow(path.split(/[\\/]/).pop() || "file", Bridge.ingestFile(path));
+        this.swallow(path.split(/[\\/]/).pop() || tr("檔案", "file"), Bridge.ingestFile(path));
         break;
       }
     }
@@ -1455,9 +1460,14 @@ export class Island {
     if (showGrid) {
       const t = State.focusTask;
       const words: Partial<Record<BotStateName, string>> = {
-        working: "is working…", thinking: "is thinking…", searching: "is searching…",
-        approval: "needs permission", question: "has a question", finished: "replied",
-        error: "stopped on an error", ratelimit: "hit a rate limit",
+        working: tr("工作中…", "is working…"),
+        thinking: tr("思考中…", "is thinking…"),
+        searching: tr("搜尋中…", "is searching…"),
+        approval: tr("需要你允許", "needs permission"),
+        question: tr("有問題問你", "has a question"),
+        finished: tr("回覆了", "replied"),
+        error: tr("因為錯誤停下來了", "stopped on an error"),
+        ratelimit: tr("碰到用量上限", "hit a rate limit"),
       };
       const word = t ? words[t.state] : undefined;
       const key = `${t?.id}|${t?.name}|${word ?? ""}`;

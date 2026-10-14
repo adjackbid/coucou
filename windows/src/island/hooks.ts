@@ -6,6 +6,7 @@
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
 import { INTEGRATION_AGENTS, State, sessionKey, type AgentQuestion, type AgentSource, type ApprovalSection, type QuestionField } from "../core/state";
+import { tr, trf } from "../core/i18n";
 import type { Island } from "./island";
 
 /** Which agent each `--agent` of the relay is. Anything unknown is Claude Code. */
@@ -59,9 +60,9 @@ interface HookPayload {
 }
 
 const PROJECT_ALIASES: Record<string, string> = {
-  "notch-buddy": "Notch Buddy",
-  notchbuddy: "Notch Buddy",
-  notch_buddy: "Notch Buddy",
+  "notch-buddy": "Notch Buddy", // i18n-ok: a project's name
+  notchbuddy: "Notch Buddy", // i18n-ok: a project's name
+  notch_buddy: "Notch Buddy", // i18n-ok: a project's name
 };
 
 function aliasProjectName(name: string): string {
@@ -75,40 +76,51 @@ function lastPathComponent(p: string): string {
 }
 
 /** A verb per tool, for the ticker: Claude Code's names, then Antigravity's. */
-const TOOL_LABELS: Record<string, string> = {
-  Bash: "Run",
-  Read: "Read",
-  Write: "Write",
-  Edit: "Edit",
-  Glob: "Find",
-  Grep: "Search",
-  WebSearch: "Web search",
-  WebFetch: "Fetch",
-  TodoWrite: "Tasks",
-  Task: "Agent",
-  LS: "List",
-  MultiEdit: "Edit",
-  NotebookEdit: "Notebook",
-  PowerShell: "Run",
-  run_command: "Run",
-  view_file: "Read",
-  list_dir: "List",
-  write_to_file: "Write",
-  replace_file_content: "Edit",
-  grep_search: "Search",
-  find_by_name: "Find",
-  search_web: "Web search",
-  read_url_content: "Fetch",
-};
+function toolLabels(): Record<string, string> {
+  const run = tr("執行", "Run");
+  const read = tr("讀取", "Read");
+  const write = tr("寫入", "Write");
+  const edit = tr("編輯", "Edit");
+  const find = tr("尋找", "Find");
+  const search = tr("搜尋", "Search");
+  const web = tr("網路搜尋", "Web search");
+  const fetch = tr("抓取網頁", "Fetch");
+  const list = tr("列出", "List");
+  return {
+    Bash: run,
+    Read: read,
+    Write: write,
+    Edit: edit,
+    Glob: find,
+    Grep: search,
+    WebSearch: web,
+    WebFetch: fetch,
+    TodoWrite: tr("待辦", "Tasks"),
+    Task: "Agent",
+    LS: list,
+    MultiEdit: edit,
+    NotebookEdit: tr("筆記本", "Notebook"),
+    PowerShell: run,
+    run_command: run,
+    view_file: read,
+    list_dir: list,
+    write_to_file: write,
+    replace_file_content: edit,
+    grep_search: search,
+    find_by_name: find,
+    search_web: web,
+    read_url_content: fetch,
+  };
+}
 
 function stepLabel(tool: string, input: Record<string, unknown>): string {
-  const label = TOOL_LABELS[tool] ?? tool;
+  const label = toolLabels()[tool] ?? tool;
   const str = (k: string) => (typeof input[k] === "string" ? (input[k] as string) : null);
   const cmd = str("command") ?? str("CommandLine");
   if (cmd) return `${label} · ${cmd.slice(0, 40)}`;
   const path = str("path") ?? str("file_path") ?? str("AbsolutePath") ?? str("TargetFile") ?? str("DirectoryPath");
   if (path) return `${label} · ${lastPathComponent(path)}`;
-  const query = str("query") ?? str("Query");
+  const query = str("query") ?? str("Query"); // i18n-ok: input field names
   if (query) return `${label} · ${query.slice(0, 40)}`;
   // A tool nobody listed still says what it was aimed at.
   const first = Object.values(input).find((v) => typeof v === "string" && v.trim()) as string | undefined;
@@ -152,7 +164,7 @@ function questionFrom(tool: string, input: Record<string, unknown>): AgentQuesti
       field(typeof f?.title === "string" ? f.title : key, strs(f?.enum), required.size === 0 || required.has(key), f?.default),
     );
     if (!text && fields.length === 0) return null;
-    return { text: text || "Choose one:", fields: fields.length ? fields : [field("", [], true)], current: 0 };
+    return { text: text || tr("選一個：", "Choose one:"), fields: fields.length ? fields : [field("", [], true)], current: 0 };
   }
   {
     const first = (input.questions as Array<Record<string, unknown>> | undefined)?.[0];
@@ -161,7 +173,7 @@ function questionFrom(tool: string, input: Record<string, unknown>): AgentQuesti
     const options = (first.options as Array<{ label?: unknown }> | undefined) ?? [];
     const choices = options.map((o) => (typeof o.label === "string" ? o.label.trim() : "")).filter(Boolean);
     if (!text && choices.length === 0) return null;
-    return { text: text || "Choose one:", fields: [field("", choices, true)], current: 0 };
+    return { text: text || tr("選一個：", "Choose one:"), fields: [field("", choices, true)], current: 0 };
   }
   return null;
 }
@@ -298,7 +310,7 @@ function handleHook(island: Island, payload: HookPayload) {
   const cwd = payload.cwd ?? "";
   const raw = lastPathComponent(cwd);
   // The name the person gave this folder, if any; else the folder's own.
-  const projectName = State.settings.sessionNames?.[sessionKey(cwd)] || aliasProjectName(raw || "Session");
+  const projectName = State.settings.sessionNames?.[sessionKey(cwd)] || aliasProjectName(raw || tr("工作階段", "Session"));
   const CLAUDE_ID = taskFor(payload, projectName, cwd);
   const own = State.tasks.find((x) => x.id === CLAUDE_ID);
   if (own) {
@@ -382,14 +394,14 @@ function handleHook(island: Island, payload: HookPayload) {
     case "ToolUsed": {
       upsert(CLAUDE_ID, projectName, cwd);
       State.updateTask(CLAUDE_ID, "working");
-      const tool = payload.tool_name ?? "Tool";
+      const tool = payload.tool_name ?? tr("工具", "Tool");
       const question = name === "PreToolUse" ? questionFrom(tool, payload.tool_input ?? {}) : null;
       if (question && own) {
         // Not a step but a question: one line in the ticker, the question
         // itself on its own card — with the choices, when it offered any.
         own.question = question;
         State.updateTask(CLAUDE_ID, "question");
-        State.appendStep(CLAUDE_ID, `Asking you · ${question.text.slice(0, 60)}`);
+        State.appendStep(CLAUDE_ID, trf("問你 · {q}", "Asking you · {q}", { q: question.text.slice(0, 60) }));
         State.appendTranscript(CLAUDE_ID, { role: "assistant", text: question.text });
         Sound.play("question");
         if (focused) {
@@ -406,7 +418,7 @@ function handleHook(island: Island, payload: HookPayload) {
       const label = stepLabel(tool, payload.tool_input ?? {});
       State.appendStep(CLAUDE_ID, label);
       State.appendTranscript(CLAUDE_ID, { role: "tool", text: label });
-      if (payload.error) State.appendStep(CLAUDE_ID, "⚠ failed");
+      if (payload.error) State.appendStep(CLAUDE_ID, tr("⚠ 失敗", "⚠ failed"));
       surface("overview", false);
       break;
     }
@@ -417,7 +429,7 @@ function handleHook(island: Island, payload: HookPayload) {
 
     case "PostToolUseFailure":
       State.updateTask(CLAUDE_ID, "working");
-      State.appendStep(CLAUDE_ID, "⚠ failed");
+      State.appendStep(CLAUDE_ID, tr("⚠ 失敗", "⚠ failed"));
       break;
 
     // Copilot only has the lowercase spelling.
@@ -496,11 +508,11 @@ function handleHook(island: Island, payload: HookPayload) {
       break;
 
     case "SubagentStart":
-      State.appendStep(CLAUDE_ID, "+ subagent");
+      State.appendStep(CLAUDE_ID, tr("+ 子 agent", "+ subagent"));
       break;
 
     case "SubagentStop":
-      State.appendStep(CLAUDE_ID, "• subagent done");
+      State.appendStep(CLAUDE_ID, tr("• 子 agent 完成", "• subagent done"));
       break;
 
     case "PermissionRequest": {
@@ -514,11 +526,11 @@ function handleHook(island: Island, payload: HookPayload) {
       }
       upsert(CLAUDE_ID, projectName, cwd);
       if (pendingTimeout != null) window.clearTimeout(pendingTimeout);
-      const tool = payload.tool_name ?? "Tool";
+      const tool = payload.tool_name ?? tr("工具", "Tool");
       const input = payload.tool_input ?? {};
       const command = approvalTarget(tool, input);
       const sections = approvalSections(input);
-      if (payload.constitution?.rule) sections.unshift({ label: "憲法", value: payload.constitution.rule });
+      if (payload.constitution?.rule) sections.unshift({ label: tr("憲法", "constitution"), value: payload.constitution.rule });
       State.pendingApproval = {
         requestId,
         sessionId: payload.session_id ?? "",
