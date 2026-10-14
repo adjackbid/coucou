@@ -9,6 +9,7 @@
 // the live pieces (live.ts): each member's Mochi, bubble and screen, which
 // stream between pictures (`team-screen`) and are moved into each new one.
 
+import { onLangChange, setLang } from "../core/i18n";
 import "./team.css";
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import type { AgentProfile, ModelChoice } from "../core/state";
@@ -1809,7 +1810,9 @@ async function load() {
     const listed = await Bridge.teamFiles();
     dir = listed?.dir ?? "";
     files = listed?.files ?? [];
-    agents = (await Bridge.boot())?.settings.agents ?? [];
+    const boot = await Bridge.boot();
+    agents = boot?.settings.agents ?? [];
+    setLang(boot?.lang);
     await loadTeamAgents(() => {}, agents, true);
     for (const snap of (await Bridge.teamSnapshots()) ?? []) {
       runs.set(snap.id, snap);
@@ -1939,6 +1942,10 @@ function wireDrops() {
 
 async function start() {
   live.setSaid(said);
+  // A language change redraws the whole window; typing in a form survives a
+  // render the way it survives a team's update (see the focus keeping below).
+  onLangChange(() => render());
+  await onEvent<string>("lang-changed", (l) => setLang(l));
   await onEvent<Snapshot>("team-changed", (snap) => {
     const had = runs.get(snap.id);
     if (had && had.startedAt === snap.startedAt && snap.seq < had.seq) return;

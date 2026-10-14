@@ -4,6 +4,7 @@ import "./style.css";
 import { Bridge, IS_TAURI, onEvent, type AcpPermission, type AcpUpdate, type DockDrop, type DockPlacement, type DockPreview } from "./core/bridge";
 import { Sound } from "./core/sound";
 import { State, type Settings } from "./core/state";
+import { onLangChange, setLang } from "./core/i18n";
 import { Island } from "./island/island";
 import { onAcpUpdate, onChatDelta } from "./views/chat";
 import { registerHookHandlers } from "./island/hooks";
@@ -45,7 +46,11 @@ async function main() {
   const boot = await Bridge.boot();
   if (boot) {
     State.settings = { ...State.settings, ...boot.settings };
+    setLang(boot.lang);
   }
+  // A language change redraws the island in place, open or not.
+  onLangChange(() => island.relabel());
+  await onEvent<string>("lang-changed", (l) => setLang(l));
   fitToWindow(boot?.screen.scale ?? null);
   if (boot) island.setPlacement(boot.screen);
   island.applySettings();

@@ -87,6 +87,7 @@ export class Island {
 
   private header!: ViewHost;
   private views!: Map<IslandViewName, ViewHost>;
+  private actions!: ViewActions;
   private uploadCanvas!: UploadCanvas;
 
   private width = new Tracked(NOTCH_W);
@@ -323,6 +324,7 @@ export class Island {
     this.countdown = h("div", { id: "countdown" });
     this.compactStatus = h("div", { id: "compact-status" });
 
+    this.actions = actions;
     this.header = buildHeader(actions);
     this.views = buildViews(actions, () => this.animateGeometry(false));
     this.viewsEl = h("div", { id: "views" });
@@ -1485,6 +1487,35 @@ export class Island {
   }
 
   /** Applies settings coming from Rust at boot. */
+  /**
+   * The language changed: the header and every view are built again, in place
+   * — the island stays open on the same view, and what was typed in a field
+   * is put back.
+   */
+  relabel() {
+    const typed = new Map<string, string>();
+    const key = (view: string, i: number) => `${view}:${i}`;
+    for (const [name, view] of this.views) {
+      view.el.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea").forEach((f, i) => {
+        if (f.value) typed.set(key(name, i), f.value);
+      });
+    }
+    const header = buildHeader(this.actions);
+    const views = buildViews(this.actions, () => this.animateGeometry(false));
+    this.header.el.replaceWith(header.el);
+    this.header = header;
+    this.viewsEl.replaceChildren(...[...views.values()].map((v) => v.el));
+    this.views = views;
+    for (const [name, view] of this.views) {
+      view.el.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea").forEach((f, i) => {
+        const v = typed.get(key(name, i));
+        if (v != null) f.value = v;
+      });
+    }
+    this.dirty = true;
+    State.notify();
+  }
+
   applySettings() {
     Sound.setEnabled(State.settings.soundEnabled);
     Sound.setVolume(State.settings.soundVolume);
