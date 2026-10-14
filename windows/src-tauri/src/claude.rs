@@ -201,6 +201,12 @@ fn refusal_reply(state: &crate::claude::ClaudeState, request_id: &str, rule: &st
     json!({ "type": "control_response", "response": { "subtype": "success", "request_id": request_id, "response": decision } }).to_string()
 }
 
+fn private_reply(state: &crate::claude::ClaudeState, request_id: &str) -> String {
+    state.asked.lock().unwrap().remove(request_id);
+    let decision = json!({ "behavior": "deny", "message": crate::policy::PRIVATE_REFUSAL });
+    json!({ "type": "control_response", "response": { "subtype": "success", "request_id": request_id, "response": decision } }).to_string()
+}
+
 fn options() -> Vec<Value> {
     vec![
         json!({ "optionId": "allow", "name": "Allow", "kind": "allow_once" }),
@@ -222,7 +228,11 @@ pub fn request_of(tool: &str, input: &Value) -> (policy::Request, String, &'stat
             let paths = if path.is_empty() { vec![] } else { vec![path.clone()] };
             (request(Kind::Edit, None, paths), format!("Edit {path}"), "edit")
         }
-        "Read" | "Glob" | "Grep" | "LS" => (request(Kind::Read, None, vec![]), tool.to_string(), "read"),
+        // Where it reads, so a private folder is seen (policy::Private); reading is allowed anywhere else.
+        "Read" | "Glob" | "Grep" | "LS" => {
+            let paths: Vec<String> = [text("file_path"), text("path")].into_iter().filter(|p| !p.is_empty()).collect();
+            (request(Kind::Read, None, paths), tool.to_string(), "read")
+        }
         "WebFetch" | "WebSearch" => (request(Kind::Fetch, None, vec![]), tool.to_string(), "fetch"),
         // Bookkeeping that changes nothing outside the conversation, and the
         // team's own tools.
@@ -261,6 +271,12 @@ pub async fn dispatch(route: &Route, state: &ClaudeState, msg: Value) {
             let (asked, title, kind) = request_of(&tool, &input);
             state.asked.lock().unwrap().insert(id.clone(), input.clone());
 
+            // A team's private documents: refused, and nobody is asked.
+            if route.private.touches(&asked, &route.work_dir) {
+                log::line(format!("claude {key}: {tool} refused — the team's private knowledge base"));
+                let _ = acp::write_line(&route.writer, &private_reply(state, &id)).await;
+                return;
+            }
             // The constitution first: refused here, or asked for whatever the rules say.
             let ruled = crate::constitution::rule_for(&asked, &route.work_dir);
             if let Some((crate::constitution::Level::Never, rule)) = &ruled {

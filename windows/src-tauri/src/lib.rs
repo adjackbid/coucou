@@ -40,7 +40,8 @@ use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 use acp::{AcpOutcome, AgentProfile, Agents, Launch};
-use team::orchestrator::{AcpDrive, Teams};
+use team::knowledge::{self, Added, DocView, Kb, KnowledgeView, Visibility};
+use team::orchestrator::{AcpDrive, KnowledgeChange, Teams};
 use team::state::Snapshot;
 use team::TeamConfig;
 use files::DroppedFile;
@@ -851,6 +852,10 @@ fn team_duplicate(file: String) -> Result<String, String> {
     let copy = format!("{id}.json");
     std::fs::write(dir.join(&copy), serde_json::to_vec_pretty(&config).map_err(|e| e.to_string())?)
         .map_err(|e| format!("Could not create {copy}: {e}"))?;
+    // The same documents, under a leader's folder of the copy's own.
+    if let Err(err) = Kb::of(base).copy_to(&Kb::of(&id)) {
+        log::line(format!("team {id}: knowledge not copied from {base}: {err}"));
+    }
     Ok(copy)
 }
 
@@ -868,6 +873,15 @@ fn team_delete(teams: State<Arc<Teams>>, file: String) -> Result<(), String> {
     std::fs::create_dir_all(&bin).map_err(|e| e.to_string())?;
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     std::fs::rename(&path, bin.join(format!("{id}-{stamp}.json"))).map_err(|e| format!("Could not delete {file}: {e}"))?;
+    // Its documents go aside with it, under the same time.
+    let docs = knowledge::team_dir(id);
+    if docs.is_dir() {
+        let aside = knowledge::root().join(".deleted");
+        let moved = std::fs::create_dir_all(&aside).and_then(|_| std::fs::rename(&docs, aside.join(format!("{id}-{stamp}"))));
+        if let Err(err) = moved {
+            log::line(format!("team {id}: knowledge folder not moved aside: {err}"));
+        }
+    }
     teams.forget(id);
     log::line(format!("team {id}: file moved to .deleted"));
     Ok(())
@@ -901,6 +915,154 @@ async fn pick_folder(app: AppHandle, start: String, title: String) -> Result<Opt
         Ok(Some(_)) => log::line("folder dialog: a folder was chosen"),
         Ok(None) => log::line("folder dialog: cancelled"),
         Err(err) => log::line(format!("folder dialog: {err}")),
+    }
+    picked
+}
+
+// ── A team's knowledge base (team::knowledge) ─────────────────────────────────
+//
+// Every change is written at once: the form's Save is not needed, and a new
+// team (whose file `team_new` already made) can take documents before it is
+// saved for the first time.
+
+/// The team a knowledge call is about: a plain id with a team file.
+fn knowledge_of(team: &str) -> Result<Kb, String> {
+    if !team::is_plain_id(team) || !team_file_path(&format!("{team}.json"))?.is_file() {
+        return Err("There is no such team.".into());
+    }
+    Ok(Kb::of(team))
+}
+
+/// Tells the window, and a running team's members (team::orchestrator), what changed.
+fn knowledge_changed(app: &AppHandle, teams: &Teams, team: &str, change: KnowledgeChange) {
+    let _ = app.emit_to("team", "team-knowledge-changed", serde_json::json!({ "team": team }));
+    teams.knowledge_changed(team, change);
+}
+
+fn after_add(app: &AppHandle, teams: &Teams, team: &str, added: &Added) {
+    if let Some(doc) = &added.doc {
+        log::line(format!("team {team}: knowledge {} added ({:?}, {} bytes)", doc.id, doc.kind, doc.bytes));
+        knowledge_changed(app, teams, team, KnowledgeChange::Added { doc: doc.id.clone() });
+    }
+}
+
+#[tauri::command]
+fn team_knowledge_list(team: String) -> Result<KnowledgeView, String> {
+    Ok(knowledge_of(&team)?.view())
+}
+
+/// A file picked or dropped, copied in by its path — for the leader only, as
+/// every new document is. `force`: it looked like it held a key, and the
+/// person said to add it anyway.
+#[tauri::command]
+fn team_knowledge_add_path(app: AppHandle, teams: State<Arc<Teams>>, team: String, path: String, force: Option<bool>) -> Result<Added, String> {
+    let kb = knowledge_of(&team)?;
+    let (name, bytes) = knowledge::read_source(std::path::Path::new(&path))?;
+    let added = kb.add(&name, bytes, &path, force.unwrap_or(false))?;
+    after_add(&app, &teams, &team, &added);
+    Ok(added)
+}
+
+/// A pasted picture (or any file) from its bytes: the team and the file name
+/// (URL-encoded) in headers, as team_attach_bytes takes them.
+#[tauri::command]
+fn team_knowledge_add_bytes(app: AppHandle, teams: State<Arc<Teams>>, request: tauri::ipc::Request<'_>) -> Result<Added, String> {
+    let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(percent_decode);
+    let team = header("x-team").ok_or("Which team is this for?")?;
+    let name = header("x-file-name").unwrap_or_else(|| "image.png".into());
+    let force = header("x-force").as_deref() == Some("1");
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else { return Err("expected the file's bytes".into()) };
+    let kb = knowledge_of(&team)?;
+    let added = kb.add(&name, bytes.clone(), "", force)?;
+    after_add(&app, &teams, &team, &added);
+    Ok(added)
+}
+
+/// Who may read a document, and the person's line about it.
+#[tauri::command]
+fn team_knowledge_update(app: AppHandle, teams: State<Arc<Teams>>, team: String, doc: String, visibility: Option<Visibility>, note: Option<String>) -> Result<DocView, String> {
+    let kb = knowledge_of(&team)?;
+    let (updated, was) = kb.update(&doc, visibility, note.as_deref())?;
+    if let Some(was) = was {
+        log::line(format!("team {team}: knowledge {doc} {was:?} → {:?}", updated.visibility));
+        knowledge_changed(&app, &teams, &team, KnowledgeChange::Visibility { doc: doc.clone(), now: updated.visibility });
+    } else {
+        let _ = app.emit_to("team", "team-knowledge-changed", serde_json::json!({ "team": team }));
+    }
+    let index = kb.load();
+    Ok(kb.doc_view(&index, &updated))
+}
+
+/// The original copied in again.
+#[tauri::command]
+fn team_knowledge_reimport(app: AppHandle, team: String, doc: String, force: Option<bool>) -> Result<Added, String> {
+    let added = knowledge_of(&team)?.reimport(&doc, force.unwrap_or(false))?;
+    if added.doc.is_some() {
+        log::line(format!("team {team}: knowledge {doc} imported again"));
+        let _ = app.emit_to("team", "team-knowledge-changed", serde_json::json!({ "team": team }));
+    }
+    Ok(added)
+}
+
+/// Takes a document out (only ever from the second click on 移除).
+#[tauri::command]
+fn team_knowledge_remove(app: AppHandle, teams: State<Arc<Teams>>, team: String, doc: String) -> Result<(), String> {
+    let removed = knowledge_of(&team)?.remove(&doc)?;
+    log::line(format!("team {team}: knowledge {} removed", removed.id));
+    knowledge_changed(&app, &teams, &team, KnowledgeChange::Removed { doc });
+    Ok(())
+}
+
+/// A document's file, if it is still there.
+fn knowledge_file(team: &str, doc: &str) -> Result<(knowledge::Doc, std::path::PathBuf), String> {
+    let kb = knowledge_of(team)?;
+    let index = kb.load();
+    let found = Kb::find(&index, doc).cloned().ok_or("There is no such document.")?;
+    let path = kb.path_of(&index, &found);
+    if !path.is_file() {
+        return Err(format!("{} is no longer in the knowledge folder.", found.name));
+    }
+    Ok((found, path))
+}
+
+/// The bytes of a text or a picture in the knowledge base, for the preview.
+#[tauri::command]
+fn team_knowledge_preview(team: String, doc: String) -> Result<tauri::ipc::Response, String> {
+    let (found, path) = knowledge_file(&team, &doc)?;
+    if found.kind == knowledge::DocKind::File {
+        return Err("This kind of file has no preview: open it instead.".into());
+    }
+    std::fs::read(path).map(tauri::ipc::Response::new).map_err(|e| e.to_string())
+}
+
+/// Shows a document in Explorer.
+#[tauri::command]
+fn team_knowledge_reveal(team: String, doc: String) -> Result<(), String> {
+    let (_, path) = knowledge_file(&team, &doc)?;
+    Command::new("explorer").arg("/select,").arg(&path).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Opens a document with the program the system has for it — on a click
+/// only, and never a program, a script or a shortcut.
+#[tauri::command]
+fn team_knowledge_open(team: String, doc: String) -> Result<(), String> {
+    let (found, path) = knowledge_file(&team, &doc)?;
+    if knowledge::is_program(&found.name) {
+        return Err("Coucou does not open programs, scripts or shortcuts. Show it in Explorer instead.".into());
+    }
+    Command::new("explorer").arg(&path).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// The system's file dialog for one or more files, over the Teamwork window. Empty when cancelled.
+#[tauri::command]
+async fn pick_files(app: AppHandle, title: String) -> Result<Vec<String>, String> {
+    let owner = app.get_webview_window("team").and_then(|w| w.hwnd().ok()).map(|h| h.0 as isize);
+    let picked = tauri::async_runtime::spawn_blocking(move || folder::pick_files(owner, &title))
+        .await
+        .map_err(|e| e.to_string())?;
+    match &picked {
+        Ok(files) => log::line(format!("file dialog: {} file(s) chosen", files.len())),
+        Err(err) => log::line(format!("file dialog: {err}")),
     }
     picked
 }
@@ -1658,6 +1820,16 @@ pub fn run() {
             team_save,
             team_new,
             pick_folder,
+            pick_files,
+            team_knowledge_list,
+            team_knowledge_add_path,
+            team_knowledge_add_bytes,
+            team_knowledge_update,
+            team_knowledge_reimport,
+            team_knowledge_remove,
+            team_knowledge_preview,
+            team_knowledge_reveal,
+            team_knowledge_open,
             team_window,
             open_team_window,
         ])
@@ -1685,7 +1857,13 @@ pub fn run() {
             };
             let teams = Arc::new(
                 Teams::new(Arc::new(AcpDrive(agents.clone())), emit, Some(settings::team_logs_dir()), settings::team_mcp_exe_path())
-                    .with_screens(show),
+                    .with_screens(show)
+                    .on_knowledge_shared({
+                        let app = handle.clone();
+                        Arc::new(move |team: &str| {
+                            let _ = app.emit_to("team", "team-knowledge-changed", serde_json::json!({ "team": team }));
+                        })
+                    }),
             );
             app.manage(teams.clone());
             // Copilot members on their own endpoint are metered (meter.rs).

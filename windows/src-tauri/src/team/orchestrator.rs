@@ -22,6 +22,7 @@ use tokio::sync::Notify;
 use super::screen::{Line, Screen};
 use super::state::{Event, Live, PermissionView, Snapshot, State, TaskStatus, TeamStatus};
 use super::store::Store;
+use super::knowledge::{self, Kb, Visibility};
 use super::{brief, tools, TeamConfig, SYSTEM, YOU};
 use crate::acp::{self, AgentProfile, Agents, Launch, McpServer, Sink};
 use crate::log;
@@ -138,6 +139,8 @@ pub struct Team {
     drive: Arc<dyn Drive>,
     emit: Emit,
     show: Show,
+    /// Where the teams' knowledge bases are; this team's is `<it>\<id>`.
+    knowledge: PathBuf,
 }
 
 /// An earlier run of a team, as the history list shows it.
@@ -163,6 +166,18 @@ pub struct Teams {
     root: Option<PathBuf>,
     /// coucou-team-mcp.exe, handed to every member as its MCP server.
     bridge: PathBuf,
+    /// Where the teams' knowledge bases are (team::knowledge).
+    knowledge: PathBuf,
+    /// Called when a leader shared a document, for the window to read the list again.
+    knowledge_shared: Arc<dyn Fn(&str) + Send + Sync>,
+}
+
+/// What changed in a team's knowledge base, for a running team to hear.
+#[derive(Debug, Clone, PartialEq)]
+pub enum KnowledgeChange {
+    Added { doc: String },
+    Visibility { doc: String, now: Visibility },
+    Removed { doc: String },
 }
 
 /// A short unique tag for a card held at the gate.
@@ -308,6 +323,27 @@ impl Team {
         read(self.store.lock().unwrap().state())
     }
 
+    /// This team's knowledge base.
+    fn kb(&self) -> Kb {
+        Kb::at(self.knowledge.join(&self.id))
+    }
+
+    /// Messages from Coucou, each with its own id: (to, text).
+    fn tell(&self, messages: Vec<(String, String)>) {
+        if messages.is_empty() {
+            return;
+        }
+        {
+            let mut store = self.store.lock().unwrap();
+            for (to, text) in messages {
+                let id = store.state().next_message_id();
+                store.append(Event::Message { id, from: SYSTEM.into(), to, text, task: None });
+            }
+            settle(&mut store);
+        }
+        self.changed();
+    }
+
     /// Records events that did not come from a member's tool call.
     fn record(&self, events: Vec<Event>) {
         {
@@ -374,7 +410,9 @@ impl Team {
             let mut text = if first {
                 // A team agent's words that have no other way in (team_agents.rs).
                 let own = self.seat(&member.id).map(|s| crate::team_agents::brief_text(&s.profile)).unwrap_or_default();
-                format!("{}{own}\n\n", brief::role(&config, &member.id))
+                // The documents it may read, as the knowledge base is now.
+                let docs = knowledge::brief_text(&self.kb(), member.id == config.leader);
+                format!("{}{own}{docs}\n\n", brief::role(&config, &member.id))
             } else {
                 String::new()
             };
@@ -609,7 +647,59 @@ impl Team {
 
 impl Teams {
     pub fn new(drive: Arc<dyn Drive>, emit: Emit, root: Option<PathBuf>, bridge: PathBuf) -> Self {
-        Self { teams: Mutex::new(HashMap::new()), drive, emit, show: Arc::new(|_| {}), root, bridge }
+        Self { teams: Mutex::new(HashMap::new()), drive, emit, show: Arc::new(|_| {}), root, bridge, knowledge: knowledge::root(), knowledge_shared: Arc::new(|_| {}) }
+    }
+
+    /// Who hears that a leader shared a document (the Teamwork window).
+    pub fn on_knowledge_shared(mut self, hear: Arc<dyn Fn(&str) + Send + Sync>) -> Self {
+        self.knowledge_shared = hear;
+        self
+    }
+
+    /// Knowledge bases somewhere else than %APPDATA% (tests).
+    #[cfg(test)]
+    pub fn with_knowledge(mut self, dir: PathBuf) -> Self {
+        self.knowledge = dir;
+        self
+    }
+
+    /// A team's knowledge base.
+    pub fn kb(&self, team: &str) -> Kb {
+        Kb::at(self.knowledge.join(team))
+    }
+
+    /// A running (or paused) team hears what the person changed in its
+    /// knowledge base, as far as it is theirs to know: a new document is told
+    /// to the leader; one opened to the team, to everyone else. One taken
+    /// away is not announced — that would only send them looking for it —
+    /// and nobody's opening words are sent again.
+    pub fn knowledge_changed(&self, team: &str, change: KnowledgeChange) {
+        let Some(team) = self.get(team) else { return };
+        if !team.has_seats() || !team.with_state(|s| matches!(s.status, TeamStatus::Running | TeamStatus::Paused)) {
+            return;
+        }
+        let Some(config) = team.config() else { return };
+        let index = self.kb(&config.id).load();
+        let others = || config.members.iter().filter(|m| m.id != config.leader).map(|m| m.id.clone()).collect::<Vec<_>>();
+        let tell: Vec<(String, String)> = match &change {
+            KnowledgeChange::Added { doc } => match Kb::find(&index, doc) {
+                Some(d) => {
+                    let mut out = vec![(config.leader.clone(), knowledge::added_text(d))];
+                    if d.visibility == Visibility::Shared {
+                        out.extend(others().into_iter().map(|m| (m, knowledge::shared_text(d))));
+                    }
+                    out
+                }
+                None => vec![],
+            },
+            KnowledgeChange::Visibility { doc, now: Visibility::Shared } => match Kb::find(&index, doc) {
+                Some(d) => others().into_iter().map(|m| (m, knowledge::shared_text(d))).collect(),
+                None => vec![],
+            },
+            _ => vec![],
+        };
+        log::line(format!("team {}: knowledge change {change:?}, {} told", team.id, tell.len()));
+        team.tell(tell);
     }
 
     /// Where the members' live screens go.
@@ -686,6 +776,13 @@ impl Teams {
                     Scope::new(&config.work_dir).with_also(also)
                 }),
                 model: Some(member.model.trim().to_string()).filter(|m| !m.is_empty()),
+                // No team's knowledge base is anybody's to read but for its
+                // own part: the leader's whole team folder, the shared
+                // documents for everyone else (team::knowledge).
+                private: crate::policy::Private {
+                    dirs: vec![self.knowledge.clone()],
+                    except: vec![if member.id == config.leader { self.kb(&config.id).dir().to_path_buf() } else { self.kb(&config.id).shared_dir() }],
+                },
             };
             let mut launch = launch;
             // A team agent's own MCP servers, after the team's (which stays first).
@@ -747,6 +844,7 @@ impl Teams {
             drive: self.drive.clone(),
             emit: self.emit.clone(),
             show: self.show.clone(),
+            knowledge: self.knowledge.clone(),
         });
         {
             let mut store = team.store.lock().unwrap();
@@ -795,6 +893,7 @@ impl Teams {
             drive: self.drive.clone(),
             emit: self.emit.clone(),
             show: self.show.clone(),
+            knowledge: self.knowledge.clone(),
         });
         {
             let mut store = team.store.lock().unwrap();
@@ -898,6 +997,7 @@ impl Teams {
             drive: self.drive.clone(),
             emit: self.emit.clone(),
             show: self.show.clone(),
+            knowledge: self.knowledge.clone(),
         });
         let snapshot = team.snapshot()?;
         self.teams.lock().unwrap().insert(id.to_string(), team);
@@ -927,6 +1027,54 @@ impl Teams {
         snap.seq = seq;
         snap.detached = true;
         Some(snap)
+    }
+
+    /// `knowledge_read`: what a member may read of the team's knowledge base,
+    /// as MCP content. Who is the leader is the running setup's say.
+    pub fn knowledge_read(&self, team: &str, member: &str, token: &str, args: &Value) -> Result<Value, String> {
+        let team = self.team(team)?;
+        if !team.token_ok(member, token) {
+            return Err("This session is not a member of that team.".into());
+        }
+        let config = team.config().ok_or("The team has no setup.")?;
+        let read = knowledge::read(&team.kb(), member == config.leader, args);
+        if let Some(doc) = args.get("doc").and_then(Value::as_str) {
+            log::line(format!("team {}: {member} read knowledge {doc}{}", team.id, if read.is_ok() { "" } else { " (refused)" }));
+        }
+        read
+    }
+
+    /// `knowledge_share`: the leader opens one of its documents to the whole
+    /// team — only when the person asked it to: one of their messages to the
+    /// leader, since the document was added, names it. Nobody is asked.
+    pub fn knowledge_share(&self, team: &str, member: &str, token: &str, args: &Value) -> Result<String, String> {
+        let team = self.team(team)?;
+        if !team.token_ok(member, token) {
+            return Err("This session is not a member of that team.".into());
+        }
+        let config = team.config().ok_or("The team has no setup.")?;
+        if member != config.leader {
+            return Err("Only the leader can share documents.".into());
+        }
+        let given = args.get("doc").and_then(Value::as_str).map(str::trim).unwrap_or("");
+        let kb = team.kb();
+        let index = kb.load();
+        let doc = Kb::find(&index, given).cloned().ok_or_else(|| format!("There is no document '{given}'. Call knowledge_read with no doc to see the list."))?;
+        if doc.visibility == Visibility::Shared {
+            return Ok(format!("「{}」 is already shared with the whole team.", doc.name));
+        }
+        let said: Vec<(u64, String)> = team.with_state(|s| s.messages.iter().filter(|m| m.from == YOU && m.to == config.leader).map(|m| (m.at, m.text.clone())).collect());
+        if !knowledge::may_share(&doc, &said) {
+            log::line(format!("team {}: leader's knowledge_share of {} refused: the user did not ask", team.id, doc.id));
+            return Err(format!("The user has not asked you to share 「{}」. Only the user can open it to the team; do not pass its contents on.", doc.name));
+        }
+        kb.update(&doc.id, Some(Visibility::Shared), None)?;
+        log::line(format!("team {}: leader shared knowledge {}", team.id, doc.id));
+        let mut tell: Vec<(String, String)> = config.members.iter().filter(|m| m.id != config.leader).map(|m| (m.id.clone(), knowledge::shared_text(&doc))).collect();
+        tell.push((YOU.to_string(), format!("Leader 已把「{}」分享給全隊。", doc.name)));
+        team.tell(tell);
+        (self.knowledge_shared)(&config.id);
+        Ok(format!("「{}」 is now shared with the whole team; they have been told.", doc.name))
     }
 
     /// A member's tool call. The token is the one its bridge was started with.
@@ -989,6 +1137,7 @@ impl Teams {
             drive: self.drive.clone(),
             emit: self.emit.clone(),
             show: self.show.clone(),
+            knowledge: self.knowledge.clone(),
         });
         let message = {
             let mut store = team.store.lock().unwrap();
@@ -1100,8 +1249,13 @@ impl Teams {
         }
         let Some(seat) = team.seat(member) else { return deny("That is not a member of the team.") };
         let asked = crate::agy::request_of(tool, args);
-        // The constitution first: refused here, or asked for whatever the rules say.
         let work_dir = std::path::PathBuf::from(seat.launch.cwd.clone().unwrap_or_default());
+        // A team's private documents: refused, and nobody is asked.
+        if seat.launch.private.touches(&asked, &work_dir) {
+            log::line(format!("team {}: {member} {tool} refused — the team's private knowledge base", team.id));
+            return deny(crate::policy::PRIVATE_REFUSAL);
+        }
+        // The constitution first: refused here, or asked for whatever the rules say.
         let ruled = crate::constitution::rule_for(&asked, &work_dir);
         if let Some((crate::constitution::Level::Never, rule)) = &ruled {
             let (title, _) = crate::agy::title_of(tool, args);
@@ -1393,7 +1547,11 @@ mod tests {
         let emit: Emit = Arc::new(move |_| {
             count.fetch_add(1, Ordering::Relaxed);
         });
-        let teams = Arc::new(Teams::new(drive.clone(), emit, root, PathBuf::from(r"C:\bin\coucou-team-mcp.exe")));
+        // Each bench its own knowledge bases: tests run side by side.
+        static BENCHES: AtomicUsize = AtomicUsize::new(0);
+        let knowledge = std::env::temp_dir().join(format!("coucou-kb-bench-{}-{}", std::process::id(), BENCHES.fetch_add(1, Ordering::Relaxed)));
+        let _ = std::fs::remove_dir_all(&knowledge);
+        let teams = Arc::new(Teams::new(drive.clone(), emit, root, PathBuf::from(r"C:\bin\coucou-team-mcp.exe")).with_knowledge(knowledge));
         *drive.teams.lock().unwrap() = Arc::downgrade(&teams);
         Bench { teams, drive, emitted }
     }
@@ -2101,6 +2259,140 @@ mod tests {
             // Other members have no limit.
             team.used("ai4", used(1_000_000), true);
             assert_eq!(bench.snap().status, TeamStatus::Running);
+        });
+    }
+
+    /// A shared document and one for the leader, in the shop team's knowledge base.
+    fn two_documents(bench: &Bench) -> (String, String) {
+        let kb = bench.teams.kb("shop");
+        let shared = kb.add("品牌指南.md", "主色:藍".as_bytes().to_vec(), "", false).unwrap().doc.unwrap().id;
+        kb.update(&shared, Some(Visibility::Shared), None).unwrap();
+        let secret = kb.add("報價.md", "底線 100 萬".as_bytes().to_vec(), "", false).unwrap().doc.unwrap().id;
+        (shared, secret)
+    }
+
+    #[test]
+    fn members_hear_of_the_documents_they_may_read_and_only_those() {
+        run(async {
+            let bench = bench(diligent());
+            two_documents(&bench);
+            bench.start(shop(&work_dir()));
+            bench.until("the team finishes", |s| s.status == TeamStatus::Finished).await;
+            let leader = bench.turns_of("ai1");
+            assert!(leader[0].contains("Team knowledge base") && leader[0].contains("主色:藍") && leader[0].contains("底線 100 萬"));
+            let ai3 = bench.turns_of("ai3");
+            assert!(ai3[0].contains("品牌指南.md") && ai3[0].contains("主色:藍"));
+            assert!(!ai3[0].contains("報價") && !ai3[0].contains("底線") && !ai3[0].contains("leader-"), "{}", ai3[0]);
+            // Later turns do not repeat it.
+            assert!(!leader[1].contains("Team knowledge base"));
+        });
+    }
+
+    #[test]
+    fn knowledge_read_follows_who_is_leader_and_a_member_s_token() {
+        run(async {
+            let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));
+            let (_, secret) = two_documents(&bench);
+            bench.start(shop(&work_dir()));
+            let team = bench.teams.get("shop").unwrap();
+            let (lead, ai3) = (team.token_for_tests("ai1").unwrap(), team.token_for_tests("ai3").unwrap());
+            let leader_reads = bench.teams.knowledge_read("shop", "ai1", &lead, &json!({ "doc": secret })).unwrap();
+            assert!(leader_reads[0]["text"].as_str().unwrap().contains("底線"));
+            let refused = bench.teams.knowledge_read("shop", "ai3", &ai3, &json!({ "doc": secret })).unwrap_err();
+            assert!(refused.contains("There is no document"));
+            assert!(bench.teams.knowledge_read("shop", "ai3", &lead, &json!({})).is_err(), "another member's token");
+        });
+    }
+
+    #[test]
+    fn the_leader_shares_a_document_only_when_the_person_named_it() {
+        run(async {
+            let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));
+            bench.drive.held.lock().unwrap().push("ai1".into());
+            let (_, secret) = two_documents(&bench);
+            bench.start(shop(&work_dir()));
+            let team = bench.teams.get("shop").unwrap();
+            let (lead, ai3) = (team.token_for_tests("ai1").unwrap(), team.token_for_tests("ai3").unwrap());
+            let share = |token: &str, member: &str| bench.teams.knowledge_share("shop", member, token, &json!({ "doc": "報價" }));
+
+            assert!(share(&ai3, "ai3").unwrap_err().contains("Only the leader"));
+            assert!(share(&lead, "ai1").unwrap_err().contains("has not asked you to share 「報價.md」"));
+            bench.teams.instruct("shop", "", "把大家都需要的資料分享出去", None).unwrap();
+            assert!(share(&lead, "ai1").is_err(), "a message that does not name it");
+            bench.teams.instruct("shop", "ai3", "報價 你先別看", None).unwrap();
+            assert!(share(&lead, "ai1").is_err(), "named, but to someone else");
+
+            bench.teams.instruct("shop", "", "把報價分享給全隊", None).unwrap();
+            assert!(share(&lead, "ai1").unwrap().contains("now shared"));
+            let index = bench.teams.kb("shop").load();
+            assert_eq!(Kb::find(&index, &secret).unwrap().visibility, Visibility::Shared);
+            let snap = bench.snap();
+            for m in ["ai2", "ai3", "ai4"] {
+                assert!(snap.messages.iter().any(|x| x.to == m && x.text.contains("「報價.md」 is now in the team's knowledge base")), "{m} was not told");
+            }
+            assert!(snap.messages.iter().any(|x| x.to == YOU && x.from == SYSTEM && x.text.contains("Leader 已把「報價.md」分享給全隊")));
+            assert!(bench.teams.knowledge_read("shop", "ai3", &ai3, &json!({ "doc": secret })).is_ok());
+            bench.drive.hold.notify_one();
+        });
+    }
+
+    #[test]
+    fn a_running_team_hears_of_new_and_opened_documents_but_not_of_closed_ones() {
+        run(async {
+            let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));
+            bench.drive.held.lock().unwrap().push("ai1".into());
+            // Not running yet: nobody to tell.
+            let kb = bench.teams.kb("shop");
+            bench.teams.knowledge_changed("shop", KnowledgeChange::Added { doc: "nothing".into() });
+            bench.start(shop(&work_dir()));
+            let told = |to: &str, what: &str| bench.snap().messages.iter().filter(|m| m.from == SYSTEM && m.to == to && m.text.contains(what)).count();
+
+            let added = kb.add("線框.png", b"\x89PNG\r\n\x1a\nxx".to_vec(), "", false).unwrap().doc.unwrap().id;
+            bench.teams.knowledge_changed("shop", KnowledgeChange::Added { doc: added.clone() });
+            assert_eq!(told("ai1", "The user added 「線框.png」"), 1);
+            assert_eq!(told("ai3", "線框.png"), 0);
+
+            kb.update(&added, Some(Visibility::Shared), None).unwrap();
+            bench.teams.knowledge_changed("shop", KnowledgeChange::Visibility { doc: added.clone(), now: Visibility::Shared });
+            assert_eq!(told("ai3", "「線框.png」 is now in the team's knowledge base"), 1);
+            assert_eq!(told("ai1", "is now in the team's knowledge base"), 0);
+
+            let before = bench.snap().messages.len();
+            kb.update(&added, Some(Visibility::Leader), None).unwrap();
+            bench.teams.knowledge_changed("shop", KnowledgeChange::Visibility { doc: added.clone(), now: Visibility::Leader });
+            kb.remove(&added).unwrap();
+            bench.teams.knowledge_changed("shop", KnowledgeChange::Removed { doc: added });
+            assert_eq!(bench.snap().messages.len(), before);
+            bench.drive.hold.notify_one();
+        });
+    }
+
+    #[test]
+    fn a_member_is_refused_the_leader_s_documents_at_the_gate_without_a_card() {
+        run(async {
+            let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));
+            bench.drive.held.lock().unwrap().push("ai1".into());
+            let mut config = shop(&work_dir());
+            // Every step asks the person: still no card for this.
+            config.auto_approve = false;
+            bench.start(config);
+            let kb = bench.teams.kb("shop");
+            let index = kb.load();
+            let secret = kb.dir().join(&index.leader_dir).join("k1-報價.md").to_string_lossy().to_string();
+            let team = bench.teams.get("shop").unwrap();
+
+            let member = team.seat("ai3").unwrap().launch.private;
+            assert_eq!(member.except, vec![kb.shared_dir()]);
+            assert_eq!(team.seat("ai1").unwrap().launch.private.except, vec![kb.dir().to_path_buf()]);
+
+            let token = team.token_for_tests("ai3").unwrap();
+            let refused = bench.teams.gate("shop", "ai3", &token, "view_file", &json!({ "AbsolutePath": secret })).await;
+            assert_eq!(refused["decision"], "deny");
+            assert!(refused["reason"].as_str().unwrap().contains("private knowledge base"));
+            let listed = bench.teams.gate("shop", "ai3", &token, "run_command", &json!({ "CommandLine": r"dir %APPDATA%\Coucou\team-knowledge" })).await;
+            assert_eq!(listed["decision"], "deny");
+            assert!(bench.snap().members.iter().all(|m| m.permission.is_none()), "no card was shown");
+            bench.drive.hold.notify_one();
         });
     }
 

@@ -234,7 +234,7 @@ pub fn as_text(bytes: &[u8]) -> Option<String> {
     } else if bytes.len() >= 2 && (bytes[..2] == [0xFF, 0xFE] || bytes[..2] == [0xFE, 0xFF]) {
         let little = bytes[0] == 0xFF;
         let body = &bytes[2..];
-        if body.len() % 2 != 0 {
+        if !body.len().is_multiple_of(2) {
             return None;
         }
         let units: Vec<u16> = body.chunks(2).map(|c| if little { u16::from_le_bytes([c[0], c[1]]) } else { u16::from_be_bytes([c[0], c[1]]) }).collect();
@@ -299,7 +299,9 @@ fn sample(s: &str) -> String {
 /// start of what looked like one. Common shapes only: a key a person meant to
 /// share is better caught here than in a model provider's log.
 pub fn find_key_like(text: &str) -> Option<KeyLike> {
-    const PREFIXES: &[(&str, usize, fn(char) -> bool)] = &[
+    /// A key's prefix, how many characters follow it at least, and which.
+    type Prefix = (&'static str, usize, fn(char) -> bool);
+    const PREFIXES: &[Prefix] = &[
         ("sk-", 20, token_char),
         ("ghp_", 20, token_char),
         ("gho_", 20, token_char),
@@ -657,11 +659,191 @@ pub fn visible_to(index: &Index, is_leader: bool) -> Vec<&Doc> {
     index.docs.iter().filter(|d| is_leader || d.visibility == Visibility::Shared).collect()
 }
 
-/// Where the team's documents are and which part every member may read:
-/// (the whole folder, its shared part). For the permission gate.
-pub fn private_paths(team: &str) -> (PathBuf, PathBuf) {
-    let kb = Kb::of(team);
-    (kb.dir.clone(), kb.shared_dir())
+// ── What members are told ───────────────────────────────────────────────────
+
+/// A text this long or shorter goes into a member's opening words whole…
+const INLINE_ONE: usize = 8_000;
+/// …as long as the texts that went in come to no more than this.
+const INLINE_ALL: usize = 24_000;
+/// `knowledge_read` hands a long text over in parts of this many characters.
+const PART: usize = 20_000;
+
+/// `18 KB`, `3.1 MB`.
+pub fn size_text(bytes: u64) -> String {
+    if bytes >= 1024 * 1024 {
+        format!("{:.1} MB", bytes as f64 / 1024.0 / 1024.0)
+    } else {
+        format!("{} KB", bytes.div_ceil(1024).max(1))
+    }
+}
+
+fn kind_word(kind: DocKind) -> &'static str {
+    match kind {
+        DocKind::Text => "text",
+        DocKind::Image => "image",
+        DocKind::File => "file",
+    }
+}
+
+const LEADER_ONLY: &str = "for you as the leader only — do not copy it into the work folder or pass its contents to teammates; if the user asks you to share it, call `knowledge_share`";
+const PROGRAM: &str = " It is a program or script the user stored as reference: do not run it unless the user asks.";
+
+/// One document in a list a member reads: its name, kind, size, who may read
+/// it and the person's note.
+fn doc_line(d: &Doc) -> String {
+    let who = match d.visibility {
+        Visibility::Shared => "shared with the whole team",
+        Visibility::Leader => LEADER_ONLY,
+    };
+    let note = if d.note.is_empty() { String::new() } else { format!(": {}", d.note) };
+    format!("{} (doc \"{}\", {}, {}, {who}){note}", d.name, d.id, kind_word(d.kind), size_text(d.bytes))
+}
+
+/// How a member gets at a document that is not in its opening words.
+fn reach(kb: &Kb, index: &Index, d: &Doc) -> String {
+    match d.kind {
+        DocKind::Text => format!("read it with `knowledge_read` (doc \"{}\")", d.id),
+        DocKind::Image => format!("look at it with `knowledge_read` (doc \"{}\"), or open {}", d.id, kb.path_of(index, d).display()),
+        DocKind::File => {
+            let program = if is_program(&d.name) { PROGRAM } else { "" };
+            format!("Coucou does not read this kind of file for you; open it with your own tools: {}.{program}", kb.path_of(index, d).display())
+        }
+    }
+}
+
+/// The part of a member's opening words about the knowledge base: the
+/// documents it may read, and the small texts among them in full. Read from
+/// disk each time, so a member that starts again hears what is there now.
+/// Nothing at all when there is nothing for this member.
+pub fn brief_text(kb: &Kb, is_leader: bool) -> String {
+    let index = kb.load();
+    let docs: Vec<&Doc> = visible_to(&index, is_leader).into_iter().filter(|d| kb.path_of(&index, d).is_file()).collect();
+    if docs.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("\nTeam knowledge base — documents the user gave this team. Treat them as reference and follow them where they apply:\n");
+    let mut inline: Vec<(&Doc, String)> = Vec::new();
+    let mut used = 0;
+    for d in docs {
+        let mut whole = None;
+        if d.kind == DocKind::Text {
+            if let Ok(text) = std::fs::read_to_string(kb.path_of(&index, d)) {
+                let n = text.chars().count();
+                if n <= INLINE_ONE && used + n <= INLINE_ALL {
+                    used += n;
+                    whole = Some(text);
+                }
+            }
+        }
+        match whole {
+            Some(text) => {
+                out.push_str(&format!("- {} — full text below\n", doc_line(d)));
+                inline.push((d, text));
+            }
+            None => out.push_str(&format!("- {} — {}\n", doc_line(d), reach(kb, &index, d))),
+        }
+    }
+    out.push_str("Call `knowledge_read` with no doc to list them again.\n");
+    for (d, text) in inline {
+        out.push_str(&format!("\n=== {} ===\n{}\n=== end of {} ===\n", d.name, text.trim_end(), d.name));
+    }
+    out
+}
+
+/// Told to the leader when the person adds a document while the team works.
+pub fn added_text(d: &Doc) -> String {
+    let who = match d.visibility {
+        Visibility::Shared => "shared with the whole team",
+        Visibility::Leader => "for you as the leader only. Do not copy it into the work folder or pass its contents to teammates; if the user asks you to share it, call `knowledge_share`",
+    };
+    format!("The user added 「{}」 to the team's knowledge base, {who}. Read it with `knowledge_read` (doc \"{}\") when it bears on the work.", d.name, d.id)
+}
+
+/// Told to the other members when a document is opened to the team.
+pub fn shared_text(d: &Doc) -> String {
+    format!("「{}」 is now in the team's knowledge base. Read it with `knowledge_read` (doc \"{}\") if it bears on your work.", d.name, d.id)
+}
+
+fn content_text(text: String) -> serde_json::Value {
+    serde_json::json!([{ "type": "text", "text": text }])
+}
+
+/// `knowledge_read`: with no doc, the list of what this member may read;
+/// with one, the document — text (in parts when long), the picture itself,
+/// or where any other file is. A document this member may not read is
+/// answered exactly as one that does not exist. Returns MCP content.
+pub fn read(kb: &Kb, is_leader: bool, args: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let index = kb.load();
+    let docs = visible_to(&index, is_leader);
+    let given = args.get("doc").and_then(serde_json::Value::as_str).map(str::trim).unwrap_or("");
+    if given.is_empty() {
+        if docs.is_empty() {
+            return Ok(content_text("The team's knowledge base has no documents for you.".into()));
+        }
+        let lines: Vec<String> = docs.iter().map(|d| format!("- {}", doc_line(d))).collect();
+        return Ok(content_text(format!("Documents you may read:\n{}\nCall knowledge_read with doc to read one.", lines.join("\n"))));
+    }
+    let not_there = || format!("There is no document '{given}' you can read. Call knowledge_read with no doc to see the list.");
+    let mine = Index { version: index.version, leader_dir: index.leader_dir.clone(), docs: docs.into_iter().cloned().collect() };
+    let d = Kb::find(&mine, given).ok_or_else(not_there)?;
+    let path = kb.path_of(&index, d);
+    if !path.is_file() {
+        return Err(format!("{} is no longer in the knowledge base.", d.name));
+    }
+    let note = if d.note.is_empty() { String::new() } else { format!(": {}", d.note) };
+    match d.kind {
+        DocKind::Text => {
+            let text = std::fs::read_to_string(&path).map_err(|e| format!("Could not read {}: {e}", d.name))?;
+            let chars: Vec<char> = text.chars().collect();
+            let parts = chars.len().div_ceil(PART).max(1);
+            let part = args.get("part").and_then(serde_json::Value::as_u64).unwrap_or(1).max(1) as usize;
+            if part > parts {
+                return Err(format!("{} has {parts} part(s).", d.name));
+            }
+            let body: String = chars.iter().skip((part - 1) * PART).take(PART).collect();
+            let head = if parts > 1 { format!("{} — part {part} of {parts} (ask for the next with part {})", d.name, part + 1) } else { d.name.clone() };
+            let head = if part == parts && parts > 1 { format!("{} — part {part} of {parts}", d.name) } else { head };
+            Ok(content_text(format!("{head}{note}\n\n{body}")))
+        }
+        DocKind::Image => {
+            let bytes = std::fs::read(&path).map_err(|e| format!("Could not read {}: {e}", d.name))?;
+            let media = sniff_image(&bytes).unwrap_or("image/png");
+            Ok(serde_json::json!([
+                { "type": "text", "text": format!("{}{note}", d.name) },
+                { "type": "image", "data": crate::llm::base64(&bytes), "mimeType": media },
+            ]))
+        }
+        DocKind::File => Ok(content_text(format!("{} ({}){note}\n{}", d.name, size_text(d.bytes), reach(kb, &index, d)))),
+    }
+}
+
+/// Every way of naming a document the person may use: its id, its name, its
+/// name without the extension. Compared without case, full-width letters as
+/// half-width.
+fn names_of(d: &Doc) -> Vec<String> {
+    [d.id.as_str(), d.name.as_str(), stem(&d.name)].iter().map(|n| fold(n)).filter(|n| n.chars().count() >= 2).collect()
+}
+
+/// Lower case, full-width ASCII as half-width.
+pub fn fold(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '\u{FF01}'..='\u{FF5E}' => char::from_u32(c as u32 - 0xFEE0).unwrap_or(c),
+            '\u{3000}' => ' ',
+            _ => c,
+        })
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// May the leader open `d` to the team? Only if the person asked: one of
+/// their messages to the leader, sent after the document was added, names it.
+pub fn may_share(d: &Doc, said_to_leader: &[(u64, String)]) -> bool {
+    let names = names_of(d);
+    said_to_leader.iter().any(|(at, text)| *at >= d.added_at && {
+        let text = fold(text);
+        names.iter().any(|n| text.contains(n.as_str()))
+    })
 }
 
 #[cfg(test)]
@@ -857,5 +1039,104 @@ mod tests {
         assert_eq!(clean_name("   "), "document");
         assert_eq!(stem("首頁草圖.png"), "首頁草圖");
         assert_eq!(stem(".env"), ".env");
+    }
+
+    #[test]
+    fn a_member_s_opening_words_list_only_what_it_may_read() {
+        let (kb, base) = kb("brief");
+        let shared = added(&kb, "品牌指南.md", "藍色為主".as_bytes());
+        let secret = added(&kb, "報價.md", "底線 100 萬".as_bytes());
+        let pic = added(&kb, "首頁.png", b"\x89PNG\r\n\x1a\nxx");
+        let pdf = added(&kb, "規格.pdf", b"%PDF-1.7 \xE2\xE3");
+        for d in [&shared, &pic, &pdf] {
+            kb.update(&d.id, Some(Visibility::Shared), None).unwrap();
+        }
+        kb.update(&pic.id, None, Some("三欄版型")).unwrap();
+        let index = kb.load();
+
+        let member = brief_text(&kb, false);
+        assert!(member.contains("品牌指南.md") && member.contains("藍色為主") && member.contains("三欄版型"));
+        assert!(member.contains(&kb.shared_dir().join(format!("{}-規格.pdf", pdf.id)).display().to_string()));
+        assert!(!member.contains("報價") && !member.contains("底線") && !member.contains(&index.leader_dir));
+        assert!(!member.contains("index.json"));
+
+        let leader = brief_text(&kb, true);
+        assert!(leader.contains("報價.md") && leader.contains("底線 100 萬") && leader.contains("knowledge_share"));
+
+        // Nothing for this member: not a word.
+        let (empty, base2) = super::tests::kb("brief-empty");
+        added(&empty, "only.md", b"x");
+        assert_eq!(brief_text(&empty, false), "");
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::remove_dir_all(&base2);
+        let _ = secret;
+    }
+
+    #[test]
+    fn long_texts_are_not_put_in_whole() {
+        let (kb, base) = kb("brief-long");
+        let long = added(&kb, "long.md", "字".repeat(INLINE_ONE + 1).as_bytes());
+        kb.update(&long.id, Some(Visibility::Shared), None).unwrap();
+        let text = brief_text(&kb, false);
+        assert!(text.contains(&format!("read it with `knowledge_read` (doc \"{}\")", long.id)));
+        assert!(!text.contains("=== long.md ==="));
+
+        let read1 = read(&kb, false, &serde_json::json!({ "doc": long.id })).unwrap();
+        let first = read1[0]["text"].as_str().unwrap();
+        assert!(first.starts_with("long.md — part 1 of 1") || first.starts_with("long.md\n"));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn knowledge_read_answers_a_leader_s_document_as_if_it_did_not_exist() {
+        let (kb, base) = kb("read");
+        let secret = added(&kb, "報價.md", b"secret");
+        let open = added(&kb, "open.md", "a".repeat(PART + 10).as_bytes());
+        let pic = added(&kb, "a.png", b"\x89PNG\r\n\x1a\nxx");
+        kb.update(&open.id, Some(Visibility::Shared), None).unwrap();
+        kb.update(&pic.id, Some(Visibility::Shared), None).unwrap();
+
+        let refused = read(&kb, false, &serde_json::json!({ "doc": secret.id })).unwrap_err();
+        let missing = read(&kb, false, &serde_json::json!({ "doc": "nothing" })).unwrap_err();
+        assert_eq!(refused.replace(&secret.id, "X"), missing.replace("nothing", "X"));
+        assert!(read(&kb, false, &serde_json::json!({ "doc": "報價" })).is_err());
+        assert!(read(&kb, true, &serde_json::json!({ "doc": "報價" })).unwrap()[0]["text"].as_str().unwrap().contains("secret"));
+
+        let list = read(&kb, false, &serde_json::json!({})).unwrap()[0]["text"].as_str().unwrap().to_string();
+        assert!(list.contains("open.md") && !list.contains("報價"));
+
+        let p1 = read(&kb, false, &serde_json::json!({ "doc": "open.md" })).unwrap()[0]["text"].as_str().unwrap().to_string();
+        assert!(p1.starts_with("open.md — part 1 of 2"));
+        let p2 = read(&kb, false, &serde_json::json!({ "doc": "open.md", "part": 2 })).unwrap()[0]["text"].as_str().unwrap().to_string();
+        assert!(p2.starts_with("open.md — part 2 of 2") && p2.ends_with("aaaaaaaaaa"));
+        assert!(read(&kb, false, &serde_json::json!({ "doc": "open.md", "part": 3 })).is_err());
+
+        let image = read(&kb, false, &serde_json::json!({ "doc": pic.id })).unwrap();
+        assert_eq!(image[1]["type"], "image");
+        assert_eq!(image[1]["mimeType"], "image/png");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_leader_may_share_only_what_the_person_named_after_it_was_added() {
+        let doc = Doc {
+            id: "k2b44".into(),
+            name: "首頁草圖.png".into(),
+            file: "k2b44-首頁草圖.png".into(),
+            kind: DocKind::Image,
+            bytes: 1,
+            visibility: Visibility::Leader,
+            added_at: 100,
+            source: String::new(),
+            hash: String::new(),
+            note: String::new(),
+        };
+        assert!(!may_share(&doc, &[]));
+        assert!(!may_share(&doc, &[(50, "把首頁草圖分享給全隊".into())]));
+        assert!(!may_share(&doc, &[(150, "把那份分享出去".into())]));
+        assert!(may_share(&doc, &[(150, "把 首頁草圖 分享給全隊".into())]));
+        assert!(may_share(&doc, &[(150, "share K2B44 please".into())]));
+        assert!(may_share(&doc, &[(150, "分享ｋ２ｂ４４".into())]));
+        assert!(may_share(&doc, &[(150, "分享 首頁草圖.PNG".into())]));
     }
 }

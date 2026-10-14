@@ -447,6 +447,12 @@ pub async fn dispatch(route: &Route, state: &CodexState, msg: Value) {
         return;
     };
 
+    // A team's private documents: refused, and nobody is asked.
+    if route.private.touches(&asked, &route.work_dir) {
+        log::line(format!("codex {key}: {kind} refused — the team's private knowledge base"));
+        let _ = acp::write_line(&route.writer, &permission_reply(&id, Some("decline"))).await;
+        return;
+    }
     // The constitution first: refused here, or asked for whatever the rules say.
     let ruled = crate::constitution::rule_for(&asked, &route.work_dir);
     if let Some((crate::constitution::Level::Never, rule)) = &ruled {

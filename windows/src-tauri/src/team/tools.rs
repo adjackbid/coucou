@@ -497,6 +497,12 @@ pub fn describe(config: &TeamConfig, member: &str) -> Vec<Value> {
             &["task", "owner"],
         ));
         tools.push(tool(
+            "knowledge_share",
+            "Leader only. Shares a leader-only document of the knowledge base with the whole team. Only when the user has asked you to share that document; Coucou checks that they did.",
+            json!({ "doc": { "type": "string", "description": "The document's id (from knowledge_read) or its file name." } }),
+            &["doc"],
+        ));
+        tools.push(tool(
             "team_finish",
             "Leader only. Closes the team once every task is accepted and you have reported to the user. It closes when nobody is still working and every message has been read.",
             json!({}),
@@ -554,6 +560,15 @@ pub fn describe(config: &TeamConfig, member: &str) -> Vec<Value> {
             "task": { "type": "string", "description": "The task it is about, if any." },
         }),
         &["to", "text"],
+    ));
+    tools.push(tool(
+        "knowledge_read",
+        "Reads the team's knowledge base: documents the user gave this team. With no doc, lists the ones you may read. With doc, returns that document: its text, the picture itself, or for other files where to open it.",
+        json!({
+            "doc": { "type": "string", "description": "The document's id (k7f3a) or file name, from the list." },
+            "part": { "type": "integer", "description": "For a long text: which part, from 1. The answer says how many parts there are." },
+        }),
+        &[],
     ));
     tools.push(tool(
         "ask_human",
@@ -800,8 +815,11 @@ mod tests {
     fn only_the_leader_is_offered_the_planning_tools() {
         let config = shop("D:\\x");
         let names = |member: &str| describe(&config, member).iter().map(|t| t["name"].as_str().unwrap().to_string()).collect::<Vec<_>>();
-        assert_eq!(names("ai1"), ["team_status", "task_create", "task_assign", "team_finish", "task_update", "task_block", "deliver", "review", "message_send", "ask_human"]);
-        assert_eq!(names("ai3"), ["team_status", "task_update", "task_block", "deliver", "review", "message_send", "ask_human"]);
+        assert_eq!(
+            names("ai1"),
+            ["team_status", "task_create", "task_assign", "knowledge_share", "team_finish", "task_update", "task_block", "deliver", "review", "message_send", "knowledge_read", "ask_human"]
+        );
+        assert_eq!(names("ai3"), ["team_status", "task_update", "task_block", "deliver", "review", "message_send", "knowledge_read", "ask_human"]);
         for tool in describe(&config, "ai1") {
             assert_eq!(tool["inputSchema"]["type"], "object");
             assert!(tool["description"].as_str().unwrap().len() > 20);

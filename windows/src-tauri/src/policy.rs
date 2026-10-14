@@ -169,6 +169,68 @@ pub fn decide(scope: &Scope, request: &Request) -> Verdict {
     }
 }
 
+// ── Private folders ───────────────────────────────────────────────────────────
+
+/// What an agent is told when it reaches for a private folder.
+pub const PRIVATE_REFUSAL: &str = "This is the team's private knowledge base; it is not for you. Do not try to read it another way.";
+
+/// Every team's knowledge base lives under a folder of this name
+/// (team::knowledge); a command that names it is reaching for one.
+const PRIVATE_WORD: &str = "team-knowledge";
+
+/// Folders a session may not touch at all, whatever else it is allowed —
+/// the teams' knowledge bases — but for the part that is its own (a member's
+/// team's shared documents; the leader's whole team folder). Checked before
+/// anything else, with or without the rules, and refused without a card:
+/// the person said not to be asked.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Private {
+    pub dirs: Vec<PathBuf>,
+    pub except: Vec<PathBuf>,
+}
+
+impl Private {
+    /// Does the request reach into a private folder? Its paths are placed
+    /// against `work_dir`; its command line is read word by word, and as a
+    /// whole for the folder's name (`%APPDATA%\Coucou\team-knowledge`).
+    pub fn touches(&self, request: &Request, work_dir: &Path) -> bool {
+        if self.dirs.is_empty() {
+            return false;
+        }
+        let scope = Scope::new(work_dir);
+        let norm = |p: &Path| p.to_string_lossy().to_lowercase().replace('/', "\\").trim_end_matches('\\').to_string();
+        let dirs: Vec<String> = self.dirs.iter().map(|d| norm(d)).collect();
+        let except: Vec<String> = self.except.iter().map(|d| norm(d)).collect();
+        let under = |t: &str, root: &str| t == root || t.strip_prefix(root).is_some_and(|r| r.starts_with('\\'));
+        // The words of a command (or a path we cannot place) with the folders
+        // it may use taken out: does the private folder's name remain?
+        let names_it = |text: &str| {
+            let mut t = text.to_lowercase().replace('/', "\\");
+            for (var, value) in [("%appdata%", "APPDATA"), ("$env:appdata", "APPDATA"), ("%localappdata%", "LOCALAPPDATA"), ("%userprofile%", "USERPROFILE"), ("$env:userprofile", "USERPROFILE")] {
+                if let Ok(v) = std::env::var(value) {
+                    t = t.replace(var, &v.to_lowercase());
+                }
+            }
+            for e in &except {
+                t = t.replace(e.as_str(), "");
+            }
+            t.contains(PRIVATE_WORD)
+        };
+        let path_touches = |raw: &str| {
+            let raw = raw.trim().trim_matches(['"', '\'']);
+            match scope.resolve(raw) {
+                Some(p) => {
+                    let t = norm(&p);
+                    dirs.iter().any(|d| under(&t, d)) && !except.iter().any(|e| under(&t, e))
+                }
+                None => names_it(raw),
+            }
+        };
+        request.paths.iter().any(|p| path_touches(p))
+            || request.command.as_deref().is_some_and(|c| names_it(c) || c.split_whitespace().any(|w| looks_like_path(w) && path_touches(w)))
+    }
+}
+
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
 impl Scope {
@@ -761,6 +823,47 @@ fn looks_like_path(word: &str) -> bool {
         || word.to_lowercase().contains("$env")
         || word.to_lowercase().contains("$home")
         || word.rsplit_once('.').map(|(_, ext)| !ext.is_empty() && ext.len() <= 5).unwrap_or(false)
+}
+
+#[cfg(test)]
+mod private_tests {
+    use super::*;
+
+    fn member() -> Private {
+        let root = PathBuf::from(r"C:\Users\x\AppData\Roaming\Coucou\team-knowledge");
+        Private { dirs: vec![root.clone()], except: vec![root.join("shop").join("shared")] }
+    }
+
+    fn read(path: &str) -> Request {
+        Request { kind: Kind::Read, command: None, paths: vec![path.into()] }
+    }
+
+    fn run(command: &str) -> Request {
+        Request { kind: Kind::Execute, command: Some(command.into()), paths: vec![] }
+    }
+
+    #[test]
+    fn a_member_cannot_reach_the_leader_s_documents_by_any_path() {
+        let p = member();
+        let w = Path::new(r"D:\Work\shop");
+        let kb = r"C:\Users\x\AppData\Roaming\Coucou\team-knowledge";
+        assert!(p.touches(&read(&format!(r"{kb}\shop\leader-0123456789abcdef\報價.md")), w));
+        assert!(p.touches(&read(&format!(r"{kb}\shop\index.json")), w));
+        assert!(p.touches(&read(&format!("{kb}/shop/leader-0123456789abcdef/a.md")), w));
+        assert!(p.touches(&read(&format!(r"{kb}\other\shared\a.md")), w), "another team's documents are not this member's");
+        assert!(p.touches(&read(kb), w));
+        assert!(p.touches(&run(&format!(r#"type "{kb}\shop\index.json""#)), w));
+        assert!(p.touches(&run(r"dir %APPDATA%\Coucou\team-knowledge"), w));
+        assert!(p.touches(&run(r"Get-ChildItem $env:APPDATA\Coucou -Recurse | Select-String team-knowledge"), w));
+        assert!(p.touches(&read(r"..\..\..\Users\x\AppData\Roaming\Coucou\team-knowledge\shop\index.json"), Path::new(r"C:\a\b\c")));
+        // Its own team's shared documents are fine, by path or in a command.
+        assert!(!p.touches(&read(&format!(r"{kb}\shop\shared\k1-品牌.md")), w));
+        assert!(!p.touches(&run(&format!(r#"type "{kb}\shop\shared\k1-品牌.md""#)), w));
+        // Nothing to do with it.
+        assert!(!p.touches(&read(r"D:\Work\shop\src\main.ts"), w));
+        assert!(!p.touches(&run("npm test"), w));
+        assert!(!Private::default().touches(&read(&format!(r"{kb}\shop\index.json")), w));
+    }
 }
 
 #[cfg(test)]

@@ -81,6 +81,19 @@ pub fn answer(teams: &Teams, who: &Hello, line: &str) -> Option<String> {
         "tools/call" => {
             let name = params.get("name").and_then(Value::as_str).unwrap_or("");
             let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+            // The knowledge base is read, not acted on: it is no event in the record.
+            if name == "knowledge_read" {
+                return Some(match teams.knowledge_read(&who.team, &who.member, &who.token, &args) {
+                    Ok(content) => result(&id, json!({ "content": content, "isError": false })),
+                    Err(why) => result(&id, tool_result(&why, true)),
+                });
+            }
+            if name == "knowledge_share" {
+                return Some(match teams.knowledge_share(&who.team, &who.member, &who.token, &args) {
+                    Ok(text) => result(&id, tool_result(&text, false)),
+                    Err(why) => result(&id, tool_result(&why, true)),
+                });
+            }
             match teams.act(&who.team, &who.member, &who.token, name, &args) {
                 Ok(text) => result(&id, tool_result(&text, false)),
                 // A refused call is a result the model reads and acts on, not
@@ -218,7 +231,11 @@ mod tests {
             assert!(answer(&teams, &leader, r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#).is_none());
 
             let list = ask(&leader, json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }));
-            assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 10);
+            assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 12);
+            // The knowledge base is read through the same server.
+            let docs = ask(&leader, json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": "knowledge_read", "arguments": {} } }));
+            assert_eq!(docs["result"]["isError"], false);
+            assert!(docs["result"]["content"][0]["text"].is_string());
 
             let made = ask(&leader, json!({ "jsonrpc": "2.0", "id": "c1", "method": "tools/call",
                 "params": { "name": "task_create", "arguments": { "title": "商品圖片", "owner": "ai4" } } }));
@@ -232,7 +249,7 @@ mod tests {
                 "params": { "name": "task_create", "arguments": { "title": "x", "owner": "ai3" } } }));
             assert_eq!(refused["result"]["isError"], true);
             assert!(refused["result"]["content"][0]["text"].as_str().unwrap().contains("Only the leader"));
-            assert_eq!(ask(&member, json!({ "jsonrpc": "2.0", "id": 4, "method": "tools/list" }))["result"]["tools"].as_array().unwrap().len(), 7);
+            assert_eq!(ask(&member, json!({ "jsonrpc": "2.0", "id": 4, "method": "tools/list" }))["result"]["tools"].as_array().unwrap().len(), 8);
 
             // The wrong token gets nothing, whoever it claims to be.
             let stranger = Hello { team: "shop".into(), member: "ai1".into(), token: token("ai3") };

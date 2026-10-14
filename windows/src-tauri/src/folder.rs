@@ -1,6 +1,7 @@
-// "Choose a folder": the system's own dialog, so a team's work folder is
-// picked, not typed. COM's file dialog wants a thread of its own with an
-// apartment; `pick` is called from one (see `pick_folder` in lib.rs).
+// "Choose a folder" and "Choose files": the system's own dialog, so a team's
+// work folder or its documents are picked, not typed. COM's file dialog wants
+// a thread of its own with an apartment; `pick` and `pick_files` are called
+// from one (see `pick_folder` and `pick_files` in lib.rs).
 
 use windows::core::HSTRING;
 use windows::Win32::Foundation::HWND;
@@ -8,8 +9,8 @@ use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
 };
 use windows::Win32::UI::Shell::{
-    FileOpenDialog, IFileOpenDialog, IShellItem, SHCreateItemFromParsingName, FOS_FORCEFILESYSTEM, FOS_PICKFOLDERS,
-    SIGDN_FILESYSPATH,
+    FileOpenDialog, IFileOpenDialog, IShellItem, SHCreateItemFromParsingName, FOS_ALLOWMULTISELECT, FOS_FILEMUSTEXIST,
+    FOS_FORCEFILESYSTEM, FOS_PICKFOLDERS, SIGDN_FILESYSPATH,
 };
 
 /// HRESULT_FROM_WIN32(ERROR_CANCELLED): the person closed the dialog.
@@ -26,6 +27,40 @@ pub fn pick(owner: Option<isize>, start: &str, title: &str) -> Result<Option<Str
         }
         result
     }
+}
+
+/// Shows the dialog for one or more files. Empty when it was cancelled.
+pub fn pick_files(owner: Option<isize>, title: &str) -> Result<Vec<String>, String> {
+    unsafe {
+        let initialised = CoInitializeEx(None, COINIT_APARTMENTTHREADED).is_ok();
+        let result = show_files(owner, title);
+        if initialised {
+            CoUninitialize();
+        }
+        result
+    }
+}
+
+unsafe fn show_files(owner: Option<isize>, title: &str) -> Result<Vec<String>, String> {
+    let fail = |e: windows::core::Error| e.message().to_string();
+    let dialog: IFileOpenDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).map_err(fail)?;
+    let options = dialog.GetOptions().map_err(fail)?;
+    dialog.SetOptions(options | FOS_ALLOWMULTISELECT | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM).map_err(fail)?;
+    let _ = dialog.SetTitle(&HSTRING::from(title));
+    let owner = owner.map(|h| HWND(h as *mut _));
+    if let Err(err) = dialog.Show(owner) {
+        return if err.code().0 == CANCELLED { Ok(Vec::new()) } else { Err(fail(err)) };
+    }
+    let items = dialog.GetResults().map_err(fail)?;
+    let mut out = Vec::new();
+    for i in 0..items.GetCount().map_err(fail)? {
+        let item = items.GetItemAt(i).map_err(fail)?;
+        let name = item.GetDisplayName(SIGDN_FILESYSPATH).map_err(fail)?;
+        let path = name.to_string().map_err(|e| e.to_string());
+        CoTaskMemFree(Some(name.0 as *const _));
+        out.push(path?);
+    }
+    Ok(out)
 }
 
 unsafe fn show(owner: Option<isize>, start: &str, title: &str) -> Result<Option<String>, String> {

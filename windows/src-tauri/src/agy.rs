@@ -186,7 +186,10 @@ pub fn request_of(tool: &str, args: &Value) -> policy::Request {
         "write_to_file" | "replace_file_content" | "multi_replace_file_content" | "sed_file" | "notebook_edit" => {
             (Kind::Edit, None, paths(&["TargetFile", "AbsolutePath", "File"]))
         }
-        "view_file" | "list_dir" | "grep_search" | "find_by_name" => (Kind::Read, None, vec![]),
+        // Where it reads, so a private folder is seen (policy::Private); reading is allowed anywhere else.
+        "view_file" | "list_dir" | "grep_search" | "find_by_name" => {
+            (Kind::Read, None, paths(&["AbsolutePath", "File", "TargetFile", "DirectoryPath", "SearchPath", "SearchDirectory", "Path"]))
+        }
         "read_url_content" | "search_web" | "open_browser_url" | "read_browser_page" | "list_browser_pages" | "capture_browser_screenshot"
         | "capture_browser_console_logs" | "browser_get_dom" | "browser_list_network_requests" | "browser_get_network_request" => (Kind::Fetch, None, vec![]),
         "call_mcp_tool" if text(args, &["ServerName"]) == acp::TEAM_SERVER => (Kind::Think, None, vec![]),

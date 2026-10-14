@@ -185,6 +185,9 @@ pub struct Launch {
     pub auto: Option<Scope>,
     /// The model, instead of the profile's.
     pub model: Option<String>,
+    /// Folders this session may not touch at all, refused without a card
+    /// (the teams' knowledge bases, but for its own part of one).
+    pub private: crate::policy::Private,
 }
 
 /// The model a session actually runs, to name usage the agent reported
@@ -657,6 +660,7 @@ pub(crate) struct Route {
     pending: PendingMap,
     pub(crate) writer: Writer,
     pub(crate) auto: Option<Scope>,
+    pub(crate) private: crate::policy::Private,
     /// Where the session works: the constitution reads relative paths against it.
     pub(crate) work_dir: std::path::PathBuf,
     /// Set for a Codex session: its lines are read by codex.rs.
@@ -686,6 +690,7 @@ async fn start(opener: &Opener, sink: &Sink, key: &str, profile: &AgentProfile, 
             pending: pending.clone(),
             writer: writer.clone(),
             auto: launch.auto.clone(),
+            private: launch.private.clone(),
             work_dir: working_dir(profile, launch),
             codex: (profile.protocol == Protocol::Codex).then(|| codex.clone()),
             claude: (profile.protocol == Protocol::Claude).then(|| claude.clone()),
@@ -920,6 +925,13 @@ async fn dispatch(route: &Route, msg: Value) {
                     // The constitution first: what it forbids is refused here,
                     // with no card; what it asks about goes to the person.
                     let asked = policy::Request::from_acp(&tool);
+                    // A team's private documents: refused, and nobody is asked.
+                    if route.private.touches(&asked, &route.work_dir) {
+                        log::line(format!("acp {key}: {kind} refused — the team's private knowledge base"));
+                        let refuse = option_of(&options, &["reject_once", "reject_always"]);
+                        let _ = write_line(&route.writer, &permission_reply(&id, refuse.as_deref())).await;
+                        return;
+                    }
                     let ruled = crate::constitution::rule_for(&asked, &route.work_dir);
                     if let Some((crate::constitution::Level::Never, rule)) = &ruled {
                         log::line(format!("acp {key}: {kind} refused by the constitution — {}", rule.text));
