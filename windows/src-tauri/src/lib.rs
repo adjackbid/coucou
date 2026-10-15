@@ -1616,6 +1616,9 @@ fn create_settings_window(app: &AppHandle) {
     match WebviewWindowBuilder::new(app, "settings", url)
         .additional_browser_args(BROWSER_ARGS)
         .title(settings_title())
+        // The page is dark whatever Windows is set to; the title bar Windows
+        // draws around it has to be told, or it comes up white.
+        .theme(Some(tauri::Theme::Dark))
         .inner_size(width, height)
         .min_inner_size(460.0, 480.0)
         .resizable(true)
