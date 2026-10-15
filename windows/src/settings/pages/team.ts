@@ -103,12 +103,12 @@ export const teamPage: Page = {
       }),
       card({
         anchor: "battle",
-        title: tr("中二模式", "Battle mode"),
-        lead: tr("把團隊的工作畫成討伐魔王的戰鬥。關掉時，Teamwork 的工作監控、團隊設定和公司設定都不會出現任何中二模式的東西。", "Shows the team's work as a raid on a boss. When off, nothing of it appears anywhere in Teamwork: not in the monitor, the team setup or the company settings."),
+        title: tr("戰鬥模式", "Battle mode"),
+        lead: tr("把團隊的工作畫成討伐魔王的戰鬥。關掉時，Teamwork 的工作監控、團隊設定和公司設定都不會出現任何戰鬥模式的東西。", "Shows the team's work as a raid on a boss. When off, nothing of it appears anywhere in Teamwork: not in the monitor, the team setup or the company settings."),
         body: [
           field(
-            tr("顯示中二模式", "Show Battle mode"),
-            toggle(settings.battleMode, (v) => { settings.battleMode = v; void save(); }, tr("顯示中二模式", "Show Battle mode")),
+            tr("顯示戰鬥模式", "Show Battle mode"),
+            toggle(settings.battleMode, (v) => { settings.battleMode = v; void save(); }, tr("顯示戰鬥模式", "Show Battle mode")),
             tr("預設關閉。只影響畫面，不影響團隊的工作、權限或驗收。", "Off by default. Only the picture changes; the team's work, permissions and reviews stay the same."),
           ),
         ],

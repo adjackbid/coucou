@@ -108,7 +108,7 @@ export function setCompanyName(name: string) {
 // i18n: model-facing — what the Leader is told when a member falls or comes back (always Chinese, like every brief).
 function fallenNote(name: string, limit: "tokens" | "cost" | null, battle: boolean): string {
   const what = limit === "cost" ? "成本上限" : "Token 上限"; // i18n-ok: model-facing
-  const fell = battle ? "在中二模式中陣亡" : "已停下"; // i18n-ok: model-facing
+  const fell = battle ? "在戰鬥模式中陣亡" : "已停下"; // i18n-ok: model-facing
   return `【系統】${name} 已達自己的${what},${fell}。請不要再指派新任務給 ${name};等人類在「團隊設定」提高上限讓它${battle ? "復活" : "繼續"}。`; // i18n-ok: model-facing
 }
 function revivedNote(name: string): string {
@@ -641,7 +641,7 @@ export class Office {
 
   private heroChip(teamId: string, memberId: string) {
     const c = this.hero(teamId, memberId);
-    return h("span", { class: `bt-hero ${c}`, title: tr("中二模式的職業外觀:只是外觀,不改變工作", "Your class in Battle mode: just a look, the work stays the same"), text: HERO_LABELS[c] });
+    return h("span", { class: `bt-hero ${c}`, title: tr("戰鬥模式的職業外觀:只是外觀,不改變工作", "Your class in Battle mode: just a look, the work stays the same"), text: HERO_LABELS[c] });
   }
 
   /** Office, 中二模式 or 星域: the same work, told three ways. */
@@ -650,7 +650,7 @@ export class Office {
       h("button", { class: `bt-${mode}${this.mode === mode ? " on" : ""}`, type: "button", "aria-pressed": this.mode === mode ? "true" : "false", title, onClick: () => this.setMode(mode) }, label);
     return h("div", { class: "bt-mode", role: "group", "aria-label": tr("畫面模式", "View mode") },
       opt("office", "Office", tr("一般辦公室畫面", "The usual office view")), // i18n-ok: the view's name, the same in both languages
-      this.battleAllowed ? opt("battle", tr("中二模式", "Battle mode"), tr("同一份工作,看成團隊討伐需求魔王:只改變畫面,不影響工作", "The same work, told as your team's raid on the Requirements Overlord: only the picture changes, never the work")) : null,
+      this.battleAllowed ? opt("battle", tr("戰鬥模式", "Battle mode"), tr("同一份工作,看成團隊討伐需求魔王:只改變畫面,不影響工作", "The same work, told as your team's raid on the Requirements Overlord: only the picture changes, never the work")) : null,
       opt("orbit", tr("星域", "Orbit mode"), tr("同一份工作,看成 Agent 在同一個宇宙裡的光環與協作連線:只改變畫面,不影響工作", "The same work, told as your agents' light rings and the lines between them, all in one universe: only the picture changes, never the work")));
   }
 
@@ -1502,7 +1502,7 @@ export class Office {
               choices: HIT_SKILLS.map((id) => ({ value: id, label: SKILLS[id].name, hint: elementWord(SKILLS[id].element) })),
               onChange: (v) => { setSkill(teamId, m.memberId, v as SkillId); this.host.render(); },
             }),
-            h("small", { class: "dim bt-hero-note", text: tr("只改變中二模式裡的樣子:每項任務都固定 100 HP,不影響工作、權限或驗收。", "Only changes how things look in Battle mode: every task is still 100 HP, and work, permissions and reviews stay the same.") }))
+            h("small", { class: "dim bt-hero-note", text: tr("只改變戰鬥模式裡的樣子:每項任務都固定 100 HP,不影響工作、權限或驗收。", "Only changes how things look in Battle mode: every task is still 100 HP, and work, permissions and reviews stay the same.") }))
         : null,
       h("section", { class: "office-card" },
         h("h3", { text: tr("目前工作", "Working on") }),

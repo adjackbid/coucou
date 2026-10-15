@@ -531,7 +531,7 @@ function sidebar(): HTMLElement {
               }),
               // 中二模式's own knobs, only while 設定 → 團隊與秘書 offers it at all.
               ...(office.battleAllowed ? [
-              h("label", { text: tr("戰鬥動畫流暢度(中二模式)", "Animation frame rate (Battle mode)") }),
+              h("label", { text: tr("戰鬥動畫流暢度(戰鬥模式)", "Animation frame rate (Battle mode)") }),
               h("div", { class: "segmented" },
                 ...[20, 30, 60].map((n) =>
                   h("button", {
@@ -562,14 +562,14 @@ function sidebar(): HTMLElement {
               })(),
               h("p", { class: "hint", text: tr("越低,模糊的桌面透出越多;越高越接近實色。模糊本身的強度由 Windows 決定,無法調整。拖動時視窗會即時變化。", "Lower lets more of the blurred desktop show through; higher gets closer to a solid color. Windows sets how strong the blur is, and that can't be changed. The window changes as you drag.") }),
               ...(office.battleAllowed ? [
-              h("label", { text: tr("戰鬥節奏(中二模式)", "Battle pace (Battle mode)") }),
+              h("label", { text: tr("戰鬥節奏(戰鬥模式)", "Battle pace (Battle mode)") }),
               h("div", { class: "segmented" },
                 ...([["calm", tr("平靜", "Calm")], ["normal", tr("一般", "Normal")], ["fierce", tr("激烈", "Fierce")]] as [Tempo, string][]).map(([v, label]) =>
                   h("button", { type: "button", class: battleTempo() === v ? "on" : "", onClick: () => { saveBattleTempo(v); render(); } }, label))),
               h("p", { class: "hint", text: tr("AI 在工作時,英雄多久出手試探一次、魔王多常反擊。只是演出:不扣血、不出卡片,HP 只看真實的任務驗收。", "While the AI works, how often the heroes probe and the boss strikes back. It's only a show: no HP lost, no cards; HP follows real task reviews only.") }),
               h("label", { class: "side-pop-check" },
                 h("input", { type: "checkbox", checked: ambientMotion(), onChange: (e: Event) => { saveAmbientMotion((e.target as HTMLInputElement).checked); render(); } }),
-                tr("場地微動(中二模式)", "Ambient motion (Battle mode)")),
+                tr("場地微動(戰鬥模式)", "Ambient motion (Battle mode)")),
               h("p", { class: "hint", text: tr("戰場上的餘燼、雪花、落葉、電花、星塵。只是氣氛,減少動態時一律停止。", "Embers, snow, falling leaves, sparks and stardust on the battlefield. Just atmosphere; it always stops when motion is reduced.") }),
               ] : [])),
       );
@@ -958,7 +958,7 @@ function setup(file: TeamFile): HTMLElement {
     }),
     // The battlefield is only a choice while 設定 → 團隊與秘書 offers 中二模式 at all.
     ...(office.battleAllowed ? [
-    h("label", { text: tr("中二模式戰場", "Battle mode arena") }),
+    h("label", { text: tr("戰鬥模式戰場", "Battle mode arena") }),
     h(
       "div",
       { class: "segmented wrap" },
@@ -966,7 +966,7 @@ function setup(file: TeamFile): HTMLElement {
         h("button", { type: "button", class: savedWorld(config.id) === id ? "on" : "", title: WORLDS[id].label, onClick: () => { saveWorld(config.id, id); office.worldChanged(config.id); } }, WORLDS[id].label),
       ),
     ),
-    h("p", { class: "hint", text: tr("中二模式下這個團隊在哪個場地討伐哪隻魔王。只改變畫面,不影響工作、任務或 HP;改了馬上生效,不用儲存。", "Where this team fights which boss in Battle mode. It only changes the picture, not the work, the tasks or HP; it applies right away, no need to save.") }),
+    h("p", { class: "hint", text: tr("戰鬥模式下這個團隊在哪個場地討伐哪隻魔王。只改變畫面,不影響工作、任務或 HP;改了馬上生效,不用儲存。", "Where this team fights which boss in Battle mode. It only changes the picture, not the work, the tasks or HP; it applies right away, no need to save.") }),
     ] : []),
     h("label", { text: tr("回合上限", "Turn limit") }),
     h("div", { class: "row nowrap" }, bound("input", "maxTurns", String(config.maxTurns), (v) => (config.maxTurns = Math.max(1, Math.min(500, Number(v) || 60))), { type: "number", min: "1", max: "500", class: "field narrow" }), h("span", { class: "hint", text: tr("整個團隊用完這麼多回合後會暫停,等你決定要不要繼續。", "Once the whole team has used this many turns, it pauses until you decide whether to go on.") })),
