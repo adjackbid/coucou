@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Agent Center · 60 秒</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block;width:1920px;height:1080px}</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+// Everything is a function of time: draw(t) always gives the same picture for
+// the same t. render.js steps t frame by frame; opened in a browser it plays.
+const W = 1920, H = 1080, c = document.getElementById('c'), ctx = c.getContext('2d');
+const C = { bg: '#0b0c0e', panel: '#15171b', panel2: '#1c1f25', line: '#2a2e36', text: '#eceef2', dim: '#9aa1ad', blue: '#5b8cff', green: '#3ccf91', violet: '#a77bff', amber: '#f2b33d', red: '#ff6b6b', white: '#ffffff' };
+const F = '"Microsoft JhengHei UI","Microsoft JhengHei","Segoe UI",sans-serif', M = '"Cascadia Mono","Consolas",monospace';
+
+// ── images (the report's screenshots) ────────────────────────────────────────
+const IMGS = {}, NAMES = ['waiting', 'office', 'links', 'secretary-status', 'cost'];
+let loaded = 0;
+window.ready = false;
+NAMES.forEach((n) => { const i = new Image(); i.onload = i.onerror = () => { if (++loaded === NAMES.length) window.ready = true; }; i.src = '../../../docs/team-report/img/' + n + '.png'; IMGS[n] = i; });
+
+// ── maths ────────────────────────────────────────────────────────────────────
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, x) => a + (b - a) * x;
+const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+const easeIn = (x) => x * x * x;
+const easeInOut = (x) => (x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const back = (x) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const inout = (t, a, b, fi = .3, fo = .3) => (t < a || t > b ? 0 : Math.min(seg(t, a, a + fi), 1 - seg(t, b - fo, b)));
+const rnd = (i) => { const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
+const hexa = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
+const mix = (h1, h2, x) => { const a = parseInt(h1.slice(1), 16), b = parseInt(h2.slice(1), 16); const ch = (s) => Math.round(lerp((a >> s) & 255, (b >> s) & 255, x)); return `rgb(${ch(16)},${ch(8)},${ch(0)})`; };
+const bez = (p0, p1, p2, u) => { const a = lerp(p0[0], p1[0], u), b = lerp(p1[0], p2[0], u), c2 = lerp(p0[1], p1[1], u), d = lerp(p1[1], p2[1], u); return [lerp(a, b, u), lerp(c2, d, u)]; };
+
+// ── drawing ──────────────────────────────────────────────────────────────────
+let SA = 1; // the scene's own alpha; ga() multiplies element alpha into it
+const ga = (x) => { ctx.globalAlpha = SA * clamp(x); };
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function panel(x, y, w, h, r = 24, fill = 'rgba(21,23,27,.94)', stroke = 'rgba(255,255,255,.09)', lw = 2) { rr(x, y, w, h, r); ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+function txt(s, x, y, size = 32, color = C.text, weight = 600, align = 'center', font = F, base = 'middle', ls = 0) {
+  ctx.font = `${weight} ${size}px ${font}`; ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = base; ctx.letterSpacing = ls ? ls + 'em' : '0px'; ctx.fillText(s, x, y); ctx.letterSpacing = '0px';
+}
+function chip(x, y, label, color, size = 24, o = {}) {
+  ctx.font = `${o.weight || 600} ${size}px ${o.font || F}`; const pad = o.pad ?? size * .8; const w = ctx.measureText(label).width + pad * 2, h = o.h ?? size * 1.75;
+  const x0 = o.align === 'left' ? x : x - w / 2; rr(x0, y - h / 2, w, h, h / 2); ctx.fillStyle = o.fill ?? hexa(color, .16); ctx.fill();
+  if (o.stroke) { ctx.strokeStyle = o.stroke; ctx.lineWidth = 2; ctx.stroke(); }
+  txt(label, x0 + w / 2, y + 1, size, o.color ?? color, o.weight || 600, 'center', o.font || F); return w;
+}
+function glow(x, y, r, color) { const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, color); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(x - r, y - r, 2 * r, 2 * r); }
+function line(x1, y1, x2, y2, color, w = 3, p = 1, dash = null, off = 0) {
+  if (p <= 0) return; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + (x2 - x1) * p, y1 + (y2 - y1) * p); ctx.strokeStyle = color; ctx.lineWidth = w; ctx.setLineDash(dash || []); ctx.lineDashOffset = off; ctx.stroke(); ctx.setLineDash([]);
+}
+function head(x, y, ang, color, s = 14) { ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-s, -s * .55); ctx.lineTo(-s, s * .55); ctx.closePath(); ctx.fillStyle = color; ctx.fill(); ctx.restore(); }
+function ring(x, y, r, color, w = 3) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.strokeStyle = color; ctx.lineWidth = w; ctx.stroke(); }
+function pulse(x, y, t, t0, color, period = 1.2, rmax = 160, r0 = 20) { if (t < t0) return; const ph = ((t - t0) % period) / period; ga((1 - ph) * .6); ring(x, y, r0 + rmax * ph, color, 3); ga(1); }
+function mochi(x, y, s, color, t, seed = 0, o = {}) {
+  const w = s, h = s * .82; rr(x - w / 2, y - h / 2, w, h, s * .42); ctx.fillStyle = color; ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.16)'; rr(x - w / 2 + s * .1, y - h / 2 + s * .07, w * .5, h * .2, s * .1); ctx.fill();
+  const bp = (t * 1 + seed * .77) % 3.3, blink = bp < .14 ? 1 - Math.abs(bp / .07 - 1) : 0;
+  const eh = Math.max(2, s * .2 * (1 - .92 * blink)), ew = s * .11;
+  ctx.fillStyle = '#101216';
+  if (o.mood === 'x') { ctx.strokeStyle = '#101216'; ctx.lineWidth = s * .06; for (const ex of [-s * .17, s * .17]) { ctx.beginPath(); ctx.moveTo(x + ex - s * .07, y - s * .07); ctx.lineTo(x + ex + s * .07, y + s * .07); ctx.moveTo(x + ex + s * .07, y - s * .07); ctx.lineTo(x + ex - s * .07, y + s * .07); ctx.stroke(); } }
+  else for (const ex of [-s * .17, s * .17]) { rr(x + ex - ew / 2, y - eh / 2, ew, eh, ew / 2); ctx.fill(); }
+  if (o.crown) { ctx.fillStyle = C.amber; const cx = x, cy = y - h / 2 - s * .04; ctx.beginPath(); ctx.moveTo(cx - s * .2, cy); ctx.lineTo(cx - s * .25, cy - s * .2); ctx.lineTo(cx - s * .09, cy - s * .1); ctx.lineTo(cx, cy - s * .26); ctx.lineTo(cx + s * .09, cy - s * .1); ctx.lineTo(cx + s * .25, cy - s * .2); ctx.lineTo(cx + s * .2, cy); ctx.closePath(); ctx.fill(); }
+}
+function cursor(x, y) { ctx.save(); ctx.translate(x, y); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 30); ctx.lineTo(8, 23); ctx.lineTo(14, 36); ctx.lineTo(20, 33); ctx.lineTo(14, 21); ctx.lineTo(24, 20); ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore(); }
+function docIcon(x, y, kind, color) { rr(x - 20, y - 26, 40, 52, 6); ctx.fillStyle = hexa(color, .2); ctx.fill(); ctx.strokeStyle = hexa(color, .8); ctx.lineWidth = 2; ctx.stroke(); if (kind === 'image') { ctx.fillStyle = hexa(color, .9); ctx.beginPath(); ctx.moveTo(x - 12, y + 14); ctx.lineTo(x - 2, y - 2); ctx.lineTo(x + 5, y + 6); ctx.lineTo(x + 9, y + 1); ctx.lineTo(x + 14, y + 14); ctx.closePath(); ctx.fill(); } else { ctx.fillStyle = hexa(color, .8); for (let k = 0; k < 3; k++) ctx.fillRect(x - 11, y - 10 + k * 9, k === 2 ? 14 : 22, 3); } }
+function shield(x, y, s, color) { ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s * .85, y - s * .65); ctx.lineTo(x + s * .75, y + s * .25); ctx.quadraticCurveTo(x + s * .4, y + s * .9, x, y + s); ctx.quadraticCurveTo(x - s * .4, y + s * .9, x - s * .75, y + s * .25); ctx.lineTo(x - s * .85, y - s * .65); ctx.closePath(); ctx.fillStyle = hexa(color, .22); ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = 4; ctx.stroke(); }
+function term(x, y, w, h, title, lines, color, t) {
+  panel(x - w / 2, y - h / 2, w, h, 16, 'rgba(14,15,18,.96)', 'rgba(255,255,255,.1)');
+  ctx.fillStyle = 'rgba(255,255,255,.05)'; rr(x - w / 2, y - h / 2, w, 38, [16, 16, 0, 0]); ctx.fill();
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x - w / 2 + 22, y - h / 2 + 19, 6, 0, 7); ctx.fill();
+  txt(title, x - w / 2 + 40, y - h / 2 + 19, 18, C.dim, 600, 'left', M);
+  lines.forEach((l, i) => txt(l, x - w / 2 + 22, y - h / 2 + 72 + i * 34, 20, i ? C.dim : C.text, 500, 'left', M));
+  if (Math.floor(t * 2) % 2 === 0) { ctx.fillStyle = color; ctx.fillRect(x - w / 2 + 22, y - h / 2 + 72 + lines.length * 34 - 10, 12, 22); }
+}
+function bar(x, y, w, h, p, color, bgc = 'rgba(255,255,255,.08)') { rr(x, y, w, h, h / 2); ctx.fillStyle = bgc; ctx.fill(); if (p > 0) { rr(x, y, Math.max(h, w * clamp(p)), h, h / 2); ctx.fillStyle = color; ctx.fill(); } }
+
+// A scene: enters with a fade and a little scale, leaves with a fade.
+function frame(t, a, b, o = {}) {
+  if (t < a || t >= b) return false;
+  const fi = o.fi ?? .45, fo = o.fo ?? .4, ai = seg(t, a, a + fi), ao = 1 - seg(t, b - fo, b);
+  SA = Math.min(easeOut(ai), ao);
+  const sin = o.sin ? lerp(o.sin[0], o.sin[1], easeOut(ai)) : lerp(.94, 1, easeOut(ai));
+  const sout = o.exit === 'collapse' ? lerp(1, .15, easeIn(1 - ao)) : lerp(1, 1.05, easeIn(1 - ao));
+  ctx.globalAlpha = SA; ctx.translate(W / 2, H / 2); ctx.scale(sin * sout, sin * sout); ctx.translate(-W / 2, -H / 2);
+  return true;
+}
+
+// ── background ───────────────────────────────────────────────────────────────
+function bg(t, bright = 1) {
+  ctx.globalAlpha = 1; ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = bright;
+  glow(320 + Math.sin(t * .3) * 80, 220, 760, 'rgba(91,140,255,.17)');
+  glow(1620 + Math.cos(t * .25) * 80, 320, 640, 'rgba(167,123,255,.13)');
+  glow(1000 + Math.sin(t * .2) * 100, 1040, 640, 'rgba(60,207,145,.09)');
+  ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(255,255,255,.035)';
+  for (let x = 60; x < W; x += 60) for (let y = 60; y < H; y += 60) ctx.fillRect(x, y, 2, 2);
+}
+
+// ── subtitles (burned in) ────────────────────────────────────────────────────
+const SUBS = [
+  [0.5, 3.6, '一個人對一個 AI 的時代,該升級了。'],
+  [4.2, 7.0, '同時開好幾個終端機,自己當中繼站傳話,'],
+  [7.0, 9.6, '你,成了整條工作流的人類瓶頸。'],
+  [10.2, 13.6, 'Agent Center 當編排中樞,Meta Agent 帶隊,Member Agent 各司其職。'],
+  [13.7, 16.8, 'Claude Code、Codex、Copilot、Antigravity 混編,各用所長。'],
+  [17.2, 20.6, 'Meta Agent 拆任務,只寫完成條件,不逐行指揮。'],
+  [20.7, 24.6, '沒有相依的任務同時推進,前端不用等後端。'],
+  [25.2, 29.3, '自主協作:一般動作直接放行,危險動作跳核准卡。'],
+  [29.6, 31.8, '憲法禁止的,直接擋下,不打擾你。'],
+  [32.2, 35.2, '文件放一次,依可見性分給 Meta Agent 或全隊,'],
+  [35.3, 37.8, '機密只到 Meta Agent,金鑰自動攔下。'],
+  [38.2, 41.6, '成員交付,Meta Agent 逐條核對完成條件,驗收或退回。'],
+  [41.7, 44.8, '全部驗收,團隊完成,交付物都在工作資料夾。'],
+  [45.2, 48.6, '即時畫面、協作地圖、溝通紀錄,一個視窗看完全隊。'],
+  [48.7, 51.8, '秘書一句話查現況,成本頁守住 Token 預算。'],
+  [52.2, 56.6, '從會議紀錄功能到專案管理平台,描述目標,團隊就動起來。'],
+  [57.7, 59.4, 'Agent Center:描述目標,授權代理,驗收成果。'],
+];
+function subs(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  for (const [a, b, s] of SUBS) {
+    const al = inout(t, a, b, .18, .18); if (al <= 0) continue;
+    ctx.globalAlpha = al; ctx.font = `600 38px ${F}`; const w = ctx.measureText(s).width + 56; const y = 992 + (1 - easeOut(seg(t, a, a + .18))) * 14;
+    rr(960 - w / 2, y - 34, w, 68, 34); ctx.fillStyle = 'rgba(0,0,0,.62)'; ctx.fill();
+    txt(s, 960, y + 1, 38, '#fff', 600);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ── scene 0 · title (0–4) ────────────────────────────────────────────────────
+function s0(t) {
+  if (!frame(t, 0, 4, { fi: .25, fo: .4 })) return;
+  const pk = seg(t, 2.3, 2.7); ga(pk); txt('多代理編排 · AGENT ORCHESTRATION', 960, 250 + (1 - easeOut(pk)) * 20, 26, C.blue, 700, 'center', F, 'middle', .18);
+  const cols = [C.blue, C.green, C.violet, C.amber];
+  for (let i = 0; i < 4; i++) { const t0 = .3 + i * .15, p = seg(t, t0, t0 + .5); if (p <= 0) continue; ga(Math.min(1, p * 3)); ctx.save(); ctx.translate(960 + (i - 1.5) * 130, 400); const s = back(p); ctx.scale(s, s); mochi(0, 0, 96, cols[i], t, i); ctx.restore(); }
+  const p1 = seg(t, 1.2, 1.7); ga(p1); txt('Agent Center', 960, 560 + (1 - easeOut(p1)) * 40, 128, C.text, 800);
+  const p2 = seg(t, 1.8, 2.3); ga(p2); txt('在桌面上編排你的 AI 夢幻團隊', 960, 680 + (1 - easeOut(p2)) * 30, 46, C.dim, 500);
+}
+
+// ── scene 1 · the human bottleneck (4–10) ───────────────────────────────────
+function s1(t) {
+  if (!frame(t, 4, 10, { fi: .4, fo: .55, exit: 'collapse' })) return;
+  const HX = 960, HY = 560;
+  const T = [
+    { x: 400, y: 265, n: 'claude', col: C.amber, lines: ['> claude', 'Reading src/meetings…', '✎ Edit EditorPage.tsx'] },
+    { x: 1520, y: 265, n: 'codex app-server', col: C.green, lines: ['> codex', 'npm test -- meetings', 'PASS 12 · FAIL 0'] },
+    { x: 400, y: 835, n: 'copilot --acp', col: C.blue, lines: ['> copilot', 'waiting for your input…'] },
+    { x: 1520, y: 835, n: 'agy -p', col: C.violet, lines: ['> agy', 'generating layout…'] },
+  ];
+  T.forEach((w, i) => { const p = seg(t, 4.1 + i * .15, 4.5 + i * .15); if (p <= 0) return; ga(p); ctx.save(); ctx.translate(w.x, w.y); const s = lerp(.6, 1, back(p)); ctx.scale(s, s); term(0, 0, 440, 210, w.n, w.lines, w.col, t); ctx.restore(); });
+  const pl = seg(t, 4.4, 4.8); ga(pl); chip(960, 150, '結對程式設計 Peer Programming · 單線程 Single-threaded', C.dim, 26, { fill: 'rgba(255,255,255,.06)' });
+  const pa = seg(t, 4.9, 5.4), labels = ['Context', '複製貼上', '等它跑完…', '再問一次'];
+  T.forEach((w, i) => {
+    const dx = HX - w.x, dy = HY - w.y, d = Math.hypot(dx, dy), ux = dx / d, uy = dy / d;
+    const x1 = w.x + ux * 250, y1 = w.y + uy * 135, x2 = HX - ux * 130, y2 = HY - uy * 130;
+    ga(pa * .8); line(x1, y1, x2, y2, 'rgba(255,255,255,.28)', 3, pa, [14, 12], -t * 140 * (i % 2 ? -1 : 1));
+    if (pa >= 1) { const q = (t * .45 + i * .27) % 1, u = i % 2 ? q : 1 - q; ga(1); chip(lerp(x1, x2, u), lerp(y1, y2, u), labels[i], i % 2 ? C.amber : C.blue, 22, { fill: 'rgba(21,23,27,.95)', stroke: hexa(i % 2 ? C.amber : C.blue, .6) }); }
+  });
+  const ph = seg(t, 4.3, 4.7), red = seg(t, 6.4, 7.0); ga(ph);
+  ctx.fillStyle = mix('#d7dbe3', C.red, red * .9); ctx.beginPath(); ctx.arc(HX, 500, 46, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(HX, 652, 88, Math.PI, 0); ctx.fill();
+  txt('你', HX, 700, 34, C.text, 700);
+  pulse(HX, 560, t, 6.3, hexa(C.red, .9), 1.0, 240, 60);
+  const ps = seg(t, 7.0, 7.3);
+  if (ps > 0) { ga(Math.min(1, ps * 2)); ctx.save(); ctx.translate(960, 560); ctx.rotate(-.12); const s = lerp(2.4, 1, easeOut(ps)); ctx.scale(s, s); rr(-340, -112, 680, 224, 18); ctx.fillStyle = 'rgba(255,107,107,.14)'; ctx.fill(); ctx.strokeStyle = C.red; ctx.lineWidth = 8; ctx.stroke(); txt('人類瓶頸', 0, -18, 120, C.red, 900); txt('HUMAN BOTTLENECK', 0, 74, 30, C.red, 700, 'center', F, 'middle', .22); ctx.restore(); }
+}
+
+// ── scene 2 · the hub (10–17) ───────────────────────────────────────────────
+const MEM2 = [
+  { x: 380, y: 540, n: 'Planner', zh: '規劃', base: 'Claude Code', model: 'opus', col: C.violet },
+  { x: 640, y: 820, n: 'Coder', zh: '後端', base: 'Codex', model: 'gpt-5.6', col: C.green },
+  { x: 1280, y: 820, n: 'Designer', zh: '前端', base: 'Antigravity', model: 'gemini-3.8', col: C.amber },
+  { x: 1540, y: 540, n: 'Tester', zh: '測試', base: 'Copilot CLI', model: 'glm-5.3', col: C.red },
+];
+function s2(t) {
+  if (!frame(t, 10, 17, { fi: .5, fo: .45, sin: [.15, 1] })) return;
+  const hx = 960, hy = 540;
+  const pa = seg(t, 12.0, 12.4); ga(pa); chip(330, 150, '星狀架構 Hub-and-Spoke', C.dim, 24, { fill: 'rgba(255,255,255,.06)' });
+  const pb = seg(t, 13.8, 14.2); ga(pb); chip(1560, 150, '認知模型適配 · 各用所長', C.amber, 24);
+  // Meta Agent
+  const mx = 960, my = 215, pm = seg(t, 10.6, 11.1);
+  if (pm > 0) { const pl = seg(t, 10.9, 11.3); ga(pl * .9); line(hx, hy - 70, mx, my + 70, hexa(C.blue, .7), 4, pl); ga(pm); ctx.save(); ctx.translate(mx, my); const s = back(pm); ctx.scale(s, s); mochi(0, -12, 110, C.blue, t, 9, { crown: true }); txt('Meta Agent', 0, 78, 34, C.text, 800); txt('主控協調者 · Orchestrator', 0, 114, 22, C.dim, 500); ctx.restore(); }
+  // members
+  MEM2.forEach((m, i) => {
+    const t0 = 11.5 + i * .45, p = seg(t, t0, t0 + .5); if (p <= 0) return;
+    const pl = seg(t, t0 + .2, t0 + .6), dx = m.x - hx, dy = m.y - hy, d = Math.hypot(dx, dy), ux = dx / d, uy = dy / d;
+    const x1 = hx + ux * 200, y1 = hy + uy * 85, x2 = m.x - ux * 95, y2 = m.y - uy * 95;
+    ga(pl * .8); line(x1, y1, x2, y2, 'rgba(255,255,255,.28)', 3, pl);
+    if (t > t0 + .7) for (let k = 0; k < 2; k++) { const q = (t * .5 + k * .5 + i * .13) % 1, u = k ? 1 - q : q; ga(1); ctx.fillStyle = k ? m.col : C.blue; ctx.beginPath(); ctx.arc(lerp(x1, x2, u), lerp(y1, y2, u), 5, 0, 7); ctx.fill(); }
+    ga(p); ctx.save(); ctx.translate(m.x, m.y); const s = back(p); ctx.scale(s, s);
+    txt('Member Agent', 0, -82, 18, C.dim, 600, 'center', F, 'middle', .08); mochi(0, -16, 86, m.col, t, i + 1); txt(m.n + ' · ' + m.zh, 0, 54, 28, C.text, 800);
+    const pc = seg(t, 14.0 + i * .2, 14.3 + i * .2); ctx.save(); ctx.translate(0, 96); const sc = pc > 0 ? lerp(1, 1.12, Math.sin(pc * Math.PI)) : 1; ctx.scale(sc, sc); chip(0, 0, pc > 0 ? m.base + ' · ' + m.model : m.base, m.col, 20); ctx.restore();
+    ctx.restore();
+  });
+  // hub
+  const ph = seg(t, 10, 10.5); ga(ph); ctx.save(); ctx.translate(hx, hy); const s = back(ph); ctx.scale(s, s); panel(-200, -70, 400, 140, 34, 'rgba(26,36,64,.97)', hexa(C.blue, .7), 3); txt('Agent Center', 0, -14, 52, C.text, 800); txt('編排中樞 · Orchestration Hub', 0, 38, 22, C.dim, 500); ctx.restore();
+  pulse(hx, hy, t, 10.5, hexa(C.blue, .5), 1.3, 300, 120);
+}
+
+// ── scene 3 · tasks and parallel work (17–25) ───────────────────────────────
+const ROWS3 = [
+  { n: 'Planner', col: C.violet, task: 'TASK-01 執行藍圖', crit: '完成條件:資料模型與 API 規格寫定', bar: [19.5, 21.4] },
+  { n: 'Coder', col: C.green, task: 'TASK-03 會議 API 與資料表', crit: '完成條件:migration 可跑 · CRUD 有測試', bar: [19.5, 22.9] },
+  { n: 'Designer', col: C.amber, task: 'TASK-02 會議列表頁', crit: '完成條件:依 UI 草圖 · 手機版可用', bar: [19.5, 22.4] },
+  { n: 'Tester', col: C.red, task: 'TASK-04 整合測試', crit: '完成條件:端對端測試全過 · 相依 02、03', bar: [23.0, 24.6] },
+];
+function s3(t) {
+  if (!frame(t, 17, 25)) return;
+  const MX = 230, MY = 230; ga(1); mochi(MX, MY, 100, C.blue, t, 9, { crown: true }); txt('Meta Agent', MX, MY + 86, 26, C.text, 800);
+  const y0 = 400, dy = 150, cx = 560, cw = 540, ch = 112;
+  const pl = seg(t, 18.9, 19.3); ga(pl); chip(cx + cw / 2, 290, '成果導向 Outcome-based:只寫完成條件', C.blue, 24);
+  const tx0 = 1200, tx1 = 1840, mapX = (tt) => tx0 + (tt - 19.5) / (24.6 - 19.5) * (tx1 - tx0);
+  const pt = seg(t, 19.2, 19.6); ga(pt); line(tx0, 320, tx1, 320, 'rgba(255,255,255,.22)', 2, 1); head(tx1, 320, 0, 'rgba(255,255,255,.4)', 12); txt('時間', tx0, 296, 18, C.dim, 500, 'left');
+  const pp = seg(t, 19.8, 20.2); ga(pp); chip(1520, 250, '並行 Parallelization', C.green, 24);
+  ROWS3.forEach((r, i) => {
+    const y = y0 + i * dy, pr = seg(t, 17.1 + i * .1, 17.4 + i * .1); ga(pr); mochi(230, y - 4, 64, r.col, t, i + 3); txt(r.n, 230, y + 48, 22, C.text, 700);
+    // the bar on the timeline
+    if (t >= r.bar[0]) { const x1 = mapX(r.bar[0]), x2 = mapX(Math.min(t, r.bar[1])); ga(1); rr(x1, y - 22, Math.max(6, x2 - x1), 44, 10); ctx.fillStyle = hexa(r.col, .75); ctx.fill(); if (t >= r.bar[1]) { const pc = seg(t, r.bar[1], r.bar[1] + .25); ctx.save(); ctx.translate(x2 + 26, y); ctx.scale(back(pc), back(pc)); txt('✓', 0, 1, 30, r.col, 900); ctx.restore(); } }
+    if (i === 3) { const pd = seg(t, 22.9, 23.25); if (pd > 0) { ga(pd); const xd = mapX(22.9); line(xd, y0 + dy - 2 + 22, xd, y - 26, hexa(C.text, .5), 2, pd, [6, 6]); head(xd, y - 26, Math.PI / 2, hexa(C.text, .6), 10); chip(xd + 110, y - 50, '相依 02、03', C.dim, 18, { fill: 'rgba(21,23,27,.95)' }); } }
+    // the task card flying from the Meta Agent
+    const t0 = 17.3 + i * .3, p = seg(t, t0, t0 + .5); if (p <= 0) return; const e = easeOut(p), P = bez([MX + 70, MY], [460, y - 140], [cx + cw / 2, y], e);
+    ga(1); ctx.save(); ctx.translate(P[0], P[1]); const s = lerp(.5, 1, e); ctx.scale(s, s);
+    panel(-cw / 2, -ch / 2, cw, ch, 18, 'rgba(21,23,27,.97)', hexa(r.col, .55)); txt(r.task, -cw / 2 + 22, -22, 26, C.text, 800, 'left'); txt(r.crit, -cw / 2 + 22, 20, 19, C.dim, 500, 'left'); chip(cw / 2 - 20, -ch / 2 + 24, 'task_create', r.col, 14, { font: M, align: 'left', pad: 10 }); ctx.restore();
+  });
+  ga(1); chip(cx + cw / 2 - 270 + 80, 290 + 0, '', C.blue, 1, { fill: 'rgba(0,0,0,0)' });
+}
+
+// ── scene 4 · the permission gate and the constitution (25–32) ──────────────
+function pill(x, y, text, color, state) {
+  ctx.font = `600 24px ${M}`; const w = ctx.measureText(text).width + 56, h = 54;
+  rr(x - w / 2, y - h / 2, w, h, 27); ctx.fillStyle = state === 'pass' ? hexa(C.green, .22) : state === 'block' ? hexa(C.red, .22) : 'rgba(21,23,27,.97)'; ctx.fill(); ctx.strokeStyle = state === 'pass' ? C.green : state === 'block' ? C.red : hexa(color, .6); ctx.lineWidth = 2; ctx.stroke();
+  txt(text, x, y + 1, 24, C.text, 600, 'center', M); return w;
+}
+function s4(t) {
+  if (!frame(t, 25, 32)) return;
+  const GX = 960, pg = seg(t, 25, 25.4); ga(pg);
+  txt('權限閘門 Permission Gate', 960, 180, 40, C.text, 800); txt('憲法 Constitution 先比對,再看一般規則', 960, 226, 22, C.dim, 500);
+  const g = ctx.createLinearGradient(0, 300, 0, 820); g.addColorStop(0, hexa(C.amber, 0)); g.addColorStop(.5, hexa(C.amber, .9)); g.addColorStop(1, hexa(C.amber, 0)); ctx.fillStyle = g; ctx.fillRect(GX - 7, 300, 14, 520);
+  glow(GX, 560, 160, hexa(C.amber, .12)); shield(GX, 300, 34, C.amber); txt('憲法', GX, 300, 18, C.amber, 800);
+  txt('Member Agent 的請求', 500, 300, 24, C.dim, 600); txt('工作資料夾', 1500, 300, 24, C.dim, 600);
+  const R = [
+    { y: 430, s: 'npm test -- meetings', t0: 25.3, tg: 25.9, tp: 25.9, col: C.green },
+    { y: 530, s: 'npm run build', t0: 26.1, tg: 26.7, tp: 26.75, col: C.green },
+    { y: 630, s: 'rm -rf node_modules && npm install', t0: 27.3, tg: 27.9, tp: 29.3, col: C.amber },
+    { y: 730, s: 'rm -rf .git', t0: 30.0, tg: 30.6, tp: null, col: C.red },
+  ];
+  R.forEach((r) => {
+    if (t < r.t0) return; let x, state = 'go';
+    if (t < r.tg) x = lerp(260, 905, easeInOut(seg(t, r.t0, r.tg)));
+    else if (r.tp === null) { const b = seg(t, r.tg, r.tg + .45); x = 905 - 170 * easeOut(b); state = 'block'; }
+    else if (t < r.tp) { x = 905 + Math.sin((t - r.tg) * 14) * 4 * (1 - seg(t, r.tg, r.tg + .3)); state = 'wait'; }
+    else { const u = seg(t, r.tp, r.tp + .9); x = lerp(905, 2450, easeIn(u) * .4 + u * .6); state = 'pass'; if (t > r.tp + .9) return; }
+    ga(1); const w = pill(x, r.y, r.s, r.col, state);
+    if (state === 'pass') { const pc = seg(t, r.tp, r.tp + .25); ctx.save(); ctx.translate(x - w / 2 - 40, r.y); ctx.scale(back(pc), back(pc)); txt('✓ 放行', 0, 1, 22, C.green, 800); ctx.restore(); }
+    if (state === 'block') { const pc = seg(t, r.tg, r.tg + .25); ctx.save(); ctx.translate(x + w / 2 + 44, r.y); ctx.scale(back(pc), back(pc)); txt('✗', 0, 1, 34, C.red, 900); ctx.restore(); }
+    if (state === 'wait') { ga(.9 + Math.sin(t * 10) * .1); txt('⏸ 等你批准', x - w / 2 - 80, r.y + 1, 20, C.amber, 700); }
+  });
+  // the approval card for the third request
+  const pc = seg(t, 28.0, 28.35), pd = 1 - seg(t, 29.1, 29.35);
+  if (pc > 0 && pd > 0) {
+    ga(Math.min(pc, pd)); ctx.save(); ctx.translate(1470, 560); const s = pc < 1 ? back(pc) : lerp(.6, 1, pd); ctx.scale(s, s);
+    panel(-280, -120, 560, 240, 26, 'rgba(32,22,26,.97)', hexa(C.red, .6), 2);
+    txt('要你批准:會刪除資料夾', -250, -78, 24, C.red, 800, 'left'); txt('rm -rf node_modules && npm install', -250, -36, 22, C.text, 600, 'left', M);
+    txt('▶ 還有 2 個請求在排隊', -250, 4, 18, C.dim, 500, 'left');
+    const clicked = seg(t, 29.0, 29.12);
+    const b1 = chip(-172, 72, '允許這一次', C.text, 20, { fill: clicked > 0 ? hexa(C.green, .5) : 'rgba(255,255,255,.14)', pad: 18 });
+    chip(-172 + b1 / 2 + 18 + 44, 72, '拒絕', C.text, 20, { fill: 'rgba(255,255,255,.1)', pad: 18 });
+    chip(120, 72, '全部允許(3)', C.text, 20, { fill: 'rgba(255,255,255,.1)', pad: 18 });
+    ctx.restore();
+    const pm = seg(t, 28.6, 29.0); if (pm > 0) { ga(1); const u = easeInOut(pm); cursor(lerp(1700, 1300, u), lerp(800, 640, u)); }
+  }
+  // the constitution slams the last one
+  const ps = seg(t, 30.6, 30.85);
+  if (ps > 0) { ga(Math.min(1, ps * 2)); ctx.save(); ctx.translate(GX, 730); const s = lerp(1.8, 1, easeOut(ps)); ctx.scale(s, s); shield(0, 0, 70, C.red); txt('憲法', 0, -12, 24, C.red, 900); txt('絕對不能做', 0, 20, 20, C.red, 800); ctx.restore();
+    const pl2 = seg(t, 30.9, 31.2); ga(pl2); chip(960, 860, '直接拒絕 · 不跳卡 · 告訴成員換做法', C.red, 24); }
+}
+
+// ── scene 5 · the knowledge base (32–38) ────────────────────────────────────
+const DOCS5 = [
+  { n: '會議紀錄-需求.md', sz: '18 KB', kind: 'text', vis: 'shared' },
+  { n: 'UI 草圖.png', sz: '801 KB', kind: 'image', vis: 'shared' },
+  { n: '第三方摘要服務報價.md', sz: '3 KB', kind: 'text', vis: 'leader' },
+  { n: 'API 規格.pdf', sz: '3.1 MB', kind: 'file', vis: 'leader' },
+];
+function s5(t) {
+  if (!frame(t, 32, 38)) return;
+  const PX = 160, PY = 240, PW = 600, PH = 640; ga(seg(t, 32, 32.4)); panel(PX, PY, PW, PH, 28); txt('團隊知識庫 Knowledge Base', PX + 30, PY + 44, 30, C.text, 800, 'left'); txt('放一次,複製一份保存;依可見性分發', PX + 30, PY + 82, 19, C.dim, 500, 'left');
+  const MX = 1420, MY = 330, MEM = [{ x: 1150, n: 'Planner', col: C.violet }, { x: 1330, n: 'Coder', col: C.green }, { x: 1510, n: 'Designer', col: C.amber }, { x: 1690, n: 'Tester', col: C.red }], MYm = 720;
+  ga(seg(t, 32.2, 32.6)); mochi(MX, MY, 100, C.blue, t, 9, { crown: true }); txt('Meta Agent', MX, MY + 84, 26, C.text, 800);
+  MEM.forEach((m, i) => { ga(seg(t, 32.4 + i * .1, 32.8 + i * .1)); mochi(m.x, MYm, 70, m.col, t, i + 5); txt(m.n, m.x, MYm + 62, 22, C.text, 700); });
+  const rows = DOCS5.map((d, i) => ({ ...d, y: PY + 150 + i * 105, t0: 32.3 + i * .3 }));
+  // lines out of the vault
+  rows.forEach((d, i) => {
+    const tl = 34.5 + i * .25, pl = seg(t, tl, tl + .4), x0 = PX + PW, y0 = d.y; if (pl <= 0) return;
+    ga(pl * .9); line(x0, y0, MX - 60, MY + 10, hexa(C.blue, .55), 3, pl);
+    if (d.vis === 'shared') MEM.forEach((m, k) => { const pm = seg(t, tl + .15 + k * .08, tl + .5 + k * .08); ga(pm * .8); line(x0, y0, m.x, MYm - 50, hexa(C.green, .5), 2, pm); const pr = seg(t, tl + .5 + k * .08, tl + .8 + k * .08); if (pr > 0) { ga(pr); ctx.save(); ctx.translate(m.x, MYm - 70); ctx.scale(back(pr), back(pr)); docIcon(0, 0, d.kind, C.green); ctx.restore(); } });
+    else { ga(pl); const lx = lerp(x0, MX - 60, .5), ly = lerp(y0, MY + 10, .5); rr(lx - 16, ly - 14, 32, 28, 6); ctx.fillStyle = 'rgba(21,23,27,.98)'; ctx.fill(); txt('🔒', lx, ly + 1, 18, C.amber, 600); }
+  });
+  rows.forEach((d, i) => {
+    const p = seg(t, d.t0, d.t0 + .45); if (p <= 0) return; const e = easeOut(p); const x = lerp(-200, PX + 60, e), y = lerp(80, d.y, e);
+    ga(1); docIcon(x, y, d.kind, d.vis === 'shared' ? C.green : C.amber); txt(d.n, x + 38, y - 10, 24, C.text, 700, 'left'); txt(d.sz, x + 38, y + 20, 17, C.dim, 500, 'left');
+    const pb = seg(t, d.t0 + .5, d.t0 + .8); if (pb > 0) { ctx.save(); ctx.translate(PX + PW - 110, y); ctx.scale(back(pb), back(pb)); chip(0, 0, d.vis === 'shared' ? '團隊共享' : '只有 Meta Agent', d.vis === 'shared' ? C.green : C.amber, 18); ctx.restore(); }
+  });
+  // a key sneaks in and is caught
+  const pk = seg(t, 36.6, 37.0); if (pk > 0) { const e = easeOut(pk), y = PY + 150 + 4 * 105, x = lerp(-200, PX + 60, e); ga(1); docIcon(x, y, 'text', pk < 1 ? C.dim : C.red); txt('config.env', x + 38, y - 10, 24, C.text, 700, 'left'); txt('sk-ab7f…', x + 38, y + 20, 17, C.red, 600, 'left', M);
+    const pf = seg(t, 37.0, 37.25); if (pf > 0) { ga(pf); ctx.save(); ctx.translate(PX + PW - 190, y); ctx.scale(back(pf), back(pf)); chip(0, 0, '第 3 行看起來有金鑰 · 已攔下', C.red, 17, { stroke: hexa(C.red, .6) }); ctx.restore(); rr(PX + 20, y - 40, PW - 40, 80, 14); ctx.strokeStyle = hexa(C.red, .7); ctx.lineWidth = 2; ctx.stroke(); } }
+}
+
+// ── scene 6 · deliver and review (38–45) ────────────────────────────────────
+function s6(t) {
+  if (!frame(t, 38, 45)) return;
+  const MEM = [{ n: 'Planner', col: C.violet, task: 'TASK-01', loc: 'docs/blueprint.md' }, { n: 'Coder', col: C.green, task: 'TASK-03', loc: 'src/server/meetings.ts' }, { n: 'Designer', col: C.amber, task: 'TASK-02', loc: 'src/meetings/ListPage.tsx' }, { n: 'Tester', col: C.red, task: 'TASK-04', loc: 'tests/e2e.report.md' }];
+  const LX = 330, ys = [300, 470, 640, 810], MX = 1760, MY = 560, BX = 1090, bys = [330, 440, 550, 660], cw = 400, ch = 78;
+  ga(seg(t, 38, 38.4)); mochi(MX, MY, 130, C.blue, t, 9, { crown: true }); txt('Meta Agent', MX, MY + 100, 30, C.text, 800); txt('review · 整合審查', MX, MY + 136, 20, C.dim, 500);
+  ga(seg(t, 38.1, 38.5)); txt('交付物 Deliverables', BX + cw / 2, 270, 22, C.dim, 600);
+  MEM.forEach((m, i) => { ga(seg(t, 38 + i * .08, 38.3 + i * .08)); mochi(LX, ys[i], 72, m.col, t, i + 11); txt(m.n, LX, ys[i] + 64, 22, C.text, 700); });
+  // the ring of accepted work
+  const checks = [38.9, 39.4, 42.3, 40.4], n = checks.filter((x) => t >= x).length, pr = seg(t, 38.2, 38.6);
+  ga(pr); const RX = 1760, RY = 250; ring(RX, RY, 62, 'rgba(255,255,255,.1)', 12); ctx.beginPath(); ctx.arc(RX, RY, 62, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (n / 4) * easeOut(seg(t, checks[n - 1] ?? 0, (checks[n - 1] ?? 0) + .4))); ctx.strokeStyle = n === 4 ? C.green : C.blue; ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.stroke(); ctx.lineCap = 'butt';
+  txt(`${n}/4`, RX, RY - 6, 30, C.text, 800); txt('已驗收', RX, RY + 24, 16, C.dim, 600);
+  const card = (x, y, m, state) => { panel(x - cw / 2, y - ch / 2, cw, ch, 16, 'rgba(21,23,27,.97)', hexa(state === 'no' ? C.amber : state === 'ok' ? C.green : m.col, .55)); chip(x - cw / 2 + 60, y - 16, 'deliver', m.col, 13, { font: M, pad: 9 }); txt(m.task, x - cw / 2 + 112, y - 16, 20, C.text, 800, 'left'); txt(m.loc, x - cw / 2 + 20, y + 18, 16, C.dim, 500, 'left', M); if (state === 'ok') txt('✓', x + cw / 2 - 28, y + 1, 32, C.green, 900); if (state === 'no') txt('退回', x + cw / 2 - 44, y + 1, 20, C.amber, 800); };
+  MEM.forEach((m, i) => {
+    const t0 = 38.3 + i * .5, p = seg(t, t0, t0 + .5); if (p <= 0) return;
+    if (i !== 2) { const e = easeOut(p), P = bez([LX + 60, ys[i]], [820, ys[i] - 80], [BX + cw / 2, bys[i]], e); ga(1); ctx.save(); ctx.translate(P[0], P[1]); const s = lerp(.6, 1, e); ctx.scale(s, s); card(0, 0, m, t >= checks[i] ? 'ok' : 'go'); ctx.restore(); return; }
+    // the designer's work goes back once
+    let x, y, state = 'go', s = 1;
+    if (t < 39.8) { const e = easeOut(p), P = bez([LX + 60, ys[i]], [820, ys[i] - 80], [BX + cw / 2, bys[i]], e); x = P[0]; y = P[1]; s = lerp(.6, 1, e); }
+    else if (t < 40.0) { x = BX + cw / 2; y = bys[i]; state = 'no'; }
+    else if (t < 41.6) { const e = easeInOut(seg(t, 40.0, 40.5)), P = bez([BX + cw / 2, bys[i]], [760, ys[i] - 250], [LX + 60 + 230, ys[i]], e); x = P[0]; y = P[1]; state = 'no'; }
+    else { const e = easeOut(seg(t, 41.6, 42.1)), P = bez([LX + 60 + 230, ys[i]], [820, ys[i] - 80], [BX + cw / 2, bys[i]], e); x = P[0]; y = P[1]; state = t >= 42.3 ? 'ok' : 'go'; }
+    ga(1); ctx.save(); ctx.translate(x, y); ctx.scale(s, s); card(0, 0, m, state); ctx.restore();
+    const pn = seg(t, 39.85, 40.1); if (pn > 0 && state === 'no') { ga(pn * (1 - seg(t, 40.8, 41.0))); chip(x, y + 60, '退回:漏了手機版,請補上', C.amber, 18, { stroke: hexa(C.amber, .5), fill: 'rgba(21,23,27,.97)' }); }
+    const pf = seg(t, 41.0, 41.25); if (pf > 0 && t < 41.7) { ga(pf); chip(LX + 60 + 230, ys[i] - 66, '修好了,重新交付', C.green, 18, { fill: 'rgba(21,23,27,.97)', stroke: hexa(C.green, .5) }); }
+  });
+  // finished
+  const pf = seg(t, 44.2, 44.5);
+  if (pf > 0) { ga(1); ctx.save(); ctx.translate(960, 150); ctx.scale(back(pf), back(pf)); chip(0, 0, 'team_finish · 團隊完成', C.green, 34, { fill: hexa(C.green, .22), stroke: hexa(C.green, .8), pad: 34 }); ctx.restore();
+    for (let k = 0; k < 60; k++) { const a = rnd(k) * Math.PI * 2, v = 300 + rnd(k + 100) * 500, dt = t - 44.2; const x = 960 + Math.cos(a) * v * dt, y = 150 + Math.sin(a) * v * dt + 600 * dt * dt; ga(1 - seg(t, 44.6, 45)); ctx.fillStyle = [C.blue, C.green, C.violet, C.amber][k % 4]; ctx.save(); ctx.translate(x, y); ctx.rotate(dt * 8 + k); ctx.fillRect(-6, -3, 12, 6); ctx.restore(); } }
+}
+
+// ── scene 7 · the real screens (45–52) ──────────────────────────────────────
+const SHOTS = [['waiting', '工作監控・看板', '每位 Member Agent 的即時畫面與核准卡'], ['office', '工作監控・Office', '辦公室動態與待處理的相依關係'], ['links', '協作關係', '誰交付給誰,一目了然'], ['secretary-status', '秘書', '一句話查現況、找卡關、算成本'], ['cost', '成本與用量', '各團隊、各成員的 Token 預算']];
+function s7(t) {
+  if (!frame(t, 45, 52, { fi: .3, fo: .4 })) return;
+  const cw = 1480, ch = 884, cx = 960, cy = 500;
+  SHOTS.forEach(([name, title, cap], i) => {
+    const t0 = 45 + i * 1.4; if (t < t0 || t >= t0 + 1.7) return;
+    const u = easeOut(seg(t, t0, t0 + .4)), v = easeIn(seg(t, t0 + 1.4, t0 + 1.7)), lv = seg(t, t0 + 1.4, t0 + 1.5);
+    const ox = lerp(760, 0, u) + lerp(0, -700, v), sc = lerp(.9, 1, u) * lerp(1, .94, v), al = Math.min(u, 1 - v), kb = 1 + .05 * seg(t, t0, t0 + 1.7);
+    ga(al); ctx.save(); ctx.translate(cx + ox, cy); ctx.scale(sc, sc);
+    ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 60; ctx.shadowOffsetY = 20; rr(-cw / 2, -ch / 2, cw, ch, 24); ctx.fillStyle = '#000'; ctx.fill(); ctx.shadowColor = 'transparent';
+    ctx.save(); rr(-cw / 2, -ch / 2, cw, ch, 24); ctx.clip(); const img = IMGS[name]; if (img && img.naturalWidth) { ctx.save(); ctx.scale(kb, kb); ctx.drawImage(img, -cw / 2, -ch / 2, cw, ch); ctx.restore(); } ctx.restore();
+    rr(-cw / 2, -ch / 2, cw, ch, 24); ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 2; ctx.stroke();
+    const pl = seg(t, t0 + .25, t0 + .5); ga(al * pl * (1 - lv)); ctx.save(); ctx.translate(-cw / 2 + 36, -ch / 2 + 46); chip(0, 0, title, C.text, 26, { align: 'left', fill: 'rgba(0,0,0,.72)', stroke: 'rgba(255,255,255,.16)', pad: 22 }); ctx.restore();
+    rr(-cw / 2, ch / 2 - 80, cw, 80, [0, 0, 24, 24]); ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fill(); txt(cap, -cw / 2 + 36, ch / 2 - 40, 24, '#fff', 600, 'left');
+    ctx.restore();
+  });
+}
+
+// ── scene 8 · the two cases (52–57) ─────────────────────────────────────────
+const CASES = [
+  { title: '案例一 · 線上會議紀錄功能', col: C.blue, t0: 52.2, team: [['Meta Agent', 'Claude Code', C.blue], ['Tester', 'Claude Code', C.green], ['Designer', 'Antigravity', C.violet], ['Coder', 'Codex', C.amber]], tasks: ['需求拆解', '會議列表頁', '會議 API 與資料表', '編輯器頁面', '需求確認', '整合測試', '驗收報告'] },
+  { title: '案例二 · 專案管理平台', col: C.green, t0: 52.5, team: [['Meta Agent', 'Claude Code', C.blue], ['Tester', 'Claude Code', C.green], ['Designer', 'Antigravity', C.violet], ['Coder', 'Codex', C.amber]], tasks: ['執行藍圖', '看板設計稿', '專案與任務 API', '看板拖拉頁', '需求確認', '整合測試', '驗收報告'] },
+];
+function s8(t) {
+  if (!frame(t, 52, 57, { fi: .3, fo: .4, exit: 'collapse' })) return;
+  const rise = seg(t, 55.3, 56.6);
+  if (rise > 0) { ga(rise * .9); for (let k = 0; k < 70; k++) { const a = rnd(k + 300) * Math.PI * 2, r0 = 1200, sp = 600 + rnd(k + 400) * 900, d = (r0 - ((t - 55.3) * sp + rnd(k + 500) * r0) % r0); ctx.strokeStyle = hexa([C.blue, C.violet, C.green][k % 3], .6); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(960 + Math.cos(a) * d, 540 + Math.sin(a) * d * .6); ctx.lineTo(960 + Math.cos(a) * (d + 90 * rise), 540 + Math.sin(a) * (d + 90 * rise) * .6); ctx.stroke(); } }
+  CASES.forEach((k, ci) => {
+    const p = seg(t, k.t0, k.t0 + .5); if (p <= 0) return; const x = 180 + ci * 810, y = lerp(1180, 230, back(p)), w = 750, h = 640;
+    ga(1); ctx.save(); ctx.translate(x + w / 2, y + h / 2); const s = lerp(1, 1.06, rise); ctx.scale(s, s); ctx.translate(-(x + w / 2), -(y + h / 2));
+    panel(x, y, w, h, 28, 'rgba(21,23,27,.96)', hexa(k.col, .45), 2); txt(k.title, x + 32, y + 48, 32, C.text, 800, 'left');
+    k.team.forEach(([role, base, col], i) => { const mx = x + 110 + i * 178, my = y + 150; mochi(mx, my, 60, col, t, i + ci * 4 + 20, { crown: i === 0 }); txt(role, mx, my + 54, 19, C.text, 700); txt(base, mx, my + 78, 16, C.dim, 500); });
+    k.tasks.forEach((task, i) => { const tl = 53.0 + ci * .3 + i * .22, lit = seg(t, tl, tl + .2); const col = i % 2, row = Math.floor(i / 2); const px = x + 32 + col * 350, py = y + 290 + row * 58; rr(px, py, 330, 46, 23); ctx.fillStyle = lit > 0 ? hexa(C.green, .18 + .1 * lit) : 'rgba(255,255,255,.06)'; ctx.fill(); if (lit > 0) { ctx.strokeStyle = hexa(C.green, .6); ctx.lineWidth = 2; ctx.stroke(); } txt(`TASK-0${i + 1} ${task}`, px + 18, py + 24, 19, lit > 0 ? C.text : C.dim, 600, 'left'); if (lit > 0) txt('✓', px + 304, py + 24, 22, C.green, 900); });
+    const n = k.tasks.filter((_, i) => t >= 53.0 + ci * .3 + i * .22).length; bar(x + 32, y + 548, 560, 14, n / 7, C.green); txt(`${n}/7 已驗收`, x + w - 32, y + 555, 20, n === 7 ? C.green : C.dim, 700, 'right');
+    const pf = seg(t, 55.0 + ci * .2, 55.25 + ci * .2); if (pf > 0) { ctx.save(); ctx.translate(x + w - 150, y + 48); ctx.scale(back(pf), back(pf)); chip(0, 0, '✓ 團隊完成', C.green, 20); ctx.restore(); }
+    ctx.restore();
+  });
+}
+
+// ── scene 9 · the title again (57–60) ───────────────────────────────────────
+function s9(t) {
+  if (t < 56.98 || t >= 60) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  if (t < 57.3) return;
+  SA = 1; const ph = seg(t, 57.3, 57.6), sh = (1 - ph) * 14;
+  ctx.translate(960 + Math.sin(t * 97) * sh, 540 + Math.cos(t * 83) * sh); const s = lerp(1.35, 1, easeOut(ph)); ctx.scale(s, s); ctx.translate(-960, -540);
+  glow(960, 540, 900, hexa(C.blue, .22 * (1 - ph) + .1));
+  ga((1 - ph) * .8); ring(960, 540, 60 + ph * 1000, 'rgba(255,255,255,.9)', 18 * (1 - ph) + 1); ga(.55 * Math.pow(1 - ph, 2.5)); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  ga(1); const cols = [C.blue, C.green, C.violet, C.amber]; for (let i = 0; i < 4; i++) mochi(960 + (i - 1.5) * 130, 400, 96, cols[i], t, i);
+  txt('Agent Center', 960, 560, 128, C.text, 800);
+  const p2 = seg(t, 58.0, 58.4); ga(p2); txt('描述目標 · 授權代理 · 驗收成果', 960, 680 + (1 - easeOut(p2)) * 24, 44, C.dim, 500);
+  const p3 = seg(t, 58.6, 58.9); ga(p3); txt('在桌面上編排你的 AI 夢幻團隊', 960, 750 + (1 - easeOut(p3)) * 20, 28, C.blue, 600, 'center', F, 'middle', .06);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = seg(t, 59.3, 60); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+}
+
+const SCENES = [s0, s1, s2, s3, s4, s5, s6, s7, s8];
+function draw(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+  bg(t, t > 55.3 && t < 57 ? 1 + seg(t, 55.3, 56.6) * 1.2 : 1);
+  for (const s of SCENES) { ctx.save(); SA = 1; s(t); ctx.restore(); }
+  ctx.save(); s9(t); ctx.restore();
+  subs(t);
+}
+window.draw = draw;
+
+// Opened in a browser: play, or show one instant with ?t=12.3
+const q = new URLSearchParams(location.search);
+if (q.has('t')) { const tt = Number(q.get('t')); const go = () => (window.ready ? draw(tt) : setTimeout(go, 50)); go(); }
+else if (!q.has('render')) { const start = performance.now(); const loop = () => { const t = ((performance.now() - start) / 1000) % 60; draw(t); requestAnimationFrame(loop); }; const go = () => (window.ready ? loop() : setTimeout(go, 50)); go(); }
+</script>
+</body>
+</html>

@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Center 說明報告</title>
+<style>
+:root{
+  --bg:#0b0c0e; --panel:#15171b; --panel2:#1c1f25; --line:#2a2e36;
+  --text:#eceef2; --dim:#9aa1ad; --blue:#5b8cff; --green:#3ccf91; --violet:#a77bff; --amber:#f2b33d; --red:#ff6b6b;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.75 "Segoe UI","Microsoft JhengHei","PingFang TC",system-ui,sans-serif}
+a{color:var(--blue)}
+code{font-family:"Cascadia Code",Consolas,monospace;font-size:.88em;background:#23262d;padding:.1em .4em;border-radius:5px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+header.hero{position:relative;overflow:hidden;padding:88px 0 64px;border-bottom:1px solid var(--line);
+  background:radial-gradient(900px 400px at 15% 0%,rgba(91,140,255,.22),transparent 60%),radial-gradient(700px 380px at 90% 20%,rgba(167,123,255,.18),transparent 60%),radial-gradient(600px 300px at 60% 100%,rgba(60,207,145,.12),transparent 60%)}
+.mochis{display:flex;gap:10px;margin-bottom:22px}
+.mochi{width:46px;height:38px;border-radius:50% 50% 44% 44%;position:relative}
+.mochi::before,.mochi::after{content:"";position:absolute;top:44%;width:6px;height:8px;border-radius:3px;background:#101216}
+.mochi::before{left:34%}.mochi::after{right:34%}
+.m1{background:var(--blue)}.m2{background:var(--green)}.m3{background:var(--violet)}.m4{background:var(--amber)}
+h1{font-size:clamp(30px,5vw,48px);line-height:1.2;margin:0 0 14px;letter-spacing:.01em}
+.lead{font-size:clamp(17px,2.2vw,20px);color:#cfd3db;max-width:760px;margin:0}
+.meta{margin-top:22px;color:var(--dim);font-size:14px}
+nav.toc{position:sticky;top:0;z-index:5;background:rgba(11,12,14,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav.toc .wrap{display:flex;gap:6px;overflow-x:auto;padding-top:10px;padding-bottom:10px}
+nav.toc a{white-space:nowrap;color:var(--dim);text-decoration:none;font-size:14px;padding:4px 12px;border-radius:999px}
+nav.toc a:hover{color:var(--text);background:var(--panel2)}
+section{padding:64px 0 8px}
+h2{font-size:clamp(24px,3.2vw,32px);margin:0 0 8px}
+h2 .en{font-size:.55em;color:var(--dim);font-weight:500;margin-left:10px}
+h3{font-size:20px;margin:34px 0 8px}
+.kicker{color:var(--blue);font-weight:600;font-size:13px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px}
+p.sub{color:var(--dim);margin-top:0}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+.card h4{margin:0 0 6px;font-size:17px}
+.card p{margin:0;color:#c3c8d1;font-size:15px}
+.tag{display:inline-block;font-size:12px;padding:2px 9px;border-radius:999px;margin-right:6px;font-weight:600}
+.t-blue{background:rgba(91,140,255,.16);color:#8fb0ff}.t-green{background:rgba(60,207,145,.15);color:#6fe0b0}
+.t-violet{background:rgba(167,123,255,.16);color:#c3a6ff}.t-amber{background:rgba(242,179,61,.16);color:#ffd27a}.t-red{background:rgba(255,107,107,.15);color:#ff9b9b}
+table{width:100%;border-collapse:collapse;margin:14px 0 6px;font-size:15px}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.tbl table{margin:0}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--dim);font-weight:600;font-size:13px;background:var(--panel2)}
+tr:last-child td{border-bottom:none}
+.pain td:first-child{color:#c3c8d1}
+figure{margin:22px 0;background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+figure img{display:block;width:100%;height:auto;cursor:zoom-in}
+figcaption{padding:12px 18px;color:var(--dim);font-size:14px;border-top:1px solid var(--line)}
+.steps{counter-reset:s;list-style:none;padding:0;margin:18px 0}
+.steps li{counter-increment:s;position:relative;padding:12px 16px 12px 58px;margin-bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.steps li::before{content:counter(s);position:absolute;left:16px;top:12px;width:28px;height:28px;border-radius:50%;background:var(--blue);color:#fff;font-weight:700;display:grid;place-items:center;font-size:14px}
+.flow{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;overflow-x:auto}
+.flow svg{display:block;min-width:760px;width:100%;height:auto}
+.case{border:1px solid var(--line);border-radius:20px;padding:28px;background:linear-gradient(180deg,rgba(91,140,255,.07),transparent 40%),var(--panel)}
+.case.c2{background:linear-gradient(180deg,rgba(60,207,145,.07),transparent 40%),var(--panel)}
+.note{font-size:14px;color:var(--dim);border-left:3px solid var(--amber);padding:4px 12px;margin:14px 0}
+.event{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px dashed var(--line)}
+.event:last-child{border-bottom:none}
+.event .tag{flex:none;margin-top:3px}
+.pros .card h4::before{content:"✦ ";color:var(--blue)}
+footer{margin-top:72px;padding:28px 0 48px;border-top:1px solid var(--line);color:var(--dim);font-size:14px}
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:20;padding:20px;cursor:zoom-out}
+.lightbox.on{display:flex}.lightbox img{max-width:100%;max-height:100%;border-radius:10px}
+@media(max-width:640px){header.hero{padding:56px 0 40px}.case{padding:18px}th,td{padding:9px 10px}}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="mochis"><span class="mochi m1"></span><span class="mochi m2"></span><span class="mochi m3"></span><span class="mochi m4"></span></div>
+    <div class="kicker">Agent Center · 多代理編排平台</div>
+    <h1>在桌面上編排<br>你的 AI 夢幻團隊</h1>
+    <p class="lead">從一人對一個 AI 的結對程式設計,走向<b>多代理編排(Agent Orchestration)</b>。你描述目標,<b>主控協調者 Meta Agent(Orchestrator)</b>拆解任務,交給各有角色 Persona 的 Member Agent 並行開發,最後整合審查。Agent Center 就是整支團隊的<b>編排中樞</b>:傳話、記錄、權限把關,全隊即時看得見。</p>
+    <p class="meta">2026-10-15 · 截圖為示範資料(介面上的 Teamwork、Leader 即 Agent Center、Meta Agent)· 兩個案例為示意流程</p>
+</div>
+</header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#why">解決什麼問題</a><a href="#concepts">核心概念</a><a href="#flow">協作流程</a>
+  <a href="#case1">案例:會議紀錄</a><a href="#case2">案例:專案管理平台</a><a href="#screens">實際畫面</a><a href="#pros">優點</a>
+</div></nav>
+
+<main class="wrap">
+
+<section id="why">
+  <div class="kicker">Why</div>
+  <h2>你不該是那個人類瓶頸</h2>
+  <p class="sub">在結對程式設計(Peer Programming)裡,你在終端機與編輯器之間切換、手動複製 Context、單線程地一件一件委派,成了整條工作流的人類瓶頸(Human Bottleneck)。Agent Center 把你放回架構師與指揮官的位置。</p>
+  <div class="tbl"><table class="pain">
+    <tr><th style="width:44%">人類瓶頸</th><th>Agent Center 的做法</th></tr>
+    <tr><td>同時開好幾個終端機跑 Claude Code、Codex、Copilot,要自己記誰在做什麼</td><td>一個視窗看全隊的<b>即時畫面(Live Screen)</b>、任務看板與進度百分比</td></tr>
+    <tr><td>AI 之間不能交接,只能手動複製貼上 Context</td><td>Member Agent 透過<b>團隊工具(Team MCP)</b>互傳訊息、登記<b>交付物(Deliverable)</b></td></tr>
+    <tr><td>前端要等後端寫完才能開始</td><td>Meta Agent 依相依關係派工,沒有相依的任務<b>並行(Parallelization)</b>推進,提升<b>吞吐量</b></td></tr>
+    <tr><td>放手讓 AI 跑 Autopilot,又怕它刪資料夾、亂裝套件</td><td><b>權限閘門(Permission Gate)</b>+<b>憲法(Constitution)</b>:一般動作放行,危險動作跳卡,禁止事項直接擋下</td></tr>
+    <tr><td>規格、設計稿要一份一份貼給 AI</td><td><b>團隊知識庫(Knowledge Base)</b>:放一次,依可見性分給Meta Agent 或全隊</td></tr>
+    <tr><td>不知道花了多少 token</td><td><b>成本與用量</b>頁與每位 Member Agent 的花費,守住 <b>Token 預算</b></td></tr>
+    <tr><td>想知道誰卡住、誰在等我</td><td><b>秘書(Secretary)</b>用 Agent Center 的紀錄回答,也能擬好新團隊,按確認才執行</td></tr>
+</table></div>
+</section>
+
+<section id="concepts">
+  <div class="kicker">Concepts</div>
+  <h2>核心概念</h2>
+  <p class="sub">九個名詞,看懂 Agent Center 怎麼運作。</p>
+  <div class="grid g2">
+    <div class="card"><span class="tag t-blue">Hub</span><h4>編排中樞(Orchestration Hub)</h4><p>CLI 彼此不互通,所以採星狀架構(Hub-and-Spoke):每位 Member Agent 只跟 Agent Center 往來。「誰在做什麼、誰在等誰」都來自<b>任務庫(Task Store)</b>的事件,不從聊天內容猜;進度 = 已驗收 ÷ 總任務。</p></div>
+    <div class="card"><span class="tag t-violet">Roles</span><h4>主控協調者 Meta Agent 與角色 Persona</h4><p>Meta Agent(Orchestrator)拆解需求、指派任務、驗收成果並宣告完成。Member Agent 的<b>職稱</b>全隊看得到,<b>職責</b>只給自己看;常見編成是 Planner、Coder、Designer、Tester。</p></div>
+    <div class="card"><span class="tag t-amber">Fit</span><h4>認知模型適配</h4><p>每位 Member Agent 各選基底 Agent 與模型:擅長推理的當 Meta Agent、擅長簡潔精準寫碼的當 Coder、擅長視覺的當 Designer。常用的組合可存成<b>團隊 Agent</b>(Agent Center 版的 Custom Agents)。</p></div>
+    <div class="card"><span class="tag t-green">Outcome</span><h4>成果導向授權(Outcome-based)</h4><p>Meta Agent 交代「要達成什麼」(完成條件),不逐行指揮;Member Agent 自己決定做法,驗收時逐條核對完成條件。這是非微觀管理(Non-micromanagement)的編排心法。</p></div>
+    <div class="card"><span class="tag t-green">Protocol</span><h4>團隊工具(Team MCP Tools)</h4><p><code>task_create</code>、<code>deliver</code>、<code>review</code>、<code>message_send</code>、<code>ask_human</code>、<code>knowledge_read</code>……Member Agent 之間的協作協定就是這組工具。</p></div>
+    <div class="card"><span class="tag t-amber">Gate</span><h4>協作模式與權限閘門</h4><p><b>自主協作(Autopilot)</b>:改檔、建置、測試不問你,危險動作仍跳卡。<b>逐步確認(Step-by-step)</b>:每個請求都問。核准卡同時出現在視窗與瀏海島。<b>回合上限</b>到了自動暫停,守住 Token 預算。</p></div>
+    <div class="card"><span class="tag t-red">Guardrails</span><h4>憲法(Constitution)</h4><p>兩級護欄:<b>要問我</b>一定跳卡並寫明條文;<b>絕對不能做</b>直接拒絕、不跳卡(以免誤點)。內建 7 條,可加自己的條文;由 Agent Center 比對,不靠模型判斷。</p></div>
+    <div class="card"><span class="tag t-blue">Context</span><h4>團隊知識庫與可見性(Visibility)</h4><p>任何格式的文件都能加入,複製一份保存。每份可設<b>只有 Meta Agent</b> 或<b>團隊共享</b>;Meta Agent 要在你點名後才能分享給全隊。金鑰防呆。</p></div>
+    <div class="card"><span class="tag t-violet">Assistant</span><h4>秘書(Secretary)</h4><p>被叫才動、平常不花 token。查進度、找卡關、算成本;開團隊、下指令、暫停封存都先擬成卡片,<b>按確認才執行</b>(Human-in-the-loop)。</p></div>
+    <div class="card"><span class="tag t-green">Observability</span><h4>可觀測性</h4><p>看板與 Office 雙視圖、協作地圖、依任務分串的溝通紀錄、成本與用量;另有「中二模式」與「星域」兩種趣味視圖。</p></div>
+</div>
+
+  <h3>支援的基底 Agent(Base Agent)</h3>
+  <div class="tbl"><table>
+    <tr><th>基底 Agent</th><th>連線方式</th><th>適合的角色(建議)</th><th>備註</th></tr>
+    <tr><td><b>Claude Code</b></td><td>stream-json(<code>claude -p</code>)</td><td>Meta Agent、Planner、Tester</td><td>權限請求經 Agent Center 規則判斷</td></tr>
+    <tr><td><b>Codex</b></td><td><code>codex app-server</code></td><td>Coder</td><td>只自動放行 Agent Center 自己的團隊工具</td></tr>
+    <tr><td><b>Copilot CLI</b>(含自訂 BYOK 版本)</td><td>ACP</td><td>Coder、前端</td><td>以 <code>--additional-mcp-config</code> 掛上團隊工具</td></tr>
+    <tr><td><b>Antigravity(agy)</b></td><td>stream-json + PreToolUse 閘門</td><td>Designer</td><td>MCP 只能放在工作資料夾(全隊共用)</td></tr>
+</table></div>
+  <p class="sub" style="margin-top:10px">進階:「Agent 設定」可定義<b>團隊 Agent(Team Agent)</b>,也就是 Agent Center 版的 Custom Agents:在基底之上疊加 Persona 的 system prompt、MCP server、skill,並寫一段說明讓秘書照著挑人。</p>
+
+  <h3>團隊工具一覽</h3>
+  <div class="tbl"><table>
+    <tr><th>工具</th><th>誰用</th><th>作用</th></tr>
+    <tr><td><code>task_create</code> / <code>task_assign</code></td><td>Meta Agent</td><td>建立任務(完成條件、相依、交付對象)並指派</td></tr>
+    <tr><td><code>task_update</code></td><td>Member Agent</td><td>開工、勾選已達成的完成條件</td></tr>
+    <tr><td><code>task_block</code></td><td>Member Agent</td><td>卡住了:說明在等隊友還是等你</td></tr>
+    <tr><td><code>deliver</code></td><td>Member Agent</td><td>登記交付物:路徑或網址、摘要、類型</td></tr>
+    <tr><td><code>review</code></td><td>Meta Agent</td><td>整合審查:驗收通過,或退回並寫明原因</td></tr>
+    <tr><td><code>message_send</code> / <code>ask_human</code></td><td>全部</td><td>傳訊給隊友、Meta Agent、全隊,或直接問你</td></tr>
+    <tr><td><code>knowledge_read</code> / <code>knowledge_share</code></td><td>Member Agent / Meta Agent</td><td>讀知識庫;在你點名後分享給全隊</td></tr>
+    <tr><td><code>team_finish</code></td><td>Meta Agent</td><td>宣告團隊完成</td></tr>
+</table></div>
+</section>
+
+<section id="flow">
+  <div class="kicker">Flow</div>
+  <h2>一次編排的流程</h2>
+  <div class="flow">
+  <svg viewBox="0 0 980 330" role="img" aria-label="協作流程圖">
+    <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#9aa1ad"/></marker>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#f2b33d"/></marker></defs>
+    <style>.b{fill:#1c1f25;stroke:#2a2e36;stroke-width:1.5}.t{fill:#eceef2;font:600 15px 'Segoe UI','Microsoft JhengHei',sans-serif}.s{fill:#9aa1ad;font:12.5px 'Segoe UI','Microsoft JhengHei',sans-serif}.l{stroke:#9aa1ad;stroke-width:1.6;fill:none;marker-end:url(#a)}</style>
+    <rect class="b" x="20" y="120" width="140" height="78" rx="14"/><text class="t" x="90" y="152" text-anchor="middle">你 / 秘書</text><text class="s" x="90" y="174" text-anchor="middle">目標、知識庫</text>
+    <rect x="230" y="120" width="150" height="78" rx="14" fill="#1a2440" stroke="#5b8cff" stroke-width="1.5"/><text class="t" x="305" y="152" text-anchor="middle">Meta Agent</text><text class="s" x="305" y="174" text-anchor="middle">主控協調者</text>
+    <rect x="470" y="40" width="150" height="70" rx="14" fill="#132a22" stroke="#3ccf91" stroke-width="1.5"/><text class="t" x="545" y="70" text-anchor="middle">Coder</text><text class="s" x="545" y="92" text-anchor="middle">Codex・後端</text>
+    <rect x="470" y="210" width="150" height="70" rx="14" fill="#231a3a" stroke="#a77bff" stroke-width="1.5"/><text class="t" x="545" y="240" text-anchor="middle">Designer</text><text class="s" x="545" y="262" text-anchor="middle">Antigravity・前端</text>
+    <rect x="720" y="120" width="170" height="78" rx="14" fill="#2b2213" stroke="#f2b33d" stroke-width="1.5"/><text class="t" x="805" y="150" text-anchor="middle">權限閘門 + 憲法</text><text class="s" x="805" y="172" text-anchor="middle">放行/核准卡/拒絕</text>
+    <path class="l" d="M160 159H226"/>
+    <path class="l" d="M380 145C420 110 430 80 466 76"/><text class="s" x="392" y="96">task_create</text>
+    <path class="l" d="M380 175C420 210 430 240 466 244"/>
+    <path class="l" d="M620 76C670 80 690 120 716 140"/><path class="l" d="M620 244C670 240 690 200 716 180"/>
+    <path d="M805 198V300H90V202" fill="none" stroke="#f2b33d" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ar)"/><text class="s" x="560" y="318" fill="#f2b33d">危險動作 → 核准卡給你</text>
+    <path class="l" d="M545 110V206" stroke-dasharray="3 4"/><text class="s" x="553" y="160">message_send</text>
+    <path class="l" d="M470 96C430 120 420 130 384 140"/>
+    <path class="l" d="M466 226C430 205 420 190 384 182"/><text class="s" x="396" y="232">deliver → review</text>
+    <path class="l" d="M300 120C300 60 160 60 100 116"/><text class="s" x="160" y="62">team_finish</text>
+</svg>
+</div>
+  <ol class="steps">
+    <li>在「團隊設定」(或請秘書)組建夢幻團隊:目標、工作資料夾、Member Agent Persona 與模型、Meta Agent、協作模式、知識庫。</li>
+    <li>按「啟動 Teamwork」,每位 Member Agent 收到<b>開場說明(Briefing)</b>:角色、團隊工具、憲法條文、看得到的知識庫文件。</li>
+    <li>Meta Agent 讀需求,用 <code>task_create</code> 拆成帶完成條件與相依關係的任務並指派(成果導向,不逐行指揮)。</li>
+    <li>沒有相依的任務並行推進;需要權限時經閘門判斷,危險動作跳卡給你。</li>
+    <li>Member Agent 用 <code>deliver</code> 交付,Meta Agent 用 <code>review</code> 整合審查,驗收或退回。</li>
+    <li>結果不如預期時,你在溝通紀錄對 Meta Agent 下<b>二次指令</b>,由 Meta Agent 重新調度,不用自己動手改程式。</li>
+    <li>全部驗收後 Meta Agent 呼叫 <code>team_finish</code>,交付物都在工作資料夾裡。</li>
+</ol>
+</section>
+
+<section id="case1">
+  <div class="kicker">Case 1 · 示意</div>
+  <h2>用夢幻團隊寫一個「線上會議紀錄」功能</h2>
+  <div class="case">
+    <p><b>目標</b>:在現有的 Next.js 專案加入會議紀錄:建立會議、即時共同編輯筆記、會後摘要與待辦、匯出 Markdown。</p>
+    <h3 style="margin-top:18px">團隊編成(認知模型適配)</h3>
+    <div class="tbl"><table>
+      <tr><th>成員</th><th>角色 Persona</th><th>基底 Agent</th><th>為什麼這樣配</th></tr>
+      <tr><td><span class="tag t-blue">AI 1</span></td><td>Meta Agent・規劃</td><td>Claude Code</td><td>讀整個專案、拆需求、驗收</td></tr>
+      <tr><td><span class="tag t-green">AI 2</span></td><td>Tester・整合測試</td><td>Claude Code</td><td>寫測試、跑測試、彙整驗收報告</td></tr>
+      <tr><td><span class="tag t-violet">AI 3</span></td><td>Designer・前端</td><td>Antigravity</td><td>依 UI 草圖做會議列表與編輯器</td></tr>
+      <tr><td><span class="tag t-amber">AI 4</span></td><td>Coder・後端</td><td>Codex</td><td>簡潔精準:資料表、API、即時同步</td></tr>
+    </table></div>
+    <p class="sub" style="margin-top:10px"><b>知識庫</b>:<code>會議紀錄-需求.md</code>、<code>UI 草圖.png</code>(團隊共享);<code>第三方摘要服務報價.md</code>、<code>API 規格.pdf</code>(只有 Meta Agent)。</p>
+    <figure><img src="img/setup-knowledge.png" alt="會議紀錄團隊的知識庫"><figcaption>團隊設定・知識庫:需求與 UI 草圖全隊共享,報價只給 Meta Agent(介面上顯示為 Leader)</figcaption></figure>
+    <h3>Meta Agent 怎麼拆任務(成果導向)</h3>
+    <div class="tbl"><table>
+      <tr><th>任務</th><th>負責</th><th>相依</th><th>完成條件</th></tr>
+      <tr><td>TASK-01 需求拆解</td><td>AI 1 Meta Agent</td><td>—</td><td>任務與分工確定</td></tr>
+      <tr><td>TASK-02 會議列表頁</td><td>AI 3 Designer</td><td>—</td><td>依 UI 草圖、手機版可用</td></tr>
+      <tr><td>TASK-03 會議 API 與資料表</td><td>AI 4 Coder</td><td>—</td><td>migration 可跑、CRUD 有測試</td></tr>
+      <tr><td>TASK-04 編輯器頁面</td><td>AI 3 Designer</td><td>03</td><td>建立會議、即時共同編輯、匯出 Markdown</td></tr>
+      <tr><td>TASK-05 需求確認:摘要與通知</td><td>AI 1 Meta Agent</td><td>—</td><td>摘要要不要寄信有定論</td></tr>
+      <tr><td>TASK-06 整合測試</td><td>AI 2 Tester</td><td>04</td><td>端對端測試全過</td></tr>
+      <tr><td>TASK-07 驗收報告</td><td>AI 2 Tester</td><td>06</td><td>測試結果彙整成報告</td></tr>
+    </table></div>
+    <p class="note">TASK-02 與 TASK-03 沒有相依,Designer 與 Coder 從第一回合就並行開工。Meta Agent 只寫「要達成什麼」,不規定在哪個檔案第幾行做什麼。</p>
+    <figure><img src="img/links.png" alt="會議紀錄團隊的協作地圖"><figcaption>協作關係:Coder 把「會議 API」交給 Designer,Designer 把前端版本交給 Tester,Meta Agent 在上方指派與驗收</figcaption></figure>
+    <h3>過程中的權限、提問與排錯</h3>
+    <div class="event"><span class="tag t-green">放行</span><div>AI 4 跑 <code>npm run db:migrate</code>、AI 3 跑 <code>npm install @tiptap/react</code> 與測試:自主協作下直接放行。(如果你把憲法「安裝軟體」設成要問我,安裝這一步會先跳卡。)</div></div>
+    <div class="event"><span class="tag t-amber">核准卡</span><div>AI 3 想 <code>rm -rf node_modules &amp;&amp; npm install</code>:會刪資料夾,跳出核准卡等你按「允許這一次」或「拒絕」,後面還有 2 個請求在排隊,可以「全部允許」。</div></div>
+    <div class="event"><span class="tag t-blue">問你</span><div>Meta Agent 遇到只有你能決定的事:「首版要支援手機版嗎?」直接在它的卡片上輸入回覆。</div></div>
+    <div class="event"><span class="tag t-violet">隊友之間</span><div>AI 3 問 Meta Agent「會後摘要要寄給所有與會者,還是只顯示在會議頁面?」Meta Agent 回覆「首版先顯示在頁面,寄信下一版再做」,不用你介入。</div></div>
+    <div class="event"><span class="tag t-red">失聯</span><div>AI 4 交付 API 後連續兩輪沒回報,被標成失聯;按「重新啟動這位成員」就能接回來。</div></div>
+    <figure><img src="img/waiting.png" alt="會議紀錄團隊的工作監控"><figcaption>工作監控・看板:Meta Agent 在問你、AI 2 等 AI 3 交付編輯器頁面、AI 3 的刪除請求等你批准、AI 4 已交付會議 API 但失聯</figcaption></figure>
+    <p style="margin-top:16px"><b>最後產出</b>:會議 API 與資料表、列表頁與編輯器、測試與驗收報告都在工作資料夾;下一輪 Meta Agent 再把「會後摘要與待辦」派給 Coder。溝通紀錄保留每個任務的討論,成本頁看得到花了多少 token。</p>
+  </div>
+</section>
+
+<section id="case2">
+  <div class="kicker">Case 2 · 示意</div>
+  <h2>用夢幻團隊做一個「專案管理平台」</h2>
+  <div class="case c2">
+    <p><b>目標</b>:從零做一個小型專案管理平台:看板(Kanban)、甘特圖、成員與權限、通知、儀表板。</p>
+    <p><b>怎麼開始</b>:把 <code>規格書.md</code> 拖進秘書的輸入框,一句話交代編成。秘書擬好新團隊卡片(成員、模型、知識庫可見性),你按「建立並啟動」才會真的建立。</p>
+    <figure><img src="img/secretary-propose.png" alt="秘書擬好專案管理平台團隊"><figcaption>秘書擬好「專案管理平台」團隊後停在確認卡,按下去才執行</figcaption></figure>
+    <h3>團隊編成</h3>
+    <div class="tbl"><table>
+      <tr><th>成員</th><th>角色 Persona</th><th>基底 Agent</th></tr>
+      <tr><td><span class="tag t-blue">AI 1</span></td><td>Meta Agent・規劃(也寫執行藍圖)</td><td>Claude Code</td></tr>
+      <tr><td><span class="tag t-green">AI 2</span></td><td>Tester・整合測試</td><td>Claude Code</td></tr>
+      <tr><td><span class="tag t-violet">AI 3</span></td><td>Designer・前端</td><td>Antigravity</td></tr>
+      <tr><td><span class="tag t-amber">AI 4</span></td><td>Coder・後端</td><td>Codex</td></tr>
+    </table></div>
+    <h3>Meta Agent 第一輪拆解</h3>
+    <div class="tbl"><table>
+      <tr><th>任務</th><th>負責</th><th>相依</th><th>完成條件</th></tr>
+      <tr><td>TASK-01 需求拆解與執行藍圖(<code>docs/blueprint.md</code>)</td><td>AI 1 Meta Agent</td><td>—</td><td>資料模型與 API 規格寫定</td></tr>
+      <tr><td>TASK-02 看板設計稿</td><td>AI 3 Designer</td><td>—</td><td>看板三欄、右側任務詳情</td></tr>
+      <tr><td>TASK-03 專案與任務 API</td><td>AI 4 Coder</td><td>01</td><td>projects、tasks、columns 的 CRUD 與測試</td></tr>
+      <tr><td>TASK-04 看板拖拉頁</td><td>AI 3 Designer</td><td>02、03</td><td>新增任務卡、拖拉換欄位、任務詳情面板</td></tr>
+      <tr><td>TASK-05 需求確認:權限角色與通知</td><td>AI 1 Meta Agent</td><td>—</td><td>角色與通知規則有定論</td></tr>
+      <tr><td>TASK-06 整合測試</td><td>AI 2 Tester</td><td>04</td><td>端對端測試全過</td></tr>
+      <tr><td>TASK-07 驗收報告</td><td>AI 2 Tester</td><td>06</td><td>測試結果彙整成報告</td></tr>
+    </table></div>
+    <p class="note">甘特圖、儀表板與通知在第二輪才派,讓第一輪先把核心的看板做穩。</p>
+    <figure><img src="img/pm-waiting.png" alt="專案管理平台團隊的工作監控"><figcaption>工作監控・看板:Meta Agent 問你甘特圖要不要拖拉改日期、AI 3 正在做看板拖拉頁並跑測試、AI 4 已交付專案與任務 API</figcaption></figure>
+    <h3>中途調整與二次調度</h3>
+    <div class="event"><span class="tag t-violet">二次指令</span><div>第一版儀表板只是一張樸素的表格。你沒有自己改,而是對 Meta Agent 說「儀表板改成卡片式,加上狀態標籤」,Meta Agent 把它退回給 Designer 重做。</div></div>
+    <div class="event"><span class="tag t-violet">隊友之間</span><div>AI 3 問「看板要支援跨專案拖拉嗎?」Meta Agent 回覆「首版只做同一個專案內拖拉」。</div></div>
+    <div class="event"><span class="tag t-green">加人</span><div>進度過半時人手不夠,在工作監控按「＋ 加人手」再加一位 Coder,Meta Agent 立刻把通知模組派給它。</div></div>
+    <div class="event"><span class="tag t-amber">要問我</span><div>AI 4 要 <code>git push</code>:憲法「對外發送要問我」跳卡,你決定先不推。</div></div>
+    <div class="event"><span class="tag t-blue">回合上限</span><div>用完 60 回合自動暫停,守住 Token 預算;你到團隊設定調高再按繼續,紀錄全部接得上。</div></div>
+    <figure><img src="img/pm-office.png" alt="專案管理平台團隊的 Office 視圖"><figcaption>工作監控・Office:辦公室動態列出你的二次指令「儀表板改成卡片式」與隊友之間的問答</figcaption></figure>
+    <p style="margin-top:16px"><b>最後產出</b>:可執行的平台原始碼、<code>docs/</code> 裡的執行藍圖與 API 規格、設計稿、測試與驗收報告;協作地圖記下誰交付給誰,方便回顧與重開。</p>
+  </div>
+</section>
+
+<section id="screens">
+  <div class="kicker">Screens</div>
+  <h2>其他實際畫面</h2>
+  <p class="sub">以下都是會議紀錄團隊的示範資料,版面與實機相同。點圖可放大。</p>
+  <figure><img src="img/office.png" alt="Office 視圖"><figcaption><b>工作監控・Office</b>:把團隊畫成辦公室,右側是辦公室動態與待處理的相依關係。</figcaption></figure>
+  <div class="grid g2">
+    <figure><img src="img/log.png" alt="溝通紀錄"><figcaption><b>溝通紀錄</b>:依任務分串,可直接給 Meta Agent 下指令。</figcaption></figure>
+    <figure><img src="img/setup.png" alt="團隊設定"><figcaption><b>團隊設定</b>:目標、工作資料夾、協作模式、Member Agent 與 Meta Agent。</figcaption></figure>
+    <figure><img src="img/law.png" alt="憲法"><figcaption><b>憲法</b>:內建條文與自己的條文,三段式等級。</figcaption></figure>
+    <figure><img src="img/agents.png" alt="Agent 設定"><figcaption><b>Agent 設定</b>:團隊 Agent 疊加 system prompt、MCP、skill。</figcaption></figure>
+    <figure><img src="img/secretary-status.png" alt="秘書查現況"><figcaption><b>秘書</b>:一句話查各團隊現況與等你處理的事。</figcaption></figure>
+    <figure><img src="img/cost.png" alt="成本與用量"><figcaption><b>成本與用量</b>:各團隊、各 Member Agent 的 token 與預估費用。</figcaption></figure>
+  </div>
+  <figure><img src="img/company.png" alt="公司總覽"><figcaption><b>公司總覽</b>:所有團隊的辦公室放在同一張地圖上。</figcaption></figure>
+</section>
+
+<section id="pros">
+  <div class="kicker">Benefits</div>
+  <h2>戰略價值與優點</h2>
+  <div class="grid g3 pros">
+    <div class="card"><h4>你不再是人類瓶頸</h4><p>描述目標、授權代理、驗收成果;中間的傳話與調度交給 Agent Center 和 Meta Agent。</p></div>
+    <div class="card"><h4>並行提升吞吐量</h4><p>沒有相依的任務同時推進,前端不用等後端。</p></div>
+    <div class="card"><h4>消除重複性勞動</h4><p>拆需求、寫測試、更新文件、跑建置,這些 Toil 交給Member Agent。</p></div>
+    <div class="card"><h4>認知模型適配</h4><p>四種 Agent 混編,各用所長、各用自己的模型與額度,不綁單一 AI。</p></div>
+    <div class="card"><h4>守住 Token 預算</h4><p>每位 Member Agent 只拿到自己需要的 Context;回合上限與成本頁隨時掌握花費。</p></div>
+    <div class="card"><h4>狀態有憑有據</h4><p>進度、等待、交付都來自任務庫事件,不從聊天內容猜。</p></div>
+    <div class="card"><h4>放手但不失控</h4><p>自主協作省掉大量確認;危險動作由你決定,禁止事項不會被誤點放行。</p></div>
+    <div class="card"><h4>一眼看全隊</h4><p>即時畫面、協作地圖、溝通紀錄、成本,一個視窗看完;瀏海島也有團隊狀態與核准卡。</p></div>
+    <div class="card"><h4>秘書代勞、可接續</h4><p>一句話查現況、開團隊;暫停、加人、調回合、重新開啟後都接得上。</p></div>
+</div>
+</section>
+
+</main>
+<footer><div class="wrap">Agent Center 說明報告 · 2026-10-15</div></footer>
+<div class="lightbox" id="lb"><img alt=""></div>
+<script>
+const lb=document.getElementById('lb'),li=lb.querySelector('img');
+document.querySelectorAll('figure img').forEach(i=>i.addEventListener('click',()=>{li.src=i.src;lb.classList.add('on')}));
+lb.addEventListener('click',()=>lb.classList.remove('on'));
+</script>
+</body>
+</html>
