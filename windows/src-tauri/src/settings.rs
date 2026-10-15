@@ -65,6 +65,10 @@ pub struct Settings {
     /// "system" = the Windows display language, or "zh-TW" | "en". See i18n.rs.
     #[serde(default = "default_language")]
     pub language: String,
+    /// Whether Teamwork offers 中二模式 (the raid view) at all. Off by default:
+    /// the window then shows nothing of it, for a sober look.
+    #[serde(default)]
+    pub battle_mode: bool,
 }
 
 /// The edge the island is docked to. The bottom one is the work area's: the
@@ -220,6 +224,7 @@ impl Default for Settings {
             session_names: Default::default(),
             dock: Dock::default(),
             language: default_language(),
+            battle_mode: false,
         }
     }
 }

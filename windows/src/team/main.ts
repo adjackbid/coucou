@@ -529,6 +529,8 @@ function sidebar(): HTMLElement {
                 value: companyName(), placeholder: tr("我的公司", "My company"),
                 onChange: (e: Event) => { setCompanyName((e.target as HTMLInputElement).value); render(); },
               }),
+              // 中二模式's own knobs, only while 設定 → 團隊與秘書 offers it at all.
+              ...(office.battleAllowed ? [
               h("label", { text: tr("戰鬥動畫流暢度(中二模式)", "Animation frame rate (Battle mode)") }),
               h("div", { class: "segmented" },
                 ...[20, 30, 60].map((n) =>
@@ -537,6 +539,7 @@ function sidebar(): HTMLElement {
                     onClick: () => { office.companyFps = n; saveCompanyFps(n); render(); },
                   }, `${n} FPS`))),
               h("p", { class: "hint", text: tr("公司總覽裡每間辦公室戰鬥動畫的更新頻率。團隊多的時候調低比較省效能,只有一兩個團隊時可以調高。", "How often each office's battle animation updates in the company overview. Turn it down when you have many teams, to save power; with one or two teams you can turn it up.") }),
+              ] : []),
               h("label", { text: tr("玻璃濃度", "Glass opacity") }),
               (() => {
                 const shown = h("b", { class: "sheet-value", text: `${sheet()}%` });
@@ -558,6 +561,7 @@ function sidebar(): HTMLElement {
                   h("div", { class: "segmented" }, preset(tr("玻璃", "Glass"), SHEET_DEFAULT), preset(tr("加深", "Darker"), 80), preset(tr("不透明", "Opaque"), 100)));
               })(),
               h("p", { class: "hint", text: tr("越低,模糊的桌面透出越多;越高越接近實色。模糊本身的強度由 Windows 決定,無法調整。拖動時視窗會即時變化。", "Lower lets more of the blurred desktop show through; higher gets closer to a solid color. Windows sets how strong the blur is, and that can't be changed. The window changes as you drag.") }),
+              ...(office.battleAllowed ? [
               h("label", { text: tr("戰鬥節奏(中二模式)", "Battle pace (Battle mode)") }),
               h("div", { class: "segmented" },
                 ...([["calm", tr("平靜", "Calm")], ["normal", tr("一般", "Normal")], ["fierce", tr("激烈", "Fierce")]] as [Tempo, string][]).map(([v, label]) =>
@@ -566,7 +570,8 @@ function sidebar(): HTMLElement {
               h("label", { class: "side-pop-check" },
                 h("input", { type: "checkbox", checked: ambientMotion(), onChange: (e: Event) => { saveAmbientMotion((e.target as HTMLInputElement).checked); render(); } }),
                 tr("場地微動(中二模式)", "Ambient motion (Battle mode)")),
-              h("p", { class: "hint", text: tr("戰場上的餘燼、雪花、落葉、電花、星塵。只是氣氛,減少動態時一律停止。", "Embers, snow, falling leaves, sparks and stardust on the battlefield. Just atmosphere; it always stops when motion is reduced.") })),
+              h("p", { class: "hint", text: tr("戰場上的餘燼、雪花、落葉、電花、星塵。只是氣氛,減少動態時一律停止。", "Embers, snow, falling leaves, sparks and stardust on the battlefield. Just atmosphere; it always stops when motion is reduced.") }),
+              ] : [])),
       );
   return h(
     "aside",
@@ -951,6 +956,8 @@ function setup(file: TeamFile): HTMLElement {
         { n: LARGE_FROM },
       ),
     }),
+    // The battlefield is only a choice while 設定 → 團隊與秘書 offers 中二模式 at all.
+    ...(office.battleAllowed ? [
     h("label", { text: tr("中二模式戰場", "Battle mode arena") }),
     h(
       "div",
@@ -960,6 +967,7 @@ function setup(file: TeamFile): HTMLElement {
       ),
     ),
     h("p", { class: "hint", text: tr("中二模式下這個團隊在哪個場地討伐哪隻魔王。只改變畫面,不影響工作、任務或 HP;改了馬上生效,不用儲存。", "Where this team fights which boss in Battle mode. It only changes the picture, not the work, the tasks or HP; it applies right away, no need to save.") }),
+    ] : []),
     h("label", { text: tr("回合上限", "Turn limit") }),
     h("div", { class: "row nowrap" }, bound("input", "maxTurns", String(config.maxTurns), (v) => (config.maxTurns = Math.max(1, Math.min(500, Number(v) || 60))), { type: "number", min: "1", max: "500", class: "field narrow" }), h("span", { class: "hint", text: tr("整個團隊用完這麼多回合後會暫停,等你決定要不要繼續。", "Once the whole team has used this many turns, it pauses until you decide whether to go on.") })),
   );
@@ -1965,6 +1973,10 @@ async function load() {
     const boot = await Bridge.boot();
     agents = boot?.settings.agents ?? [];
     setLang(boot?.lang);
+    // 中二模式 is off unless 設定 → 團隊與秘書 turned it on; a raid saved as
+    // the last view then opens as the office (the preference itself is kept).
+    office.battleAllowed = !!boot?.settings.battleMode;
+    if (!office.battleAllowed && office.mode === "battle") office.mode = "office";
     await loadTeamAgents(() => {}, agents, true);
     for (const snap of (await Bridge.teamSnapshots()) ?? []) {
       runs.set(snap.id, snap);
@@ -1994,6 +2006,11 @@ async function load() {
         live.applySnapshot(next);
         if (tab === "monitor") render();
       }, snap);
+      // `&battle=off` is the window with 中二模式 turned off in the settings.
+      if (new URLSearchParams(location.search).get("battle") === "off") {
+        office.battleAllowed = false;
+        if (office.mode === "battle") office.mode = "office";
+      }
       // `&battle=play` plays a whole raid on the demo team, to look at 中二模式.
       if (new URLSearchParams(location.search).get("battle") === "play") {
         (await import("./battle-demo")).playBattle(snap, (next) => {
@@ -2130,8 +2147,9 @@ async function start() {
     }
   });
   // Agents may have been added in the settings window meanwhile.
-  await onEvent<{ agents: AgentProfile[] }>("settings-changed", (s) => {
+  await onEvent<{ agents: AgentProfile[]; battleMode?: boolean }>("settings-changed", (s) => {
     agents = s.agents ?? agents;
+    office.allowBattle(!!s.battleMode);
     if (!unsaved) render();
   });
 

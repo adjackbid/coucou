@@ -7,8 +7,8 @@ import { tr, trf } from "../../core/i18n";
 import { h } from "../../views/dom";
 import type { Page } from "../nav";
 import { todoList } from "../status";
-import { refreshTeamAgents, settings, statusInput, teamAgents } from "../store";
-import { card, field, notice, pageHeader, row } from "../ui";
+import { refreshTeamAgents, save, settings, statusInput, teamAgents } from "../store";
+import { card, field, notice, pageHeader, row, toggle } from "../ui";
 
 /** The chat model the secretary was last set to, from the Teamwork window's storage (same origin). */
 export function secretaryProvider(): { name: string; model: string } | null {
@@ -100,6 +100,18 @@ export const teamPage: Page = {
         title: tr("團隊", "Teams"),
         lead: tr("每個團隊的目標、成員、知識庫和憲法，都在 Teamwork 裡設定。", "Each team's goal, members, knowledge and constitution are set up in Teamwork."),
         body: [row(h("button", { type: "button", class: "primary", text: tr("打開 Teamwork ↗", "Open Teamwork ↗"), onclick: () => openTeam() }))],
+      }),
+      card({
+        anchor: "battle",
+        title: tr("中二模式", "Battle mode"),
+        lead: tr("把團隊的工作畫成討伐魔王的戰鬥。關掉時，Teamwork 的工作監控、團隊設定和公司設定都不會出現任何中二模式的東西。", "Shows the team's work as a raid on a boss. When off, nothing of it appears anywhere in Teamwork: not in the monitor, the team setup or the company settings."),
+        body: [
+          field(
+            tr("顯示中二模式", "Show Battle mode"),
+            toggle(settings.battleMode, (v) => { settings.battleMode = v; void save(); }, tr("顯示中二模式", "Show Battle mode")),
+            tr("預設關閉。只影響畫面，不影響團隊的工作、權限或驗收。", "Off by default. Only the picture changes; the team's work, permissions and reviews stay the same."),
+          ),
+        ],
       }),
     );
   },

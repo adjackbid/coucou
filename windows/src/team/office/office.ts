@@ -106,9 +106,10 @@ export function setCompanyName(name: string) {
   }
 }
 // i18n: model-facing — what the Leader is told when a member falls or comes back (always Chinese, like every brief).
-function fallenNote(name: string, limit: "tokens" | "cost" | null): string {
+function fallenNote(name: string, limit: "tokens" | "cost" | null, battle: boolean): string {
   const what = limit === "cost" ? "成本上限" : "Token 上限"; // i18n-ok: model-facing
-  return `【系統】${name} 已達自己的${what},在中二模式中陣亡。請不要再指派新任務給 ${name};等人類在「團隊設定」提高上限讓它復活。`; // i18n-ok: model-facing
+  const fell = battle ? "在中二模式中陣亡" : "已停下"; // i18n-ok: model-facing
+  return `【系統】${name} 已達自己的${what},${fell}。請不要再指派新任務給 ${name};等人類在「團隊設定」提高上限讓它${battle ? "復活" : "繼續"}。`; // i18n-ok: model-facing
 }
 function revivedNote(name: string): string {
   return `【系統】${name} 的上限已提高,已復活,可以繼續指派任務。`; // i18n-ok: model-facing
@@ -174,6 +175,8 @@ export class Office {
   private runs = new Map<string, Snapshot>();
   /** 中二模式: the same work told as a raid; the person's own preference. */
   mode: PresentationMode = savedMode();
+  /** Whether 中二模式 is offered at all (設定 → 團隊與秘書). Off, nothing of it is drawn or named. */
+  battleAllowed = true;
   /** In 中二模式, whether the company map plays every room's fight (it costs more to draw). */
   companyLive = companyLive();
   companyFps = companyFps();
@@ -546,7 +549,7 @@ export class Office {
         // The Leader is told once per run; the request id keeps it to once.
         if (canTell) {
           void this.host
-            .instruct(teamId, fallenNote(m.displayName ?? m.memberId, v!.limit), `bt-fallen:${run.id}:${this.battle.vm(teamId)?.runId ?? ""}:${m.memberId}`)
+            .instruct(teamId, fallenNote(m.displayName ?? m.memberId, v!.limit, this.battleAllowed), `bt-fallen:${run.id}:${this.battle.vm(teamId)?.runId ?? ""}:${m.memberId}`)
             .catch(() => {});
         }
       } else if (!dead && seen.has(m.memberId)) {
@@ -647,7 +650,7 @@ export class Office {
       h("button", { class: `bt-${mode}${this.mode === mode ? " on" : ""}`, type: "button", "aria-pressed": this.mode === mode ? "true" : "false", title, onClick: () => this.setMode(mode) }, label);
     return h("div", { class: "bt-mode", role: "group", "aria-label": tr("畫面模式", "View mode") },
       opt("office", "Office", tr("一般辦公室畫面", "The usual office view")), // i18n-ok: the view's name, the same in both languages
-      opt("battle", tr("中二模式", "Battle mode"), tr("同一份工作,看成團隊討伐需求魔王:只改變畫面,不影響工作", "The same work, told as your team's raid on the Requirements Overlord: only the picture changes, never the work")),
+      this.battleAllowed ? opt("battle", tr("中二模式", "Battle mode"), tr("同一份工作,看成團隊討伐需求魔王:只改變畫面,不影響工作", "The same work, told as your team's raid on the Requirements Overlord: only the picture changes, never the work")) : null,
       opt("orbit", tr("星域", "Orbit mode"), tr("同一份工作,看成 Agent 在同一個宇宙裡的光環與協作連線:只改變畫面,不影響工作", "The same work, told as your agents' light rings and the lines between them, all in one universe: only the picture changes, never the work")));
   }
 
@@ -658,6 +661,14 @@ export class Office {
       if (layer instanceof BattleLayer) layer.stop();
     }
     this.host.render();
+  }
+
+  /** The settings window turned 中二模式 on or off. Off, a raid on screen goes back to the office. */
+  allowBattle(on: boolean) {
+    if (this.battleAllowed === on) return;
+    this.battleAllowed = on;
+    if (!on && this.mode === "battle") this.setMode("office");
+    else this.host.render();
   }
 
   setMode(mode: PresentationMode) {
