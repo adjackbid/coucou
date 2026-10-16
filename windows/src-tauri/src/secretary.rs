@@ -30,6 +30,17 @@ use crate::team::orchestrator::{KnowledgeChange, Teams};
 use crate::team::TeamConfig;
 
 const MAX_ROUNDS: usize = 8;
+
+/// Told to the model when it says a card is waiting but made none.
+// i18n: model-facing
+const NO_CARD: &str = "[Agent Center] You wrote that a card (or a button to click) is ready for the user, but you called no propose_* tool in this answer, so nothing is on their screen. If you meant to prepare something, call the propose_* tool now with what you described; if not, tell the user plainly that nothing was prepared yet.";
+
+/// Whether an answer speaks of a card or a button for the person.
+// i18n: model-facing (words looked for in the model's answer, never shown)
+fn claims_card(text: &str) -> bool {
+    let t = text.to_lowercase();
+    ["提案卡", "卡片", "按鈕", "按下", "proposal card", "the card", "a card", "button", "click"].iter().any(|w| t.contains(w))
+}
 const MAX_RESULT: usize = 8000;
 const KEEP_TURNS: usize = 60;
 const COLORS: [&str; 8] = ["#5b8def", "#34c7a0", "#a06cf0", "#f5b63d", "#f472b6", "#22d3ee", "#84cc16", "#f97316"];
@@ -304,6 +315,7 @@ impl Secretary {
         let tools = describe();
         let mut steps = Vec::new();
         let mut made = Vec::new();
+        let mut nudged = false;
 
         for _ in 0..MAX_ROUNDS {
             let reply = tools::complete(provider, &system, &turns, &tools).await?;
@@ -311,6 +323,15 @@ impl Secretary {
                 let text = reply.text.trim().to_string();
                 if text.is_empty() {
                     return Err(tr!(format!("{} 沒有回答。", provider.name), format!("{} gave no answer.", provider.name)));
+                }
+                // It speaks of a card for the person, but none was made in this answer and none is
+                // still open from before: some models describe the proposal instead of making it.
+                // Once, it is told so and asked to make it (or to say plainly that it did not).
+                if made.is_empty() && !nudged && claims_card(&text) && !self.any_open() {
+                    nudged = true;
+                    turns.push(Turn::Assistant { text, calls: vec![] });
+                    turns.push(Turn::User(NO_CARD.into()));
+                    continue;
                 }
                 turns.push(Turn::Assistant { text: text.clone(), calls: vec![] });
                 self.keep(turns);
@@ -345,6 +366,11 @@ impl Secretary {
             "This needs more looking up than I can do in one go, so I'll stop here. Tell me more precisely what you need, or ask me to carry on."
         );
         Ok(Reply { text, steps, proposals: made })
+    }
+
+    /// A card from earlier still waits for the person's click.
+    fn any_open(&self) -> bool {
+        self.proposals.lock().unwrap().iter().any(|p| p.state == "open")
     }
 
     /// Keeps the conversation, from a user turn on, within bounds.
@@ -1415,7 +1441,7 @@ fn system_prompt(office: &Office) -> String {
 \n\
 How you work:\n\
 - Look things up with your tools before you answer; never guess a team's state. Quote names, numbers and times as the tools give them.\n\
-- You cannot change anything yourself. To get something done (a new team, an instruction to a team, starting, pausing, resuming, stopping or archiving a team) you prepare it with a propose_* tool: it appears on the user's screen as a card, and it happens only if they click it. Never say something was done unless a [Agent Center] note says the user confirmed it.\n\
+- You cannot change anything yourself. To get something done (a new team, an instruction to a team, starting, pausing, resuming, stopping or archiving a team) you prepare it with a propose_* tool: it appears on the user's screen as a card, and it happens only if they click it. Never say something was done unless a [Agent Center] note says the user confirmed it. Never say a card or a button is ready unless a propose_* tool told you in this answer that it is on the user's screen: when the user wants a team, call propose_team; describing the team in words is not enough.\n\
 - Prefer one proposal that does what was asked. Ask a short question first only when something essential is missing, such as the work folder for a new team.\n\
 - For a new team: pick agents and models from list_agents (agent_models lists what an agent offers); give the leader the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
 - A team has a knowledge base: documents (design notes, specs, pictures, any file) its members work from. When the user attaches files or mentions design documents, specs or reference material for a team, put them in `knowledge` (propose_team for a new team, propose_knowledge for one that exists): attached files by their id (u…), or full paths the user wrote — never a path you guessed. Each is for the leader only unless the user says the whole team should see it (then visibility \"shared\"). You only see the files' names, never what is in them.\n\
@@ -1558,6 +1584,13 @@ fn label(call: &Call, office: &Office) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_answer_that_speaks_of_a_card_is_caught() {
+        assert!(claims_card("已準備好一張團隊提案卡,確認後按卡片上的按鈕即會建立並啟動。"));
+        assert!(claims_card("The card is on your screen: click Create."));
+        assert!(!claims_card("目前有 2 個團隊,購物網站團隊執行中。"));
+    }
 
     #[test]
     fn the_person_s_instructions_end_the_prompt_within_the_rules() {

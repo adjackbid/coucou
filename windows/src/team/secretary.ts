@@ -369,11 +369,31 @@ async function decline(host: SecretaryHost, p: SecretaryProposal, why = "") {
 }
 
 /** Agent Center's words: line breaks, **bold**, `code` and "- " lists, nothing else. */
+/** A Markdown table's row: its cells, or null when the line is not one. */
+function cells(line: string): string[] | null {
+  const t = line.trim();
+  if (!t.startsWith("|") || !t.endsWith("|") || t.length < 3) return null;
+  return t.slice(1, -1).split("|").map((c) => c.trim());
+}
+
 function words(text: string): HTMLElement {
   const box = h("div", { class: "sec-words" });
   let list: HTMLElement | null = null;
+  let table: HTMLTableElement | null = null;
   for (const raw of text.split("\n")) {
     const line = raw.trimEnd();
+    // Markdown tables: the first row heads it, the |---| line is skipped.
+    const row = cells(line);
+    if (row) {
+      list = null;
+      if (row.every((c) => /^:?-{2,}:?$/.test(c))) continue;
+      if (!table) {
+        box.append(h("div", { class: "sec-table-wrap" }, (table = h("table", { class: "sec-table" }))));
+        table.append(h("tr", {}, ...row.map((c) => inline(h("th"), c))));
+      } else table.append(h("tr", {}, ...row.map((c) => inline(h("td"), c))));
+      continue;
+    }
+    table = null;
     const heading = /^#{1,6}\s+(.*)$/.exec(line);
     if (heading) {
       list = null;
