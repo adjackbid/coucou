@@ -24,6 +24,7 @@ import { buildHeader, buildViews, type ViewActions, type ViewHost } from "../vie
 import { h } from "../views/dom";
 import { tr, trf } from "../core/i18n";
 import { IslandStateMachine } from "./fsm";
+import { approvalLines, requestHeadline } from "./hooks";
 import { nextTeamCard, teamTaskId } from "./team";
 import type { Danger, MemberView, Snapshot } from "../team/types";
 
@@ -556,14 +557,16 @@ export class Island {
       sections.push({ label: trf("還有 {n} 個在等", "{n} more waiting", { n: queued.length }), value: queued.join("\n") });
     }
     const taskId = teamTaskId(snap.id);
+    const command = requestHeadline(m.name, p.title, sections);
     State.pendingApproval = {
       requestId: `team:${snap.id}:${m.id}:${JSON.stringify(p.requestId)}`,
       sessionId: "",
       taskId,
       tool: p.title,
-      command: `${m.name} · ${p.title}`,
+      command,
       sections,
-      lines: 2 + sections.reduce((n, s) => n + s.value.split("\n").length, 0),
+      // Wrapped lines, not newlines: a one-line script is many lines on the card.
+      lines: approvalLines(command, sections),
       truncated: false,
       team: { team: snap.id, member: m.id, requestId: p.requestId, allowOption: pick(["allow_once", "allow_always"]), denyOption: pick(["reject_once", "reject_always"]), more: m.morePermissions.length },
     };
@@ -606,7 +609,7 @@ export class Island {
       .filter(([, v]) => v != null)
       .map(([label, v]) => ({ label, value: typeof v === "string" ? v : JSON.stringify(v, null, 2) }));
     if (p.rule) sections.unshift({ label: tr("憲法", "constitution"), value: p.rule });
-    const command = `${agent?.name ?? p.agentId} · ${p.title}`;
+    const command = requestHeadline(agent?.name ?? p.agentId, p.title, sections);
     State.pendingApproval = {
       requestId: `acp:${p.agentId}`,
       sessionId: "",
@@ -614,7 +617,7 @@ export class Island {
       tool: p.title,
       command,
       sections,
-      lines: 2 + sections.reduce((n, s) => n + s.value.split("\n").length, 0),
+      lines: approvalLines(command, sections),
       truncated: false,
       acp: { agentId: p.agentId, requestId: p.requestId, allowOption, denyOption },
     };

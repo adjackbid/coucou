@@ -252,11 +252,24 @@ function approvalSections(input: Record<string, unknown>): ApprovalSection[] {
 const CODE_COLS = 64;
 
 /**
+ * The headline of an agent's or a team member's request: who, and what its
+ * agent called the step. A title that is a whole command is cut to its start
+ * when the body below carries the command in full — the headline is not
+ * where a script is read, and it would push the buttons off the card.
+ */
+export function requestHeadline(who: string, title: string, sections: ApprovalSection[]): string {
+  const first = title.split("\n")[0];
+  const inBody = sections.some((s) => s.label === "command" || s.label === "commandLine" || s.label === "CommandLine");
+  const short = inBody && (title.length > 100 || first !== title) ? `${first.slice(0, 100).trimEnd()}…` : title;
+  return `${who} · ${short}`;
+}
+
+/**
  * How many lines of text the card needs — the island grows to fit, up to its
  * cap. Fractions stand for the chrome around the text: the body's padding,
  * border and gap, and a label's smaller type plus its margin.
  */
-function approvalLines(headline: string, sections: ApprovalSection[]): number {
+export function approvalLines(headline: string, sections: ApprovalSection[]): number {
   const count = (text: string) =>
     text.split("\n").reduce((n, line) => n + Math.max(1, Math.ceil(line.length / CODE_COLS)), 0);
   let lines = count(headline);

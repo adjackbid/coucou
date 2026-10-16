@@ -812,6 +812,22 @@ body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
+  /* A headline that is a whole script must not push the body and the
+     buttons off the card: four lines, then it scrolls (like the body). */
+  flex: 0 0 auto;
+  max-height: 64px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+
+.code-head::-webkit-scrollbar {
+  width: 8px;
+}
+
+.code-head::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
 }
 
 /* The approval body: the whole request. It wraps rather than hides behind an
