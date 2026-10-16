@@ -32,11 +32,20 @@ use crate::log;
 use crate::policy::{self, Kind, Verdict};
 
 /// A model an agent offers, for the drop-down next to a member.
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelChoice {
     pub id: String,
     pub label: String,
+    /// What the agent itself says the model takes, when it says (Codex's `inputModalities`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vision: Option<bool>,
+    /// The reasoning efforts it offers (Codex's `supportedReasoningEfforts`); empty when unsaid.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub efforts: Vec<String>,
+    /// The agent's own default.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub default: bool,
 }
 
 #[derive(Default)]
@@ -157,7 +166,7 @@ pub async fn setup(running: &mut Running, key: &str, launch: &Launch, timeout: D
                     let name = m.get("displayName").and_then(Value::as_str).unwrap_or(&id).to_string();
                     let resolved = m.get("resolvedModel").and_then(Value::as_str).unwrap_or("");
                     let label = if resolved.is_empty() || resolved == id { name } else { format!("{name} ({resolved})") };
-                    Some(ModelChoice { id, label })
+                    Some(ModelChoice { id, label, ..Default::default() })
                 })
                 .collect()
         })
@@ -616,7 +625,7 @@ mod tests {
 
             // The handshake's model list is what the drop-down offers.
             let listed = agents.models(&claude_profile()).await.unwrap();
-            assert_eq!(listed, vec![ModelChoice { id: "sonnet".into(), label: "Sonnet (claude-sonnet-5-5)".into() }]);
+            assert_eq!(listed, vec![ModelChoice { id: "sonnet".into(), label: "Sonnet (claude-sonnet-5-5)".into(), ..Default::default() }]);
         });
     }
 

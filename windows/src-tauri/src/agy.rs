@@ -153,7 +153,7 @@ pub async fn models(command: &str) -> Result<Vec<ModelChoice>, String> {
         .filter_map(|l| {
             let (id, name) = l.split_once('\t')?;
             let id = id.trim();
-            (!id.is_empty() && !id.contains(' ')).then(|| ModelChoice { id: id.to_string(), label: name.trim().to_string() })
+            (!id.is_empty() && !id.contains(' ')).then(|| ModelChoice { id: id.to_string(), label: name.trim().to_string(), ..Default::default() })
         })
         .collect();
     if list.is_empty() {

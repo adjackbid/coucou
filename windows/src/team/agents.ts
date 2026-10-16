@@ -670,7 +670,7 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
     h(
       "footer",
       { class: "ta-card-foot" },
-      tags.length ? h("div", { class: "ta-tags" }, ...tags) : h("span", { class: "ta-plain", text: tr("只換名稱與模型", "Only a name and a model") }),
+      tags.length ? h("div", { class: "ta-tags" }, ...tags) : h("span"),
       h(
         "span",
         { class: `ta-used${used.length ? " on" : ""}`, title: used.length ? used.join("\n") : "" },

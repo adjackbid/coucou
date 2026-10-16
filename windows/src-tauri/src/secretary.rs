@@ -1183,7 +1183,7 @@ fn list_agents(office: &Office) -> String {
             let plan = [p.id.as_str(), base].iter().any(|id| choices.billing.get(*id).is_some_and(|b| b == "subscription"));
             let found = (!model.is_empty()).then(|| crate::pricing::lookup(&model, &choices, &table)).flatten();
             let cost = cost_note(p.location(), &model, found.as_ref(), plan, spent.get(&p.id).copied());
-            let can = crate::caps::describe(&crate::caps::of(p, &choices, &table));
+            let can = crate::caps::describe(&crate::caps::of(p, &choices, &table, None));
             format!("- {} (id {}): {:?}, default model {}{}{own}; can: {can}; {cost}", p.name, p.id, p.protocol, if model.is_empty() { "the agent's own" } else { &model }, endpoint)
         })
         .collect();

@@ -181,6 +181,8 @@ export interface AgentCaps {
   /** 1 cheap … 4 dear. */
   tier?: number | null;
   image: boolean;
+  /** Some of it is told from the model's name, not said by a list. */
+  guessed?: boolean;
 }
 
 /** Whether a URL's host is this machine or a private network (acp.rs `is_local_address`). */

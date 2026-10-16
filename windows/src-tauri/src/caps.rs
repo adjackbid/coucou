@@ -3,15 +3,19 @@
 // sees images, thinks before it answers, how much it reads, roughly what it
 // costs, and whether it makes pictures.
 //
-// The model's own abilities come from the same lists as its price
-// (pricing.rs): a LiteLLM proxy's /model/info, else LiteLLM's public list,
-// which says so for most models once it has been fetched again from the cost
-// page. Claude Code's models all see images and think. Making pictures is a
-// tool, not something any list says: the person ticks it on the provider.
+// The model's own abilities come, first, from the agent itself where it says
+// (Codex's model list: what each model takes, which efforts it offers, its
+// default); then from the same lists as its price (pricing.rs): a LiteLLM
+// proxy's /model/info, else LiteLLM's public list, which says so for most
+// models once it has been fetched again from the cost page; last, from the
+// model's family name (Claude, Gemini, GPT-5…), marked as a guess. Making
+// pictures is a tool, not something any list says: the person ticks it on
+// the provider.
 
 use serde::Serialize;
 
 use crate::acp::{AgentProfile, Launch, Protocol};
+use crate::claude::ModelChoice;
 use crate::pricing::{self, Choices, Table};
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -26,6 +30,36 @@ pub struct Caps {
     pub tier: Option<u8>,
     /// Makes pictures, as the person ticked it on the provider.
     pub image: bool,
+    /// Some of it is told from the model's name, not said by a list.
+    pub guessed: bool,
+}
+
+/// Claude Code's aliases name the newest of a family: the list's newest entry for it.
+fn claude_alias(model: &str, table: &Table) -> Option<String> {
+    let alias = model.trim().to_ascii_lowercase();
+    let alias = alias.split('[').next().unwrap_or("");
+    if !["opus", "sonnet", "haiku"].contains(&alias) {
+        return None;
+    }
+    let prefix = format!("claude-{alias}-");
+    table.models.keys().filter(|k| k.starts_with(&prefix)).max().cloned()
+}
+
+/// What a model's family name says, when nothing else does: (vision, thinking).
+fn family(model: &str) -> (Option<bool>, Option<bool>) {
+    let m = model.to_ascii_lowercase();
+    let m = m.rsplit('/').next().unwrap_or(&m);
+    let efforted = ["-low", "-medium", "-high", "-xhigh", "-max"].iter().any(|s| m.ends_with(s));
+    if m.starts_with("gpt-oss") {
+        return (Some(false), Some(true));
+    }
+    if m.starts_with("claude") || ["opus", "sonnet", "haiku"].iter().any(|a| m.starts_with(a)) || m.starts_with("gemini") || m.starts_with("gpt-5") || m.starts_with("gpt-6") || m.starts_with("o3") || m.starts_with("o4") {
+        return (Some(true), Some(true));
+    }
+    if m.starts_with("deepseek") || m.starts_with("qwen3") || m.starts_with("qwq") || m.contains("reasoning") || efforted {
+        return (None, Some(true));
+    }
+    (None, None)
 }
 
 /// How dear a price is, in four steps: input weighed three to one against output.
@@ -42,17 +76,30 @@ pub fn tier(p: &pricing::Price) -> u8 {
     }
 }
 
-pub fn of(profile: &AgentProfile, choices: &Choices, table: &Table) -> Caps {
-    let model = crate::acp::running_model(profile, &Launch::default());
-    let found = (!model.is_empty()).then(|| pricing::lookup(&model, choices, table)).flatten();
+/// `offered`: the agent's own model list, when it says what its models can do (Codex).
+pub fn of(profile: &AgentProfile, choices: &Choices, table: &Table, offered: Option<&[ModelChoice]>) -> Caps {
+    let mut model = crate::acp::running_model(profile, &Launch::default());
+    // The agent's own word on its model; with no model set, on its default one.
+    let own = offered.and_then(|list| if model.is_empty() { list.iter().find(|m| m.default) } else { list.iter().find(|m| m.id == model) });
+    if model.is_empty() {
+        if let Some(m) = own {
+            model = m.id.clone();
+        }
+    }
+    let priced_as = claude_alias(&model, table).unwrap_or_else(|| model.clone());
+    let found = (!priced_as.is_empty()).then(|| pricing::lookup(&priced_as, choices, table)).flatten();
     let can = found.as_ref().map(|f| f.can).unwrap_or_default();
     let claude = profile.protocol == Protocol::Claude;
+    let said_vision = own.and_then(|m| m.vision).or(can.vision).or(claude.then_some(true));
+    let said_thinking = own.filter(|m| !m.efforts.is_empty()).map(|_| true).or(can.reasoning).or(claude.then_some(true));
+    let (guess_vision, guess_thinking) = family(&model);
     Caps {
-        vision: can.vision.or(claude.then_some(true)),
-        thinking: can.reasoning.or(claude.then_some(true)),
+        vision: said_vision.or(guess_vision),
+        thinking: said_thinking.or(guess_thinking),
         context: can.context.or_else(|| (claude && model.contains("[1m]")).then_some(1_000_000)),
         tier: found.as_ref().map(|f| tier(&f.price)),
         image: profile.image_gen,
+        guessed: (said_vision.is_none() && guess_vision.is_some()) || (said_thinking.is_none() && guess_thinking.is_some()),
         model,
     }
 }
@@ -104,17 +151,40 @@ mod tests {
         let mut cg = AgentProfile::copilot();
         cg.model = "deepseek-v4-flash".into();
         cg.image_gen = true;
-        let c = of(&cg, &Choices::default(), &table());
-        assert_eq!((c.vision, c.thinking, c.context, c.tier, c.image), (Some(true), Some(true), Some(1_000_000), Some(2), true));
+        let c = of(&cg, &Choices::default(), &table(), None);
+        assert_eq!((c.vision, c.thinking, c.context, c.tier, c.image, c.guessed), (Some(true), Some(true), Some(1_000_000), Some(2), true, false));
         assert!(describe(&c).contains("see images") && describe(&c).contains("make images"));
 
         let mut claude = AgentProfile::copilot();
         claude.protocol = Protocol::Claude;
-        claude.model = "claude-opus-5".into();
-        let c = of(&claude, &Choices::default(), &table());
+        // "opus" is priced as the list's newest Opus.
+        claude.model = "opus".into();
+        let c = of(&claude, &Choices::default(), &table(), None);
         assert_eq!((c.vision, c.thinking, c.tier, c.image), (Some(true), Some(true), Some(4), false));
 
-        let unknown = of(&AgentProfile::copilot(), &Choices::default(), &table());
+        let unknown = of(&AgentProfile::copilot(), &Choices::default(), &table(), None);
         assert_eq!(describe(&unknown), "abilities unknown");
+    }
+
+    #[test]
+    fn the_agent_s_own_list_wins_then_the_family_name_is_a_guess() {
+        let mut codex = AgentProfile::copilot();
+        codex.protocol = Protocol::Codex;
+        let offered = vec![
+            ModelChoice { id: "gpt-6.1-sol".into(), label: "x".into(), vision: Some(true), efforts: vec!["low".into()], default: true },
+            ModelChoice { id: "text-only".into(), label: "y".into(), vision: Some(false), ..Default::default() },
+        ];
+        let c = of(&codex, &Choices::default(), &table(), Some(&offered));
+        assert_eq!((c.model.as_str(), c.vision, c.thinking, c.guessed), ("gpt-6.1-sol", Some(true), Some(true), false));
+        codex.model = "text-only".into();
+        assert_eq!(of(&codex, &Choices::default(), &table(), Some(&offered)).vision, Some(false));
+
+        let mut agy = AgentProfile::copilot();
+        agy.protocol = Protocol::Agy;
+        agy.model = "gemini-3.8-flash-high".into();
+        let c = of(&agy, &Choices::default(), &table(), None);
+        assert_eq!((c.vision, c.thinking, c.guessed), (Some(true), Some(true), true));
+        agy.model = "gpt-oss-120b-medium".into();
+        assert_eq!(of(&agy, &Choices::default(), &table(), None).vision, Some(false));
     }
 }

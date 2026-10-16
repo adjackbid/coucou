@@ -68,7 +68,7 @@ export function markName(mark: KindMark): string {
 export function markHint(mark: KindMark): string {
   switch (mark) {
     case "cloud": return tr("在雲端服務上工作:資料會送到那個服務。", "Works on a cloud service: the work is sent to it.");
-    case "local": return tr("在你自己的電腦或網路裡工作。", "Works on your own machine or network.");
+    case "local": return tr("在地端服務上工作:資料留在你的電腦或公司網路裡。", "Works on an on-premises service: the work stays on your own machine or network.");
     case "n8n": return tr("n8n 工作流程,透過 Webhook 呼叫;接一件任務、交一份結果,不能當 Leader。", "An n8n workflow, called through its webhook: it takes one task and hands back one result, and cannot lead.");
   }
 }

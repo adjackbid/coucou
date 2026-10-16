@@ -1549,12 +1549,34 @@ async fn agent_models(agents: State<'_, Arc<Agents>>, profile: AgentProfile) -> 
     agents.models(&profile).await
 }
 
+/// Codex's model lists, by how Codex is started: asked once per run of the app (it starts an app server).
+static CODEX_LISTS: std::sync::LazyLock<Mutex<std::collections::BTreeMap<String, Vec<claude::ModelChoice>>>> = std::sync::LazyLock::new(Default::default);
+
 /// What each agent can do (caps.rs), by the id it was sent with: a provider, a team agent, or a form not yet saved.
 #[tauri::command]
-fn agent_caps(profiles: Vec<AgentProfile>) -> std::collections::BTreeMap<String, caps::Caps> {
+async fn agent_caps(agents: State<'_, Arc<Agents>>, profiles: Vec<AgentProfile>) -> Result<std::collections::BTreeMap<String, caps::Caps>, String> {
     let choices = pricing::load_choices();
     let table = pricing::cached_table();
-    profiles.iter().map(|p| (p.id.clone(), caps::of(p, &choices, &table))).collect()
+    let mut out = std::collections::BTreeMap::new();
+    for p in &profiles {
+        // Codex says what each of its models takes and how it thinks: ask it, once.
+        let offered = if p.protocol == acp::Protocol::Codex {
+            let key = format!("{}|{:?}|{:?}", p.command, p.args, p.env);
+            let had = CODEX_LISTS.lock().unwrap().get(&key).cloned();
+            Some(match had {
+                Some(list) => list,
+                None => {
+                    let list = agents.models(p).await.unwrap_or_default();
+                    CODEX_LISTS.lock().unwrap().insert(key, list.clone());
+                    list
+                }
+            })
+        } else {
+            None
+        };
+        out.insert(p.id.clone(), caps::of(p, &choices, &table, offered.as_deref()));
+    }
+    Ok(out)
 }
 
 #[tauri::command]

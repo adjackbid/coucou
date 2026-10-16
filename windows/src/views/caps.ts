@@ -65,7 +65,12 @@ function fill(slot: HTMLElement, c: AgentCaps) {
   const shown = parts.filter((x): x is HTMLElement => !!x);
   slot.replaceChildren(...shown);
   slot.classList.toggle("empty", !shown.length);
-  slot.title = shown.length ? "" : tr("價目表沒寫這個模型能做什麼;到「成本與用量」更新價格表後會補上。", "The price list says nothing about what this model can do; updating it in Cost & usage fills this in.");
+  slot.classList.toggle("guessed", !!c.guessed);
+  slot.title = shown.length
+    ? c.guessed
+      ? tr("部分能力是依模型名稱推測的;到「成本與用量」下載新的價格表後會更準。", "Some of this is guessed from the model's name; downloading the price list again in Cost & usage makes it exact.")
+      : ""
+    : tr("價目表沒寫這個模型能做什麼;到「成本與用量」更新價格表後會補上。", "The price list says nothing about what this model can do; updating it in Cost & usage fills this in.");
 }
 
 /** A row of the agent's abilities: filled now if known, else when Rust answers. */

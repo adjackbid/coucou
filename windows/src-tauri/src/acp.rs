@@ -760,7 +760,7 @@ async fn copilot_models(profile: &AgentProfile) -> Result<Vec<ModelChoice>, Stri
     provider.base_url = base.to_string();
     provider.auth = if key.is_some() { "bearer".into() } else { "none".into() };
     let ids = crate::llm::models_with_key(&provider, key).await?;
-    Ok(ids.into_iter().map(|id| ModelChoice { label: id.clone(), id }).collect())
+    Ok(ids.into_iter().map(|id| ModelChoice { label: id.clone(), id, ..Default::default() }).collect())
 }
 
 /// Why `model` will not do on an endpoint that lists `offered`: a gateway
@@ -1336,7 +1336,15 @@ impl Agents {
                             .filter_map(|m| {
                                 let id = m.get("id").and_then(Value::as_str)?.to_string();
                                 let label = m.get("displayName").and_then(Value::as_str).unwrap_or(&id).to_string();
-                                Some(ModelChoice { id, label })
+                                // What Codex says the model takes and how hard it can think.
+                                let vision = m.get("inputModalities").and_then(Value::as_array).map(|l| l.iter().any(|x| x.as_str() == Some("image")));
+                                let efforts = m
+                                    .get("supportedReasoningEfforts")
+                                    .and_then(Value::as_array)
+                                    .map(|l| l.iter().filter_map(|e| e.as_str().or_else(|| e.get("reasoningEffort").and_then(Value::as_str)).map(str::to_string)).collect())
+                                    .unwrap_or_default();
+                                let default = m.get("isDefault").and_then(Value::as_bool).unwrap_or(false);
+                                Some(ModelChoice { id, label, vision, efforts, default })
                             })
                             .collect()
                     })
@@ -1423,7 +1431,7 @@ mod tests {
 
     #[test]
     fn a_model_the_endpoint_does_not_list_for_the_key_is_caught_by_the_test() {
-        let offered: Vec<ModelChoice> = ["TXC-LLM-Reasoning", "deepseek-ai/DeepSeek-V4.1-Flash"].iter().map(|id| ModelChoice { id: id.to_string(), label: id.to_string() }).collect();
+        let offered: Vec<ModelChoice> = ["TXC-LLM-Reasoning", "deepseek-ai/DeepSeek-V4.1-Flash"].iter().map(|id| ModelChoice { id: id.to_string(), label: id.to_string(), ..Default::default() }).collect();
         let problem = unoffered("glm-5.3-flash", &offered).expect("a model the key may not use");
         assert!(problem.contains("glm-5.3-flash") && problem.contains("TXC-LLM-Reasoning") && problem.contains("401"), "{problem}");
         assert!(unoffered("deepseek-ai/deepseek-v4.1-flash", &offered).is_none());

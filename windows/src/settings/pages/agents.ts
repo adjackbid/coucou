@@ -271,12 +271,20 @@ export const agentsPage: Page = {
       });
 
       // What it can do: read from the price lists, but making images only the person can say.
+      let capsSlot = capsView(a);
       const abilities = field(
         tr("能力", "Abilities"),
         [
-          capsView(a),
+          capsSlot,
           h("label", { class: "inline-check" },
-            toggle(!!a.imageGen, (v) => { live().imageGen = v; void save(); redraw(); }, tr("可以生圖", "Makes images")),
+            // Only this row changes: drawing the page again would take the person back to its top.
+            toggle(!!a.imageGen, (v) => {
+              live().imageGen = v;
+              void save();
+              const next = capsView(live());
+              capsSlot.replaceWith(next);
+              capsSlot = next;
+            }, tr("可以生圖", "Makes images")),
             h("span", { text: tr("可以生圖", "Makes images") })),
         ],
         tr("看圖、思考、上下文和價位依價目表自動判斷;能不能生圖沒有清單會說,它有產生圖片的工具時(例如 Antigravity)請打開,Agent Center 要做圖時才會挑它。", "Vision, thinking, context and price come from the price list; whether it makes images no list says, so turn this on when it has a tool for it (Antigravity, say): Agent Center picks it for pictures only then."),
@@ -315,8 +323,8 @@ export const agentsPage: Page = {
         "Agent Provider",
         tr("Agent Center 實際用來做事的 agent，分成 Cloud Agent 與 Local Agent：在聊天列挑一個，或讓 Agent Pool 裡的 Agent 用它執行。", "The agents Agent Center actually works with, sorted into Cloud Agents and Local Agents: pick one in the chat bar, or have the agents in Agent Pool run on it."),
         () => tr(
-          "跟「連結 Agent」不一樣（那是 Agent Center 在旁邊看你自己開的工作階段），這裡的 agent 是 Agent Center 自己執行的：透過 Agent Client Protocol（Copilot CLI）、Codex 的 app server、Claude Code 或 Antigravity，或呼叫 n8n 工作流程的 Webhook。Cloud Agent 在雲端服務上工作；Local Agent 在你自己的電腦或網路裡工作（例如本機模型、自架的 n8n）。它們做事時工具步驟會即時出現，需要許可的會在瀏海島上問你。Teamwork Agent Pool 裡的每個 Agent，都用這裡的一個 Provider 執行。",
-          "Unlike \"Connect agents\" (Agent Center watches sessions you start yourself), these are agents Agent Center runs itself — over the Agent Client Protocol (Copilot CLI), Codex's app server, Claude Code or Antigravity — or n8n workflows it calls through their webhook. A Cloud Agent works on a cloud service; a Local Agent works on your own machine or network (a local model, a self-hosted n8n). Their tool calls show up as they work, and anything that needs permission asks in the island. Every agent in Teamwork's Agent Pool runs on one of these providers.",
+          "跟「連結 Agent」不一樣（那是 Agent Center 在旁邊看你自己開的工作階段），這裡的 agent 是 Agent Center 自己執行的：透過 Agent Client Protocol（Copilot CLI）、Codex 的 app server、Claude Code 或 Antigravity，或呼叫 n8n 工作流程的 Webhook。Cloud Agent 在雲端服務上工作；Local Agent 在地端服務上工作，資料留在你的電腦或公司網路裡（例如本機模型、自架的 n8n）。它們做事時工具步驟會即時出現，需要許可的會在瀏海島上問你。Teamwork Agent Pool 裡的每個 Agent，都用這裡的一個 Provider 執行。",
+          "Unlike \"Connect agents\" (Agent Center watches sessions you start yourself), these are agents Agent Center runs itself — over the Agent Client Protocol (Copilot CLI), Codex's app server, Claude Code or Antigravity — or n8n workflows it calls through their webhook. A Cloud Agent works on a cloud service; a Local Agent works on an on-premises service, and the work stays on your own machine or network (a local model, a self-hosted n8n). Their tool calls show up as they work, and anything that needs permission asks in the island. Every agent in Teamwork's Agent Pool runs on one of these providers.",
         ),
       ),
       list,
