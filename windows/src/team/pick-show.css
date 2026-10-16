@@ -227,10 +227,10 @@
 }
 
 /* Picked: locks on, and stays lit. */
+/* From however it stood (lit by the looking, or not). */
 @keyframes ps-lock {
   0% {
     transform: scale(1);
-    box-shadow: inset 0 0 0 2px var(--m);
   }
   45% {
     transform: scale(1.35);
@@ -392,7 +392,7 @@
 /* Still looking: the sweep keeps going round, the agents looked at light up. */
 .ps-sweep.spin {
   opacity: 1;
-  animation: ps-spin 2.2s linear infinite;
+  animation: ps-spin 2.6s linear infinite; /* SPIN in pick-show.ts */
 }
 
 @keyframes ps-spin {
@@ -408,13 +408,23 @@
   animation: ps-in 0.35s ease-out var(--in) both;
 }
 
-.ps-node.scanning .ps-ring {
-  transition: box-shadow 0.3s ease-out, transform 0.3s ease-out;
-}
-
+/* Looked at: lights up once, when it is looked at, and stays lit across redraws. */
 .ps-node.seen .ps-ring {
   transform: scale(1.08);
   box-shadow: inset 0 0 0 2px var(--hot), 0 0 0 4px rgba(255, 122, 89, 0.14), 0 0 18px rgba(255, 122, 89, 0.45);
+  animation: ps-seen 0.45s ease-out var(--s) both;
+}
+
+@keyframes ps-seen {
+  from {
+    transform: scale(1);
+    box-shadow: inset 0 0 0 2px var(--m), 0 0 0 0 rgba(255, 122, 89, 0), 0 0 0 rgba(255, 122, 89, 0);
+  }
+}
+
+/* Looked at and picked: the lock wins. */
+.ps-node.picked.seen .ps-ring {
+  animation: ps-lock 0.5s ease-out calc(var(--d) + 150ms) both;
 }
 
 .ps-node.seen .ps-name {
@@ -422,7 +432,7 @@
 }
 
 .ps-sub.live {
-  animation: ps-breathe 1.6s ease-in-out infinite;
+  animation: ps-breathe 1.6s ease-in-out var(--b, 0ms) infinite;
 }
 
 @keyframes ps-breathe {
@@ -452,25 +462,81 @@
   height: 4px;
   border-radius: 50%;
   background: var(--hot);
-  animation: ps-breathe 1s ease-in-out infinite;
+  animation: ps-breathe 1s ease-in-out var(--t, 0ms) infinite;
 }
 
 .ps-dots i:nth-child(2) {
-  animation-delay: 0.15s;
+  animation-delay: calc(var(--t, 0ms) + 0.15s);
 }
 
 .ps-dots i:nth-child(3) {
-  animation-delay: 0.3s;
+  animation-delay: calc(var(--t, 0ms) + 0.3s);
 }
 
 /* Over the conversation while Agent Center works: lighter, so the page shows through. */
 .ps-overlay.live {
   background: rgba(0, 0, 0, 0.35);
+  /* Its delay is set from when it first came: drawn again, it does not fade in again. */
   animation: ps-fade 0.2s ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ps-sweep.spin {
     display: none;
+  }
+}
+
+/* The picking straight after the looking: the sweep is already there, at the top. */
+.ps-sweep.cont {
+  animation-name: ps-sweep-on;
+}
+
+@keyframes ps-sweep-on {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/* The looking's words and the outcome share one place. */
+.ps-subs {
+  display: inline-grid;
+}
+
+.ps-subs > * {
+  grid-area: 1 / 1;
+}
+
+.ps-sub.live.going {
+  animation: ps-breathe 1.6s ease-in-out var(--b, 0ms) infinite, ps-out 0.25s ease-out var(--o) forwards;
+}
+
+.ps-row.wait.going {
+  animation: ps-out 0.25s ease-out var(--o) forwards;
+}
+
+@keyframes ps-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* Going: fades out instead of vanishing. */
+.ps-overlay.leaving {
+  animation: ps-leave 0.25s ease-out 0s forwards !important;
+  pointer-events: none;
+}
+
+@keyframes ps-leave {
+  to {
+    opacity: 0;
   }
 }

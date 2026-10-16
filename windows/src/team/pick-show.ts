@@ -36,8 +36,8 @@ const LEAD = 450;
 const SWEEP = 2600;
 /** How long the picking takes, from its proposal to the last lock. */
 export const SHOW_MS = LEAD + SWEEP;
-/** One turn of the sweep while Agent Center is still looking. */
-const SPIN = 2200;
+/** One turn of the sweep while Agent Center is still looking: as fast as the last one, so the change is not seen. */
+const SPIN = SWEEP;
 
 /** When each show began, by proposal: a redraw carries on from there. */
 const began = new Map<string, number>();
@@ -56,16 +56,31 @@ export function forgetShow(id: string) {
   began.delete(id);
 }
 
+/** How long until the looking's sweep is back at the top, where the picking's starts. */
+export function turnLeft(id: string): number {
+  const at = began.get(id);
+  return at === undefined ? 0 : SPIN - ((performance.now() - at) % SPIN);
+}
+
+/** A breathing that goes on across redraws: its phase from the clock, not from when it was drawn. */
+function phase(period: number): string {
+  return `--b:${-(performance.now() % period)}ms`;
+}
+
 /**
- * `picks` null: still looking, `seen` the agents looked at so far. `continued`:
- * the looking was on screen just before, so the agents are already there.
+ * `picks` null: still looking; `seenAt` the agents looked at so far, by when
+ * (performance.now()). `continued`: the looking was on screen just before and
+ * its sweep has just come back to the top, so the picking carries straight on.
  */
-export function pickShow(id: string, picks: Pick[] | null, pool: PoolAgent[], opts: { seen?: string[]; continued?: boolean } = {}): HTMLElement {
+export function pickShow(id: string, picks: Pick[] | null, pool: PoolAgent[], opts: { seenAt?: Record<string, number>; continued?: boolean } = {}): HTMLElement {
   if (!began.has(id)) began.set(id, performance.now());
-  const since = performance.now() - began.get(id)!;
-  const end = LEAD + SWEEP;
+  const now = performance.now();
+  const since = now - began.get(id)!;
+  const lead = opts.continued ? 0 : LEAD;
+  const end = lead + SWEEP;
   const scanning = picks === null;
-  const seen = new Set(opts.seen ?? []);
+  const seenAt = opts.seenAt ?? {};
+  const seen = new Set(Object.keys(seenAt));
   picks = picks ?? [];
 
   // Local Agents on the inner ring, Cloud Agents on the outer; each ring far enough out for its names.
@@ -98,7 +113,7 @@ export function pickShow(id: string, picks: Pick[] | null, pool: PoolAgent[], op
       const a = -Math.PI / 2 + j * step + turn;
       // The sweep starts at the top and goes clockwise: it reaches this one at…
       const frac = (((a + Math.PI / 2) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) / (2 * Math.PI);
-      nodes.push({ p, x: c + radii[k] * Math.cos(a), y: c + radii[k] * Math.sin(a), t: LEAD + SWEEP * frac });
+      nodes.push({ p, x: c + radii[k] * Math.cos(a), y: c + radii[k] * Math.sin(a), t: lead + SWEEP * frac });
     });
   });
   const lockAt = (agent: string) => (nodes.find((n) => n.p.id === agent)?.t ?? end) + 150;
@@ -117,12 +132,13 @@ export function pickShow(id: string, picks: Pick[] | null, pool: PoolAgent[], op
 
   const node = (n: (typeof nodes)[number], i: number) => {
     const picked = chosen.has(n.p.id);
-    const state = scanning ? ` scanning${seen.has(n.p.id) ? " seen" : ""}` : picked ? " picked" : "";
+    // An agent looked at stays lit until the picking locks it on or dims it.
+    const state = `${scanning ? " scanning" : picked ? " picked" : ""}${seen.has(n.p.id) ? " seen" : ""}`;
     return h(
       "div",
       {
         class: `ps-node${state}`,
-        style: `left:${(n.x / S) * 100}%;top:${(n.y / S) * 100}%;--m:${markColor(n.p.mark)};--c:${n.p.face};--in:${opts.continued ? -9999 : i * 22 - since}ms;--d:${n.t - since}ms;--e:${end - since}ms`,
+        style: `left:${(n.x / S) * 100}%;top:${(n.y / S) * 100}%;--m:${markColor(n.p.mark)};--c:${n.p.face};--in:${opts.continued ? -9999 : i * 22 - since}ms;--d:${n.t - since}ms;--e:${end - since}ms;--s:${(seenAt[n.p.id] ?? now) - now}ms`,
         title: n.p.category ? `${n.p.name} · ${n.p.category}` : n.p.name,
       },
       h("span", { class: "ps-ring" }, h("i", { class: "blob", style: `--c:${n.p.face};--s:20px`, "aria-hidden": "true" })),
@@ -151,9 +167,15 @@ export function pickShow(id: string, picks: Pick[] | null, pool: PoolAgent[], op
       "div",
       { class: "ps-title" },
       h("b", { text: tr("Agent Center 挑人", "Agent Center picks a team") }),
-      scanning
-        ? h("span", { class: "ps-sub live", text: trf("正在看 Agent Pool 裡的 {n} 位…", "Looking over the {n} agents in Agent Pool…", { n: total }) })
-        : h("span", { class: "ps-sub", style: `animation-delay:${end - since}ms`, text: trf("從 {n} 位裡選出 {k} 位", "{k} picked of {n}", { n: total, k: picks.length }) }),
+      // The looking's words stay through the picking and give way to its outcome: one place, no jump.
+      h(
+        "span",
+        { class: "ps-subs" },
+        scanning || opts.continued
+          ? h("span", { class: `ps-sub live${scanning ? "" : " going"}`, style: `${phase(1600)};--o:${end - since}ms`, text: trf("正在看 Agent Pool 裡的 {n} 位…", "Looking over the {n} agents in Agent Pool…", { n: total }) })
+          : null,
+        scanning ? null : h("span", { class: "ps-sub", style: `animation-delay:${end - since}ms`, text: trf("從 {n} 位裡選出 {k} 位", "{k} picked of {n}", { n: total, k: picks.length }) }),
+      ),
     ),
     h(
       "div",
@@ -166,8 +188,8 @@ export function pickShow(id: string, picks: Pick[] | null, pool: PoolAgent[], op
           { class: "ps-field" },
           lines,
           h("div", {
-            class: `ps-sweep${scanning ? " spin" : ""}`,
-            style: `width:${((2 * (R + 40)) / S) * 100}%;height:${((2 * (R + 40)) / S) * 100}%;animation-delay:${scanning ? -(since % SPIN) : LEAD - since}ms`,
+            class: `ps-sweep${scanning ? " spin" : opts.continued ? " cont" : ""}`,
+            style: `width:${((2 * (R + 40)) / S) * 100}%;height:${((2 * (R + 40)) / S) * 100}%;animation-delay:${scanning ? -(since % SPIN) : lead - since}ms`,
           }),
           h("div", { class: "ps-hub" }, h("span", { class: "ps-core", html: HUB }), h("b", { text: "Agent Center" })),
           ...nodes.map(node),
@@ -177,7 +199,6 @@ export function pickShow(id: string, picks: Pick[] | null, pool: PoolAgent[], op
       h(
         "ol",
         { class: "ps-list" },
-        scanning ? h("li", { class: "ps-row wait" }, h("span", { text: tr("挑選中", "Picking") }), h("span", { class: "ps-dots", "aria-hidden": "true" }, h("i"), h("i"), h("i"))) : null,
         ...order.map((p) => {
           const a = name(p.agent);
           return h(
@@ -188,6 +209,15 @@ export function pickShow(id: string, picks: Pick[] | null, pool: PoolAgent[], op
             h("span", { class: "ps-role", text: [p.name, p.role, p.leader ? "Leader" : ""].filter(Boolean).join(" · ") }), // i18n-ok: the same in both
           );
         }),
+        // "Picking…" under the members as they come, gone once the last is in.
+        scanning || opts.continued
+          ? h(
+              "li",
+              { class: `ps-row wait${scanning ? "" : " going"}`, style: `--o:${(order.length ? lockAt(order[order.length - 1].agent) + 200 : end) - since}ms` },
+              h("span", { text: tr("挑選中", "Picking") }),
+              h("span", { class: "ps-dots", style: `--t:${-(performance.now() % 1000)}ms`, "aria-hidden": "true" }, h("i"), h("i"), h("i")),
+            )
+          : null,
       ),
     ),
   );

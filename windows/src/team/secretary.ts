@@ -7,7 +7,7 @@
 // The conversation lives in the app for as long as it runs; this page keeps
 // what it shows, and is drawn inside the Teamwork window by main.ts.
 
-import { forgetShow, pickShow, SHOW_MS, type Pick, type PoolAgent } from "./pick-show";
+import { forgetShow, pickShow, SHOW_MS, turnLeft, type Pick, type PoolAgent } from "./pick-show";
 import "./secretary.css";
 import { Bridge, IS_TAURI } from "../core/bridge";
 import { tr, trf } from "../core/i18n";
@@ -278,7 +278,7 @@ export function setPickShowOn(v: boolean) {
  * person put it away; it stays away for this question. `preview`: played from
  * the ⚙, with made-up looking and picks.
  */
-let show: { id: string; picks: Pick[] | null; seen: string[]; continued: boolean; hidden: boolean; preview: boolean } | null = null;
+let show: { id: string; picks: Pick[] | null; seenAt: Record<string, number>; continued: boolean; hidden: boolean; preview: boolean; shownAt: number; leaving?: boolean } | null = null;
 let showTimers: number[] = [];
 
 /** How long the finished picking stays before it goes. */
@@ -295,16 +295,25 @@ function dropShow() {
   show = null;
 }
 
+/** Fades the picking out, then takes it away. */
 function endShow(host: SecretaryHost) {
-  dropShow();
+  if (!show || show.leaving) return;
+  clearShowTimers();
+  show.leaving = true;
   host.render();
+  showTimers.push(
+    window.setTimeout(() => {
+      dropShow();
+      host.render();
+    }, 250),
+  );
 }
 
 /** Agent Center looked at Agent Pool: the looking starts (or goes on), with this agent lit. */
 function lookedAt(step: SecretaryStep, host: SecretaryHost) {
   if (!pickShowOn() || !["list_agents", "agent_models", "propose_team"].includes(step.tool) || !host.pool().length) return;
-  if (!show) show = { id: `scan-${Date.now()}`, picks: null, seen: [], continued: false, hidden: false, preview: false };
-  if (show.picks === null && step.agent && !show.seen.includes(step.agent)) show.seen.push(step.agent);
+  if (!show) show = { id: `scan-${Date.now()}`, picks: null, seenAt: {}, continued: false, hidden: false, preview: false, shownAt: performance.now() };
+  if (show.picks === null && step.agent && !(step.agent in show.seenAt)) show.seenAt[step.agent] = performance.now();
 }
 
 /** The answer came: the members it picked lock on, then the picking goes; any other answer ends it. */
@@ -317,13 +326,19 @@ function answered(reply: SecretaryReply, host: SecretaryHost) {
   lockOn(team.picks!, host, false);
 }
 
+/** The members lock on: straight away, or — after the looking — once its sweep is back at the top, so it carries on unbroken. */
 function lockOn(picks: Pick[], host: SecretaryHost, preview: boolean) {
   clearShowTimers();
   const before = show;
-  if (before) forgetShow(before.id);
-  show = { id: `lock-${Date.now()}`, picks, seen: before?.seen ?? [], continued: !!before, hidden: false, preview };
-  // A preview stays until closed; a real one leaves the card to be read.
-  if (!preview) showTimers.push(window.setTimeout(() => endShow(host), SHOW_MS + SHOW_LINGER));
+  const apply = () => {
+    if (before) forgetShow(before.id);
+    show = { id: `lock-${Date.now()}`, picks, seenAt: before?.seenAt ?? {}, continued: !!before, hidden: false, preview, shownAt: before?.shownAt ?? performance.now() };
+    // A preview stays until closed; a real one leaves the card to be read.
+    if (!preview) showTimers.push(window.setTimeout(() => endShow(host), SHOW_MS + SHOW_LINGER));
+    host.render();
+  };
+  if (before && before.picks === null) showTimers.push(window.setTimeout(apply, turnLeft(before.id)));
+  else apply();
 }
 
 /** From Agent Center's ⚙: a moment of looking at a few agents, then a made-up pick, one per category first. */
@@ -333,22 +348,22 @@ export function previewPickShow(host: SecretaryHost) {
   if (show) forgetShow(show.id);
   show = null;
   if (!pool.length) {
-    show = { id: "empty", picks: [], seen: [], continued: false, hidden: false, preview: true };
+    show = { id: "empty", picks: [], seenAt: {}, continued: false, hidden: false, preview: true, shownAt: performance.now() };
     host.render();
     return;
   }
   const firsts = pool.filter((p, i) => p.category && pool.findIndex((q) => q.category === p.category) === i);
   const chosen = [...firsts, ...pool.filter((p) => !firsts.includes(p))].slice(0, Math.min(4, pool.length));
   const picks = chosen.map((p, i) => ({ agent: p.id, name: `AI ${i + 1}`, role: p.category || tr("成員", "Member"), leader: i === 0 }));
-  show = { id: `scan-${Date.now()}`, picks: null, seen: [], continued: false, hidden: false, preview: true };
+  show = { id: `scan-${Date.now()}`, picks: null, seenAt: {}, continued: false, hidden: false, preview: true, shownAt: performance.now() };
   host.render();
   // Looking: a few agents, picked ones among them, one after another.
   const looked = [...new Set([chosen[0], pool[pool.length - 1], ...chosen.slice(1), pool[Math.floor(pool.length / 2)]])].filter(Boolean).slice(0, 5);
   looked.forEach((p, i) =>
     showTimers.push(
       window.setTimeout(() => {
-        if (show?.preview && show.picks === null && !show.seen.includes(p.id)) {
-          show.seen.push(p.id);
+        if (show?.preview && show.picks === null && !(p.id in show.seenAt)) {
+          show.seenAt[p.id] = performance.now();
           host.render();
         }
       }, 500 + i * 450),
@@ -358,7 +373,6 @@ export function previewPickShow(host: SecretaryHost) {
     window.setTimeout(() => {
       if (!show?.preview) return;
       lockOn(picks, host, true);
-      host.render();
     }, 700 + looked.length * 450),
   );
 }
@@ -374,12 +388,17 @@ function showOverlay(host: SecretaryHost): HTMLElement | null {
   };
   return h(
     "div",
-    { class: `ps-overlay${shown.preview ? "" : " live"}`, onClick: (e: Event) => e.target === e.currentTarget && away() },
+    {
+      class: `ps-overlay${shown.preview ? "" : " live"}${shown.leaving ? " leaving" : ""}`,
+      // Faded in once, when it first came: a redraw does not fade it in again.
+      style: `animation-delay:${shown.shownAt - performance.now()}ms`,
+      onClick: (e: Event) => e.target === e.currentTarget && away(),
+    },
     h(
       "div",
       { class: "stack", style: "width:min(900px,100%)" },
       host.pool().length
-        ? pickShow(shown.id, shown.picks, host.pool(), { seen: shown.seen, continued: shown.continued })
+        ? pickShow(shown.id, shown.picks, host.pool(), { seenAt: shown.seenAt, continued: shown.continued })
         : h("p", { class: "problem", text: tr("Agent Pool 裡還沒有 Agent,沒有東西可以挑。", "Agent Pool has no agents yet: there is nothing to pick from.") }),
       h(
         "div",
