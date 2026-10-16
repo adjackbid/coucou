@@ -22,7 +22,7 @@ import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
 import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCompanyFps, type Tempo } from "./office/battle/session";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
-import { onStep as secretaryStep, secretaryAttachFiles, secretaryName, secretaryPage, secretaryTitle, setSecretaryDragging, setSecretaryName, type SecretaryHost } from "./secretary";
+import { MAX_INSTRUCTIONS, onStep as secretaryStep, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
 import { agentLabel, agentsPage, baseOf, loadTeamAgents, memberChoices, teamAgentCounts, teamAgents, teamProfiles, type AgentsHost } from "./agents";
@@ -498,7 +498,8 @@ function sidebar(): HTMLElement {
       onClick: (e: Event) => {
         e.stopPropagation();
         const at = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        sidePop = sidePop?.which === which ? null : { which, top: Math.min(at.top, window.innerHeight - 280) };
+        // Agent Center's panel is the taller one (its instructions box).
+        sidePop = sidePop?.which === which ? null : { which, top: Math.max(12, Math.min(at.top, window.innerHeight - (which === "secretary" ? 520 : 280))) };
         render();
       },
     });
@@ -518,6 +519,26 @@ function sidebar(): HTMLElement {
                 onChange: (e: Event) => { setSecretaryName((e.target as HTMLInputElement).value); render(); },
               }),
               h("p", { class: "hint", text: tr("想叫它什麼都可以;改完馬上生效。", "Call it anything you like; the change applies right away.") }),
+              h("label", { for: "sec-instructions", text: tr("自訂指示", "Your instructions") }),
+              ...((count: HTMLElement) => [
+                h("textarea", {
+                  id: "sec-instructions",
+                  class: "side-pop-text",
+                  "data-key": "sec-instructions",
+                  rows: "7",
+                  maxlength: String(MAX_INSTRUCTIONS),
+                  spellcheck: "false",
+                  placeholder: tr("例如:\n開團隊預設 3 人。\n預算優先,便宜的模型夠用就用便宜的。\n回答先講結論,再列細節。", "e.g.\nNew teams have 3 members by default.\nBudget first: use cheaper models where they will do.\nLead with the answer, then the details."),
+                  text: secretaryInstructions(),
+                  // Kept as it is typed: the window may be drawn again before the box loses focus.
+                  onInput: (e: Event) => {
+                    setSecretaryInstructions((e.target as HTMLTextAreaElement).value);
+                    count.textContent = `${secretaryInstructions().length} / ${MAX_INSTRUCTIONS}`;
+                  },
+                }),
+                count,
+              ])(h("span", { class: "side-pop-count", text: `${secretaryInstructions().length} / ${MAX_INSTRUCTIONS}` })),
+              h("p", { class: "hint", text: tr("每次問 Agent Center 都會接在它的系統提示後面,下一個問題就生效。可以調它的做法、口吻和偏好;它還是不會不經你按確認就做事。", "Added after Agent Center's own system prompt each time you ask; it applies from your next question. Shape how it works, its tone and what it prefers; it still never acts without your click.") }),
               h("label", { text: tr("開團隊使用的 Agent", "Agents for new teams") }),
               h("p", { class: "hint" },
                 tr("Agent Center 開團隊、你新增團隊成員時,只從 ", "When Agent Center starts a team or you add a member, agents come only from the team agents in "),

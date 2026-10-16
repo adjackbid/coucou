@@ -172,6 +172,21 @@ export function secretaryName(): string {
   return named() ? name : "Agent Center";
 }
 
+/** The person's own instructions for Agent Center (its ⚙ → 自訂指示): they go after its system prompt. */
+let instructions = stored("coucou.secretary.instructions") ?? "";
+
+/** As long as secretary.rs keeps of them (MAX_INSTRUCTIONS). */
+export const MAX_INSTRUCTIONS = 2000;
+
+export function secretaryInstructions(): string {
+  return instructions;
+}
+
+export function setSecretaryInstructions(v: string) {
+  instructions = v.slice(0, MAX_INSTRUCTIONS);
+  store("coucou.secretary.instructions", instructions);
+}
+
 export function setSecretaryName(v: string) {
   name = v.trim();
   store("coucou.secretary.name", name);
@@ -237,7 +252,7 @@ async function ask(host: SecretaryHost, text: string, withFiles = true) {
   host.render();
   try {
     const reply: SecretaryReply = IS_TAURI
-      ? await Bridge.secretaryAsk(words, provider || null, tz(), name, files.map((f) => f.id))
+      ? await Bridge.secretaryAsk(words, provider || null, tz(), name, files.map((f) => f.id), instructions.trim())
       : await (await import("./demo")).demoSecretary(words);
     const unused = unusedUploads(files, reply.proposals);
     entries.push({ who: "secretary", text: reply.text, steps: reply.steps, proposals: reply.proposals, unused: unused.length ? unused : undefined });
@@ -548,6 +563,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
           : providers
             ? h("button", { class: "link hint", type: "button", onClick: () => void Bridge.openSettingsPage("chat") }, tr("還沒有聊天模型：到「設定 → 聊天模型」新增一個", "No chat model yet: add one in Settings → Chat models"))
             : h("span", { class: "hint", text: "" }),
+        instructions.trim() ? h("span", { class: "chip sec-own", title: trf("自訂指示(在側欄 Agent Center 的 ⚙ 裡改):\n{text}", "Your instructions (change them under Agent Center's ⚙ in the sidebar):\n{text}", { text: instructions.trim() }), text: tr("已套用自訂指示", "Your instructions on") }) : null,
         h("button", { class: "link sec-attach", type: "button", title: tr("附加檔案(也可以拖進視窗或貼上圖片):要放進團隊知識庫的設計稿、規格、圖片…", "Attach files (or drag them onto the window, or paste a picture): designs, specs, pictures for a team's knowledge base…"), disabled: waiting, onClick: () => pickFiles(host) }, tr("📎 附加檔案", "📎 Attach files")),
         h("span", { class: "grow" }),
         entries.length

@@ -1310,6 +1310,7 @@ async fn secretary_ask(
     tz_minutes: i64,
     name: Option<String>,
     uploads: Option<Vec<String>>,
+    instructions: Option<String>,
 ) -> Result<secretary::Reply, String> {
     let (provider, profiles) = {
         let settings = shared.settings.lock().unwrap();
@@ -1324,7 +1325,8 @@ async fn secretary_ask(
         (found, settings.agents.clone())
     };
     let provider = provider.ok_or_else(needs_chat_model)?;
-    let office = secretary::Office::new(teams.inner().clone(), &profiles, agents.inner().clone(), tz_minutes, name.unwrap_or_default());
+    let mut office = secretary::Office::new(teams.inner().clone(), &profiles, agents.inner().clone(), tz_minutes, name.unwrap_or_default());
+    office.instructions = instructions.unwrap_or_default();
     let window = app.clone();
     secretary
         .ask(&provider, &office, &text, &uploads.unwrap_or_default(), &move |step| {

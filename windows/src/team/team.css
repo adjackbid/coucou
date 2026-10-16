@@ -2905,7 +2905,9 @@ h2 {
   position: fixed;
   left: 258px;
   z-index: 90;
-  width: 272px;
+  width: 300px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
   padding: 12px 14px 14px;
   border-radius: 14px;
   background: var(--panel, #16171c);
@@ -2953,6 +2955,26 @@ h2 {
   border-radius: 9px;
   padding: 7px 10px;
   box-shadow: var(--edge);
+}
+
+.side-pop-body .side-pop-text {
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--lift);
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 10px;
+  box-shadow: var(--edge);
+  resize: vertical;
+  min-height: 96px;
+}
+
+.side-pop-body .side-pop-count {
+  align-self: flex-end;
+  font-size: 11px;
+  color: var(--dim);
 }
 
 .side-pop-body .hint {

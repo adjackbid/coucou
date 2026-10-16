@@ -143,6 +143,8 @@ pub struct Office {
     pub tz_minutes: i64,
     /// What the person calls Agent Center; empty for no name.
     pub name: String,
+    /// The person's own instructions for Agent Center (its ⚙ → 自訂指示); empty for none.
+    pub instructions: String,
 }
 
 impl Office {
@@ -157,6 +159,7 @@ impl Office {
             driver,
             tz_minutes,
             name,
+            instructions: String::new(),
         }
     }
 }
@@ -1392,7 +1395,7 @@ How you work:\n\
 - Answer in the language named on the last line of this prompt, short and concrete: a few lines or a short list. Point out anything waiting for the user (permission cards, questions) first.\n\
 \n\
 Now: {} (the user's local time).\n\
-{}",
+{}{}",
         // The window's name for an assistant the person has not named, in either language (秘書 / Secretary from earlier versions).
         match office.name.trim() {
             "" | "秘書" | "Secretary" | "Agent Center" => String::new(),
@@ -1400,7 +1403,25 @@ Now: {} (the user's local time).\n\
         },
         " The user builds teams from their own team agents only: list_agents lists them with what each is good for, whether it is a Cloud Agent or a Local Agent, and what it costs; choose members by those descriptions, and never name an agent that is not listed. When the user wants it cheap, on a budget, or asks which costs less (or wants the best whatever it costs), compare the agents by the prices and recent spend list_agents gives, not only by what their descriptions say, and tell the user the prices you compared; a description is the user's own note, the price is the fact, so when they disagree say so. An agent on a subscription plan costs nothing extra per token. When you talk to the user, call a team agent by its name, never by its id (ta-…).",
         when(crate::team::store::now_ms(), office.tz_minutes),
+        own_instructions(&office.instructions),
         crate::i18n::reply_language(),
+    )
+}
+
+/// How long the person's own instructions may be: a few paragraphs, not a second prompt.
+pub const MAX_INSTRUCTIONS: usize = 2000;
+
+/// The person's own instructions, put before the language line: they shape how Agent Center
+/// works, never what it may do on its own.
+// i18n: model-facing
+fn own_instructions(given: &str) -> String {
+    let given = given.trim();
+    if given.is_empty() {
+        return String::new();
+    }
+    format!(
+        "The user's own instructions for you (they set them in Agent Center's settings). Follow them as long as they do not go against the rules above: whatever they say, nothing happens without the user's click on a card, you never guess a team's state, and you only name agents list_agents gave you.\n<user_instructions>\n{}\n</user_instructions>\n",
+        cut(given, MAX_INSTRUCTIONS)
     )
 }
 
@@ -1510,6 +1531,14 @@ fn label(call: &Call, office: &Office) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_person_s_instructions_end_the_prompt_within_the_rules() {
+        assert_eq!(own_instructions("  "), "");
+        let said = own_instructions("開團隊預設 3 人,預算優先。");
+        assert!(said.contains("<user_instructions>\n開團隊預設 3 人,預算優先。\n</user_instructions>") && said.contains("nothing happens without the user's click"), "{said}");
+        assert!(own_instructions(&"字".repeat(MAX_INSTRUCTIONS + 500)).chars().count() < MAX_INSTRUCTIONS + 400);
+    }
 
     #[test]
     fn an_agent_s_cost_is_its_model_s_price_and_what_it_spent() {

@@ -230,8 +230,8 @@ export const Bridge = {
   /** The chat providers Agent Center can think with: (id, name, model). */
   secretaryProviders: () => call<[string, string, string][]>("secretary_providers"),
   /** The person asks Agent Center; its steps arrive as `secretary-step` while it works. */
-  secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string, uploads: string[] = []) =>
-    callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name, uploads }),
+  secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string, uploads: string[] = [], instructions = "") =>
+    callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name, uploads, instructions }),
   /** A file attached in Agent Center's conversation, by its path (picked or dropped). */
   secretaryUploadPath: (path: string) => callOrThrow<SecretaryUpload>("secretary_upload_path", { path }),
   /** The same from its bytes (a paste). */
