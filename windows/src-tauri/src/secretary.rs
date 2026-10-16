@@ -51,8 +51,21 @@ pub struct Proposal {
     pub outcome: String,
     /// The attached files it would put in a knowledge base.
     pub uses: Vec<String>,
+    /// A new team's members as picked from Agent Pool, for the window's picking animation.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub picks: Vec<Pick>,
     #[serde(skip)]
     payload: Value,
+}
+
+/// One member of a proposed team: the team agent it runs as, and who it is.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Pick {
+    pub agent: String,
+    pub name: String,
+    pub role: String,
+    pub leader: bool,
 }
 
 /// A file the person attached in the conversation, kept until a proposal
@@ -440,6 +453,18 @@ impl Secretary {
     fn add(&self, kind: &str, title: String, lines: Vec<String>, confirm: &str, payload: Value) -> Proposal {
         let mut all = self.proposals.lock().unwrap();
         let uses = payload["knowledge"].as_array().into_iter().flatten().filter_map(|k| k["upload"].as_str()).filter(|u| !u.is_empty()).map(str::to_string).collect();
+        let config = &payload["config"];
+        let picks = config["members"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|m| Pick {
+                agent: s(m, "agent").to_string(),
+                name: s(m, "name").to_string(),
+                role: s(m, "role").to_string(),
+                leader: m["id"] == config["leader"],
+            })
+            .collect();
         let p = Proposal {
             id: format!("P-{}", all.len() + 1),
             kind: kind.into(),
@@ -449,6 +474,7 @@ impl Secretary {
             state: "open".into(),
             outcome: String::new(),
             uses,
+            picks,
             payload,
         };
         all.push(p.clone());

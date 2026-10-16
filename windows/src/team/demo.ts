@@ -470,6 +470,11 @@ export async function demoSecretary(text: string): Promise<import("./types").Sec
           confirm: tr("建立並啟動", "Create and start"),
           state: "open",
           outcome: "",
+          picks: [
+            { agent: "ta-reviewer", name: "AI 1", role: tr("規劃", "Planning"), leader: true },
+            { agent: "ta-joker", name: "AI 2", role: tr("前端", "Front end"), leader: false },
+            { agent: "ta-painter", name: "AI 3", role: tr("文案", "Copy"), leader: false },
+          ],
         },
       ],
     };

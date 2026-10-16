@@ -17,6 +17,7 @@ import { kindIcon, markColor, markHint, markName, markOf, type KindMark } from "
 import { capsView, forgetCaps } from "../views/caps";
 import { h } from "../views/dom";
 import { CHEVRON, dropdown, refreshSuggestions, suggest, type Choice } from "./ui";
+import type { PoolAgent } from "./pick-show";
 import type { TeamAgent, TeamAgentMcp, TeamAgents, TeamAgentSupport, TeamAgentSupports } from "./types";
 
 export interface AgentsHost {
@@ -78,6 +79,14 @@ function categoriesInUse(): string[] {
   const used = new Set(teamAgents().map((a) => a.category.trim()).filter(Boolean));
   const offered = presetCategories().filter((c) => used.has(c));
   return [...offered, ...[...used].filter((c) => !offered.includes(c)).sort((a, b) => a.localeCompare(b))];
+}
+
+/** Agent Pool as the picking animation draws it (pick-show.ts): same category together, each with its Mochi. */
+export function poolForShow(natives: AgentProfile[]): PoolAgent[] {
+  return byCategory(teamAgents().map((a, i) => ({ a, i }))).map(({ a, i }) => {
+    const base = natives.find((n) => n.id === a.base);
+    return { id: a.id, name: a.name || a.id, category: a.category.trim(), where: base ? locationOf(base) : "cloud", mark: base ? markOf(base) : "cloud", face: FACES[i % FACES.length] };
+  });
 }
 
 /** Same category together, in the order of categoriesInUse(), the ones with none last; otherwise as added. */

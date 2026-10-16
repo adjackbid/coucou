@@ -391,6 +391,8 @@ export interface SecretaryProposal {
   outcome: string;
   /** The attached files it would put in a knowledge base. */
   uses?: string[];
+  /** A new team's members as picked from Agent Pool (secretary.rs Pick), for the picking animation. */
+  picks?: { agent: string; name: string; role: string; leader: boolean }[];
 }
 
 /** A file attached in Agent Center's conversation (secretary.rs UploadView). */

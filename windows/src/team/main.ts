@@ -23,10 +23,10 @@ import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
 import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCompanyFps, type Tempo } from "./office/battle/session";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
-import { MAX_INSTRUCTIONS, onStep as secretaryStep, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, type SecretaryHost } from "./secretary";
+import { MAX_INSTRUCTIONS, onStep as secretaryStep, pickShowOn, previewPickShow, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
-import { agentLabel, agentsPage, baseOf, loadTeamAgents, memberChoices, teamAgentCounts, teamAgents, teamProfiles, type AgentsHost } from "./agents";
+import { agentLabel, agentsPage, baseOf, loadTeamAgents, memberChoices, poolForShow, teamAgentCounts, teamAgents, teamProfiles, type AgentsHost } from "./agents";
 import { addFiles as addKnowledgeFiles, dropTarget, knowledgeChanged, knowledgePanel, setDragging, type KnowledgeHost } from "./knowledge";
 import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
@@ -542,6 +542,11 @@ function sidebar(): HTMLElement {
                 count,
               ])(h("span", { class: "side-pop-count", text: `${secretaryInstructions().length} / ${MAX_INSTRUCTIONS}` })),
               h("p", { class: "hint", text: tr("每次問 Agent Center 都會接在它的系統提示後面,下一個問題就生效。可以調它的做法、口吻和偏好;它還是不會不經你按確認就做事。", "Added after Agent Center's own system prompt each time you ask; it applies from your next question. Shape how it works, its tone and what it prefers; it still never acts without your click.") }),
+              h("label", { text: tr("組隊動畫", "Team-picking animation") }),
+              h("label", { class: "side-pop-check" },
+                h("input", { type: "checkbox", checked: pickShowOn(), onChange: (e: Event) => { setPickShowOn((e.target as HTMLInputElement).checked); render(); } }),
+                h("span", { text: tr("提出新團隊時,播放從 Agent Pool 挑人的動畫", "Show Agent Center picking from Agent Pool when it proposes a team") })),
+              h("button", { class: "btn plain", type: "button", onClick: () => { sidePop = null; place = "secretary"; previewPickShow(secretaryHost); } }, tr("預覽動畫", "Preview")),
               h("label", { text: tr("開團隊使用的 Agent", "Agents for new teams") }),
               h("p", { class: "hint" },
                 tr("Agent Center 開團隊、你新增團隊成員時,只從 ", "When Agent Center starts a team or you add a member, agents come only from the team agents in "),
@@ -1824,6 +1829,7 @@ function main(): HTMLElement {
 const secretaryHost: SecretaryHost = {
   render: () => render(),
   reload: () => load(),
+  pool: () => poolForShow(agents),
   openTeam: (id) => {
     const file = files.find((f) => f.config?.id === id);
     if (file) {

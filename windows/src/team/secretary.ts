@@ -7,6 +7,7 @@
 // The conversation lives in the app for as long as it runs; this page keeps
 // what it shows, and is drawn inside the Teamwork window by main.ts.
 
+import { forgetShow, pickShow, type Pick, type PoolAgent } from "./pick-show";
 import "./secretary.css";
 import { Bridge, IS_TAURI } from "../core/bridge";
 import { tr, trf } from "../core/i18n";
@@ -21,6 +22,8 @@ export interface SecretaryHost {
   reload(): Promise<void>;
   /** Shows a team by its id. */
   openTeam(id: string): void;
+  /** Agent Pool, for the picking animation. */
+  pool(): PoolAgent[];
 }
 
 interface Entry {
@@ -187,6 +190,60 @@ export function setSecretaryInstructions(v: string) {
   store("coucou.secretary.instructions", instructions);
 }
 
+/** Agent Center's picking shown as it proposes a team (pick-show.ts): off unless the person turns it on. */
+let pickShowing = stored("coucou.secretary.pickShow") === "1";
+
+export function pickShowOn(): boolean {
+  return pickShowing;
+}
+
+export function setPickShowOn(v: boolean) {
+  pickShowing = v;
+  store("coucou.secretary.pickShow", v ? "1" : "0");
+}
+
+/** The picking played over the page, from Agent Center's ⚙: a made-up pick from Agent Pool, one per category first. */
+let preview: { id: string; picks: Pick[] } | null = null;
+
+export function previewPickShow(host: SecretaryHost) {
+  const pool = host.pool();
+  const firsts = pool.filter((p, i) => p.category && pool.findIndex((q) => q.category === p.category) === i);
+  const chosen = [...firsts, ...pool.filter((p) => !firsts.includes(p))].slice(0, Math.min(4, pool.length));
+  if (preview) forgetShow(preview.id);
+  preview = {
+    id: `preview-${Date.now()}`,
+    picks: chosen.map((p, i) => ({ agent: p.id, name: `AI ${i + 1}`, role: p.category || tr("成員", "Member"), leader: i === 0 })),
+  };
+  host.render();
+}
+
+function previewOverlay(host: SecretaryHost): HTMLElement | null {
+  if (!preview) return null;
+  const shown = preview;
+  const close = () => {
+    forgetShow(shown.id);
+    preview = null;
+    host.render();
+  };
+  return h(
+    "div",
+    { class: "ps-overlay", onClick: (e: Event) => e.target === e.currentTarget && close() },
+    h(
+      "div",
+      { class: "stack", style: "width:min(900px,100%)" },
+      host.pool().length
+        ? pickShow(shown.id, shown.picks, host.pool())
+        : h("p", { class: "problem", text: tr("Agent Pool 裡還沒有 Agent,沒有東西可以挑。", "Agent Pool has no agents yet: there is nothing to pick from.") }),
+      h(
+        "div",
+        { class: "ps-overlay-foot" },
+        h("button", { class: "btn plain", type: "button", onClick: () => previewPickShow(host) }, tr("再播一次", "Play again")),
+        h("button", { class: "btn primary", type: "button", onClick: close }, tr("關閉", "Close")),
+      ),
+    ),
+  );
+}
+
 export function setSecretaryName(v: string) {
   name = v.trim();
   store("coucou.secretary.name", name);
@@ -233,8 +290,8 @@ async function ensureProviders(host: SecretaryHost) {
  */
 export async function consult(text: string, render: () => void): Promise<string> {
   if (waiting) return named() ? trf("{name}還在處理上一件事,稍等一下再試。", "{name} is still on the last request: try again in a moment.", { name }) : tr("Agent Center 還在處理上一件事,稍等一下再試。", "Agent Center is still on the last request: try again in a moment.");
-  if (!providers) await ensureProviders({ render, reload: async () => {}, openTeam: () => {} });
-  await ask({ render, reload: async () => {}, openTeam: () => {} }, text, false);
+  if (!providers) await ensureProviders({ render, reload: async () => {}, openTeam: () => {}, pool: () => [] });
+  await ask({ render, reload: async () => {}, openTeam: () => {}, pool: () => [] }, text, false);
   const last = entries[entries.length - 1];
   return last?.who === "error" ? trf("沒有成功:{why}", "Didn't work: {why}", { why: last.text }) : (last?.text ?? "");
 }
@@ -447,7 +504,11 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
         ),
       );
     else if (e.who === "error") list.append(h("div", { class: "sec-row" }, h("div", { class: "problem", text: e.text })));
-    else
+    else {
+      // A team it proposes: first the picking, the whole width of the conversation, when the person wants it.
+      for (const p of e.proposals ?? []) {
+        if (p.kind === "team" && p.picks?.length && pickShowOn()) list.append(h("div", { class: "sec-row sec-show" }, pickShow(p.id, p.picks, host.pool())));
+      }
       list.append(
         h(
           "div",
@@ -494,6 +555,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
           ),
         ),
       );
+    }
   }
   if (waiting) list.append(h("div", { class: "sec-row" }, h("div", { class: "sec-bubble thinking" }, steps(live, true), h("span", { class: "sec-dots", "aria-label": tr("處理中", "Working") }, h("i"), h("i"), h("i")))));
   if (stick) {
@@ -536,6 +598,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
     "div",
     { class: "secretary" },
     list,
+    previewOverlay(host),
     h(
       "div",
       { class: `sec-composer${dragging ? " over" : ""}` },
