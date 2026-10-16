@@ -805,6 +805,11 @@ impl Teams {
         self.get(id).is_some_and(|t| t.has_seats() && t.with_state(|s| s.status != TeamStatus::Finished))
     }
 
+    /// Every team this run knows, run or loaded from its log.
+    pub fn ids(&self) -> Vec<String> {
+        self.teams.lock().unwrap().keys().cloned().collect()
+    }
+
     /// The team's file is gone: its picture goes too.
     pub fn forget(&self, id: &str) {
         self.teams.lock().unwrap().remove(id);

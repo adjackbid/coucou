@@ -2,7 +2,7 @@
 // they use and takes the person there — two windows editing one value would
 // fight.
 
-import { Bridge } from "../../core/bridge";
+import { Bridge, IS_TAURI, type HistoryStats } from "../../core/bridge";
 import { tr, trf } from "../../core/i18n";
 import { locationOf } from "../../core/state";
 import { kindIcon, markName } from "../../views/agent-kind";
@@ -10,7 +10,7 @@ import { h } from "../../views/dom";
 import type { Page } from "../nav";
 import { todoList } from "../status";
 import { refreshTeamAgents, save, settings, statusInput, teamAgents } from "../store";
-import { card, field, notice, pageHeader, row, toggle } from "../ui";
+import { card, errText, field, notice, pageHeader, row, toggle } from "../ui";
 
 /** The chat model Agent Center was last set to, from the Teamwork window's storage (same origin). */
 export function secretaryProvider(): { name: string; model: string } | null {
@@ -27,6 +27,130 @@ export function secretaryProvider(): { name: string; model: string } | null {
 /** Opens Teamwork on one of its pages. */
 export function openTeam(page?: "secretary" | "agents") {
   void Bridge.openTeamPage(page ?? null);
+}
+
+/** `18 KB`, `3.1 MB`. */
+function sizeText(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${Math.max(bytes ? 1 : 0, Math.ceil(bytes / 1024))} KB`;
+}
+
+/**
+ * 清除歷史紀錄: the teams' runs and what they cost, or the teams too. What
+ * sets things up — Agent Pool, the agents, chat models, keys, prices, the
+ * constitution — is never on the list (history.rs). Two clicks: pick, then
+ * confirm.
+ */
+function historyCard(): HTMLElement {
+  const body = h("div", { class: "stack" });
+  let stats: HistoryStats | null = null;
+  let scope: "runs" | "all" = "runs";
+  let confirming = false;
+  let busy = false;
+  let said: { kind: "ok" | "err"; text: string } | null = null;
+
+  const load = async () => {
+    stats = await Bridge.historyStats();
+    draw();
+  };
+
+  const option = (value: "runs" | "all", title: string, help: string) =>
+    h(
+      "button",
+      {
+        type: "button",
+        class: `choice history-choice${scope === value ? " on" : ""}`,
+        role: "radio",
+        "aria-checked": String(scope === value),
+        onclick: () => {
+          scope = value;
+          confirming = false;
+          said = null;
+          draw();
+        },
+      },
+      h("span", { class: "radio" }),
+      h("span", { class: "history-choice-text" }, h("b", { text: title }), h("span", { class: "hint", text: help })),
+    );
+
+  const draw = () => {
+    const s = stats;
+    const nothing = !!s && (scope === "runs" ? !s.runs : !s.teams && !s.deleted && !s.runs && !s.documents);
+    body.replaceChildren(
+      ...[
+        h("p", {
+          class: "hint",
+          text: !IS_TAURI
+            ? tr("目前有多少紀錄,在 App 裡才讀得到。", "How much there is can only be read in the app.")
+            : !s
+              ? tr("讀取中…", "Reading…")
+              : trf("目前有 {teams} 個團隊、{runs} 份執行紀錄({runSize})、{docs} 份知識庫文件({docSize}){deleted}。", "Now: {teams} teams, {runs} run records ({runSize}), {docs} knowledge documents ({docSize}){deleted}.", {
+                  teams: s.teams,
+                  runs: s.runs,
+                  runSize: sizeText(s.runBytes),
+                  docs: s.documents,
+                  docSize: sizeText(s.documentBytes),
+                  deleted: s.deleted ? trf(",另有 {n} 個之前刪除的團隊檔", ", and {n} team files deleted before", { n: s.deleted }) : "",
+                }),
+        }),
+        h(
+          "div",
+          { class: "choice-list", role: "radiogroup", "aria-label": tr("要清除什麼", "What to clear") },
+          option("runs", tr("只清執行紀錄與花費", "Runs and costs only"), tr("團隊留著,之後可以再啟動;它們的訊息、任務進度,以及「成本與用量」裡的紀錄清空。", "The teams stay and can start again; their messages, task progress and the records in Cost & usage are cleared.")),
+          option("all", tr("全部清掉", "Everything"), tr("連團隊本身也清掉:所有團隊(含已封存與之前刪除的)、執行紀錄與花費、知識庫文件,以及 Agent Center 的對話。", "The teams go too: every team (archived and earlier-deleted ones included), their runs and costs, their knowledge documents, and Agent Center's conversation.")),
+        ),
+        confirming
+          ? h(
+              "div",
+              { class: "stack" },
+              notice("warn", scope === "all" ? tr("確定要清掉所有團隊和它們的紀錄嗎?會移到資源回收筒。", "Clear every team and all their records? They go to the Recycle Bin.") : tr("確定要清掉所有團隊的執行紀錄與花費嗎?會移到資源回收筒。", "Clear every team's runs and costs? They go to the Recycle Bin.")),
+              row(
+                h("button", { type: "button", text: tr("取消", "Cancel"), disabled: busy, onclick: () => { confirming = false; draw(); } }),
+                h("button", {
+                  type: "button",
+                  class: "danger",
+                  text: busy ? tr("清除中…", "Clearing…") : tr("確定清除", "Clear"),
+                  disabled: busy,
+                  onclick: async () => {
+                    busy = true;
+                    draw();
+                    try {
+                      stats = await Bridge.historyClear(scope === "all");
+                      said = { kind: "ok", text: scope === "all" ? tr("已清掉所有團隊和紀錄,移到資源回收筒了。", "Every team and its records are cleared: they are in the Recycle Bin.") : tr("已清掉執行紀錄與花費,移到資源回收筒了。團隊都還在。", "Runs and costs are cleared: they are in the Recycle Bin. The teams are all still there.") };
+                    } catch (err) {
+                      said = { kind: "err", text: errText(err) };
+                    }
+                    busy = false;
+                    confirming = false;
+                    draw();
+                  },
+                }),
+              ),
+            )
+          : row(
+              h("button", {
+                type: "button",
+                text: tr("清除…", "Clear…"),
+                disabled: !IS_TAURI || !s || nothing,
+                title: nothing ? tr("沒有可以清的紀錄", "Nothing to clear") : "",
+                onclick: () => { confirming = true; said = null; draw(); },
+              }),
+            ),
+        said ? notice(said.kind, said.text) : null,
+      ].filter((x): x is HTMLElement => !!x),
+    );
+  };
+  draw();
+  void load();
+  return card({
+    anchor: "history",
+    title: tr("清除歷史紀錄", "Clear history"),
+    lead: tr(
+      "清掉過去的團隊、執行紀錄和花費。Agent Pool、Agents、聊天模型、金鑰、價格表和憲法都不會動,團隊工作資料夾裡的檔案也不會動。清掉的東西會移到資源回收筒,按錯了還能從那裡救回來。執行中或暫停中的團隊要先停止。",
+      "Clears past teams, their runs and what they cost. Agent Pool, the agents, chat models, keys, the price list and the constitution stay, and nothing in the teams' work folders is touched. What goes is moved to the Recycle Bin, so a mistake can be undone there. A running or paused team must be stopped first.",
+    ),
+    body: [body],
+  });
 }
 
 export const teamPage: Page = {
@@ -113,6 +237,7 @@ export const teamPage: Page = {
           ),
         ],
       }),
+      historyCard(),
     );
   },
 };

@@ -602,6 +602,38 @@ textarea.env {
   box-shadow: inset 0 0 0 4px var(--green);
 }
 
+/* A choice that is a button (清除歷史紀錄): a row, not a pill. */
+button.choice {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border-radius: 10px;
+}
+
+button.choice:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+button.choice:active:not(:disabled) {
+  transform: none;
+}
+
+.history-choice .radio {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 3px;
+}
+
+.history-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-choice-text b {
+  font-weight: 600;
+}
+
 /* ── Overview ──────────────────────────────────────────────────────────── */
 
 .todo-box {

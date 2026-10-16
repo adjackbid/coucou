@@ -246,6 +246,10 @@ export const Bridge = {
   secretaryMissingFolder: (id: string) => call<string | null>("secretary_missing_folder", { id }),
   secretaryDecline: (id: string) => call<SecretaryProposal | null>("secretary_decline", { id }),
   secretaryReset: () => call<void>("secretary_reset"),
+  /** What 清除歷史紀錄 would clear (null outside the app). */
+  historyStats: () => call<HistoryStats>("history_stats"),
+  /** Moves the teams' runs and costs — and with `all` the teams themselves — to the Recycle Bin; refused while a team is at work. */
+  historyClear: (all: boolean) => callOrThrow<HistoryStats>("history_clear", { all }),
   /** 安裝 CLI: the built-in table, nothing looked up. */
   cliList: () => call<CliInfo[]>("cli_list"),
   /** 安裝 CLI: each one looked up on PATH and asked its version. */
@@ -395,6 +399,16 @@ export interface HookPreview {
 }
 
 /** Same as `call`, but surfaces the error so the UI can show what went wrong. */
+/** What there is to clear in Settings → 團隊與 Agent Center (history.rs Stats). */
+export interface HistoryStats {
+  teams: number;
+  deleted: number;
+  runs: number;
+  runBytes: number;
+  documents: number;
+  documentBytes: number;
+}
+
 async function callOrThrow<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (!IS_TAURI) throw new Error(tr("不是在 Agent Center 裡執行", "not running inside Agent Center"));
   return invoke<T>(cmd, args);

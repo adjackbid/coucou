@@ -10,6 +10,7 @@ mod codex;
 mod files;
 mod folder;
 mod glass;
+mod history;
 mod hooks;
 mod integrations;
 mod island;
@@ -1425,6 +1426,38 @@ fn secretary_reset(secretary: State<Arc<secretary::Secretary>>) {
     secretary.reset();
 }
 
+/// What there is to clear in Settings → 團隊與 Agent Center → 清除歷史紀錄.
+#[tauri::command]
+fn history_stats() -> history::Stats {
+    history::stats()
+}
+
+/// Clears the teams' runs and what they cost, and with `all` the teams
+/// themselves and Agent Center's conversation — only ever from an explicit
+/// click, never while a team is at work. Agent Pool, the agents, the chat
+/// models, the prices and the constitution stay. What goes is moved to the
+/// Recycle Bin.
+#[tauri::command]
+fn history_clear(app: AppHandle, teams: State<Arc<Teams>>, secretary: State<Arc<secretary::Secretary>>, all: bool) -> Result<history::Stats, String> {
+    let known = teams.ids();
+    if known.iter().any(|id| teams.is_live(id)) {
+        return Err(tr!(
+            "還有團隊在執行或暫停中。請先在 Teamwork 停止所有團隊，再清除。",
+            "A team is still running or paused. Stop every team in Teamwork first, then clear."
+        ));
+    }
+    history::clear(all)?;
+    for id in known {
+        teams.forget(&id);
+    }
+    if all {
+        secretary.reset();
+    }
+    log::line(if all { "history: teams, runs and Agent Center's conversation moved to the Recycle Bin" } else { "history: team runs moved to the Recycle Bin" });
+    let _ = app.emit_to("team", "history-cleared", all);
+    Ok(history::stats())
+}
+
 /// The person's constitution (Coucou's starting one until they save their own).
 #[tauri::command]
 fn constitution_load() -> constitution::Constitution {
@@ -2002,6 +2035,8 @@ pub fn run() {
             secretary_upload_force,
             secretary_upload_remove,
             secretary_reset,
+            history_stats,
+            history_clear,
             team_past,
             team_open_configs,
             team_save,

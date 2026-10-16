@@ -2146,6 +2146,8 @@ async function start() {
   wireDrops();
   // What Agent Center is doing while it works on a request.
   await onEvent<SecretaryStep>("secretary-step", (step) => secretaryStep(step, secretaryHost));
+  // Settings → 清除歷史紀錄: the teams, their runs and Agent Center's words this window holds are gone; start over from disk.
+  await onEvent<boolean>("history-cleared", () => location.reload());
   // Each member's screen, as it happens: no redraw, just the lines.
   await onEvent<ScreenPatch>("team-screen", live.applyPatch);
   // A team's documents changed: here, by its leader sharing one, or by Agent Center.
