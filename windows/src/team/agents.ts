@@ -13,7 +13,7 @@ import "./agents.css";
 import { Bridge, IS_TAURI } from "../core/bridge";
 import { tr, trf } from "../core/i18n";
 import { locationOf, type AgentLocation, type AgentProfile, type ModelChoice } from "../core/state";
-import { kindIcon, markHint, markName, markOf } from "../views/agent-kind";
+import { kindIcon, markColor, markHint, markName, markOf, type KindMark } from "../views/agent-kind";
 import { h } from "../views/dom";
 import { CHEVRON, dropdown, refreshSuggestions, suggest, type Choice } from "./ui";
 import type { TeamAgent, TeamAgentMcp, TeamAgents, TeamAgentSupport, TeamAgentSupports } from "./types";
@@ -43,23 +43,28 @@ let problem = "";
 let deleting: string | null = null;
 /** The category the page is narrowed to: null for all of them, "" for the agents with none. */
 let only: string | null = null;
-/** Cards under their categories (the default), or in the order they were added; kept per person. */
-let grouped = readGrouped();
+/** Cards in their Cloud and Local panels, or every agent on rings around Agent Center; kept per person. */
+let view: PoolView = readView();
+/** When the ring view was opened: its agents fly out from the centre for a moment. */
+let unfoldAt = 0;
 
-function readGrouped(): boolean {
+type PoolView = "cards" | "ring";
+
+function readView(): PoolView {
   try {
-    return localStorage.getItem("coucou.agentPool.grouped") !== "0";
+    return localStorage.getItem("coucou.agentPool.view") === "ring" ? "ring" : "cards";
   } catch {
-    return true;
+    return "cards";
   }
 }
 
-function setGrouped(on: boolean, render: () => void) {
-  grouped = on;
+function setView(next: PoolView, render: () => void) {
+  view = next;
+  if (next === "ring") unfoldAt = performance.now();
   try {
-    localStorage.setItem("coucou.agentPool.grouped", on ? "1" : "0");
+    localStorage.setItem("coucou.agentPool.view", next);
   } catch {
-    // Not kept: the page still works, grouped again next time.
+    // Not kept: the page still works, with the cards next time.
   }
   render();
 }
@@ -72,6 +77,13 @@ function categoriesInUse(): string[] {
   const used = new Set(teamAgents().map((a) => a.category.trim()).filter(Boolean));
   const offered = presetCategories().filter((c) => used.has(c));
   return [...offered, ...[...used].filter((c) => !offered.includes(c)).sort((a, b) => a.localeCompare(b))];
+}
+
+/** Same category together, in the order of categoriesInUse(), the ones with none last; otherwise as added. */
+function byCategory<T extends { a: TeamAgent }>(list: T[]): T[] {
+  const cats = categoriesInUse();
+  const rank = (a: TeamAgent) => (a.category.trim() ? cats.indexOf(a.category.trim()) : cats.length);
+  return [...list].sort((x, y) => rank(x.a) - rank(y.a));
 }
 
 /** The browser preview's agents, in the language of the moment they are first read. */
@@ -521,12 +533,39 @@ const ICON_DELETE = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden
 /** Opens the form for `a`, scrolled into view: the list may be far below it. */
 function edit(host: AgentsHost, a: TeamAgent) {
   draft = structuredClone(a);
+  drawerScroll = 0;
   draftIsNew = false;
   draftWhere = null;
   problem = "";
   deleting = null;
   host.render();
   requestAnimationFrame(() => document.querySelector(".ta-editor")?.scrollIntoView({ block: "start", behavior: "smooth" }));
+}
+
+/** 刪除, pressed twice: the first press arms it and says so. */
+function deleteButton(host: AgentsHost, a: TeamAgent): HTMLElement {
+  const arming = deleting === a.id;
+  const used = host.usedBy(a.id);
+  return h(
+    "button",
+    {
+      type: "button",
+      class: `ta-icon danger${arming ? " armed" : ""}`,
+      title: arming ? tr("再按一次刪除", "Click again to delete") : used.length ? trf("刪除({teams} 用到它,刪掉後要改選別的 Agent)", "Delete ({teams} use it and will need another agent)", { teams: used.join(tr("、", ", ")) }) : tr("刪除", "Delete"),
+      "aria-label": arming ? tr("確定刪除", "Confirm delete") : trf("刪除 {name}", "Delete {name}", { name: a.name }),
+      html: arming ? "" : ICON_DELETE,
+      onClick: () => {
+        if (!arming) {
+          deleting = a.id;
+          host.render();
+          return;
+        }
+        deleting = null;
+        void persist({ agents: teamAgents().filter((x) => x.id !== a.id) }, host.render);
+      },
+    },
+    arming ? tr("確定刪除?", "Delete?") : null,
+  );
 }
 
 function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
@@ -536,7 +575,6 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
   const kind = kindOf(base);
   const used = host.usedBy(a.id);
   const model = a.model || base?.model || "";
-  const arming = deleting === a.id;
   const tags = [
     a.systemPrompt.trim() ? h("span", { class: "ta-tag", title: a.systemPrompt.trim().slice(0, 300) }, "System prompt") : null, // i18n-ok: the same in both
     a.mcp.length ? h("span", { class: "ta-tag", title: a.mcp.map((m) => m.name).join(tr("、", ", ")) }, `MCP ${a.mcp.length}`) : null,
@@ -555,36 +593,18 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
       "header",
       { class: "ta-card-head" },
       h("i", { class: "blob", style: `--c:${face};--s:34px`, "aria-hidden": "true" }),
-      h("div", { class: "ta-card-title" }, h("b", { title: a.name || a.id }, base ? kindIcon(locationOf(base), 15) : null, h("span", { text: a.name || a.id })), h("small", { text: `${base ? kind.label : tr("基底不存在", "Base missing")}${!grouped && a.category.trim() ? ` · ${a.category.trim()}` : ""}` })),
+      h("div", { class: "ta-card-title" }, h("b", { title: a.name || a.id }, base ? kindIcon(locationOf(base), 15) : null, h("span", { text: a.name || a.id })), h("small", { text: base ? kind.label : tr("基底不存在", "Base missing") })),
       h(
         "div",
         { class: "ta-card-actions" },
         h("button", { type: "button", class: "ta-icon", title: tr("編輯", "Edit"), "aria-label": trf("編輯 {name}", "Edit {name}", { name: a.name }), html: ICON_EDIT, onClick: () => edit(host, a) }),
-        h(
-          "button",
-          {
-            type: "button",
-            class: `ta-icon danger${arming ? " armed" : ""}`,
-            title: arming ? tr("再按一次刪除", "Click again to delete") : used.length ? trf("刪除({teams} 用到它,刪掉後要改選別的 Agent)", "Delete ({teams} use it and will need another agent)", { teams: used.join(tr("、", ", ")) }) : tr("刪除", "Delete"),
-            "aria-label": arming ? tr("確定刪除", "Confirm delete") : trf("刪除 {name}", "Delete {name}", { name: a.name }),
-            html: arming ? "" : ICON_DELETE,
-            onClick: () => {
-              if (!arming) {
-                deleting = a.id;
-                host.render();
-                return;
-              }
-              deleting = null;
-              void persist({ agents: teamAgents().filter((x) => x.id !== a.id) }, host.render);
-            },
-          },
-          arming ? tr("確定刪除?", "Delete?") : null,
-        ),
+        deleteButton(host, a),
       ),
     ),
     h(
       "div",
       { class: "ta-card-kind" },
+      a.category.trim() ? h("span", { class: "ta-cat", title: tr("分類", "Category"), text: a.category.trim() }) : null,
       h("span", { class: `ta-kind ${kind.tone}`, title: base ? trf("基底 Agent:{name}({kind})", "Base agent: {name} ({kind})", { name: base.name, kind: kind.label }) : trf("基底「{base}」不在 設定 → Agents 裡", "The base “{base}” is not in Settings → Agents", { base: a.base }) }, base?.protocol === "n8n" ? kindIcon("n8n", 13) : null, h("span", { text: base ? base.name : trf("{base}(不存在)", "{base} (missing)", { base: a.base }) })),
       h("span", { class: "ta-model-name", title: a.model ? trf("模型:{model}", "Model: {model}", { model: a.model }) : tr("沒有指定,用基底的模型", "None set: the base's model") }, model ? `${model}${a.model ? "" : tr("(基底)", " (base)")}` : base?.protocol === "n8n" ? tr("由工作流程決定", "Up to the workflow") : tr("基底預設模型", "Base's default model")),
     ),
@@ -602,6 +622,25 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
   );
 }
 
+/** Opens the form for a new agent of one kind, in the category the page is narrowed to. */
+function startNew(host: AgentsHost, where: AgentLocation) {
+  const bases = host.natives().filter((n) => locationOf(n) === where);
+  draft = { id: `ta-${Date.now().toString(36)}`, name: "", base: bases[0]?.id ?? "", model: "", systemPrompt: "", mcp: [], skills: [], description: "", category: only ?? "" };
+  drawerScroll = 0;
+  draftIsNew = true;
+  draftWhere = where;
+  problem = "";
+  deleting = null;
+  host.render();
+  requestAnimationFrame(() => document.querySelector(".ta-editor")?.scrollIntoView({ block: "start", behavior: "smooth" }));
+}
+
+/** Why a kind cannot have a new agent yet, or its hint. */
+function addHint(where: AgentLocation, can: boolean): string {
+  if (can) return markHint(where);
+  return where === "local" ? tr("先到 設定 → Agents 新增 Local Agent(本機模型或 n8n 節點)", "First add a Local Agent (a local model or an n8n node) in Settings → Agents") : tr("先到 設定 → Agents 新增 Cloud Agent", "First add a Cloud Agent in Settings → Agents");
+}
+
 /** The tile that starts a new team agent of one kind, at the end of its grid. */
 function addTile(host: AgentsHost, where: AgentLocation): HTMLElement {
   const bases = host.natives().filter((n) => locationOf(n) === where);
@@ -611,15 +650,8 @@ function addTile(host: AgentsHost, where: AgentLocation): HTMLElement {
       type: "button",
       class: `ta-card ta-add ${where}`,
       disabled: !bases.length,
-      title: bases.length ? markHint(where) : where === "local" ? tr("先到 設定 → Agents 新增 Local Agent(本機模型或 n8n 節點)", "First add a Local Agent (a local model or an n8n node) in Settings → Agents") : tr("先到 設定 → Agents 新增 Cloud Agent", "First add a Cloud Agent in Settings → Agents"),
-      onClick: () => {
-        draft = { id: `ta-${Date.now().toString(36)}`, name: "", base: bases[0]?.id ?? "", model: "", systemPrompt: "", mcp: [], skills: [], description: "", category: only ?? "" };
-        draftIsNew = true;
-        draftWhere = where;
-        problem = "";
-        host.render();
-        requestAnimationFrame(() => document.querySelector(".ta-editor")?.scrollIntoView({ block: "start", behavior: "smooth" }));
-      },
+      title: addHint(where, !!bases.length),
+      onClick: () => startNew(host, where),
     },
     h("span", { class: "ta-add-plus", text: "+" }),
     h("span", { text: where === "local" ? tr("新增 Local Agent", "New Local Agent") : tr("新增 Cloud Agent", "New Cloud Agent") }),
@@ -634,12 +666,11 @@ function section(host: AgentsHost, where: AgentLocation): HTMLElement {
     const base = natives.find((n) => n.id === a.base);
     return base ? locationOf(base) : "cloud";
   };
-  const mine = teamAgents()
-    .map((a, i) => ({ a, i }))
-    .filter(({ a }) => whereOf(a) === where && (only === null || a.category.trim() === only));
-  // Under each category in use, the ones with none last; the tile for one more after them all.
-  const cats = categoriesInUse();
-  const groups = grouped && cats.length ? [...cats, ""].map((c) => ({ c, list: mine.filter(({ a }) => a.category.trim() === c) })).filter((g) => g.list.length) : [];
+  const mine = byCategory(
+    teamAgents()
+      .map((a, i) => ({ a, i }))
+      .filter(({ a }) => whereOf(a) === where && (only === null || a.category.trim() === only)),
+  );
   const noBase = !natives.some((n) => locationOf(n) === where);
   return h(
     "section",
@@ -653,72 +684,248 @@ function section(host: AgentsHost, where: AgentLocation): HTMLElement {
     noBase
       ? h("p", { class: "hint" }, where === "local" ? tr("設定 → Agents 裡還沒有 Local Agent。先到 ", "Settings → Agents has no Local Agent yet. Add a local model or an n8n node in ") : tr("設定 → Agents 裡還沒有 Cloud Agent。先到 ", "Settings → Agents has no Cloud Agent yet. Add one in "), h("button", { class: "link", type: "button", onClick: () => host.openSettings() }, tr("設定 → Agents", "Settings → Agents")), where === "local" ? tr(" 新增本機模型或 n8n 節點。", " first.") : tr(" 新增一個。", " first."))
       : null,
-    ...(groups.length
-      ? [
-          ...groups.map((g) =>
-            h(
-              "div",
-              { class: "ta-group" },
-              h("h3", { class: "ta-group-title" }, h("span", { text: g.c || tr("未分類", "Uncategorized") }), h("span", { class: "count", text: String(g.list.length) })),
-              h("div", { class: "ta-grid-list" }, ...g.list.map(({ a, i }) => card(host, a, i))),
-            ),
-          ),
-          h("div", { class: "ta-grid-list" }, addTile(host, where)),
-        ]
-      : [h("div", { class: "ta-grid-list" }, ...mine.map(({ a, i }) => card(host, a, i)), addTile(host, where))]),
+    h("div", { class: "ta-grid-list" }, ...mine.map(({ a, i }) => card(host, a, i)), addTile(host, where)),
   );
 }
 
-/** Above the sections: a chip per category to narrow the page to it, and how the cards are laid out. */
-function toolbar(host: AgentsHost): HTMLElement | null {
+/**
+ * Above the sections: a chip per category — the cards narrow to it, the
+ * ring lights it — what the last save said, and cards or ring.
+ */
+function toolbar(host: AgentsHost): HTMLElement {
   const agents = teamAgents();
   const cats = categoriesInUse();
   const none = agents.filter((a) => !a.category.trim()).length;
   if (only !== null && (only ? !cats.includes(only) : !none)) only = null;
-  if (!cats.length) return null;
   const chip = (value: string | null, label: string, n: number) =>
     h(
       "button",
-      { type: "button", class: `ta-filter${only === value ? " on" : ""}`, "aria-pressed": String(only === value), onClick: () => { only = value; host.render(); } },
+      { type: "button", class: `ta-filter${only === value ? " on" : ""}`, "aria-pressed": String(only === value), onClick: () => { only = only === value ? null : value; host.render(); } },
       h("span", { text: label }),
       h("span", { class: "count", text: String(n) }),
     );
   return h(
     "div",
     { class: "ta-bar" },
+    cats.length
+      ? h(
+          "div",
+          { class: "ta-filters", role: "group", "aria-label": tr("依分類篩選", "Filter by category") },
+          chip(null, tr("全部", "All"), agents.length),
+          ...cats.map((c) => chip(c, c, agents.filter((a) => a.category.trim() === c).length)),
+          none ? chip("", tr("未分類", "Uncategorized"), none) : null,
+        )
+      : h("span", { class: "dim ta-bar-hint", text: tr("在 Agent 的「分類」填上程式開發、文案製作…,同一類就會排在一起。", "Give agents a Category (Coding, Copywriting…) and the same kind sit together.") }),
     h(
       "div",
-      { class: "ta-filters", role: "group", "aria-label": tr("依分類篩選", "Filter by category") },
-      chip(null, tr("全部", "All"), agents.length),
-      ...cats.map((c) => chip(c, c, agents.filter((a) => a.category.trim() === c).length)),
-      none ? chip("", tr("未分類", "Uncategorized"), none) : null,
-    ),
-    h(
-      "div",
-      { class: "segmented small ta-order", role: "group", "aria-label": tr("排列方式", "Layout") }, // i18n-ok: CSS classes
-      h("button", { type: "button", class: grouped ? "on" : "", onClick: () => setGrouped(true, host.render) }, tr("依分類", "By category")),
-      h("button", { type: "button", class: grouped ? "" : "on", onClick: () => setGrouped(false, host.render) }, tr("依加入順序", "In order added")),
+      { class: "ta-bar-end" },
+      state ? h("span", { class: "ta-state", role: "status", text: stateText() }) : null,
+      h(
+        "div",
+        { class: "segmented small ta-views", role: "group", "aria-label": tr("顯示方式", "View") }, // i18n-ok: CSS classes
+        h("button", { type: "button", class: view === "cards" ? "on" : "", "aria-pressed": String(view === "cards"), onClick: () => setView("cards", host.render) }, tr("卡片", "Cards")),
+        h("button", { type: "button", class: view === "ring" ? "on" : "", "aria-pressed": String(view === "ring"), onClick: () => setView("ring", host.render) }, tr("環狀", "Ring")),
+      ),
     ),
   );
 }
 
-export function agentsPage(host: AgentsHost): HTMLElement {
+/** How far down the form over the ring was scrolled: a redraw puts it back there. */
+let drawerScroll = 0;
+
+/** The form over the ring's right side: it scrolls on its own, and keeps its place when the window is drawn again. */
+function drawer(form: HTMLElement): HTMLElement {
+  const el = h("div", { class: "ta-ring-drawer", onScroll: () => (drawerScroll = el.scrollTop) }, form);
+  // Once the page it belongs to is on screen (render appends it right after).
+  queueMicrotask(() => (el.scrollTop = drawerScroll));
+  return el;
+}
+
+/** Agent Center at the ring's centre: a hexagon around a small orbit. */
+const HUB =
+  '<svg viewBox="0 0 64 64" width="46" height="46" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><path d="M32 5 55.4 18.5v27L32 59 8.6 45.5v-27Z"/><circle cx="32" cy="32" r="11.5" stroke-width="1.6" opacity=".7"/><circle cx="32" cy="32" r="4.6" fill="currentColor" stroke="none"/><circle cx="32" cy="20.5" r="2.1" fill="currentColor" stroke="none"/><circle cx="42" cy="37.8" r="2.1" fill="currentColor" stroke="none"/><circle cx="22" cy="37.8" r="2.1" fill="currentColor" stroke="none"/></svg>';
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function svgEl(tag: string, attrs: Record<string, string | number>): SVGElement {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+  return el;
+}
+
+/** One agent on the ring: its Mochi in a circle of its kind's colour, its name, its category. */
+function ringNode(host: AgentsHost, x: RingPlace, focus: string | null, unfold: number): HTMLElement {
+  const { a, base } = x;
+  const mark = base ? markOf(base) : "cloud";
+  const face = FACES[x.i % FACES.length];
+  const lit = focus !== null && a.category.trim() === focus;
+  const model = a.model || base?.model || "";
+  const tip = [
+    a.name || a.id,
+    `${base ? `${markName(mark)} · ${kindOf(base).label}` : tr("基底不存在", "Base missing")}${model ? ` · ${model}` : ""}`,
+    a.description,
+    tr("按一下編輯", "Click to edit"),
+  ].filter(Boolean).join("\n");
+  return h(
+    "button",
+    {
+      type: "button",
+      class: `ta-node${base ? "" : " broken"}${lit ? " lit" : focus !== null ? " dim" : ""}${draft?.id === a.id ? " editing" : ""}${unfold >= 0 ? " unfold" : ""}`,
+      style: `left:${x.left}%;top:${x.top}%;--c:${face};--m:${markColor(mark)};--dx:${x.dx}px;--dy:${x.dy}px;--d:${unfold}ms`,
+      title: tip,
+      "aria-label": trf("編輯 {name}", "Edit {name}", { name: a.name || a.id }),
+      onClick: () => edit(host, a),
+    },
+    h("span", { class: "ta-node-ring" }, h("i", { class: "blob", style: `--c:${face};--s:26px`, "aria-hidden": "true" })),
+    h("span", { class: "ta-node-name", text: a.name || a.id }),
+    h("span", { class: `ta-node-cat${a.category.trim() ? "" : " none"}`, text: a.category.trim() || tr("未分類", "Uncategorized") }),
+  );
+}
+
+interface RingPlace {
+  a: TeamAgent;
+  i: number;
+  base: AgentProfile | undefined;
+  /** Where on the stage, in % of its width and height. */
+  left: number;
+  top: number;
+  /** From it to the centre, in stage units: where it flies out from. */
+  dx: number;
+  dy: number;
+}
+
+/**
+ * Every team agent on rings around Agent Center: the Local Agents — inside
+ * the company — on the inner ring, the Cloud Agents — outside it — on the
+ * outer one, each ring going round by category. A category picked above
+ * lights its agents, draws them to the centre and lists them; the others
+ * dim. A click on an agent edits it; the form opens over the ring's right.
+ */
+function ringView(host: AgentsHost, entered: boolean): HTMLElement {
+  const natives = host.natives();
+  const all = teamAgents().map((a, i) => ({ a, i, base: natives.find((n) => n.id === a.base) }));
+  const placeOf = (x: { base: AgentProfile | undefined }) => (x.base ? locationOf(x.base) : "cloud");
+  const rings = (["local", "cloud"] as const).map((where) => ({ where, list: byCategory(all.filter((x) => placeOf(x) === where)) })).filter((r) => r.list.length);
+  // Each ring far enough out for its agents' names to sit side by side, the outer one clear of the inner.
+  const radii: number[] = [];
+  for (const r of rings) radii.push(Math.max(radii.length ? radii[radii.length - 1] + 140 : 170, (r.list.length * 104) / (2 * Math.PI)));
+  const R = radii[radii.length - 1] ?? 175;
+  const W = Math.max(1000, 2 * R + 560);
+  // Names hang under the agents: more room below the rings than above.
+  const H = Math.max(560, 2 * R + 170);
+  const cx = W / 2;
+  const cy = H / 2 - 12;
+  const focus = only;
+
+  if (entered) unfoldAt = performance.now();
+  const since = performance.now() - unfoldAt;
+  const places: RingPlace[] = [];
+  // The outer ring starts at the top; the inner one is turned to stand as far as it can from the outer agents.
+  const turns = rings.map(() => 0);
+  if (rings.length > 1) {
+    const outer = rings[1].list.map((_, j) => (j * 2 * Math.PI) / rings[1].list.length);
+    const step = (2 * Math.PI) / rings[0].list.length;
+    const gap = (turn: number) =>
+      Math.min(...rings[0].list.flatMap((_, j) => outer.map((o) => {
+        const d = Math.abs((((j * step + turn - o) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI));
+        return Math.min(d, 2 * Math.PI - d);
+      })));
+    let best = 0;
+    for (let n = 0; n < 24; n++) {
+      const turn = (n / 24) * step;
+      if (gap(turn) > gap(best) + 1e-6) best = turn;
+    }
+    turns[0] = best;
+  }
+  rings.forEach((r, k) => {
+    const step = (2 * Math.PI) / r.list.length;
+    r.list.forEach((x, j) => {
+      const t = -Math.PI / 2 + j * step + turns[k];
+      const px = cx + radii[k] * Math.cos(t);
+      const py = cy + radii[k] * Math.sin(t);
+      places.push({ ...x, left: (px / W) * 100, top: (py / H) * 100, dx: cx - px, dy: cy - py });
+    });
+  });
+
+  const lines = svgEl("svg", { class: "ta-ring-lines", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", "aria-hidden": "true" });
+  for (const r of radii) lines.append(svgEl("ellipse", { class: "ta-ring-orbit", cx, cy, rx: r, ry: r }));
+  const litPlaces = focus === null ? [] : places.filter((x) => x.a.category.trim() === focus);
+  for (const x of litPlaces) {
+    const px = (x.left / 100) * W;
+    const py = (x.top / 100) * H;
+    lines.append(svgEl("line", { class: "ta-ring-link", x1: cx, y1: cy, x2: px, y2: py }));
+    lines.append(svgEl("circle", { class: "ta-ring-knot", cx: (cx + px) / 2, cy: (cy + py) / 2, r: 4 }));
+  }
+
+  const canAdd = (where: AgentLocation) => natives.some((n) => locationOf(n) === where);
+  const addButton = (where: AgentLocation) =>
+    h(
+      "button",
+      { type: "button", class: "ta-ring-add-btn", disabled: !canAdd(where), title: addHint(where, canAdd(where)), onClick: () => startNew(host, where) },
+      kindIcon(where, 16),
+      h("span", { text: where === "local" ? tr("新增 Local Agent", "New Local Agent") : tr("新增 Cloud Agent", "New Cloud Agent") }),
+    );
+  const legendRow = (mark: KindMark, label: string) => h("div", { class: "ta-ring-legend-row", title: markHint(mark) }, kindIcon(mark, 16), h("span", { text: label }));
+  // A late redraw keeps flying from where it was, not from the start.
+  const unfold = (n: number) => (since < 1400 ? n * 45 - since : -1);
+
+  return h(
+    "section",
+    { class: "ta-ring", style: `--w:${W};--h:${H}` },
+    h(
+      "div",
+      { class: "ta-ring-stage" },
+      h(
+        "div",
+        { class: "ta-ring-field" },
+        lines,
+        h("div", { class: `ta-ring-hub${focus !== null ? " on" : ""}`, style: `left:${(cx / W) * 100}%;top:${(cy / H) * 100}%` }, h("span", { class: "ta-ring-core", html: HUB }), h("b", { text: "Agent Center" })),
+        ...places.map((x, n) => ringNode(host, x, focus, unfold(n))),
+        all.length ? null : h("p", { class: "ta-ring-empty", text: tr("還沒有 Agent。按左下角新增第一個。", "No agents yet. Add the first one at the bottom left.") }),
+      ),
+      h(
+        "div",
+        { class: "ta-ring-legend" },
+        h("b", { text: tr("內部或外部", "Inside or outside") }),
+        legendRow("cloud", tr("外部 · Cloud Agent", "Outside · Cloud Agent")),
+        legendRow("local", tr("內部 · Local Agent", "Inside · Local Agent")),
+        legendRow("n8n", tr("內部 · n8n 節點", "Inside · n8n node")),
+      ),
+      focus !== null && !draft
+        ? h(
+            "aside",
+            { class: "ta-ring-list" },
+            h("div", { class: "ta-ring-list-head" }, h("b", { text: focus || tr("未分類", "Uncategorized") }), h("span", { class: "count", text: `${litPlaces.length} / ${all.length}` })),
+            ...litPlaces.map((x) => {
+              const face = FACES[x.i % FACES.length];
+              const model = x.a.model || x.base?.model || "";
+              return h(
+                "div",
+                { class: "ta-ring-row", style: `--c:${face}` },
+                h("i", { class: "blob", style: `--c:${face};--s:22px`, "aria-hidden": "true" }),
+                h("div", { class: "ta-ring-row-text" }, h("b", {}, x.base ? kindIcon(markOf(x.base), 13) : null, h("span", { text: x.a.name || x.a.id })), h("small", { text: [x.base ? kindOf(x.base).label : tr("基底不存在", "Base missing"), model].filter(Boolean).join(" · ") })),
+                h("button", { type: "button", class: "ta-icon", title: tr("編輯", "Edit"), "aria-label": trf("編輯 {name}", "Edit {name}", { name: x.a.name }), html: ICON_EDIT, onClick: () => edit(host, x.a) }),
+                deleteButton(host, x.a),
+              );
+            }),
+            litPlaces.length ? null : h("p", { class: "dim", text: tr("這一類還沒有 Agent。", "No agent in this category yet.") }),
+          )
+        : null,
+      h("div", { class: "ta-ring-add" }, addButton("cloud"), addButton("local")),
+      draft ? drawer(editor(host, draft)) : null,
+    ),
+  );
+}
+
+/** The page; `entered` when it was not on screen the last time the window was drawn. */
+export function agentsPage(host: AgentsHost, entered = false): HTMLElement {
   void loadTeamAgents(host.render, host.natives());
   if (!doc) return h("div", { class: "ta" }, h("p", { class: "dim", text: tr("讀取中…", "Loading…") }));
   return h(
     "div",
     { class: "ta" },
-    state || (!draft && problem)
-      ? h(
-          "section",
-          { class: "panel" },
-          state ? h("p", { class: "hint", role: "status", text: stateText() }) : null,
-          !draft && problem ? h("p", { class: "problem", text: problem }) : null,
-        )
-      : null,
     toolbar(host),
-    draft ? editor(host, draft) : null,
-    section(host, "cloud"),
-    section(host, "local"),
+    !draft && problem ? h("p", { class: "problem", text: problem }) : null,
+    ...(view === "ring" ? [ringView(host, entered)] : [draft ? editor(host, draft) : null, section(host, "cloud"), section(host, "local")]),
   );
 }

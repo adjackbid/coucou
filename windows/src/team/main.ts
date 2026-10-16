@@ -78,6 +78,8 @@ let sidePop: { which: "secretary" | "company"; top: number } | null = null;
 let monitorMode: "board" | "office" = "board";
 /** The company map instead of one team; or the office of a team that has no file here (示範資料). */
 let place: "team" | "company" | "office" | "cost" | "secretary" | "law" | "agents" = "team";
+/** The place the window showed when it was last drawn: a page can tell being entered from being redrawn. */
+let drawnPlace: string | null = null;
 let officeTeam: string | null = null;
 /** The form's working copy of the selected team; saved on request. */
 let editing: TeamConfig | null = null;
@@ -1719,7 +1721,7 @@ function main(): HTMLElement {
       "main",
       { class: "main pane" },
       h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": tr("位置", "Location") }, h("b", { text: "Agent Pool" })), windowButtons()),
-      h("div", { class: "scroll" }, agentsPage(agentsHost)),
+      h("div", { class: "scroll" }, agentsPage(agentsHost, drawnPlace !== "agents")),
     );
   }
   if (place === "law") {
@@ -1946,6 +1948,7 @@ function render() {
   if (scroller) scroller.scrollTop = scroll;
   // Nodes kept across redraws (the 星域, its rings) were detached and put back: give them their focus back.
   if (active && active !== document.body && active.isConnected && document.activeElement !== active) active.focus({ preventScroll: true });
+  drawnPlace = place;
   live.afterRender();
   office.afterRender();
   if (key) {
@@ -2042,6 +2045,7 @@ async function load() {
     if (adv) advancedOpen.add(adv);
   }
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "law") place = "law";
+  if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "agents") place = "agents";
   firstLoad = false;
   render();
 }

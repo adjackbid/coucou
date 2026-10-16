@@ -478,27 +478,391 @@
   margin-left: 6px;
 }
 
-.ta-order {
-  flex: none;
+.ta-bar-hint {
+  font-size: 12.5px;
 }
 
-.ta-order button {
-  padding: 5px 12px;
-}
-
-/* One category's cards, under its name. */
-.ta-group + .ta-group,
-.ta-group + .ta-grid-list {
-  margin-top: 14px;
-}
-
-.ta-group-title {
+.ta-bar-end {
   display: flex;
   align-items: center;
-  margin: 0 0 8px 2px;
-  font-size: 12.5px;
-  font-weight: 600;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.ta-state {
   color: var(--dim);
+  font-size: 12px;
+}
+
+.ta-views {
+  flex: none;
+  min-width: 150px;
+}
+
+.ta-views button {
+  padding: 5px 14px;
+}
+
+/* A card's category, first on its kind row. */
+.ta-cat {
+  flex: none;
+  max-width: 45%;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── The ring: Agent Center in the middle, Local Agents round it, Cloud Agents further out ── */
+.ta-ring {
+  --hot: #ff7a59;
+  container-type: inline-size;
+  border-radius: 22px;
+  overflow: hidden;
+  background:
+    radial-gradient(45% 55% at 50% 48%, rgba(79, 179, 255, 0.07), transparent 70%),
+    rgba(10, 12, 16, 0.55);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.ta-ring-stage {
+  position: relative;
+  width: 100%;
+  /* As drawn, unless the window is shorter: then the rings flatten a little. */
+  height: max(560px, min(calc(100cqw * var(--h) / var(--w)), calc(100vh - 150px)));
+}
+
+.ta-ring-field {
+  position: absolute;
+  inset: 0;
+}
+
+.ta-ring-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.ta-ring-orbit {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.13);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 7;
+  vector-effect: non-scaling-stroke;
+}
+
+.ta-ring-link {
+  stroke: var(--hot);
+  stroke-width: 2;
+  stroke-dasharray: 9 7;
+  opacity: 0.85;
+  vector-effect: non-scaling-stroke;
+}
+
+.ta-ring-knot {
+  fill: var(--hot);
+}
+
+.ta-ring-hub {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transform: translate(-50%, -46px);
+  pointer-events: none;
+}
+
+.ta-ring-core {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  color: var(--hot);
+  background: radial-gradient(circle, rgba(255, 122, 89, 0.2), rgba(12, 14, 18, 0.92) 70%);
+  box-shadow: inset 0 0 0 2px var(--hot), 0 0 32px rgba(255, 122, 89, 0.22);
+}
+
+.ta-ring-hub.on .ta-ring-core {
+  box-shadow: inset 0 0 0 2px var(--hot), 0 0 0 8px rgba(255, 122, 89, 0.1), 0 0 40px rgba(255, 122, 89, 0.4);
+}
+
+.ta-ring-hub b {
+  font-size: 14px;
+  color: var(--ink);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.ta-node {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 104px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  transform: translate(-50%, -25px);
+  transition: opacity 0.25s ease-out, filter 0.25s ease-out;
+  cursor: default;
+}
+
+.ta-node-ring {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(12, 14, 18, 0.9);
+  box-shadow: inset 0 0 0 2px var(--m), 0 0 16px color-mix(in srgb, var(--m) 28%, transparent);
+  transition: transform 0.15s ease-out, box-shadow 0.2s ease-out;
+}
+
+.ta-node:hover .ta-node-ring,
+.ta-node:focus-visible .ta-node-ring {
+  transform: scale(1.1);
+}
+
+.ta-node:focus-visible {
+  outline: none;
+}
+
+.ta-node-name {
+  max-width: 104px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+
+.ta-node-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 104px;
+  font-size: 10.5px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ta-node-cat::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--m);
+}
+
+.ta-node-cat.none {
+  opacity: 0.7;
+}
+
+.ta-node.dim {
+  opacity: 0.25;
+  filter: grayscale(0.7);
+}
+
+.ta-node.lit .ta-node-ring {
+  box-shadow: inset 0 0 0 2px var(--hot), 0 0 0 5px rgba(255, 122, 89, 0.16), 0 0 0 10px rgba(255, 122, 89, 0.07), 0 0 26px rgba(255, 122, 89, 0.45);
+}
+
+.ta-node.lit .ta-node-name {
+  color: #fff;
+}
+
+.ta-node.editing .ta-node-ring {
+  box-shadow: inset 0 0 0 2px var(--m), 0 0 0 4px color-mix(in srgb, var(--m) 40%, transparent);
+}
+
+.ta-node.broken .ta-node-ring {
+  box-shadow: inset 0 0 0 2px rgba(244, 80, 94, 0.8);
+}
+
+/* Opening the ring: each agent flies out from Agent Center, one after another. */
+.ta-node.unfold {
+  animation: ta-unfold 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+  animation-delay: var(--d);
+}
+
+@keyframes ta-unfold {
+  from {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-25px + var(--dy))) scale(0.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ta-node.unfold {
+    animation: none;
+  }
+}
+
+.ta-ring-empty {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 70px);
+  transform: translateX(-50%);
+  color: var(--dim);
+}
+
+.ta-ring-legend,
+.ta-ring-list {
+  position: absolute;
+  z-index: 3;
+  border-radius: 16px;
+  background: rgba(21, 23, 27, 0.86);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.ta-ring-legend {
+  left: 16px;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+}
+
+.ta-ring-legend b {
+  color: var(--dim);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ta-ring-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ta-ring-list {
+  right: 16px;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 270px;
+  max-height: calc(100% - 32px);
+  padding: 12px;
+  overflow: auto;
+}
+
+.ta-ring-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px 2px;
+}
+
+.ta-ring-list-head .count {
+  margin-left: 0;
+}
+
+.ta-ring-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 122, 89, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 122, 89, 0.45);
+}
+
+.ta-ring-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ta-ring-row-text b {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+}
+
+.ta-ring-row-text b span,
+.ta-ring-row-text small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ta-ring-row-text small {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.ta-ring-add {
+  position: absolute;
+  z-index: 3;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ta-ring-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 10px;
+  border: 0;
+  border-radius: 999px;
+  font: 500 12.5px var(--font);
+  color: var(--ink);
+  background: rgba(21, 23, 27, 0.86);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  cursor: default;
+}
+
+.ta-ring-add-btn:hover:not(:disabled) {
+  background: var(--lift-2);
+}
+
+.ta-ring-add-btn:disabled {
+  opacity: 0.45;
+}
+
+/* Editing on the ring: the form over its right side. */
+.ta-ring-drawer {
+  position: absolute;
+  z-index: 4;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: min(580px, 64%);
+  overflow: auto;
+  border-radius: 18px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+
+.ta-ring-drawer .ta-editor {
+  min-height: 100%;
+  margin: 0;
+  background: rgba(20, 22, 27, 0.97);
 }
 
 .ta-editor-title {
