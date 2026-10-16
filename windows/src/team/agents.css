@@ -862,7 +862,30 @@
 .ta-ring-drawer .ta-editor {
   min-height: 100%;
   margin: 0;
+  padding-top: 0;
   background: rgba(20, 22, 27, 0.97);
+}
+
+/* Its head — title, 取消 and 儲存 — stays at the top while the fields scroll under it. */
+.ta-editor.pinned > .panel-head {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  align-items: center;
+  margin: 0 -14px 10px;
+  padding: 14px 14px 10px;
+  background: rgba(20, 22, 27, 0.98);
+  box-shadow: 0 1px 0 var(--hairline);
+}
+
+.ta-editor.pinned > .panel-head > .row {
+  margin: 0;
+}
+
+.ta-editor.pinned > .panel-head > .problem {
+  flex-basis: 100%;
+  margin: 0;
+  white-space: pre-line;
 }
 
 .ta-editor-title {

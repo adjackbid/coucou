@@ -428,7 +428,16 @@ function baseChoices(natives: AgentProfile[], only: AgentLocation | null): Choic
   return out;
 }
 
-function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
+/** Closes the form, whatever was typed in it. */
+function closeDraft(host: AgentsHost) {
+  draft = null;
+  draftWhere = null;
+  problem = "";
+  host.render();
+}
+
+/** The form; `pinned`: its 取消 / 儲存 in its head, which stays put while the form scrolls (the ring's drawer). */
+function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
   const natives = host.natives();
   const base = natives.find((n) => n.id === a.base);
   const node = base?.protocol === "n8n";
@@ -438,13 +447,49 @@ function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
   const mcpOff = can?.mcp === "no";
   const skillsOff = can?.skills === "no";
   const where = base ? locationOf(base) : draftWhere;
+  const actions = h(
+    "div",
+    { class: "row end" },
+    h("button", { type: "button", class: "btn plain", onClick: () => closeDraft(host) }, tr("取消", "Cancel")),
+    h(
+      "button",
+      {
+        type: "button",
+        class: "btn primary",
+        // Checked when pressed, not when drawn: the fields change without a redraw.
+        onClick: () => {
+          const why = problemsOf(a, host.natives());
+          if (why.length) {
+            problem = why.join("\n");
+            host.render();
+            return;
+          }
+          const all = teamAgents().filter((x) => x.id !== a.id);
+          const at = teamAgents().findIndex((x) => x.id === a.id);
+          const clean: TeamAgent = { ...a, name: a.name.trim(), category: a.category.trim(), mcp: a.mcp.filter((m) => m.name || m.command || m.url) };
+          if (at < 0) all.push(clean);
+          else all.splice(at, 0, clean);
+          void persist({ agents: all }, host.render).then((ok) => {
+            if (ok) {
+              draft = null;
+              draftWhere = null;
+            }
+            host.render();
+          });
+        },
+      },
+      tr("儲存", "Save"),
+    ),
+  );
   return h(
     "section",
-    { class: "panel form ta-editor" }, // i18n-ok: CSS classes
+    { class: `panel form ta-editor${pinned ? " pinned" : ""}` }, // i18n-ok: CSS classes
     h(
       "div",
       { class: "panel-head" },
       h("h2", { class: "ta-editor-title" }, where ? kindIcon(where, 20) : null, draftIsNew ? (where === "local" ? tr("新增 Local Agent", "New Local Agent") : where === "cloud" ? tr("新增 Cloud Agent", "New Cloud Agent") : tr("新增團隊 Agent", "New team agent")) : trf("編輯「{name}」", "Edit “{name}”", { name: a.name || tr("未命名", "unnamed") })),
+      pinned ? actions : null,
+      pinned && problem ? h("p", { class: "problem", text: problem }) : null,
     ),
     h(
       "div",
@@ -486,41 +531,8 @@ function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
       ),
     ),
     node ? h("p", { class: "hint ta-node-note" }, kindIcon("n8n", 14), h("span", { text: markHint("n8n") })) : null,
-    problem ? h("p", { class: "problem", text: problem }) : null,
-    h(
-      "div",
-      { class: "row end" },
-      h("button", { type: "button", class: "btn plain", onClick: () => { draft = null; draftWhere = null; problem = ""; host.render(); } }, tr("取消", "Cancel")),
-      h(
-        "button",
-        {
-          type: "button",
-          class: "btn primary",
-          // Checked when pressed, not when drawn: the fields change without a redraw.
-          onClick: () => {
-            const why = problemsOf(a, host.natives());
-            if (why.length) {
-              problem = why.join("\n");
-              host.render();
-              return;
-            }
-            const all = teamAgents().filter((x) => x.id !== a.id);
-            const at = teamAgents().findIndex((x) => x.id === a.id);
-            const clean: TeamAgent = { ...a, name: a.name.trim(), category: a.category.trim(), mcp: a.mcp.filter((m) => m.name || m.command || m.url) };
-            if (at < 0) all.push(clean);
-            else all.splice(at, 0, clean);
-            void persist({ agents: all }, host.render).then((ok) => {
-              if (ok) {
-                draft = null;
-                draftWhere = null;
-              }
-              host.render();
-            });
-          },
-        },
-        tr("儲存", "Save"),
-      ),
-    ),
+    pinned ? null : problem ? h("p", { class: "problem", text: problem }) : null,
+    pinned ? null : actions,
   );
 }
 
@@ -754,7 +766,7 @@ function svgEl(tag: string, attrs: Record<string, string | number>): SVGElement 
 }
 
 /** One agent on the ring: its Mochi in a circle of its kind's colour, its name, its category. */
-function ringNode(host: AgentsHost, x: RingPlace, focus: string | null, unfold: number): HTMLElement {
+function ringNode(host: AgentsHost, x: RingPlace, focus: string | null, unfold: number | null): HTMLElement {
   const { a, base } = x;
   const mark = base ? markOf(base) : "cloud";
   const face = FACES[x.i % FACES.length];
@@ -770,8 +782,8 @@ function ringNode(host: AgentsHost, x: RingPlace, focus: string | null, unfold: 
     "button",
     {
       type: "button",
-      class: `ta-node${base ? "" : " broken"}${lit ? " lit" : focus !== null ? " dim" : ""}${draft?.id === a.id ? " editing" : ""}${unfold >= 0 ? " unfold" : ""}`,
-      style: `left:${x.left}%;top:${x.top}%;--c:${face};--m:${markColor(mark)};--dx:${x.dx}px;--dy:${x.dy}px;--d:${unfold}ms`,
+      class: `ta-node${base ? "" : " broken"}${lit ? " lit" : focus !== null ? " dim" : ""}${draft?.id === a.id ? " editing" : ""}${unfold !== null ? " unfold" : ""}`,
+      style: `left:${x.left}%;top:${x.top}%;--c:${face};--m:${markColor(mark)};--dx:${x.dx}px;--dy:${x.dy}px;--d:${unfold ?? 0}ms`,
       title: tip,
       "aria-label": trf("編輯 {name}", "Edit {name}", { name: a.name || a.id }),
       onClick: () => edit(host, a),
@@ -867,7 +879,7 @@ function ringView(host: AgentsHost, entered: boolean): HTMLElement {
     );
   const legendRow = (mark: KindMark, label: string) => h("div", { class: "ta-ring-legend-row", title: markHint(mark) }, kindIcon(mark, 16), h("span", { text: label }));
   // A late redraw keeps flying from where it was, not from the start.
-  const unfold = (n: number) => (since < 1400 ? n * 45 - since : -1);
+  const unfold = (n: number) => (since < 1400 ? n * 45 - since : null);
 
   return h(
     "section",
@@ -912,7 +924,7 @@ function ringView(host: AgentsHost, entered: boolean): HTMLElement {
           )
         : null,
       h("div", { class: "ta-ring-add" }, addButton("cloud"), addButton("local")),
-      draft ? drawer(editor(host, draft)) : null,
+      draft ? drawer(editor(host, draft, true)) : null,
     ),
   );
 }
@@ -923,7 +935,17 @@ export function agentsPage(host: AgentsHost, entered = false): HTMLElement {
   if (!doc) return h("div", { class: "ta" }, h("p", { class: "dim", text: tr("讀取中…", "Loading…") }));
   return h(
     "div",
-    { class: "ta" },
+    {
+      class: "ta",
+      // On the ring the form floats over it: a click anywhere else on the page puts it away.
+      // An agent or 新增 opens its own form instead; menus hang from the window, outside the page.
+      onClick: (e: Event) => {
+        if (view !== "ring" || !draft) return;
+        const at = e.target as Element | null;
+        if (!at?.isConnected || at.closest(".ta-ring-drawer, .ta-node, .ta-ring-add-btn, .ta-ring-list")) return;
+        closeDraft(host);
+      },
+    },
     toolbar(host),
     !draft && problem ? h("p", { class: "problem", text: problem }) : null,
     ...(view === "ring" ? [ringView(host, entered)] : [draft ? editor(host, draft) : null, section(host, "cloud"), section(host, "local")]),
