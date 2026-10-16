@@ -1807,7 +1807,12 @@ fn create_team_window(app: &AppHandle) {
         // its own), and nothing painted behind the page.
         .decorations(false)
         .transparent(true)
-        .shadow(true)
+        // Windows 11 draws the shadow around the page. Windows 10 does not
+        // (the window is cut to its rounded corners, which takes it away),
+        // and the shadow would only leave a frame of resize borders outside
+        // the page, which the blur makes visible: there the page is all of
+        // the window, and its edges are what resizes it.
+        .shadow(!glass::win10())
         .visible(false)
         // Files are dropped through the page's own HTML5 drag and drop, as on
         // the island: WebView2 keeps the window OLE finds first in its own
