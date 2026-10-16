@@ -455,7 +455,7 @@ impl Team {
             let first = self.briefed.lock().unwrap().insert(member.id.clone());
             let mut text = if let Some(seat) = &node {
                 let words = seat.profile.extras.as_ref().and_then(|x| x.system_prompt()).unwrap_or("");
-                crate::n8n::team_turn(&config, state, &member.id, &unheard, &seat.key, words, &acp::running_model(&seat.profile, &seat.launch))
+                crate::n8n::team_turn(&config, state, &member.id, &unheard, &seat.key, words, &acp::running_model(&seat.profile, &seat.launch), seat.profile.extras.as_ref().map(|x| x.effort.as_str()).unwrap_or(""))
             } else if first {
                 // A team agent's words that have no other way in (team_agents.rs).
                 let own = self.seat(&member.id).map(|s| crate::team_agents::brief_text(&s.profile)).unwrap_or_default();
@@ -2343,6 +2343,7 @@ mod tests {
                     skills: vec![],
                     description: String::new(),
                     category: String::new(),
+                    effort: String::new(),
                 }],
             };
             let profiles = doc.runnable(&[AgentProfile::copilot()]);

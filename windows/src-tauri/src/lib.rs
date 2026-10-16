@@ -1518,7 +1518,7 @@ struct TeamAgentsView {
 #[tauri::command]
 fn team_agents_load(shared: State<Shared>) -> TeamAgentsView {
     let natives = shared.settings.lock().unwrap().agents.clone();
-    let supports = natives.iter().map(|a| (a.id.clone(), team_agents::supports(a.protocol))).collect();
+    let supports = natives.iter().map(|a| (a.id.clone(), team_agents::supports_profile(a))).collect();
     TeamAgentsView { doc: team_agents::current(), supports }
 }
 

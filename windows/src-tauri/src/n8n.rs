@@ -128,7 +128,7 @@ fn current_task<'a>(state: &'a State, member: &str) -> Option<&'a Task> {
 /// What a team member that is an n8n node is sent for a turn, as the text of
 /// its prompt (`prompt` sends it as it is): the team, who it is in it, the
 /// task its answer is for, its other open tasks and what it heard.
-pub fn team_turn(config: &TeamConfig, state: &State, member: &str, heard: &[&Message], key: &str, system_prompt: &str, model: &str) -> String {
+pub fn team_turn(config: &TeamConfig, state: &State, member: &str, heard: &[&Message], key: &str, system_prompt: &str, model: &str, effort: &str) -> String {
     let me = config.member(member);
     let who = |id: &str| crate::team::brief::who(config, id);
     json!({
@@ -144,6 +144,7 @@ pub fn team_turn(config: &TeamConfig, state: &State, member: &str, heard: &[&Mes
         },
         "systemPrompt": system_prompt,
         "model": model,
+        "effort": effort,
         "task": current_task(state, member).map(task_json),
         "tasks": state.open_tasks(member).into_iter().map(task_json).collect::<Vec<_>>(),
         "messages": heard.iter().map(|m| json!({ "from": who(&m.from), "text": m.text, "task": m.task })).collect::<Vec<_>>(),
@@ -351,7 +352,7 @@ mod tests {
         assert!(hand_in(&config, &state, "flow", &Answer::default()).unwrap().is_empty());
 
         give_task(&mut state);
-        let body: Value = serde_json::from_str(&team_turn(&config, &state, "flow", &[], "team:t:flow", "Be brief.", "glm")).unwrap();
+        let body: Value = serde_json::from_str(&team_turn(&config, &state, "flow", &[], "team:t:flow", "Be brief.", "glm", "low")).unwrap();
         assert_eq!(body["kind"], "team-turn");
         assert_eq!(body["task"]["id"], "T1");
         assert_eq!(body["member"]["role"], "Reporter");

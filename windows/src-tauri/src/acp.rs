@@ -132,6 +132,8 @@ pub struct Extras {
     pub description: String,
     /// The person's grouping in Agent Pool; empty for none.
     pub category: String,
+    /// Reasoning effort (team_agents::EFFORTS), already checked against the base; empty for its default.
+    pub effort: String,
     /// The native agent it is built on.
     pub base: String,
 }
@@ -638,7 +640,7 @@ pub fn agent_folder(profile: &AgentProfile) -> Option<std::path::PathBuf> {
     })
 }
 
-fn runs_copilot(profile: &AgentProfile) -> bool {
+pub fn runs_copilot(profile: &AgentProfile) -> bool {
     profile.protocol == Protocol::Acp && is_copilot(std::path::Path::new(&profile.command))
 }
 
@@ -657,13 +659,21 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
     let mut cmd = Command::new(&exe);
     cmd.args(&profile.args);
     let model = model_of(profile, launch);
+    // A team agent's effort, each provider by its own flag.
+    let effort = profile.extras.as_ref().map(|x| x.effort.as_str()).filter(|e| !e.is_empty());
     match profile.protocol {
         // Codex takes its MCP servers as configuration, not from the thread.
         Protocol::Codex => {
             cmd.args(crate::codex::mcp_args(&launch.mcp_servers));
+            if let Some(e) = effort {
+                cmd.arg("-c").arg(format!("model_reasoning_effort=\"{e}\""));
+            }
         }
         Protocol::Claude => {
             cmd.args(crate::claude::args(model.as_deref(), &launch.mcp_servers));
+            if let Some(e) = effort {
+                cmd.arg("--effort").arg(e);
+            }
             if let Some(words) = profile.extras.as_ref().and_then(|x| x.system_prompt()) {
                 cmd.arg("--append-system-prompt-file").arg(prompt_file(words)?);
             }
@@ -673,7 +683,7 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
         // server inherit.
         Protocol::Agy => {
             let team = launch.mcp_servers.first();
-            cmd.args(crate::agy::args(model.as_deref(), team.is_some()));
+            cmd.args(crate::agy::args(model.as_deref(), effort, team.is_some()));
             for (k, v) in team.map(|s| &s.env).into_iter().flatten() {
                 cmd.env(k, v);
             }
@@ -683,6 +693,9 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
         // servers are Agent Center's own, so their tools run without a card
         // each time.
         Protocol::Acp => {
+            if let (true, Some(e)) = (runs_copilot(profile), effort) {
+                cmd.arg("--reasoning-effort").arg(e);
+            }
             if runs_copilot(profile) && !launch.mcp_servers.is_empty() {
                 // Only the team's own tools go without a card; a server the
                 // person added asks like any other tool.

@@ -460,6 +460,8 @@ export interface TeamAgent {
   description: string;
   /** The person's own grouping in Agent Pool (程式開發, 文案製作…); empty for none. */
   category: string;
+  /** How hard it thinks: low, medium, high, xhigh, max; empty for the provider's own default. */
+  effort: string;
 }
 
 /** New teams are built from these only; an older file's `source` is read past. */
@@ -474,6 +476,8 @@ export interface TeamAgentSupports {
   systemPrompt: TeamAgentSupport;
   mcp: TeamAgentSupport;
   skills: TeamAgentSupport;
+  /** Reasoning effort: a flag of the provider's (or, for n8n, a field of each call). */
+  effort: TeamAgentSupport;
 }
 
 export interface TeamAgentsView {

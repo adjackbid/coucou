@@ -53,9 +53,21 @@ pub struct TeamAgent {
     /// What it is for, in the person's words: Agent Center picks by it.
     #[serde(default)]
     pub description: String,
-    /// The person's own grouping in Agent Pool (程式開發, 文案…); empty for none.
+    /// The person's grouping in Agent Pool (程式開發, 文案…); empty for none.
     #[serde(default)]
     pub category: String,
+    /// How hard it thinks: low, medium, high, xhigh or max; empty for the provider's own default.
+    #[serde(default)]
+    pub effort: String,
+}
+
+/// The efforts every provider that takes one understands.
+pub const EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
+
+/// An effort a provider will take, or none.
+pub fn effort_of(given: &str) -> Option<&'static str> {
+    let given = given.trim().to_ascii_lowercase();
+    EFFORTS.iter().copied().find(|e| *e == given)
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -83,23 +95,35 @@ pub struct Supports {
     pub system_prompt: Support,
     pub mcp: Support,
     pub skills: Support,
+    /// Its reasoning effort: a flag on its command line (or, for n8n, a field of each call).
+    pub effort: Support,
 }
 
 pub fn supports(protocol: Protocol) -> Supports {
     match protocol {
         // --append-system-prompt-file, --mcp-config.
-        Protocol::Claude => Supports { system_prompt: Support::Native, mcp: Support::Native, skills: Support::Brief },
+        Protocol::Claude => Supports { system_prompt: Support::Native, mcp: Support::Native, skills: Support::Brief, effort: Support::Native },
         // developerInstructions on thread/start, mcp_servers.* overrides.
-        Protocol::Codex => Supports { system_prompt: Support::Native, mcp: Support::Native, skills: Support::Brief },
+        Protocol::Codex => Supports { system_prompt: Support::Native, mcp: Support::Native, skills: Support::Brief, effort: Support::Native },
         // ACP has no system prompt; MCP servers go with session/new (or Copilot's own file).
-        Protocol::Acp => Supports { system_prompt: Support::Brief, mcp: Support::Native, skills: Support::Brief },
+        // --reasoning-effort is Copilot CLI's (another ACP agent: see `supports_profile`).
+        Protocol::Acp => Supports { system_prompt: Support::Brief, mcp: Support::Native, skills: Support::Brief, effort: Support::Native },
         // Antigravity reads MCP servers only from the work folder's .agents,
         // which every member shares: one member's servers would be everyone's.
-        Protocol::Agy => Supports { system_prompt: Support::Brief, mcp: Support::No, skills: Support::Brief },
+        Protocol::Agy => Supports { system_prompt: Support::Brief, mcp: Support::No, skills: Support::Brief, effort: Support::Native },
         // An n8n workflow is sent the system prompt with every call (n8n.rs);
         // its tools and skills are the workflow's own business.
-        Protocol::N8n => Supports { system_prompt: Support::Native, mcp: Support::No, skills: Support::No },
+        Protocol::N8n => Supports { system_prompt: Support::Native, mcp: Support::No, skills: Support::No, effort: Support::Native },
     }
+}
+
+/// What a native agent can take: as its protocol can, but only Copilot CLI among ACP agents knows an effort.
+pub fn supports_profile(profile: &AgentProfile) -> Supports {
+    let mut s = supports(profile.protocol);
+    if profile.protocol == Protocol::Acp && !crate::acp::runs_copilot(profile) {
+        s.effort = Support::No;
+    }
+    s
 }
 
 fn path() -> PathBuf {
@@ -219,6 +243,7 @@ fn profile_of(a: &TeamAgent, natives: &[AgentProfile]) -> Option<AgentProfile> {
         skills: a.skills.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
         description: a.description.trim().to_string(),
         category: a.category.trim().to_string(),
+        effort: effort_of(&a.effort).filter(|_| supports_profile(base).effort != Support::No).unwrap_or("").to_string(),
         base: base.id.clone(),
     });
     Some(p)
@@ -285,6 +310,9 @@ pub fn describe(profile: &AgentProfile) -> Option<String> {
     if !x.category.is_empty() {
         bits.push(format!("category: {}", x.category));
     }
+    if !x.effort.is_empty() {
+        bits.push(format!("reasoning effort: {}", x.effort));
+    }
     if profile.protocol == Protocol::N8n {
         bits.push("an n8n workflow: it takes one task at a time and hands back one result, has no tools, and cannot be the leader".into());
     }
@@ -326,6 +354,7 @@ mod tests {
             skills: vec!["code-review".into()],
             description: "審查程式碼".into(),
             category: "程式開發".into(),
+            effort: "high".into(),
         }
     }
 
@@ -376,6 +405,16 @@ mod tests {
         assert!(line.contains("Local Agent") && line.contains("cannot be the leader"), "{line}");
         let line = describe(&profiles[0]).unwrap();
         assert!(line.contains("Cloud Agent") && line.contains("category: 程式開發"), "{line}");
+    }
+
+    #[test]
+    fn its_effort_goes_with_it_when_the_base_takes_one() {
+        let p = &TeamAgents { agents: vec![reviewer()] }.profiles(&natives())[0];
+        assert_eq!(p.extras.as_ref().unwrap().effort, "high");
+        let mut odd = reviewer();
+        odd.effort = "turbo".into();
+        assert_eq!(TeamAgents { agents: vec![odd] }.profiles(&natives())[0].extras.as_ref().unwrap().effort, "");
+        assert_eq!(effort_of(" XHigh "), Some("xhigh"));
     }
 
     #[test]

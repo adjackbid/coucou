@@ -1019,3 +1019,12 @@
 :root[data-theme="light"] .ta-ring-hub b {
   text-shadow: none;
 }
+
+/* Effort: six levels in a row, wrapping on a narrow form. */
+.segmented.wrap.ta-effort {
+  grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+}
+
+.segmented.ta-effort button:disabled {
+  opacity: 0.4;
+}

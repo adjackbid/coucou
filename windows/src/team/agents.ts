@@ -99,6 +99,7 @@ const demoAgents = (): TeamAgents => ({
       skills: ["code-review"],
       description: tr("審查程式碼、找出風險與缺少的測試;適合當 Leader 或最後把關。", "Reviews code and finds risks and missing tests; a good Leader or final check."),
       category: tr("程式開發", "Coding"),
+      effort: "high",
     },
     {
       id: "ta-designer",
@@ -110,6 +111,7 @@ const demoAgents = (): TeamAgents => ({
       skills: [],
       description: tr("畫介面、做圖片與排版。", "Draws interfaces, makes images and lays out pages."),
       category: tr("圖片影音", "Images & video"),
+      effort: "",
     },
     {
       id: "ta-joker",
@@ -121,6 +123,7 @@ const demoAgents = (): TeamAgents => ({
       skills: [],
       description: tr("專門用來講笑話的,不適合規劃,但要省錢寫 Code 時可以用", "Made for telling jokes. Not for planning, but fine for writing code on a budget"),
       category: "",
+      effort: "low",
     },
     {
       id: "ta-painter",
@@ -132,6 +135,7 @@ const demoAgents = (): TeamAgents => ({
       skills: [],
       description: tr("適合拿來畫圖、生成 UI SVG,也可以寫 Code,但品質高的代價是很貴", "Good for drawing and making UI SVGs; it writes code too, but the quality comes at a high price"),
       category: tr("圖片影音", "Images & video"),
+      effort: "",
     },
     {
       id: "ta-local-coder",
@@ -143,6 +147,7 @@ const demoAgents = (): TeamAgents => ({
       skills: [],
       description: tr("在本機模型上寫程式;資料不出公司,適合處理機密的程式碼。", "Writes code on a local model; nothing leaves the company, so it suits confidential code."),
       category: tr("程式開發", "Coding"),
+      effort: "",
     },
     {
       id: "ta-weekly",
@@ -154,15 +159,16 @@ const demoAgents = (): TeamAgents => ({
       skills: [],
       description: tr("n8n 工作流程:彙整本週的工單與提交,產出一份週報。", "An n8n workflow: gathers the week's tickets and commits into a weekly report."),
       category: tr("文案製作", "Copywriting"),
+      effort: "",
     },
   ],
 });
 
 function demoSupports(protocol: AgentProfile["protocol"]): TeamAgentSupports {
-  if (protocol === "claude" || protocol === "codex") return { systemPrompt: "native", mcp: "native", skills: "brief" };
-  if (protocol === "agy") return { systemPrompt: "brief", mcp: "no", skills: "brief" };
-  if (protocol === "n8n") return { systemPrompt: "native", mcp: "no", skills: "no" };
-  return { systemPrompt: "brief", mcp: "native", skills: "brief" };
+  if (protocol === "claude" || protocol === "codex") return { systemPrompt: "native", mcp: "native", skills: "brief", effort: "native" };
+  if (protocol === "agy") return { systemPrompt: "brief", mcp: "no", skills: "brief", effort: "native" };
+  if (protocol === "n8n") return { systemPrompt: "native", mcp: "no", skills: "no", effort: "native" };
+  return { systemPrompt: "brief", mcp: "native", skills: "brief", effort: "native" };
 }
 
 /** Reads them once (or again, `force`); draws when they arrive. */
@@ -173,7 +179,7 @@ export async function loadTeamAgents(render: () => void, natives: AgentProfile[]
     if (IS_TAURI) {
       const view = await Bridge.teamAgentsLoad();
       // A file from before categories has none.
-      doc = { agents: view.doc.agents.map((a) => ({ ...a, category: a.category ?? "" })) };
+      doc = { agents: view.doc.agents.map((a) => ({ ...a, category: a.category ?? "", effort: a.effort ?? "" })) };
       supports = view.supports;
     } else {
       doc = doc ?? demoAgents();
@@ -328,6 +334,41 @@ function mcpRow(host: AgentsHost, a: TeamAgent, m: TeamAgentMcp, at: number, off
 
 /** The models each base agent offers, asked once per window: base id → list, why not, or null while asked. */
 const modelLists = new Map<string, ModelChoice[] | string | null>();
+
+/** The efforts a provider takes, lightest first; "" leaves it to the provider. */
+const EFFORTS = ["", "low", "medium", "high", "xhigh", "max"] as const;
+
+function effortName(e: string): string {
+  switch (e) {
+    case "low": return tr("低", "Low");
+    case "medium": return tr("中", "Medium");
+    case "high": return tr("高", "High");
+    case "xhigh": return tr("很高", "Very high");
+    case "max": return tr("最高", "Max");
+    default: return tr("預設", "Default");
+  }
+}
+
+/** How hard it thinks: the provider's default, or one of its levels. Lower answers sooner and costs less. */
+function effortField(host: AgentsHost, a: TeamAgent, off: boolean): HTMLElement {
+  return h(
+    "div",
+    {},
+    h(
+      "div",
+      { class: "segmented wrap ta-effort", role: "radiogroup", "aria-label": "Effort" }, // i18n-ok: CSS classes
+      ...EFFORTS.map((e) =>
+        h("button", { type: "button", role: "radio", class: (a.effort || "") === e ? "on" : "", "aria-checked": String((a.effort || "") === e), disabled: off && e !== "", onClick: () => { a.effort = e; host.render(); } }, effortName(e)),
+      ),
+    ),
+    h("p", {
+      class: "hint",
+      text: off
+        ? tr("這個 Provider 沒有 Effort 可以調,照它自己的預設。", "This provider has no effort to set: it keeps its own default.")
+        : tr("想得越深越久、越貴;寫程式、改小東西用低或中通常就夠。預設是 Provider 自己決定。", "The harder it thinks, the longer and costlier each turn; low or medium is usually enough for code and small changes. Default leaves it to the provider."),
+    }),
+  );
+}
 
 /** The category, typed or picked from the ones in use and the offered ones. */
 function categoryField(a: TeamAgent): HTMLElement {
@@ -507,6 +548,8 @@ function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
       ),
       h("label", { text: tr("模型", "Model") }),
       modelField(a, base),
+      h("label", {}, "Effort ", badge(can?.effort, node)), // i18n-ok: the same in both
+      effortField(host, a, can?.effort === "no"),
       h("label", { text: tr("說明", "Description") }),
       field("ta-desc", a.description, (v) => (a.description = v), { rows: "2", placeholder: tr("適合做什麼、擅長什麼。", "What it is good at.") }, "textarea"),
       h("label", {}, "System prompt ", badge(can?.systemPrompt, node)), // i18n-ok: the same in both
@@ -591,6 +634,7 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
     a.systemPrompt.trim() ? h("span", { class: "ta-tag", title: a.systemPrompt.trim().slice(0, 300) }, "System prompt") : null, // i18n-ok: the same in both
     a.mcp.length ? h("span", { class: "ta-tag", title: a.mcp.map((m) => m.name).join(tr("、", ", ")) }, `MCP ${a.mcp.length}`) : null,
     a.skills.length ? h("span", { class: "ta-tag", title: a.skills.join("\n") }, `Skill ${a.skills.length}`) : null, // i18n-ok: the same in both
+    a.effort ? h("span", { class: "ta-tag", title: tr("想得多深(Effort)", "How hard it thinks (effort)") }, `Effort ${effortName(a.effort)}`) : null, // i18n-ok: the same in both
   ].filter(Boolean) as HTMLElement[];
   return h(
     "article",
@@ -637,7 +681,7 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
 /** Opens the form for a new agent of one kind, in the category the page is narrowed to. */
 function startNew(host: AgentsHost, where: AgentLocation) {
   const bases = host.natives().filter((n) => locationOf(n) === where);
-  draft = { id: `ta-${Date.now().toString(36)}`, name: "", base: bases[0]?.id ?? "", model: "", systemPrompt: "", mcp: [], skills: [], description: "", category: only ?? "" };
+  draft = { id: `ta-${Date.now().toString(36)}`, name: "", base: bases[0]?.id ?? "", model: "", systemPrompt: "", mcp: [], skills: [], description: "", category: only ?? "", effort: "" };
   drawerScroll = 0;
   drawerAt = performance.now();
   draftIsNew = true;
