@@ -846,20 +846,40 @@
   opacity: 0.45;
 }
 
-/* Editing on the ring: the form over its right side. */
-.ta-ring-drawer {
-  position: absolute;
-  z-index: 4;
-  top: 12px;
-  right: 12px;
+/* Editing or adding, cards or ring: the form over the page's right side, under the window's title row. */
+.ta-drawer {
+  position: fixed;
+  z-index: 20;
+  top: 58px;
+  right: 16px;
   bottom: 12px;
-  width: min(580px, 64%);
+  width: min(580px, calc(100vw - 208px - 64px));
   overflow: auto;
   border-radius: 18px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--hairline);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
-.ta-ring-drawer .ta-editor {
+.ta-drawer.opening {
+  animation: ta-slide 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--t);
+}
+
+@keyframes ta-slide {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ta-drawer.opening {
+    animation: none;
+  }
+}
+
+.ta-drawer .ta-editor {
   min-height: 100%;
   margin: 0;
   padding-top: 0;

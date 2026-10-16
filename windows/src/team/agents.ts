@@ -542,16 +542,16 @@ const FACES = ["#6F93FF", "#34D399", "#A78BFA", "#F5A524", "#F472B6", "#22D3EE",
 const ICON_EDIT = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>';
 const ICON_DELETE = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
 
-/** Opens the form for `a`, scrolled into view: the list may be far below it. */
+/** Opens the form for `a`, slid in from the right. */
 function edit(host: AgentsHost, a: TeamAgent) {
   draft = structuredClone(a);
   drawerScroll = 0;
+  drawerAt = performance.now();
   draftIsNew = false;
   draftWhere = null;
   problem = "";
   deleting = null;
   host.render();
-  requestAnimationFrame(() => document.querySelector(".ta-editor")?.scrollIntoView({ block: "start", behavior: "smooth" }));
 }
 
 /** 刪除, pressed twice: the first press arms it and says so. */
@@ -639,12 +639,12 @@ function startNew(host: AgentsHost, where: AgentLocation) {
   const bases = host.natives().filter((n) => locationOf(n) === where);
   draft = { id: `ta-${Date.now().toString(36)}`, name: "", base: bases[0]?.id ?? "", model: "", systemPrompt: "", mcp: [], skills: [], description: "", category: only ?? "" };
   drawerScroll = 0;
+  drawerAt = performance.now();
   draftIsNew = true;
   draftWhere = where;
   problem = "";
   deleting = null;
   host.render();
-  requestAnimationFrame(() => document.querySelector(".ta-editor")?.scrollIntoView({ block: "start", behavior: "smooth" }));
 }
 
 /** Why a kind cannot have a new agent yet, or its hint. */
@@ -742,12 +742,19 @@ function toolbar(host: AgentsHost): HTMLElement {
   );
 }
 
-/** How far down the form over the ring was scrolled: a redraw puts it back there. */
+/** How far down the form was scrolled: a redraw puts it back there. */
 let drawerScroll = 0;
+/** When the form was opened: it slides in once, not on every redraw. */
+let drawerAt = 0;
 
-/** The form over the ring's right side: it scrolls on its own, and keeps its place when the window is drawn again. */
+/**
+ * The form, over the page's right side whether cards or ring: it scrolls on
+ * its own, keeps its place when the window is drawn again, and slides in
+ * when opened (a redraw on the way carries on from where it was).
+ */
 function drawer(form: HTMLElement): HTMLElement {
-  const el = h("div", { class: "ta-ring-drawer", onScroll: () => (drawerScroll = el.scrollTop) }, form);
+  const since = performance.now() - drawerAt;
+  const el = h("div", { class: `ta-drawer${since < 260 ? " opening" : ""}`, style: `--t:${-since}ms`, onScroll: () => (drawerScroll = el.scrollTop) }, form);
   // Once the page it belongs to is on screen (render appends it right after).
   queueMicrotask(() => (el.scrollTop = drawerScroll));
   return el;
@@ -924,7 +931,6 @@ function ringView(host: AgentsHost, entered: boolean): HTMLElement {
           )
         : null,
       h("div", { class: "ta-ring-add" }, addButton("cloud"), addButton("local")),
-      draft ? drawer(editor(host, draft, true)) : null,
     ),
   );
 }
@@ -933,21 +939,28 @@ function ringView(host: AgentsHost, entered: boolean): HTMLElement {
 export function agentsPage(host: AgentsHost, entered = false): HTMLElement {
   void loadTeamAgents(host.render, host.natives());
   if (!doc) return h("div", { class: "ta" }, h("p", { class: "dim", text: tr("讀取中…", "Loading…") }));
+  // Coming back to the page: a form left open is put away, as if clicked away.
+  if (entered && draft) {
+    draft = null;
+    draftWhere = null;
+    problem = "";
+  }
   return h(
     "div",
     {
       class: "ta",
-      // On the ring the form floats over it: a click anywhere else on the page puts it away.
-      // An agent or 新增 opens its own form instead; menus hang from the window, outside the page.
+      // The form floats over the page: a click anywhere else on it puts the form away. An
+      // agent, its ✎ or 新增 opens its own form instead; menus hang from the window, outside the page.
       onClick: (e: Event) => {
-        if (view !== "ring" || !draft) return;
+        if (!draft) return;
         const at = e.target as Element | null;
-        if (!at?.isConnected || at.closest(".ta-ring-drawer, .ta-node, .ta-ring-add-btn, .ta-ring-list")) return;
+        if (!at?.isConnected || at.closest(".ta-drawer, .ta-node, .ta-ring-add-btn, .ta-ring-list, .ta-icon, .ta-add")) return;
         closeDraft(host);
       },
     },
     toolbar(host),
     !draft && problem ? h("p", { class: "problem", text: problem }) : null,
-    ...(view === "ring" ? [ringView(host, entered)] : [draft ? editor(host, draft) : null, section(host, "cloud"), section(host, "local")]),
+    ...(view === "ring" ? [ringView(host, entered)] : [section(host, "cloud"), section(host, "local")]),
+    draft ? drawer(editor(host, draft, true)) : null,
   );
 }
