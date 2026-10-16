@@ -172,10 +172,17 @@ impl Meter {
         conn.write_all(out.as_bytes()).await.map_err(|e| e.to_string())?;
 
         let mut reader = Reader::default();
+        // A refusal's own words go to the log: the agent may sum one up
+        // wrongly (Copilot calls a gateway's "key not allowed to access
+        // model" 401 a failed authentication).
+        let mut refusal: Option<Vec<u8>> = (!status.is_success()).then(Vec::new);
         let mut resp = resp;
         loop {
             match resp.chunk().await {
                 Ok(Some(bytes)) => {
+                    if let Some(said) = refusal.as_mut().filter(|s| s.len() < 600) {
+                        said.extend_from_slice(&bytes[..bytes.len().min(600 - said.len())]);
+                    }
                     reader.feed(&bytes);
                     conn.write_all(format!("{:x}\r\n", bytes.len()).as_bytes()).await.map_err(|e| e.to_string())?;
                     conn.write_all(&bytes).await.map_err(|e| e.to_string())?;
@@ -190,6 +197,10 @@ impl Meter {
         }
         let _ = conn.write_all(b"0\r\n\r\n").await;
         let _ = conn.flush().await;
+        if let Some(said) = refusal {
+            let said = String::from_utf8_lossy(&said).replace(['\r', '\n'], " ");
+            log::line(format!("meter: {key} {upstream}{path} (model {model}) answered HTTP {}: {}", status.as_u16(), said.trim()));
+        }
 
         if let Some(u) = reader.usage(&model) {
             if let Some(report) = self.report.get() {

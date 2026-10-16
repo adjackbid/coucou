@@ -255,14 +255,19 @@ pub struct Launch {
 }
 
 /// The model a session actually runs, to name usage the agent reported
-/// without one: for Copilot, a COPILOT_MODEL in the profile's environment
-/// comes before the profile's model field (it is set after it).
+/// without one: a member's, else the profile's model field (a team agent's
+/// own model is that field), and only when neither is set, for Copilot, a
+/// COPILOT_MODEL in the profile's environment — what `spawn_agent` gives it.
 pub fn running_model(profile: &AgentProfile, launch: &Launch) -> String {
-    let own = launch.model.as_deref().map(str::trim).filter(|m| !m.is_empty());
-    let env = (profile.protocol == Protocol::Acp)
+    model_of(profile, launch).or_else(|| env_model(profile)).unwrap_or_default()
+}
+
+/// A Copilot profile's COPILOT_MODEL, the stand-in for an empty model field.
+fn env_model(profile: &AgentProfile) -> Option<String> {
+    (profile.protocol == Protocol::Acp)
         .then(|| profile.env.get("COPILOT_MODEL").map(|m| m.trim()).filter(|m| !m.is_empty() && !m.contains('{')))
-        .flatten();
-    own.or(env).map(str::to_string).or_else(|| model_of(profile, launch)).unwrap_or_default()
+        .flatten()
+        .map(str::to_string)
 }
 
 /// The model a session runs: the launch's, else the profile's, else the agent's own default.
@@ -672,12 +677,10 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
             }
         }
         // Copilot CLI reads its model from the environment, whichever
-        // provider it talks to. The MCP servers are Coucou's own, so their
-        // tools run without a card each time.
+        // provider it talks to (set below, after the profile's own). The MCP
+        // servers are Agent Center's own, so their tools run without a card
+        // each time.
         Protocol::Acp => {
-            if let Some(m) = &model {
-                cmd.env("COPILOT_MODEL", m);
-            }
             if runs_copilot(profile) && !launch.mcp_servers.is_empty() {
                 // Only the team's own tools go without a card; a server the
                 // person added asks like any other tool.
@@ -705,8 +708,12 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
             cmd.env(k.trim(), v);
         }
     }
-    // A team member's own model wins over a COPILOT_MODEL in the profile's environment.
-    if let (Protocol::Acp, Some(m)) = (&profile.protocol, launch.model.as_deref().map(str::trim).filter(|m| !m.is_empty())) {
+    // The model the person can see wins — a member's, else the agent's model
+    // field (a team agent's own model) — over a COPILOT_MODEL left in the
+    // profile's environment, which only stands in when neither is set. The
+    // other way round, an endpoint that lets a key use only some models
+    // answers 401 for the leftover one, and Copilot calls that a bad key.
+    if let (Protocol::Acp, Some(m)) = (&profile.protocol, &model) {
         cmd.env("COPILOT_MODEL", m);
     }
     let mut child = cmd.spawn().map_err(|e| -> String {
@@ -735,6 +742,26 @@ async fn copilot_models(profile: &AgentProfile) -> Result<Vec<ModelChoice>, Stri
     provider.auth = if key.is_some() { "bearer".into() } else { "none".into() };
     let ids = crate::llm::models_with_key(&provider, key).await?;
     Ok(ids.into_iter().map(|id| ModelChoice { label: id.clone(), id }).collect())
+}
+
+/// Why `model` will not do on an endpoint that lists `offered`: a gateway
+/// such as LiteLLM lists only what the key may use, and answers 401 for
+/// anything else — which Copilot reports as a bad key. None when it is
+/// listed, or when nothing is listed or no model is named to judge by.
+fn unoffered(model: &str, offered: &[ModelChoice]) -> Option<String> {
+    let model = model.trim();
+    if model.is_empty() || offered.is_empty() || offered.iter().any(|m| m.id.eq_ignore_ascii_case(model)) {
+        return None;
+    }
+    let mut list: Vec<&str> = offered.iter().map(|m| m.id.as_str()).take(12).collect();
+    if offered.len() > list.len() {
+        list.push("…");
+    }
+    let list = list.join(", ");
+    Some(tr!(
+        format!("連得上，但它會用的模型「{model}」不在端點的模型清單裡（這把金鑰能用：{list}）。實際工作時端點會回 401，看起來像金鑰錯。請在「模型」欄選清單裡的一個（它優先於環境變數的 COPILOT_MODEL）。"),
+        format!("It connects, but the model it would use, '{model}', is not in the endpoint's list (this key may use: {list}). At work the endpoint would answer 401, which looks like a bad key. Pick one of those in the Model field (it wins over COPILOT_MODEL in the environment).")
+    ))
 }
 
 /// Stops the agent and everything under it. An npm shim is a tree —
@@ -1311,6 +1338,17 @@ impl Agents {
         if running.claude.signed_out.load(Ordering::SeqCst) {
             return Err(crate::claude::signed_out());
         }
+        // A handshake spends nothing and says nothing about the model. On an
+        // endpoint of its own, the model Copilot will ask for has to be one
+        // the endpoint lets this key use: its list says so, still for free.
+        if profile.protocol == Protocol::Acp && profile.env.contains_key("COPILOT_PROVIDER_BASE_URL") {
+            let model = running_model(profile, &Launch::default());
+            if let Ok(offered) = copilot_models(profile).await {
+                if let Some(problem) = unoffered(&model, &offered) {
+                    return Err(problem);
+                }
+            }
+        }
         let name = &profile.name;
         Ok(tr!(format!("{name} 回應了連線，也開好了工作階段。"), format!("{name} answered the handshake and opened a session.")))
     }
@@ -1339,16 +1377,34 @@ mod tests {
     /// `cargo test -p coucou the_real_copilot_starts -- --ignored`.
     #[test]
     fn usage_without_a_model_is_named_after_the_model_really_running() {
+        // TXCDeep: a model field, and a COPILOT_MODEL left over from the cg preset.
         let mut cg = AgentProfile::copilot();
-        cg.model = "deepseek-v4-flash".into();
-        cg.env.insert("COPILOT_MODEL".into(), "deepseek-v4.1-flash".into());
-        // The profile's environment is set after its model field: it is what runs.
-        assert_eq!(running_model(&cg, &Launch::default()), "deepseek-v4.1-flash");
+        cg.model = "deepseek-ai/DeepSeek-V4.1-Flash".into();
+        cg.env.insert("COPILOT_MODEL".into(), "glm-5.3-flash".into());
+        // The model field the person can see is what runs, not the leftover.
+        assert_eq!(running_model(&cg, &Launch::default()), "deepseek-ai/DeepSeek-V4.1-Flash");
         // A member's own model is set last of all.
         let member = Launch { model: Some("minimax-m2.7".into()), ..Launch::default() };
         assert_eq!(running_model(&cg, &member), "minimax-m2.7");
+        // A team agent's own model is its profile's model field.
+        let team_agent = AgentProfile { model: "TXC-LLM-Reasoning".into(), ..cg.clone() };
+        assert_eq!(running_model(&team_agent, &Launch::default()), "TXC-LLM-Reasoning");
+        // With no model field, COPILOT_MODEL stands in (the cg presets).
+        cg.model.clear();
+        assert_eq!(running_model(&cg, &Launch::default()), "glm-5.3-flash");
         cg.env.clear();
-        assert_eq!(running_model(&cg, &Launch::default()), "deepseek-v4-flash");
+        assert_eq!(running_model(&cg, &Launch::default()), "");
+    }
+
+    #[test]
+    fn a_model_the_endpoint_does_not_list_for_the_key_is_caught_by_the_test() {
+        let offered: Vec<ModelChoice> = ["TXC-LLM-Reasoning", "deepseek-ai/DeepSeek-V4.1-Flash"].iter().map(|id| ModelChoice { id: id.to_string(), label: id.to_string() }).collect();
+        let problem = unoffered("glm-5.3-flash", &offered).expect("a model the key may not use");
+        assert!(problem.contains("glm-5.3-flash") && problem.contains("TXC-LLM-Reasoning") && problem.contains("401"), "{problem}");
+        assert!(unoffered("deepseek-ai/deepseek-v4.1-flash", &offered).is_none());
+        // Nothing to judge by: no complaint.
+        assert!(unoffered("", &offered).is_none());
+        assert!(unoffered("glm-5.3-flash", &[]).is_none());
     }
 
     #[test]

@@ -289,8 +289,8 @@ function modelField(a: TeamAgent, base: AgentProfile | undefined): HTMLElement {
   const input = field("ta-model", a.model, (v) => (a.model = v.trim()), {
     placeholder: node
       ? tr("可留空;填了會放進送給 n8n 的 model 欄位", "May be empty; sent to n8n as `model` when set")
-      : base?.model
-        ? trf("留空用基底的:{model}", "Leave empty for the base's: {model}", { model: base.model })
+      : base?.model || base?.env?.COPILOT_MODEL
+        ? trf("留空用基底的:{model}", "Leave empty for the base's: {model}", { model: base.model || base.env.COPILOT_MODEL })
         : tr("留空用基底 Agent 的預設", "Leave empty for the base agent's default"),
     autocomplete: "off",
     class: "field ta-model-input",

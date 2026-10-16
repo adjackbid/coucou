@@ -269,7 +269,7 @@ export const agentsPage: Page = {
 
       const usedBy = (teamAgents?.doc.agents ?? []).filter((t) => t.base === a.id).map((t) => t.name);
       const title = h("div", { class: "title-icon" }, kindIcon(markOf(a), 18), h("h2", { text: a.name }));
-      const meta = isNode ? `${protocolName(a)} · ${hostOf(a.url) || tr("還沒填網址", "no URL yet")}` : `${protocolName(a)} · ${a.model || tr("它自己的預設模型", "its own default model")}`;
+      const meta = isNode ? `${protocolName(a)} · ${hostOf(a.url) || tr("還沒填網址", "no URL yet")}` : `${protocolName(a)} · ${a.model?.trim() || envModel(a) || tr("它自己的預設模型", "its own default model")}`;
       const body = isNode
         ? [kind, field(tr("說話方式", "Speaks"), protocol), ...nodeFields(a, live, keyRow, syncBadge), keyRow, row(test, h("span", { class: "hint", text: tr("送一個 kind: test 的請求給 Webhook;在聊天列選它,就能跟它說話", "sends the webhook a request with kind: test; pick it in the chat bar to talk to it") })), feedback]
         : [kind, field(tr("說話方式", "Speaks"), protocol), modelField(a, live, feedback), keyRow, row(test, h("span", { class: "hint", text: tr("在聊天列選它，就能跟它說話", "pick it in the chat bar to talk to it") })), feedback];
@@ -315,7 +315,16 @@ function modelField(a: AgentProfile, live: () => AgentProfile, feedback: HTMLEle
   // The model it runs unless a team member names another. The list is the
   // agent's own: asked with a handshake, so nothing is spent.
   const modelList = h("datalist", { id: `agent-models-${a.id}` }) as HTMLDataListElement;
-  const model = h("input", { type: "text", value: a.model ?? "", placeholder: tr("用它自己的預設", "its own default"), list: `agent-models-${a.id}`, spellcheck: "false", class: "grow-input" }) as HTMLInputElement;
+  // This field wins over a COPILOT_MODEL in the environment (acp.rs `running_model`).
+  const fromEnv = envModel(a);
+  const model = h("input", {
+    type: "text",
+    value: a.model ?? "",
+    placeholder: fromEnv ? trf("空白時用環境變數的 COPILOT_MODEL:{model}", "empty: COPILOT_MODEL from the environment, {model}", { model: fromEnv }) : tr("用它自己的預設", "its own default"),
+    list: `agent-models-${a.id}`,
+    spellcheck: "false",
+    class: "grow-input",
+  }) as HTMLInputElement;
   model.addEventListener("change", () => { live().model = model.value.trim(); void save(); });
   const listModels = h("button", { type: "button", text: tr("列出模型", "List models") }) as HTMLButtonElement;
   listModels.addEventListener("click", async () => {
@@ -332,7 +341,18 @@ function modelField(a: AgentProfile, live: () => AgentProfile, feedback: HTMLEle
       listModels.disabled = false;
     }
   });
-  return field(tr("模型", "Model"), [model, modelList, listModels]);
+  const overrides = fromEnv && a.model?.trim() && a.model.trim() !== fromEnv;
+  return field(
+    tr("模型", "Model"),
+    [model, modelList, listModels],
+    overrides ? trf("用這裡的模型;環境變數的 COPILOT_MODEL({model})只在這裡空白時才用。", "This model is used; COPILOT_MODEL in the environment ({model}) only when this is empty.", { model: fromEnv }) : null,
+  );
+}
+
+/** A Copilot agent's COPILOT_MODEL, which stands in for an empty model field. */
+function envModel(a: AgentProfile): string {
+  const m = (a.protocol ?? "acp") === "acp" ? a.env?.COPILOT_MODEL?.trim() ?? "" : "";
+  return m.includes("{") ? "" : m;
 }
 
 /** An n8n node's webhook and the header it checks. */
