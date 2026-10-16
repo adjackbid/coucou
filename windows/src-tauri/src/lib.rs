@@ -136,6 +136,10 @@ fn hotkey_status(shared: State<Shared>) -> Option<String> {
     shared.hotkey_error.lock().unwrap().clone()
 }
 
+/// The longest quitting waits for the agents to stop: their 4 s to close
+/// properly, side by side, and the kill after it.
+const QUIT_WAIT: std::time::Duration = std::time::Duration::from_secs(7);
+
 /// The app used to be called Coucou, and its sign-in entry (HKCU\…\Run) is
 /// named after the app: the old "Coucou" one would start whatever is still at
 /// its path. It is removed, and Agent Center's own is written when start at
@@ -2070,11 +2074,27 @@ pub fn run() {
         .run(|app, event| {
             // Agents the island started must not outlive it.
             if let tauri::RunEvent::Exit = event {
-                if let Some(teams) = app.try_state::<Arc<Teams>>() {
-                    tauri::async_runtime::block_on(teams.shutdown());
+                // This runs on the windows' own thread, and stopping agents
+                // takes a moment: the windows go first, or the wait shows as
+                // a frozen island marked "not responding".
+                for window in app.webview_windows().values() {
+                    let _ = window.hide();
                 }
-                let agents = app.state::<Arc<Agents>>();
-                tauri::async_runtime::block_on(agents.shutdown());
+                let teams = app.try_state::<Arc<Teams>>().map(|t| t.inner().clone());
+                let agents = app.state::<Arc<Agents>>().inner().clone();
+                tauri::async_runtime::block_on(async move {
+                    let all = async {
+                        if let Some(teams) = teams {
+                            teams.shutdown().await;
+                        }
+                        agents.shutdown().await;
+                    };
+                    // Every agent gets its moment side by side; quitting
+                    // never waits past this, whatever an agent does.
+                    if tokio::time::timeout(QUIT_WAIT, all).await.is_err() {
+                        log::line("quit: some agents did not stop in time; leaving anyway");
+                    }
+                });
             }
         });
 }

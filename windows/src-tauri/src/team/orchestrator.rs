@@ -1508,13 +1508,16 @@ impl Teams {
     }
 
     /// Coucou is closing: no agent outlives it.
+    /// Every member's agent goes, all at once (see `Agents::shutdown`).
     pub async fn shutdown(&self) {
         let teams: Vec<Arc<Team>> = self.teams.lock().unwrap().values().cloned().collect();
+        let mut going = tokio::task::JoinSet::new();
         for team in teams {
             for key in team.seat_keys() {
-                team.drive.stop(key).await;
+                going.spawn(team.drive.stop(key));
             }
         }
+        while going.join_next().await.is_some() {}
     }
 }
 
@@ -1560,6 +1563,8 @@ mod tests {
         hold: Arc<Notify>,
         held: Mutex<Vec<String>>,
         asks: Mutex<Vec<String>>,
+        /// How long each agent takes to stop, like a CLI in the middle of a turn.
+        stop_takes: Mutex<Duration>,
     }
 
     impl Drive for Scripted {
@@ -1617,7 +1622,8 @@ mod tests {
 
         fn stop(&self, key: String) -> BoxFuture<()> {
             self.stopped.lock().unwrap().push(key);
-            Box::pin(async {})
+            let takes = *self.stop_takes.lock().unwrap();
+            Box::pin(async move { tokio::time::sleep(takes).await })
         }
     }
 
@@ -1642,6 +1648,7 @@ mod tests {
             hold: Arc::new(Notify::new()),
             held: Default::default(),
             asks: Default::default(),
+            stop_takes: Mutex::new(Duration::ZERO),
         });
         let emitted = Arc::new(AtomicUsize::new(0));
         let count = emitted.clone();
@@ -1830,6 +1837,22 @@ mod tests {
             // Handing in is a move: the member is not reminded or lost.
             assert_ne!(bench.member("ai4").status, MemberStatus::Lost);
             let _ = std::fs::remove_dir_all(&dir);
+        });
+    }
+
+    #[test]
+    fn quitting_stops_every_member_side_by_side() {
+        run(async {
+            let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));
+            bench.start(shop(&work_dir()));
+            // Four members, each taking a while to let go, as in the middle of a turn.
+            *bench.drive.stop_takes.lock().unwrap() = Duration::from_millis(400);
+            let started = std::time::Instant::now();
+            bench.teams.shutdown().await;
+            let took = started.elapsed();
+            assert_eq!(bench.drive.stopped.lock().unwrap().len(), 4);
+            // One after another would be 1.6 s: the window would freeze for each.
+            assert!(took < Duration::from_millis(1200), "took {took:?}");
         });
     }
 

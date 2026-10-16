@@ -771,8 +771,9 @@ async fn stop(running: &Running) {
     let Some(mut child) = running.child.lock().await.take() else { return };
     // Asked to go, an agent gets to close its session properly (its own
     // records finished, its last report sent): its input closed, it has a
-    // moment to do so before it is killed.
-    let _ = running.writer.lock().await.shutdown().await;
+    // moment to do so before it is killed. A write stuck on a pipe the agent
+    // no longer reads holds the writer: closing it is not waited on forever.
+    let _ = tokio::time::timeout(Duration::from_millis(500), async { running.writer.lock().await.shutdown().await }).await;
     if tokio::time::timeout(Duration::from_secs(4), child.wait()).await.is_ok() {
         return;
     }
@@ -1353,17 +1354,22 @@ impl Agents {
         Ok(tr!(format!("{name} 回應了連線，也開好了工作階段。"), format!("{name} answered the handshake and opened a session.")))
     }
 
+    /// Every session goes, all at once: each gets its moment to close
+    /// properly side by side, not one after another — an agent in the middle
+    /// of a turn rarely lets go by itself, and the app is quitting.
     pub async fn shutdown(&self) {
         for (_, call) in self.calls.lock().unwrap().drain() {
             call.abort();
         }
         let slots: Vec<Arc<Slot>> = self.slots.lock().unwrap().drain().map(|(_, s)| s).collect();
+        let mut going = tokio::task::JoinSet::new();
         for slot in slots {
             let old = slot.running.lock().unwrap().take();
             if let Some(old) = old {
-                stop(&old).await;
+                going.spawn(async move { stop(&old).await });
             }
         }
+        while going.join_next().await.is_some() {}
     }
 }
 
