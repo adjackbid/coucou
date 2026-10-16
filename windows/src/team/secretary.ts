@@ -7,14 +7,14 @@
 // The conversation lives in the app for as long as it runs; this page keeps
 // what it shows, and is drawn inside the Teamwork window by main.ts.
 
-import { forgetShow, pickShow, type Pick, type PoolAgent } from "./pick-show";
+import { forgetShow, pickShow, SHOW_MS, type Pick, type PoolAgent } from "./pick-show";
 import "./secretary.css";
 import { Bridge, IS_TAURI } from "../core/bridge";
 import { tr, trf } from "../core/i18n";
 import { h } from "../views/dom";
 import { dropdown, editableText } from "./ui";
 import { kbSaid, sizeText } from "./knowledge";
-import type { SecretaryProposal, SecretaryReply, SecretaryStep, SecretaryUpload } from "./types";
+import type { SecretaryChoices, SecretaryProposal, SecretaryReply, SecretaryStep, SecretaryUpload } from "./types";
 
 export interface SecretaryHost {
   render(): void;
@@ -35,6 +35,74 @@ interface Entry {
   files?: SecretaryUpload[];
   /** Files attached to the question this answers that no card of it uses. */
   unused?: SecretaryUpload[];
+  /** Options to click, from offer_choices or read off a question that ends the answer. */
+  choices?: SecretaryChoices;
+}
+
+/** Options ticked so far on a question that takes more than one. */
+let ticked: string[] = [];
+
+/** A list item's words: no marker, no bold. */
+function itemText(line: string): string | null {
+  const m = /^\s*(?:[-*•]|\d+[.)、]|[A-Ha-h][.)、]|\(?[A-Ha-h1-9]\)|[①-⑥])\s*(.+)$/.exec(line);
+  return m ? m[1].replace(/\*\*/g, "").trim() : null;
+}
+
+/**
+ * When a model asks a multiple-choice question in words: a question line and
+ * 2–6 short list items next to it, at the end of the answer. Anything else is
+ * left as words.
+ */
+export function guessChoices(text: string): SecretaryChoices | undefined {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  // "你要哪一種?", "要做哪些頁面?(可複選)"; or a line that asks for a pick and ends in a colon.
+  const isQuestion = (l: string) => /[?？]\s*([(（][^)）]*[)）])?\s*(\*\*)?$/.test(l) || (/[:：]\s*$/.test(l) && /選|哪|pick|choose|which|option/i.test(l));
+  let end = lines.length;
+  // A closing line after the list ("請選擇。", "選好跟我說"): one is allowed.
+  if (end > 0 && itemText(lines[end - 1]) === null && !isQuestion(lines[end - 1])) end--;
+  let start = end;
+  while (start > 0 && itemText(lines[start - 1]) !== null) start--;
+  const items = lines.slice(start, end).map((l) => itemText(l)!);
+  if (items.length < 2 || items.length > 6 || items.some((o) => o.length > 80)) return undefined;
+  const before = lines[start - 1];
+  const after = lines[end];
+  const question = before && isQuestion(before) ? before : after && isQuestion(after) ? after : null;
+  if (!question) return undefined;
+  return { question: question.replace(/\*\*/g, ""), options: items, multiple: /可複選|多選|可以選多個|choose (any|several)|select all/i.test(question) };
+}
+
+/** The options under an answer: a click answers with it; on the latest answer only. */
+function choicesView(host: SecretaryHost, c: SecretaryChoices, live: boolean): HTMLElement {
+  const pick = (o: string) => {
+    if (!live || waiting) return;
+    if (!c.multiple) return void ask(host, o);
+    ticked = ticked.includes(o) ? ticked.filter((x) => x !== o) : [...ticked, o];
+    host.render();
+  };
+  return h(
+    "div",
+    { class: `sec-choices${live ? "" : " past"}`, role: "group", "aria-label": c.question },
+    ...c.options.map((o) =>
+      h("button", { type: "button", class: `sec-choice${c.multiple && ticked.includes(o) ? " on" : ""}`, disabled: !live || waiting, "aria-pressed": c.multiple ? String(ticked.includes(o)) : undefined, onClick: () => pick(o) }, c.multiple ? h("span", { class: "sec-choice-box", "aria-hidden": "true" }) : null, h("span", { text: o })),
+    ),
+    c.multiple && live
+      ? h(
+          "button",
+          {
+            type: "button",
+            class: "btn primary sec-choice-send", // i18n-ok: CSS classes
+            disabled: !ticked.length || waiting,
+            onClick: () => {
+              const picked = ticked;
+              ticked = [];
+              void ask(host, picked.join(tr("、", ", ")));
+            },
+          },
+          tr("送出選擇", "Send"),
+        )
+      : null,
+    live ? h("span", { class: "hint", text: tr("或直接在下面輸入", "or type your own below") }) : null,
+  );
 }
 
 /** Files going with the next request. */
@@ -202,43 +270,122 @@ export function setPickShowOn(v: boolean) {
   store("coucou.secretary.pickShow", v ? "1" : "0");
 }
 
-/** The picking played over the page, from Agent Center's ⚙: a made-up pick from Agent Pool, one per category first. */
-let preview: { id: string; picks: Pick[] } | null = null;
+/**
+ * The picking, over the conversation while Agent Center works (pick-show.ts).
+ * It starts when Agent Center looks at Agent Pool (list_agents, agent_models,
+ * propose_team), lights each agent it looks at, and when the answer brings a
+ * new team, locks on the members and goes away a moment after. `hidden`: the
+ * person put it away; it stays away for this question. `preview`: played from
+ * the ⚙, with made-up looking and picks.
+ */
+let show: { id: string; picks: Pick[] | null; seen: string[]; continued: boolean; hidden: boolean; preview: boolean } | null = null;
+let showTimers: number[] = [];
 
-export function previewPickShow(host: SecretaryHost) {
-  const pool = host.pool();
-  const firsts = pool.filter((p, i) => p.category && pool.findIndex((q) => q.category === p.category) === i);
-  const chosen = [...firsts, ...pool.filter((p) => !firsts.includes(p))].slice(0, Math.min(4, pool.length));
-  if (preview) forgetShow(preview.id);
-  preview = {
-    id: `preview-${Date.now()}`,
-    picks: chosen.map((p, i) => ({ agent: p.id, name: `AI ${i + 1}`, role: p.category || tr("成員", "Member"), leader: i === 0 })),
-  };
+/** How long the finished picking stays before it goes. */
+const SHOW_LINGER = 2200;
+
+function clearShowTimers() {
+  for (const t of showTimers) clearTimeout(t);
+  showTimers = [];
+}
+
+function dropShow() {
+  clearShowTimers();
+  if (show) forgetShow(show.id);
+  show = null;
+}
+
+function endShow(host: SecretaryHost) {
+  dropShow();
   host.render();
 }
 
-function previewOverlay(host: SecretaryHost): HTMLElement | null {
-  if (!preview) return null;
-  const shown = preview;
-  const close = () => {
-    forgetShow(shown.id);
-    preview = null;
+/** Agent Center looked at Agent Pool: the looking starts (or goes on), with this agent lit. */
+function lookedAt(step: SecretaryStep, host: SecretaryHost) {
+  if (!pickShowOn() || !["list_agents", "agent_models", "propose_team"].includes(step.tool) || !host.pool().length) return;
+  if (!show) show = { id: `scan-${Date.now()}`, picks: null, seen: [], continued: false, hidden: false, preview: false };
+  if (show.picks === null && step.agent && !show.seen.includes(step.agent)) show.seen.push(step.agent);
+}
+
+/** The answer came: the members it picked lock on, then the picking goes; any other answer ends it. */
+function answered(reply: SecretaryReply, host: SecretaryHost) {
+  const team = reply.proposals.find((p) => p.kind === "team" && p.picks?.length);
+  if (!team || !pickShowOn() || show?.hidden) {
+    if (show) endShow(host);
+    return;
+  }
+  lockOn(team.picks!, host, false);
+}
+
+function lockOn(picks: Pick[], host: SecretaryHost, preview: boolean) {
+  clearShowTimers();
+  const before = show;
+  if (before) forgetShow(before.id);
+  show = { id: `lock-${Date.now()}`, picks, seen: before?.seen ?? [], continued: !!before, hidden: false, preview };
+  // A preview stays until closed; a real one leaves the card to be read.
+  if (!preview) showTimers.push(window.setTimeout(() => endShow(host), SHOW_MS + SHOW_LINGER));
+}
+
+/** From Agent Center's ⚙: a moment of looking at a few agents, then a made-up pick, one per category first. */
+export function previewPickShow(host: SecretaryHost) {
+  const pool = host.pool();
+  clearShowTimers();
+  if (show) forgetShow(show.id);
+  show = null;
+  if (!pool.length) {
+    show = { id: "empty", picks: [], seen: [], continued: false, hidden: false, preview: true };
+    host.render();
+    return;
+  }
+  const firsts = pool.filter((p, i) => p.category && pool.findIndex((q) => q.category === p.category) === i);
+  const chosen = [...firsts, ...pool.filter((p) => !firsts.includes(p))].slice(0, Math.min(4, pool.length));
+  const picks = chosen.map((p, i) => ({ agent: p.id, name: `AI ${i + 1}`, role: p.category || tr("成員", "Member"), leader: i === 0 }));
+  show = { id: `scan-${Date.now()}`, picks: null, seen: [], continued: false, hidden: false, preview: true };
+  host.render();
+  // Looking: a few agents, picked ones among them, one after another.
+  const looked = [...new Set([chosen[0], pool[pool.length - 1], ...chosen.slice(1), pool[Math.floor(pool.length / 2)]])].filter(Boolean).slice(0, 5);
+  looked.forEach((p, i) =>
+    showTimers.push(
+      window.setTimeout(() => {
+        if (show?.preview && show.picks === null && !show.seen.includes(p.id)) {
+          show.seen.push(p.id);
+          host.render();
+        }
+      }, 500 + i * 450),
+    ),
+  );
+  showTimers.push(
+    window.setTimeout(() => {
+      if (!show?.preview) return;
+      lockOn(picks, host, true);
+      host.render();
+    }, 700 + looked.length * 450),
+  );
+}
+
+function showOverlay(host: SecretaryHost): HTMLElement | null {
+  if (!show || show.hidden) return null;
+  const shown = show;
+  const away = () => {
+    if (shown.preview || shown.picks) return endShow(host);
+    // Still looking: put away for this question.
+    shown.hidden = true;
     host.render();
   };
   return h(
     "div",
-    { class: "ps-overlay", onClick: (e: Event) => e.target === e.currentTarget && close() },
+    { class: `ps-overlay${shown.preview ? "" : " live"}`, onClick: (e: Event) => e.target === e.currentTarget && away() },
     h(
       "div",
       { class: "stack", style: "width:min(900px,100%)" },
       host.pool().length
-        ? pickShow(shown.id, shown.picks, host.pool())
+        ? pickShow(shown.id, shown.picks, host.pool(), { seen: shown.seen, continued: shown.continued })
         : h("p", { class: "problem", text: tr("Agent Pool 裡還沒有 Agent,沒有東西可以挑。", "Agent Pool has no agents yet: there is nothing to pick from.") }),
       h(
         "div",
         { class: "ps-overlay-foot" },
-        h("button", { class: "btn plain", type: "button", onClick: () => previewPickShow(host) }, tr("再播一次", "Play again")),
-        h("button", { class: "btn primary", type: "button", onClick: close }, tr("關閉", "Close")),
+        shown.preview ? h("button", { class: "btn plain", type: "button", onClick: () => previewPickShow(host) }, tr("再播一次", "Play again")) : null,
+        h("button", { class: "btn primary", type: "button", onClick: away }, shown.preview ? tr("關閉", "Close") : shown.picks ? tr("看提案", "See the proposal") : tr("隱藏", "Hide")),
       ),
     ),
   );
@@ -273,6 +420,7 @@ function store(key: string, value: string) {
 export function onStep(step: SecretaryStep, host: SecretaryHost) {
   if (!waiting) return;
   live.push(step);
+  lookedAt(step, host);
   stick = true;
   host.render();
 }
@@ -306,15 +454,20 @@ async function ask(host: SecretaryHost, text: string, withFiles = true) {
   waiting = true;
   live = [];
   stick = true;
+  // A new question: whatever picking was on screen is over.
+  dropShow();
   host.render();
   try {
     const reply: SecretaryReply = IS_TAURI
       ? await Bridge.secretaryAsk(words, provider || null, tz(), name, files.map((f) => f.id), instructions.trim())
-      : await (await import("./demo")).demoSecretary(words);
+      : await (await import("./demo")).demoSecretary(words, (step) => onStep(step, host));
     const unused = unusedUploads(files, reply.proposals);
-    entries.push({ who: "secretary", text: reply.text, steps: reply.steps, proposals: reply.proposals, unused: unused.length ? unused : undefined });
+    entries.push({ who: "secretary", text: reply.text, steps: reply.steps, proposals: reply.proposals, unused: unused.length ? unused : undefined, choices: reply.choices ?? guessChoices(reply.text) });
+    ticked = [];
+    answered(reply, host);
   } catch (err) {
     entries.push({ who: "error", text: String(err instanceof Error ? err.message : err) });
+    dropShow();
   }
   waiting = false;
   live = [];
@@ -525,10 +678,6 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
       );
     else if (e.who === "error") list.append(h("div", { class: "sec-row" }, h("div", { class: "problem", text: e.text })));
     else {
-      // A team it proposes: first the picking, the whole width of the conversation, when the person wants it.
-      for (const p of e.proposals ?? []) {
-        if (p.kind === "team" && p.picks?.length && pickShowOn()) list.append(h("div", { class: "sec-row sec-show" }, pickShow(p.id, p.picks, host.pool())));
-      }
       list.append(
         h(
           "div",
@@ -539,6 +688,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
             steps(e.steps ?? [], false),
             words(e.text),
             ...(e.proposals ?? []).map((p) => card(host, p)),
+            e.choices ? choicesView(host, e.choices, e === entries[entries.length - 1]) : null,
             e.unused?.length
               ? h(
                   "div",
@@ -618,7 +768,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
     "div",
     { class: "secretary" },
     list,
-    previewOverlay(host),
+    showOverlay(host),
     h(
       "div",
       { class: `sec-composer${dragging ? " over" : ""}` },

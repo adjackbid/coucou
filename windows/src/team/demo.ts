@@ -8,7 +8,7 @@
 // agents' step titles and the orchestrator's sentences stay in English, as
 // the app writes them: the window words them (heardWords, said, toolWords).
 
-import { tr } from "../core/i18n";
+import { tr, trf } from "../core/i18n";
 import type { Line, PastRun, PricingChoices, ScreenPatch, Snapshot, TeamFile, TeamConfig, Usage, UsageReport, UsageRow } from "./types";
 
 const NOW = Date.now();
@@ -449,9 +449,27 @@ export function demoKeySpend(): import("./types").KeySpend {
 }
 
 /** Agent Center in a browser: a canned answer, after a moment, with a card when asked for a team. */
-export async function demoSecretary(text: string): Promise<import("./types").SecretaryReply> {
-  await new Promise((r) => setTimeout(r, 900));
+export async function demoSecretary(text: string, step?: (s: import("./types").SecretaryStep) => void): Promise<import("./types").SecretaryReply> {
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  await wait(500);
+  if (/組合|which|哪/i.test(text)) {
+    return {
+      text: tr("這個團隊可以用兩種組合,差在成本和品質。你要哪一種?", "This team can be put together two ways, trading cost against quality. Which do you want?"),
+      steps: [{ tool: "list_agents", label: tr("查看可用的代理", "Looked at the available agents") }],
+      proposals: [],
+      choices: { question: tr("你要哪一種?", "Which do you want?"), options: [tr("省錢組合:Leader 用 Gemini,程式用 Deepseek", "Budget: Gemini leads, Deepseek codes"), tr("品質組合:Leader 用規劃大師,程式用 Codex Sol", "Quality: Planning master leads, Codex Sol codes"), tr("先列出兩種組合的預估成本", "Show the estimated cost of both first")], multiple: false },
+    };
+  }
   if (/開|建立|新團隊|new team|set up|create/i.test(text)) {
+    // Looking Agent Pool over, as a real model would: the agents, then a few of their models.
+    step?.({ tool: "list_agents", label: tr("查看可用的代理", "Looking at the available agents") });
+    for (const agent of ["ta-reviewer", "ta-painter", "ta-joker", "ta-local-coder"]) {
+      await wait(650);
+      step?.({ tool: "agent_models", label: trf("查詢「{agent}」提供的模型", "Checking the models \"{agent}\" offers", { agent }), agent });
+    }
+    await wait(700);
+    step?.({ tool: "propose_team", label: tr("擬好新團隊「官網改版」", "Drafted the new team “Website redesign”") });
+    await wait(400);
     return {
       text: tr("已擬好新團隊,**尚未建立**。按卡片上的「建立並啟動」才會執行。", "I've prepared a new team, **not created yet**. Nothing happens until you click “Create and start” on the card."),
       steps: [{ tool: "list_agents", label: tr("查看可用的代理", "Looked at the available agents") }, { tool: "propose_team", label: tr("擬好新團隊「官網改版」", "Prepared the new team “Website redesign”") }],

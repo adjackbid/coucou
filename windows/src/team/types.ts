@@ -342,6 +342,8 @@ export interface KeySpend {
 export interface SecretaryStep {
   tool: string;
   label: string;
+  /** The agent it looks at (agent_models): lit in the picking animation. */
+  agent?: string;
 }
 
 // ── A team's knowledge base — mirror of team/knowledge.rs ─────────────────────
@@ -411,6 +413,15 @@ export interface SecretaryReply {
   text: string;
   steps: SecretaryStep[];
   proposals: SecretaryProposal[];
+  /** A question asked with options to click (secretary.rs Choices). */
+  choices?: SecretaryChoices;
+}
+
+/** Options to click; the one clicked is sent as the person's answer. */
+export interface SecretaryChoices {
+  question: string;
+  options: string[];
+  multiple: boolean;
 }
 
 // ── The constitution — mirror of constitution.rs ─────────────────────────────

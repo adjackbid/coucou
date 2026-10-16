@@ -144,6 +144,9 @@ struct Item {
 pub struct Step {
     pub tool: String,
     pub label: String,
+    /// The agent it looks at (agent_models), for the window's picking animation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -152,6 +155,37 @@ pub struct Reply {
     pub text: String,
     pub steps: Vec<Step>,
     pub proposals: Vec<Proposal>,
+    /// A question it asks with options to click (offer_choices).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub choices: Option<Choices>,
+}
+
+/// Options for the person to click; the one clicked is sent as their answer.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Choices {
+    pub question: String,
+    pub options: Vec<String>,
+    /// More than one may be picked.
+    pub multiple: bool,
+}
+
+/// What offer_choices was given, or why not: 2 to 6 short options.
+// i18n: model-facing
+fn choices_of(a: &Value) -> Result<Choices, String> {
+    let question = text(a, "question").unwrap_or_default();
+    let options: Vec<String> = a
+        .get("options")
+        .and_then(Value::as_array)
+        .map(|l| l.iter().filter_map(Value::as_str).map(|o| o.trim().to_string()).filter(|o| !o.is_empty()).collect())
+        .unwrap_or_default();
+    if options.len() < 2 || options.len() > 6 {
+        return Err("Give 2 to 6 options.".into());
+    }
+    if options.iter().any(|o| o.chars().count() > 80) {
+        return Err("Keep each option under 80 characters; put the detail in your answer.".into());
+    }
+    Ok(Choices { question, options, multiple: a.get("multiple").and_then(Value::as_bool).unwrap_or(false) })
 }
 
 /// What Agent Center can see and act on.
@@ -316,6 +350,7 @@ impl Secretary {
         let mut steps = Vec::new();
         let mut made = Vec::new();
         let mut nudged = false;
+        let mut offered: Option<Choices> = None;
 
         for _ in 0..MAX_ROUNDS {
             let reply = tools::complete(provider, &system, &turns, &tools).await?;
@@ -335,11 +370,12 @@ impl Secretary {
                 }
                 turns.push(Turn::Assistant { text: text.clone(), calls: vec![] });
                 self.keep(turns);
-                return Ok(Reply { text, steps, proposals: made });
+                return Ok(Reply { text, steps, proposals: made, choices: offered });
             }
             let mut results = Vec::new();
             for call in &reply.calls {
-                let step = Step { tool: call.name.clone(), label: label(call, office) };
+                let agent = (call.name == "agent_models").then(|| self::text(&call.arguments, "agent")).flatten();
+                let step = Step { tool: call.name.clone(), label: label(call, office), agent };
                 on_step(&step);
                 steps.push(step);
                 let out = match self.call(call, office).await {
@@ -349,6 +385,11 @@ impl Secretary {
                         let text = format!("Proposal {} is on the user's screen as a card. Nothing has happened yet: it happens only if they click it. Tell them in one or two lines what you prepared.", p.id);
                         made.push(p);
                         text
+                    }
+                    Ok(Called::Offered(c)) => {
+                        offered = Some(c);
+                        // i18n: model-facing
+                        "The options are on the user's screen as buttons under your answer; the one they click comes back as their next message. Ask the question in your answer in one line, without listing the options again.".to_string()
                     }
                     // i18n: model-facing
                     Err(err) => format!("ERROR: {err}"),
@@ -365,7 +406,7 @@ impl Secretary {
             "這件事需要查的東西比較多,我先停在這裡。可以再說得具體一點,或請我接著查。",
             "This needs more looking up than I can do in one go, so I'll stop here. Tell me more precisely what you need, or ask me to carry on."
         );
-        Ok(Reply { text, steps, proposals: made })
+        Ok(Reply { text, steps, proposals: made, choices: offered })
     }
 
     /// A card from earlier still waits for the person's click.
@@ -469,6 +510,7 @@ impl Secretary {
                 Ok(Called::Text(models.iter().map(|m| m.id.clone()).collect::<Vec<_>>().join("\n")))
             }
             "propose_team" => self.propose_team(a, office).map(Called::Proposed),
+            "offer_choices" => choices_of(a).map(Called::Offered),
             "propose_instruction" => self.propose_instruction(a, office).map(Called::Proposed),
             "propose_team_action" => self.propose_action(a, office).map(Called::Proposed),
             "propose_knowledge" => self.propose_knowledge(a, office).map(Called::Proposed),
@@ -710,6 +752,7 @@ impl Secretary {
 enum Called {
     Text(String),
     Proposed(Proposal),
+    Offered(Choices),
 }
 
 /// The card's lines about a knowledge base: each document and who may read
@@ -1443,6 +1486,7 @@ How you work:\n\
 - Look things up with your tools before you answer; never guess a team's state. Quote names, numbers and times as the tools give them.\n\
 - You cannot change anything yourself. To get something done (a new team, an instruction to a team, starting, pausing, resuming, stopping or archiving a team) you prepare it with a propose_* tool: it appears on the user's screen as a card, and it happens only if they click it. Never say something was done unless a [Agent Center] note says the user confirmed it. Never say a card or a button is ready unless a propose_* tool told you in this answer that it is on the user's screen: when the user wants a team, call propose_team; describing the team in words is not enough.\n\
 - Prefer one proposal that does what was asked. Ask a short question first only when something essential is missing, such as the work folder for a new team.\n\
+- When you ask the user to choose between options, call offer_choices with them so they can click one, instead of listing them as text.\n\
 - For a new team: pick agents and models from list_agents (agent_models lists what an agent offers); give the leader the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
 - A team has a knowledge base: documents (design notes, specs, pictures, any file) its members work from. When the user attaches files or mentions design documents, specs or reference material for a team, put them in `knowledge` (propose_team for a new team, propose_knowledge for one that exists): attached files by their id (u…), or full paths the user wrote — never a path you guessed. Each is for the leader only unless the user says the whole team should see it (then visibility \"shared\"). You only see the files' names, never what is in them.\n\
 - Answer in the language named on the last line of this prompt, short and concrete: a few lines or a short list. Point out anything waiting for the user (permission cards, questions) first.\n\
@@ -1509,6 +1553,16 @@ fn describe() -> Vec<Tool> {
         tool("list_agents", "The agents members can run as: their default models, what each is good for, its price per million tokens and what it spent in the last 30 days.", json!({}), &[]),
         tool("agent_models", "The models one agent offers (asks the agent's endpoint).", json!({ "agent": { "type": "string", "description": "The agent's id." } }), &["agent"]),
         tool(
+            "offer_choices",
+            "When you ask the user to choose between a few options, put them on screen as buttons: the one they click comes back as their next message. Use it for every multiple-choice question (which team, which agent, cheaper or stronger, yes or no…).",
+            json!({
+                "question": { "type": "string", "description": "The question, in one line." },
+                "options": { "type": "array", "items": { "type": "string" }, "description": "2 to 6 short options, each a complete answer the user could have typed." },
+                "multiple": { "type": "boolean", "description": "True when more than one may be picked." }
+            }),
+            &["question", "options"],
+        ),
+        tool(
             "propose_team",
             "Prepares a new team for the user to confirm with a click (it is created, and started if start is true, only then).",
             json!({
@@ -1574,6 +1628,7 @@ fn label(call: &Call, office: &Office) -> String {
         "list_agents" => tr!("查看可用的代理", "Looking at the available agents"),
         "agent_models" => tr!(format!("查詢「{}」提供的模型", text(a, "agent").unwrap_or_default()), format!("Checking the models \"{}\" offers", text(a, "agent").unwrap_or_default())),
         "propose_team" => tr!(format!("擬好新團隊「{}」", text(a, "name").unwrap_or_default()), format!("Drafted the new team \"{}\"", text(a, "name").unwrap_or_default())),
+        "offer_choices" => tr!("列出選項", "Offering choices"),
         "propose_instruction" => tr!(format!("擬好給「{}」的指令", team()), format!("Drafted an instruction for \"{}\"", team())),
         "propose_team_action" => tr!(format!("擬好「{}」的操作", team()), format!("Drafted an action for \"{}\"", team())),
         "propose_knowledge" => tr!(format!("擬好「{}」的知識庫文件", team()), format!("Drafted documents for the knowledge base of \"{}\"", team())),
@@ -1584,6 +1639,14 @@ fn label(call: &Call, office: &Office) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn choices_are_two_to_six_short_options() {
+        let ok = choices_of(&json!({ "question": "哪一種?", "options": ["便宜的組合", " 最強的組合 ", ""] })).unwrap();
+        assert_eq!((ok.options.len(), ok.options[1].as_str(), ok.multiple), (2, "最強的組合", false));
+        assert!(choices_of(&json!({ "question": "?", "options": ["only one"] })).is_err());
+        assert!(choices_of(&json!({ "question": "?", "options": ["a", "b", "c", "d", "e", "f", "g"] })).is_err());
+    }
 
     #[test]
     fn an_answer_that_speaks_of_a_card_is_caught() {
@@ -1645,7 +1708,7 @@ mod tests {
     #[test]
     fn the_tools_are_described_for_every_wire() {
         let tools = describe();
-        assert_eq!(tools.len(), 11);
+        assert_eq!(tools.len(), 12);
         for t in &tools {
             assert_eq!(t.parameters["type"], "object");
             assert!(t.description.len() > 20);
