@@ -1,6 +1,6 @@
-// 秘書: the person calls on Coucou's secretary when they need it — to hear how
+// Agent Center: the person calls on Coucou's secretary when they need it — to hear how
 // the teams are doing, what waits for them, what it cost, or to have a team
-// set up or told something. The secretary (secretary.rs) reads Coucou's
+// set up or told something. Agent Center (secretary.rs) reads Coucou's
 // records freely; what it prepares comes back as cards, and only a click on
 // a card's button makes it happen.
 //
@@ -67,7 +67,7 @@ async function attachAll(host: SecretaryHost, add: (() => Promise<SecretaryUploa
   host.render();
 }
 
-/** Files dropped on the window while the secretary's page is open, or picked. */
+/** Files dropped on the window while Agent Center's page is open, or picked. */
 export function secretaryAttachPaths(paths: string[], host: SecretaryHost) {
   return attachAll(
     host,
@@ -75,7 +75,7 @@ export function secretaryAttachPaths(paths: string[], host: SecretaryHost) {
   );
 }
 
-/** Files are over the window while the secretary's page is open (or no longer). */
+/** Files are over the window while Agent Center's page is open (or no longer). */
 let dragging = false;
 export function setSecretaryDragging(on: boolean, host: SecretaryHost) {
   if (dragging === on) return;
@@ -83,7 +83,7 @@ export function setSecretaryDragging(on: boolean, host: SecretaryHost) {
   host.render();
 }
 
-/** Files dropped on the secretary's page, or pasted: they go with the next request. */
+/** Files dropped on Agent Center's page, or pasted: they go with the next request. */
 export function secretaryAttachFiles(files: File[], host: SecretaryHost) {
   return attachFiles(files, host);
 }
@@ -100,7 +100,7 @@ function attachFiles(files: File[], host: SecretaryHost) {
 
 function pickFiles(host: SecretaryHost) {
   if (!IS_TAURI) return void secretaryAttachPaths([tr("D:\\Docs\\品牌指南.md", "D:\\Docs\\brand-guide.md"), tr("D:\\Docs\\首頁草圖.png", "D:\\Docs\\home-sketch.png")], host);
-  Bridge.pickFiles(tr("附加檔案給秘書", "Attach files for the secretary"))
+  Bridge.pickFiles(tr("附加檔案給 Agent Center", "Attach files for Agent Center"))
     .then((paths) => (paths.length ? secretaryAttachPaths(paths, host) : undefined))
     .catch((err) => {
       uploadProblems = [String(err instanceof Error ? err.message : err)];
@@ -157,19 +157,19 @@ let stick = false;
 let providers: [string, string, string][] | null = null;
 let provider = stored("coucou.secretary.provider") ?? "";
 /**
- * What the person calls the secretary; empty until they name it, and then
- * shown as 秘書 / Secretary. Earlier versions saved that default itself, in
- * Chinese ("\u79d8\u66f8" below): it is still the default. The name goes to
- * Rust as it is (secretary.rs treats "" and 秘書 alike).
+ * What the person calls Agent Center; empty until they name it, and then
+ * shown as Agent Center. Earlier versions saved their default (\u79d8\u66f8) itself
+ * ("\u79d8\u66f8" below): it still means no name. The name goes to Rust as it
+ * is (secretary.rs treats "", \u79d8\u66f8 and Agent Center alike).
  */
 let name = stored("coucou.secretary.name")?.trim() ?? "";
 const OLD_DEFAULT = "\u79d8\u66f8";
 
-/** Whether the person gave the secretary a name of their own. */
+/** Whether the person gave Agent Center a name of their own. */
 const named = () => !!name && name !== OLD_DEFAULT;
 
 export function secretaryName(): string {
-  return named() ? name : tr("秘書", "Secretary");
+  return named() ? name : "Agent Center";
 }
 
 export function setSecretaryName(v: string) {
@@ -197,7 +197,7 @@ function store(key: string, value: string) {
   }
 }
 
-/** A step the secretary took, as it happens (`secretary-step`). */
+/** A step Agent Center took, as it happens (`secretary-step`). */
 export function onStep(step: SecretaryStep, host: SecretaryHost) {
   if (!waiting) return;
   live.push(step);
@@ -213,11 +213,11 @@ async function ensureProviders(host: SecretaryHost) {
 }
 
 /**
- * Asks the secretary from another page (成本分析): the exchange joins the
+ * Asks Agent Center from another page (成本分析): the exchange joins the
  * conversation, and the answer — or why there is none — comes back as words.
  */
 export async function consult(text: string, render: () => void): Promise<string> {
-  if (waiting) return named() ? trf("{name}還在處理上一件事,稍等一下再試。", "{name} is still on the last request: try again in a moment.", { name }) : tr("秘書還在處理上一件事,稍等一下再試。", "The secretary is still on the last request: try again in a moment.");
+  if (waiting) return named() ? trf("{name}還在處理上一件事,稍等一下再試。", "{name} is still on the last request: try again in a moment.", { name }) : tr("Agent Center 還在處理上一件事,稍等一下再試。", "Agent Center is still on the last request: try again in a moment.");
   if (!providers) await ensureProviders({ render, reload: async () => {}, openTeam: () => {} });
   await ask({ render, reload: async () => {}, openTeam: () => {} }, text, false);
   const last = entries[entries.length - 1];
@@ -296,7 +296,7 @@ async function decline(host: SecretaryHost, p: SecretaryProposal, why = "") {
   host.render();
 }
 
-/** The secretary's words: line breaks, **bold**, `code` and "- " lists, nothing else. */
+/** Agent Center's words: line breaks, **bold**, `code` and "- " lists, nothing else. */
 function words(text: string): HTMLElement {
   const box = h("div", { class: "sec-words" });
   let list: HTMLElement | null = null;
@@ -384,12 +384,12 @@ function card(host: SecretaryHost, p: SecretaryProposal): HTMLElement {
 /** `?view=secretary&ask=…` in a browser asks once, to look at a conversation. */
 let asked = false;
 
-/** The page's title: the secretary's name, changed by clicking it. */
+/** The page's title: Agent Center's name, changed by clicking it. */
 export function secretaryTitle(host: SecretaryHost): HTMLElement {
   return editableText("secretary", secretaryName(), {
     tag: "b",
     className: "sec-title",
-    label: tr("秘書的名字", "The secretary's name"),
+    label: tr("Agent Center 的名字", "Agent Center's name"),
     // Left empty, it goes back to the default name (in the language of the moment).
     fallback: "",
     maxLength: 20,
@@ -415,7 +415,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
       h(
         "div",
         { class: "sec-hello" },
-        h("h2", { text: named() ? trf("我是{name},需要什麼跟我說", "I'm {name}. Tell me what you need", { name }) : tr("我是秘書,需要什麼跟我說", "I'm your secretary. Tell me what you need") }),
+        h("h2", { text: named() ? trf("我是{name},需要什麼跟我說", "I'm {name}. Tell me what you need", { name }) : tr("我是 Agent Center,需要什麼跟我說", "I'm Agent Center. Tell me what you need") }),
 
         h("p", { class: "dim", text: tr("我會查 Agent Center 的紀錄回答你:各團隊進度、誰卡住、誰在等你、花了多少錢。也可以請我開新團隊、給團隊下指令、暫停或封存團隊——我先擬好,你按確認才會執行。", "I answer from Agent Center's records: how each team is getting on, who is stuck, who is waiting for you, what it cost. You can also ask me to set up a team, give a team an instruction, or pause or archive one: I prepare it, and it happens only when you confirm.") }),
         h("div", { class: "sec-suggest" }, ...suggestions().map((s) => h("button", { class: "chip pick", type: "button", onClick: () => (s.endsWith("…") ? ((draft = s.replace("…", ":")), host.render()) : void ask(host, s)) }, s))),
@@ -516,7 +516,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
       void ask(host, input.value);
     }
   });
-  const choices = (providers ?? []).map(([id, name, model]) => ({ value: id, label: `${name} · ${model}`, hint: tr("秘書用這個聊天模型思考", "The secretary thinks with this chat model") }));
+  const choices = (providers ?? []).map(([id, name, model]) => ({ value: id, label: `${name} · ${model}`, hint: tr("Agent Center 用這個聊天模型思考", "Agent Center thinks with this chat model") }));
   return h(
     "div",
     { class: "secretary" },
@@ -544,7 +544,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
         "div",
         { class: "sec-composer-row" },
         choices.length
-          ? dropdown({ value: provider, choices, className: "sec-model", title: tr("秘書用哪個聊天模型（設定 → 聊天模型）", "Which chat model the secretary uses (Settings → Chat models)"), onChange: (v) => ((provider = v), store("coucou.secretary.provider", v), host.render()) })
+          ? dropdown({ value: provider, choices, className: "sec-model", title: tr("Agent Center 用哪個聊天模型（設定 → 聊天模型）", "Which chat model Agent Center uses (Settings → Chat models)"), onChange: (v) => ((provider = v), store("coucou.secretary.provider", v), host.render()) })
           : providers
             ? h("button", { class: "link hint", type: "button", onClick: () => void Bridge.openSettingsPage("chat") }, tr("還沒有聊天模型：到「設定 → 聊天模型」新增一個", "No chat model yet: add one in Settings → Chat models"))
             : h("span", { class: "hint", text: "" }),

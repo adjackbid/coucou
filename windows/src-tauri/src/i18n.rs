@@ -5,7 +5,7 @@
 // `tr!("資料夾不存在", "The folder doesn't exist")` — and picked when it is
 // made: a message already sent, or stored in a log, stays as it was.
 //
-// Text meant for a model (the secretary's system prompt, a member's brief,
+// Text meant for a model (Agent Center's system prompt, a member's brief,
 // tool descriptions) is not translated; `reply_language` adds the one line
 // that says which language to answer the person in.
 

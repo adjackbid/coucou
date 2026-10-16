@@ -260,7 +260,7 @@ pub fn team_configs_dir() -> PathBuf {
 }
 
 /// %LOCALAPPDATA%\Coucou\secretary-uploads — files the person attached in
-/// the secretary's conversation, until a confirmed proposal copies them into
+/// Agent Center's conversation, until a confirmed proposal copies them into
 /// a team's knowledge base. Emptied when Coucou starts and when the
 /// conversation is cleared: the conversation itself is not kept.
 pub fn secretary_uploads_dir() -> PathBuf {

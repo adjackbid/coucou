@@ -438,7 +438,7 @@ class AppState {
   searchResult: SearchResult | null = null;
   chatHistory: ChatMessage[] = [];
   pendingApproval: ApprovalInfo | null = null;
-  /** The approval card shows the secretary's explanation (「Ask」): it grows for it. */
+  /** The approval card shows Agent Center's explanation (「Ask」): it grows for it. */
   approvalExplaining = false;
 
   integrations: Record<string, IntegrationInfo> = {};

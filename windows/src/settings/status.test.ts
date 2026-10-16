@@ -87,7 +87,7 @@ describe("todoList", () => {
     expect(t.map((x) => x.kind)).toEqual(["chat-incomplete"]);
   });
 
-  it("with an agent in the chat bar, still wants one provider for the secretary", () => {
+  it("with an agent in the chat bar, still wants one provider for Agent Center", () => {
     const s = { activeProvider: "agent:copilot", agents: [{ ...DEFAULT_AGENT }] };
     expect(todoList(input({ present: {} }, s)).map((x) => x.kind)).toEqual(["chat-no-key"]);
     expect(todoList(input({}, s))).toEqual([]);

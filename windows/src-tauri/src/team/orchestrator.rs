@@ -2337,6 +2337,7 @@ mod tests {
                     mcp: vec![crate::team_agents::Mcp { name: "docs".into(), url: "https://example.test/mcp".into(), ..Default::default() }],
                     skills: vec![],
                     description: String::new(),
+                    category: String::new(),
                 }],
             };
             let profiles = doc.runnable(&[AgentProfile::copilot()]);

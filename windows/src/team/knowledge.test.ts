@@ -69,7 +69,7 @@ describe("where a dropped file goes", () => {
   });
 });
 
-describe("files attached to a question for the secretary", () => {
+describe("files attached to a question for Agent Center", () => {
   it("are left over when no card of the answer uses them", async () => {
     const { unusedUploads } = await import("./secretary");
     const file = (id: string) => ({ id, name: `${id}.md`, kind: "text" as const, bytes: 1, keyLike: null, force: false });

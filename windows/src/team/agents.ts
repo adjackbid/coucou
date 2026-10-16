@@ -1,11 +1,11 @@
 // Agent Pool: agents of the person's own making for their teams. Each is built
 // on a native agent of Settings → Agents — its command (or an n8n node's
 // webhook), environment and key — and adds a name, a model, a system prompt,
-// MCP servers, skills, and a description the secretary reads to pick
+// MCP servers, skills, and a description Agent Center reads to pick
 // members. What a base's protocol cannot take is said here rather than
 // dropped quietly (team_agents.rs).
 //
-// New teams — the secretary's and the ones made by hand — take their agents
+// New teams — Agent Center's and the ones made by hand — take their agents
 // from here only. The page lists them as Cloud Agents and Local Agents, as
 // their bases are (views/agent-kind.ts).
 
@@ -41,6 +41,38 @@ let draftWhere: AgentLocation | null = null;
 let problem = "";
 /** The agent whose 刪除 has been pressed once. */
 let deleting: string | null = null;
+/** The category the page is narrowed to: null for all of them, "" for the agents with none. */
+let only: string | null = null;
+/** Cards under their categories (the default), or in the order they were added; kept per person. */
+let grouped = readGrouped();
+
+function readGrouped(): boolean {
+  try {
+    return localStorage.getItem("coucou.agentPool.grouped") !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function setGrouped(on: boolean, render: () => void) {
+  grouped = on;
+  try {
+    localStorage.setItem("coucou.agentPool.grouped", on ? "1" : "0");
+  } catch {
+    // Not kept: the page still works, grouped again next time.
+  }
+  render();
+}
+
+/** The categories offered before any is typed; the person may write any other. */
+const presetCategories = () => [tr("程式開發", "Coding"), tr("文案製作", "Copywriting"), tr("圖片影音", "Images & video"), tr("研究分析", "Research"), tr("規劃審查", "Planning & review")];
+
+/** Every category in use: the offered ones first, in their order, then the rest by name. */
+function categoriesInUse(): string[] {
+  const used = new Set(teamAgents().map((a) => a.category.trim()).filter(Boolean));
+  const offered = presetCategories().filter((c) => used.has(c));
+  return [...offered, ...[...used].filter((c) => !offered.includes(c)).sort((a, b) => a.localeCompare(b))];
+}
 
 /** The browser preview's agents, in the language of the moment they are first read. */
 const demoAgents = (): TeamAgents => ({
@@ -54,6 +86,7 @@ const demoAgents = (): TeamAgents => ({
       mcp: [{ name: "docs", command: "", args: [], url: "https://docs.example.com/mcp" }],
       skills: ["code-review"],
       description: tr("審查程式碼、找出風險與缺少的測試;適合當 Leader 或最後把關。", "Reviews code and finds risks and missing tests; a good Leader or final check."),
+      category: tr("程式開發", "Coding"),
     },
     {
       id: "ta-designer",
@@ -64,6 +97,7 @@ const demoAgents = (): TeamAgents => ({
       mcp: [],
       skills: [],
       description: tr("畫介面、做圖片與排版。", "Draws interfaces, makes images and lays out pages."),
+      category: tr("圖片影音", "Images & video"),
     },
     {
       id: "ta-joker",
@@ -74,6 +108,7 @@ const demoAgents = (): TeamAgents => ({
       mcp: [],
       skills: [],
       description: tr("專門用來講笑話的,不適合規劃,但要省錢寫 Code 時可以用", "Made for telling jokes. Not for planning, but fine for writing code on a budget"),
+      category: "",
     },
     {
       id: "ta-painter",
@@ -84,6 +119,7 @@ const demoAgents = (): TeamAgents => ({
       mcp: [],
       skills: [],
       description: tr("適合拿來畫圖、生成 UI SVG,也可以寫 Code,但品質高的代價是很貴", "Good for drawing and making UI SVGs; it writes code too, but the quality comes at a high price"),
+      category: tr("圖片影音", "Images & video"),
     },
     {
       id: "ta-local-coder",
@@ -94,6 +130,7 @@ const demoAgents = (): TeamAgents => ({
       mcp: [],
       skills: [],
       description: tr("在本機模型上寫程式;資料不出公司,適合處理機密的程式碼。", "Writes code on a local model; nothing leaves the company, so it suits confidential code."),
+      category: tr("程式開發", "Coding"),
     },
     {
       id: "ta-weekly",
@@ -104,6 +141,7 @@ const demoAgents = (): TeamAgents => ({
       mcp: [],
       skills: [],
       description: tr("n8n 工作流程:彙整本週的工單與提交,產出一份週報。", "An n8n workflow: gathers the week's tickets and commits into a weekly report."),
+      category: tr("文案製作", "Copywriting"),
     },
   ],
 });
@@ -122,7 +160,8 @@ export async function loadTeamAgents(render: () => void, natives: AgentProfile[]
   try {
     if (IS_TAURI) {
       const view = await Bridge.teamAgentsLoad();
-      doc = { agents: view.doc.agents };
+      // A file from before categories has none.
+      doc = { agents: view.doc.agents.map((a) => ({ ...a, category: a.category ?? "" })) };
       supports = view.supports;
     } else {
       doc = doc ?? demoAgents();
@@ -278,6 +317,18 @@ function mcpRow(host: AgentsHost, a: TeamAgent, m: TeamAgentMcp, at: number, off
 /** The models each base agent offers, asked once per window: base id → list, why not, or null while asked. */
 const modelLists = new Map<string, ModelChoice[] | string | null>();
 
+/** The category, typed or picked from the ones in use and the offered ones. */
+function categoryField(a: TeamAgent): HTMLElement {
+  const input = field("ta-category", a.category, (v) => (a.category = v), { placeholder: tr("例如:程式開發、文案製作、圖片影音", "e.g. Coding, Copywriting, Images & video"), autocomplete: "off", class: "field ta-model-input" }) as HTMLInputElement;
+  suggest(input, () => [...new Set([...categoriesInUse(), ...presetCategories()])].map((c) => ({ value: c, label: c })));
+  return h(
+    "div",
+    { class: "ta-model" },
+    input,
+    h("button", { type: "button", class: "ta-model-open", tabindex: "-1", "aria-label": tr("列出分類", "List categories"), title: tr("列出分類", "List categories"), html: CHEVRON, onMousedown: (e: Event) => e.preventDefault(), onClick: () => (document.activeElement === input ? input.dispatchEvent(new Event("refresh-suggestions")) : input.focus()) }),
+  );
+}
+
 /**
  * The model, typed or picked from what the base agent offers. The list is
  * asked for the first time the field is used: a handshake with the base, with
@@ -388,6 +439,8 @@ function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
       { class: "ta-grid" },
       h("label", { text: tr("名稱", "Name") }),
       field("ta-name", a.name, (v) => (a.name = v), { placeholder: tr("例如:嚴格審查員", "e.g. Strict reviewer") }),
+      h("label", { text: tr("分類", "Category") }),
+      categoryField(a),
       h("label", { text: tr("基底 Agent", "Base agent") }),
       h(
         "div",
@@ -397,8 +450,8 @@ function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
       ),
       h("label", { text: tr("模型", "Model") }),
       modelField(a, base),
-      h("label", { text: tr("說明(給秘書看)", "Description (for the secretary)") }),
-      field("ta-desc", a.description, (v) => (a.description = v), { rows: "2", placeholder: tr("適合做什麼、擅長什麼。秘書開團隊時照這段話挑人。", "What it is good at. The secretary picks members by this when it sets up a team.") }, "textarea"),
+      h("label", { text: tr("說明(給 Agent Center 看)", "Description (for Agent Center)") }),
+      field("ta-desc", a.description, (v) => (a.description = v), { rows: "2", placeholder: tr("適合做什麼、擅長什麼。Agent Center 開團隊時照這段話挑人。", "What it is good at. Agent Center picks members by this when it sets up a team.") }, "textarea"),
       h("label", {}, "System prompt ", badge(can?.systemPrompt, node)), // i18n-ok: the same in both
       field("ta-prompt", a.systemPrompt, (v) => (a.systemPrompt = v), { rows: "6", placeholder: node ? tr("每次呼叫都放在 systemPrompt 欄位送給工作流程", "Sent to the workflow as systemPrompt with every call") : tr("這個 Agent 一直要遵守的指示、口吻、做事方式", "Instructions, tone and ways of working this agent always keeps to") }, "textarea"),
       h("label", {}, "MCP server ", badge(can?.mcp, node)), // i18n-ok: the same in both
@@ -441,7 +494,7 @@ function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
             }
             const all = teamAgents().filter((x) => x.id !== a.id);
             const at = teamAgents().findIndex((x) => x.id === a.id);
-            const clean: TeamAgent = { ...a, name: a.name.trim(), mcp: a.mcp.filter((m) => m.name || m.command || m.url) };
+            const clean: TeamAgent = { ...a, name: a.name.trim(), category: a.category.trim(), mcp: a.mcp.filter((m) => m.name || m.command || m.url) };
             if (at < 0) all.push(clean);
             else all.splice(at, 0, clean);
             void persist({ agents: all }, host.render).then((ok) => {
@@ -502,7 +555,7 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
       "header",
       { class: "ta-card-head" },
       h("i", { class: "blob", style: `--c:${face};--s:34px`, "aria-hidden": "true" }),
-      h("div", { class: "ta-card-title" }, h("b", { title: a.name || a.id }, base ? kindIcon(locationOf(base), 15) : null, h("span", { text: a.name || a.id })), h("small", { text: base ? kind.label : tr("基底不存在", "Base missing") })),
+      h("div", { class: "ta-card-title" }, h("b", { title: a.name || a.id }, base ? kindIcon(locationOf(base), 15) : null, h("span", { text: a.name || a.id })), h("small", { text: `${base ? kind.label : tr("基底不存在", "Base missing")}${!grouped && a.category.trim() ? ` · ${a.category.trim()}` : ""}` })),
       h(
         "div",
         { class: "ta-card-actions" },
@@ -535,7 +588,7 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
       h("span", { class: `ta-kind ${kind.tone}`, title: base ? trf("基底 Agent:{name}({kind})", "Base agent: {name} ({kind})", { name: base.name, kind: kind.label }) : trf("基底「{base}」不在 設定 → Agents 裡", "The base “{base}” is not in Settings → Agents", { base: a.base }) }, base?.protocol === "n8n" ? kindIcon("n8n", 13) : null, h("span", { text: base ? base.name : trf("{base}(不存在)", "{base} (missing)", { base: a.base }) })),
       h("span", { class: "ta-model-name", title: a.model ? trf("模型:{model}", "Model: {model}", { model: a.model }) : tr("沒有指定,用基底的模型", "None set: the base's model") }, model ? `${model}${a.model ? "" : tr("(基底)", " (base)")}` : base?.protocol === "n8n" ? tr("由工作流程決定", "Up to the workflow") : tr("基底預設模型", "Base's default model")),
     ),
-    h("p", { class: `ta-desc${a.description ? "" : " empty"}`, text: a.description || tr("還沒有說明:秘書不知道它適合做什麼", "No description yet: the secretary doesn't know what it is good for") }),
+    h("p", { class: `ta-desc${a.description ? "" : " empty"}`, text: a.description || tr("還沒有說明:Agent Center 不知道它適合做什麼", "No description yet: Agent Center doesn't know what it is good for") }),
     h(
       "footer",
       { class: "ta-card-foot" },
@@ -560,7 +613,7 @@ function addTile(host: AgentsHost, where: AgentLocation): HTMLElement {
       disabled: !bases.length,
       title: bases.length ? markHint(where) : where === "local" ? tr("先到 設定 → Agents 新增 Local Agent(本機模型或 n8n 節點)", "First add a Local Agent (a local model or an n8n node) in Settings → Agents") : tr("先到 設定 → Agents 新增 Cloud Agent", "First add a Cloud Agent in Settings → Agents"),
       onClick: () => {
-        draft = { id: `ta-${Date.now().toString(36)}`, name: "", base: bases[0]?.id ?? "", model: "", systemPrompt: "", mcp: [], skills: [], description: "" };
+        draft = { id: `ta-${Date.now().toString(36)}`, name: "", base: bases[0]?.id ?? "", model: "", systemPrompt: "", mcp: [], skills: [], description: "", category: only ?? "" };
         draftIsNew = true;
         draftWhere = where;
         problem = "";
@@ -581,7 +634,12 @@ function section(host: AgentsHost, where: AgentLocation): HTMLElement {
     const base = natives.find((n) => n.id === a.base);
     return base ? locationOf(base) : "cloud";
   };
-  const mine = teamAgents().map((a, i) => ({ a, i })).filter(({ a }) => whereOf(a) === where);
+  const mine = teamAgents()
+    .map((a, i) => ({ a, i }))
+    .filter(({ a }) => whereOf(a) === where && (only === null || a.category.trim() === only));
+  // Under each category in use, the ones with none last; the tile for one more after them all.
+  const cats = categoriesInUse();
+  const groups = grouped && cats.length ? [...cats, ""].map((c) => ({ c, list: mine.filter(({ a }) => a.category.trim() === c) })).filter((g) => g.list.length) : [];
   const noBase = !natives.some((n) => locationOf(n) === where);
   return h(
     "section",
@@ -595,7 +653,52 @@ function section(host: AgentsHost, where: AgentLocation): HTMLElement {
     noBase
       ? h("p", { class: "hint" }, where === "local" ? tr("設定 → Agents 裡還沒有 Local Agent。先到 ", "Settings → Agents has no Local Agent yet. Add a local model or an n8n node in ") : tr("設定 → Agents 裡還沒有 Cloud Agent。先到 ", "Settings → Agents has no Cloud Agent yet. Add one in "), h("button", { class: "link", type: "button", onClick: () => host.openSettings() }, tr("設定 → Agents", "Settings → Agents")), where === "local" ? tr(" 新增本機模型或 n8n 節點。", " first.") : tr(" 新增一個。", " first."))
       : null,
-    h("div", { class: "ta-grid-list" }, ...mine.map(({ a, i }) => card(host, a, i)), addTile(host, where)),
+    ...(groups.length
+      ? [
+          ...groups.map((g) =>
+            h(
+              "div",
+              { class: "ta-group" },
+              h("h3", { class: "ta-group-title" }, h("span", { text: g.c || tr("未分類", "Uncategorized") }), h("span", { class: "count", text: String(g.list.length) })),
+              h("div", { class: "ta-grid-list" }, ...g.list.map(({ a, i }) => card(host, a, i))),
+            ),
+          ),
+          h("div", { class: "ta-grid-list" }, addTile(host, where)),
+        ]
+      : [h("div", { class: "ta-grid-list" }, ...mine.map(({ a, i }) => card(host, a, i)), addTile(host, where))]),
+  );
+}
+
+/** Above the sections: a chip per category to narrow the page to it, and how the cards are laid out. */
+function toolbar(host: AgentsHost): HTMLElement | null {
+  const agents = teamAgents();
+  const cats = categoriesInUse();
+  const none = agents.filter((a) => !a.category.trim()).length;
+  if (only !== null && (only ? !cats.includes(only) : !none)) only = null;
+  if (!cats.length) return null;
+  const chip = (value: string | null, label: string, n: number) =>
+    h(
+      "button",
+      { type: "button", class: `ta-filter${only === value ? " on" : ""}`, "aria-pressed": String(only === value), onClick: () => { only = value; host.render(); } },
+      h("span", { text: label }),
+      h("span", { class: "count", text: String(n) }),
+    );
+  return h(
+    "div",
+    { class: "ta-bar" },
+    h(
+      "div",
+      { class: "ta-filters", role: "group", "aria-label": tr("依分類篩選", "Filter by category") },
+      chip(null, tr("全部", "All"), agents.length),
+      ...cats.map((c) => chip(c, c, agents.filter((a) => a.category.trim() === c).length)),
+      none ? chip("", tr("未分類", "Uncategorized"), none) : null,
+    ),
+    h(
+      "div",
+      { class: "segmented small ta-order", role: "group", "aria-label": tr("排列方式", "Layout") }, // i18n-ok: CSS classes
+      h("button", { type: "button", class: grouped ? "on" : "", onClick: () => setGrouped(true, host.render) }, tr("依分類", "By category")),
+      h("button", { type: "button", class: grouped ? "" : "on", onClick: () => setGrouped(false, host.render) }, tr("依加入順序", "In order added")),
+    ),
   );
 }
 
@@ -613,6 +716,7 @@ export function agentsPage(host: AgentsHost): HTMLElement {
           !draft && problem ? h("p", { class: "problem", text: problem }) : null,
         )
       : null,
+    toolbar(host),
     draft ? editor(host, draft) : null,
     section(host, "cloud"),
     section(host, "local"),

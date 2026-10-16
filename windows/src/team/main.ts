@@ -72,7 +72,7 @@ let selected: string | null = null;
 let tab: "setup" | "links" | "monitor" | "log" = "setup";
 /** 檢查代理 results, while the setup tab shows them. */
 let doctor: import("../core/state").AgentCheck[] | "running" | string | null = null;
-/** The little gear beside 秘書 or 公司總覽: which panel is open, and where. */
+/** The little gear beside Agent Center or 公司總覽: which panel is open, and where. */
 let sidePop: { which: "secretary" | "company"; top: number } | null = null;
 /** The monitor as a board, or as the team's office. */
 let monitorMode: "board" | "office" = "board";
@@ -504,30 +504,30 @@ function sidebar(): HTMLElement {
     ? null
     : h(
         "div",
-        { class: "side-pop", role: "dialog", "aria-label": sidePop.which === "secretary" ? tr("秘書設定", "Secretary settings") : tr("公司設定", "Company settings"), style: `top:${sidePop.top}px` },
+        { class: "side-pop", role: "dialog", "aria-label": sidePop.which === "secretary" ? tr("Agent Center 設定", "Agent Center settings") : tr("公司設定", "Company settings"), style: `top:${sidePop.top}px` },
         h("div", { class: "side-pop-head" },
-          h("b", { text: sidePop.which === "secretary" ? tr("秘書設定", "Secretary settings") : tr("公司設定", "Company settings") }),
+          h("b", { text: sidePop.which === "secretary" ? tr("Agent Center 設定", "Agent Center settings") : tr("公司設定", "Company settings") }),
           h("button", { class: "side-pop-close", type: "button", "aria-label": tr("關閉", "Close"), onClick: () => { sidePop = null; render(); } }, "✕")),
         sidePop.which === "secretary"
           ? h("div", { class: "side-pop-body" },
-              h("label", { text: tr("秘書名稱", "Secretary's name") }),
+              h("label", { text: tr("顯示名稱", "Display name") }),
               h("input", {
-                value: secretaryName(), placeholder: tr("秘書", "Secretary"),
+                value: secretaryName(), placeholder: "Agent Center",
                 onChange: (e: Event) => { setSecretaryName((e.target as HTMLInputElement).value); render(); },
               }),
               h("p", { class: "hint", text: tr("想叫它什麼都可以;改完馬上生效。", "Call it anything you like; the change applies right away.") }),
               h("label", { text: tr("開團隊使用的 Agent", "Agents for new teams") }),
               h("p", { class: "hint" },
-                tr("秘書開團隊、你新增團隊成員時,只從 ", "When the secretary starts a team or you add a member, agents come only from the team agents in "),
+                tr("Agent Center 開團隊、你新增團隊成員時,只從 ", "When Agent Center starts a team or you add a member, agents come only from the team agents in "),
                 h("button", { class: "link", type: "button", onClick: () => { sidePop = null; place = "agents"; render(); } }, "Agent Pool"),
-                tr(" 裡的團隊 Agent(Cloud Agent 與 Local Agent)挑,秘書會照每個 Agent 的說明選人。以前設定好、用原生 Agent 的團隊照樣能啟動。", " (Cloud Agents and Local Agents), and the secretary picks each one by its description. Teams set up earlier with native agents still start.")))
+                tr(" 裡的團隊 Agent(Cloud Agent 與 Local Agent)挑,Agent Center 會照每個 Agent 的說明選人。以前設定好、用原生 Agent 的團隊照樣能啟動。", " (Cloud Agents and Local Agents), and Agent Center picks each one by its description. Teams set up earlier with native agents still start.")))
           : h("div", { class: "side-pop-body" },
               h("label", { text: tr("公司名稱", "Company name") }),
               h("input", {
                 value: companyName(), placeholder: tr("我的公司", "My company"),
                 onChange: (e: Event) => { setCompanyName((e.target as HTMLInputElement).value); render(); },
               }),
-              // 中二模式's own knobs, only while 設定 → 團隊與秘書 offers it at all.
+              // 中二模式's own knobs, only while 設定 → 團隊與 Agent Center offers it at all.
               ...(office.battleAllowed ? [
               h("label", { text: tr("戰鬥動畫流暢度(戰鬥模式)", "Animation frame rate (Battle mode)") }),
               h("div", { class: "segmented" },
@@ -588,7 +588,7 @@ function sidebar(): HTMLElement {
       },
       h("span", { class: "team-item-name", text: secretaryName() }),
       h("span", { class: "team-item-state", text: tr("需要時叫我:查現況、開團隊", "Call me when you need me: check status, start teams") }),
-      gear("secretary", tr("秘書設定", "Secretary settings")),
+      gear("secretary", tr("Agent Center 設定", "Agent Center settings")),
     ),
     h(
       "button",
@@ -955,7 +955,7 @@ function setup(file: TeamFile): HTMLElement {
         { n: LARGE_FROM },
       ),
     }),
-    // The battlefield is only a choice while 設定 → 團隊與秘書 offers 中二模式 at all.
+    // The battlefield is only a choice while 設定 → 團隊與 Agent Center offers 中二模式 at all.
     ...(office.battleAllowed ? [
     h("label", { text: tr("戰鬥模式戰場", "Battle mode arena") }),
     h(
@@ -1794,7 +1794,7 @@ function main(): HTMLElement {
   );
 }
 
-/** The secretary's page: it may add a team, and point at one. */
+/** Agent Center's page: it may add a team, and point at one. */
 const secretaryHost: SecretaryHost = {
   render: () => render(),
   reload: () => load(),
@@ -1965,7 +1965,7 @@ async function load() {
     const boot = await Bridge.boot();
     agents = boot?.settings.agents ?? [];
     setLang(boot?.lang);
-    // 中二模式 is off unless 設定 → 團隊與秘書 turned it on; a raid saved as
+    // 中二模式 is off unless 設定 → 團隊與 Agent Center turned it on; a raid saved as
     // the last view then opens as the office (the preference itself is kept).
     office.battleAllowed = !!boot?.settings.battleMode;
     if (!office.battleAllowed && office.mode === "battle") office.mode = "office";
@@ -2049,7 +2049,7 @@ let firstLoad = true;
 
 /**
  * Files dragged onto the window: into the knowledge base of the team being
- * set up, to the secretary, or with the next instruction to the team on
+ * set up, to Agent Center, or with the next instruction to the team on
  * screen. Through the page's own HTML5 drag and drop (the window has no
  * Tauri drop handler, see create_team_window): the files come as bytes.
  * Anywhere else a dropped file is refused, never opened by the webview.
@@ -2119,11 +2119,11 @@ async function start() {
     if (tab === "monitor" || !unsaved) render();
   });
   wireDrops();
-  // What the secretary is doing while it works on a request.
+  // What Agent Center is doing while it works on a request.
   await onEvent<SecretaryStep>("secretary-step", (step) => secretaryStep(step, secretaryHost));
   // Each member's screen, as it happens: no redraw, just the lines.
   await onEvent<ScreenPatch>("team-screen", live.applyPatch);
-  // A team's documents changed: here, by its leader sharing one, or by the secretary.
+  // A team's documents changed: here, by its leader sharing one, or by Agent Center.
   await onEvent<{ team: string }>("team-knowledge-changed", ({ team }) => knowledgeChanged(team, knowledgeHost));
   // Team agents saved: what teams can start with may have changed.
   await onEvent("team-agents-changed", () => {
@@ -2131,7 +2131,7 @@ async function start() {
       if (!unsaved) render();
     });
   });
-  // The settings window's "Open the secretary ↗" / "Agent Pool ↗".
+  // The settings window's "Open Agent Center ↗" / "Agent Pool ↗".
   await onEvent<string>("team-goto", (page) => {
     if (page === "secretary" || page === "agents") {
       place = page;

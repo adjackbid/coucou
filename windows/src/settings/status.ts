@@ -148,7 +148,7 @@ export function todoList(input: StatusInput): Todo[] {
     }
   }
 
-  // The chat (and the secretary) need one provider that can answer.
+  // The chat (and Agent Center) need one provider that can answer.
   const active = settings.providers.find((p) => p.id === settings.activeProvider);
   if (!settings.providers.length) {
     out.push({ kind: "chat-no-provider", page: "chat", anchor: "chat-add", name: "", level: "todo" });
@@ -159,7 +159,7 @@ export function todoList(input: StatusInput): Todo[] {
       out.push({ kind: "chat-no-key", page: "chat", anchor: `provider-${active.id}`, name: active.name, level: "todo" });
     }
   } else if (!settings.providers.some((p) => providerUsable(p, present))) {
-    // The chat bar talks to an agent; the secretary still needs a provider.
+    // The chat bar talks to an agent; Agent Center still needs a provider.
     const first = settings.providers[0];
     out.push({ kind: "chat-no-key", page: "chat", anchor: `provider-${first.id}`, name: first.name, level: "todo" });
   }

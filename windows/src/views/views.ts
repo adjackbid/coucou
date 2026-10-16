@@ -25,7 +25,7 @@ export interface ViewActions {
   /** `terminal` gives the request back unanswered, for Claude Code to ask itself. */
   /** `allow-all`: a team member asked for several steps at once. */
   decide(d: "allow" | "deny" | "terminal" | "allow-all"): void;
-  /** 「Ask」: the secretary explains the waiting request; null when it cannot be explained. */
+  /** 「Ask」: Agent Center explains the waiting request; null when it cannot be explained. */
   explain(requestId: string): Promise<string> | null;
   /** The card changed what it shows: size the island to it again. */
   relayout(): void;
@@ -402,7 +402,7 @@ function buildApproval(actions: ViewActions): ViewHost {
   const head = h("div", { class: "code-head" });
   const body = h("div", { class: "code" });
   const note = h("div", { class: "sub" });
-  // 「Ask」's answer: the secretary's reading of the request, under it.
+  // 「Ask」's answer: Agent Center's reading of the request, under it.
   const explained = h("div", { class: "explain" });
   explained.style.display = "none";
   const answers = new Map<string, string>();
@@ -491,14 +491,14 @@ function buildApproval(actions: ViewActions): ViewHost {
         const pending = actions.explain(r.requestId);
         if (!pending) {
           explained.textContent = tr(
-            "這張卡片來自瀏海島聊天啟動的 agent，秘書目前還不能解讀這一種。",
-            "This card comes from an agent the island's chat started; the secretary can't explain this kind yet.",
+            "這張卡片來自瀏海島聊天啟動的 agent，Agent Center 目前還不能解讀這一種。",
+            "This card comes from an agent the island's chat started; Agent Center can't explain this kind yet.",
           );
           return;
         }
         explained.textContent = tr(
-          "秘書解讀中…（讀取完整指令、工作資料夾與這個工作階段最近的紀錄）",
-          "The secretary is reading it… (the full command, the working folder and this session's recent history)",
+          "Agent Center 解讀中…（讀取完整指令、工作資料夾與這個工作階段最近的紀錄）",
+          "Agent Center is reading it… (the full command, the working folder and this session's recent history)",
         );
         const id = r.requestId;
         pending.then(
@@ -507,7 +507,7 @@ function buildApproval(actions: ViewActions): ViewHost {
             if (State.pendingApproval?.requestId === id) explained.textContent = text;
           },
           (e) => {
-            if (State.pendingApproval?.requestId === id) explained.textContent = trf("秘書無法解讀：{e}", "The secretary couldn't explain it: {e}", { e: String(e).replace(/^Error:\s*/, "") });
+            if (State.pendingApproval?.requestId === id) explained.textContent = trf("Agent Center 無法解讀：{e}", "Agent Center couldn't explain it: {e}", { e: String(e).replace(/^Error:\s*/, "") });
           },
         );
       };

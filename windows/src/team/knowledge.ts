@@ -159,9 +159,9 @@ function load(team: string, host: KnowledgeHost) {
     });
 }
 
-/** The backend says the list changed (an edit here, the leader sharing, the secretary adding). */
+/** The backend says the list changed (an edit here, the leader sharing, Agent Center adding). */
 export function knowledgeChanged(team: string, host: KnowledgeHost) {
-  // "*": the secretary made a team or added documents somewhere.
+  // "*": Agent Center made a team or added documents somewhere.
   if (team === "*") {
     views.clear();
     host.render();

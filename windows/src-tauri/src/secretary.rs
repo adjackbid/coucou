@@ -34,7 +34,7 @@ const MAX_RESULT: usize = 8000;
 const KEEP_TURNS: usize = 60;
 const COLORS: [&str; 8] = ["#5b8def", "#34c7a0", "#a06cf0", "#f5b63d", "#f472b6", "#22d3ee", "#84cc16", "#f97316"];
 
-/// Something the secretary prepared, waiting for the person's click.
+/// Something Agent Center prepared, waiting for the person's click.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Proposal {
@@ -114,7 +114,7 @@ struct Item {
     key_like: bool,
 }
 
-/// A look-up or a preparation the secretary made on the way to its answer.
+/// A look-up or a preparation Agent Center made on the way to its answer.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Step {
@@ -130,7 +130,7 @@ pub struct Reply {
     pub proposals: Vec<Proposal>,
 }
 
-/// What the secretary can see and act on.
+/// What Agent Center can see and act on.
 pub struct Office {
     pub teams: Arc<Teams>,
     /// Every agent a team may run as: the team agents, and the native ones
@@ -141,7 +141,7 @@ pub struct Office {
     pub driver: Arc<Agents>,
     /// The person's clock: minutes to add to UTC for local time.
     pub tz_minutes: i64,
-    /// What the person calls the secretary; empty for no name.
+    /// What the person calls Agent Center; empty for no name.
     pub name: String,
 }
 
@@ -263,11 +263,11 @@ impl Secretary {
         (!parts.is_empty()).then(|| format!("[Files the user attached: {}]", parts.join("; ")))
     }
 
-    /// One request from the person: the secretary looks things up and
+    /// One request from the person: Agent Center looks things up and
     /// prepares what is asked, then answers. `uploads`: the files attached to it.
     pub async fn ask(&self, provider: &Provider, office: &Office, text: &str, uploads: &[String], on_step: &(dyn Fn(&Step) + Send + Sync)) -> Result<Reply, String> {
         if self.busy.swap(true, Ordering::SeqCst) {
-            return Err(tr!("秘書還在處理上一個請求。", "The secretary is still on the last request."));
+            return Err(tr!("Agent Center 還在處理上一個請求。", "Agent Center is still on the last request."));
         }
         let text = match self.attached_line(uploads) {
             Some(line) => format!("{text}\n\n{line}"),
@@ -1339,7 +1339,7 @@ async fn act(payload: &Value, office: &Office, create_folder: bool) -> Result<St
 // i18n: model-facing
 fn system_prompt(office: &Office) -> String {
     format!(
-        "{}You are the secretary of the user's company of AI agents, inside Agent Center, a Windows app. The company is made of teams: each has a goal, a work folder and AI members (each runs an agent such as Codex, Claude Code, Copilot or Antigravity, with a model); a leader member plans tasks, hands them out and reviews them. The user calls on you when they need you: to find out how the teams are doing, what is stuck or waiting for them, what it cost, or to get something done.\n\
+        "{}You are Agent Center, the assistant that runs the user's company of AI agents in a Windows app. The company is made of teams: each has a goal, a work folder and AI members (each runs an agent such as Codex, Claude Code, Copilot or Antigravity, with a model); a leader member plans tasks, hands them out and reviews them. The user calls on you when they need you: to find out how the teams are doing, what is stuck or waiting for them, what it cost, or to get something done.\n\
 \n\
 How you work:\n\
 - Look things up with your tools before you answer; never guess a team's state. Quote names, numbers and times as the tools give them.\n\
@@ -1351,9 +1351,9 @@ How you work:\n\
 \n\
 Now: {} (the user's local time).\n\
 {}",
-        // The window's name for a secretary the person has not named, in either language.
+        // The window's name for an assistant the person has not named, in either language (秘書 / Secretary from earlier versions).
         match office.name.trim() {
-            "" | "秘書" | "Secretary" => String::new(),
+            "" | "秘書" | "Secretary" | "Agent Center" => String::new(),
             name => format!("Your name is {name}; the user calls you that, and you may call yourself that. "),
         },
         " The user builds teams from their own team agents only: list_agents lists them with what each is good for and whether it is a Cloud Agent or a Local Agent; choose members by those descriptions, and never name an agent that is not listed. When you talk to the user, call a team agent by its name, never by its id (ta-…).",
@@ -1433,7 +1433,7 @@ fn describe() -> Vec<Tool> {
     ]
 }
 
-/// What the window shows while the secretary works.
+/// What the window shows while Agent Center works.
 fn label(call: &Call, office: &Office) -> String {
     let a = &call.arguments;
     let team = || {

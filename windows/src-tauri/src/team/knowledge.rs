@@ -81,7 +81,7 @@ pub struct Doc {
     pub visibility: Visibility,
     pub added_at: u64,
     /// Where it was copied from: shown to the person and used to import it
-    /// again. Never told to a member or the secretary.
+    /// again. Never told to a member or Agent Center.
     #[serde(default)]
     pub source: String,
     /// A hash of the content, to notice the same document added twice.
@@ -589,7 +589,7 @@ impl Kb {
         }
     }
 
-    /// A document by id or by name (as members and the secretary give it).
+    /// A document by id or by name (as members and Agent Center give it).
     pub fn find<'a>(index: &'a Index, given: &str) -> Option<&'a Doc> {
         let given = given.trim();
         index

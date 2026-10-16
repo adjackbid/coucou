@@ -2,7 +2,7 @@
 // what would bring it down. Charts drawn here from the usage records — the
 // cost piling up member by member, the context each call carried, what kind
 // of token the money went on — the members' work beside their spend, and
-// findings worked out from those numbers. The secretary can then be asked
+// findings worked out from those numbers. Agent Center can then be asked
 // to read the same numbers (its cost_analysis tool) and explain them.
 
 import { tr, trf } from "../core/i18n";
@@ -16,7 +16,7 @@ export interface AnalysisHost {
   tokens(n: number): string;
   /** "近 30 天" / "the last 30 days", "2026-10-01 ~ 2026-10-04". */
   periodLabel(): string;
-  /** The person asks the secretary; resolves to its words, or why not. */
+  /** The person asks Agent Center; resolves to its words, or why not. */
   consult(text: string): Promise<string>;
   openSecretary(): void;
 }
@@ -303,7 +303,7 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
     asking = true;
     answer = null;
     host.render();
-    // Sent as the person's own question, so in their language: the secretary answers in it.
+    // Sent as the person's own question, so in their language: Agent Center answers in it.
     const text = await host.consult(
       trf(
         "幫我分析「{team}」在{period}的成本:為什麼這麼高(或這麼低)?怎麼優化、改善?請用具體數字說明,並給可以直接照做的建議。",
@@ -344,15 +344,15 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
       h(
         "div",
         { class: "ca-ask" },
-        h("button", { class: "btn primary", type: "button", disabled: asking, onClick: () => void ask() }, asking ? tr("秘書分析中…", "The secretary is analysing…") : tr("請秘書分析原因與優化方式", "Ask the secretary why, and how to cut it")),
-        h("span", { class: "hint", text: tr("秘書會讀同一份數字(成員、模型、回合、退件、快取),用你的聊天模型寫成說明與建議。", "The secretary reads the same numbers (members, models, turns, send-backs, cache) and explains them with advice, using your chat model.") }),
+        h("button", { class: "btn primary", type: "button", disabled: asking, onClick: () => void ask() }, asking ? tr("Agent Center 分析中…", "Agent Center is analysing…") : tr("請 Agent Center 分析原因與優化方式", "Ask Agent Center why, and how to cut it")),
+        h("span", { class: "hint", text: tr("Agent Center 會讀同一份數字(成員、模型、回合、退件、快取),用你的聊天模型寫成說明與建議。", "Agent Center reads the same numbers (members, models, turns, send-backs, cache) and explains them with advice, using your chat model.") }),
       ),
       answer && answer.team === picked
         ? h(
             "div",
             { class: "ca-answer" },
             wordsOf(answer.text),
-            h("button", { class: "link", type: "button", onClick: () => host.openSecretary() }, tr("到秘書頁繼續問 →", "Keep asking on the secretary's page →")),
+            h("button", { class: "link", type: "button", onClick: () => host.openSecretary() }, tr("到 Agent Center 頁繼續問 →", "Keep asking on Agent Center's page →")),
           )
         : null,
     ),
@@ -396,7 +396,7 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
   );
 }
 
-/** The secretary's words: paragraphs, lists, headings and **bold**. */
+/** Agent Center's words: paragraphs, lists, headings and **bold**. */
 function wordsOf(text: string): HTMLElement {
   const box = h("div", { class: "sec-words" });
   let list: HTMLElement | null = null;

@@ -448,7 +448,7 @@ export function demoKeySpend(): import("./types").KeySpend {
   return { spend: 15.55, maxBudget: 150, budgetDuration: "7d", budgetResetAt: new Date(NOW + 2 * 86_400_000).toISOString(), modelSpend: { "deepseek-v4-flash": 11.92, "glm-5.3-flash": 2.41, "gemini-3.8-flash": 1.22 }, askedAt: Date.now() };
 }
 
-/** The secretary in a browser: a canned answer, after a moment, with a card when asked for a team. */
+/** Agent Center in a browser: a canned answer, after a moment, with a card when asked for a team. */
 export async function demoSecretary(text: string): Promise<import("./types").SecretaryReply> {
   await new Promise((r) => setTimeout(r, 900));
   if (/開|建立|新團隊|new team|set up|create/i.test(text)) {

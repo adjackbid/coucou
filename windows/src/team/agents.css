@@ -433,6 +433,74 @@
   margin: 0 0 10px;
 }
 
+/* Above the sections: the category chips, and grouped or in order. */
+.ta-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding: 0 2px;
+}
+
+.ta-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ta-filter {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 6px 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  font: 500 12.5px var(--font);
+  color: var(--dim);
+  background: var(--lift);
+  cursor: default;
+}
+
+.ta-filter:hover {
+  color: var(--ink);
+  background: var(--lift-2);
+}
+
+.ta-filter.on {
+  color: var(--ink);
+  font-weight: 600;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.ta-filter .count {
+  margin-left: 6px;
+}
+
+.ta-order {
+  flex: none;
+}
+
+.ta-order button {
+  padding: 5px 12px;
+}
+
+/* One category's cards, under its name. */
+.ta-group + .ta-group,
+.ta-group + .ta-grid-list {
+  margin-top: 14px;
+}
+
+.ta-group-title {
+  display: flex;
+  align-items: center;
+  margin: 0 0 8px 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dim);
+}
+
 .ta-editor-title {
   display: flex;
   align-items: center;

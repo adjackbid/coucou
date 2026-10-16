@@ -1249,7 +1249,7 @@ async fn endpoint_spend(shared: State<'_, Shared>, agent: String) -> Result<cost
     cost::key_spend(&base, key).await
 }
 
-/// The chat providers the secretary can think with: (id, name, model), the
+/// The chat providers Agent Center can think with: (id, name, model), the
 /// one in use for the island's chat first.
 #[tauri::command]
 fn secretary_providers(shared: State<Shared>) -> Vec<(String, String, String)> {
@@ -1263,10 +1263,10 @@ fn secretary_providers(shared: State<Shared>) -> Vec<(String, String, String)> {
 }
 
 fn needs_chat_model() -> String {
-    tr!("秘書需要一個聊天模型：請先在 設定 → 聊天模型 加入。", "The secretary needs a chat model: add one in Settings → Chat models.")
+    tr!("Agent Center 需要一個聊天模型：請先在 設定 → 聊天模型 加入。", "Agent Center needs a chat model: add one in Settings → Chat models.")
 }
 
-/// 「Ask」on a permission card: the secretary's model explains what the
+/// 「Ask」on a permission card: Agent Center's model explains what the
 /// waiting request is for and what it risks. No tools, nothing is decided.
 #[tauri::command]
 async fn explain_request(
@@ -1296,7 +1296,7 @@ async fn explain_request(
     explain::explain(&provider, &payload, &teams.snapshots()).await
 }
 
-/// The person asks the secretary something. Steps are told to the Teamwork
+/// The person asks Agent Center something. Steps are told to the Teamwork
 /// window as they happen (`secretary-step`).
 #[tauri::command]
 async fn secretary_ask(
@@ -1333,7 +1333,7 @@ async fn secretary_ask(
         .await
 }
 
-/// The person clicked 確認 on one of the secretary's proposals — the only way any of them happens.
+/// The person clicked 確認 on one of Agent Center's proposals — the only way any of them happens.
 #[tauri::command]
 async fn secretary_confirm(
     app: AppHandle,
@@ -1355,7 +1355,7 @@ async fn secretary_confirm(
     done
 }
 
-/// A file attached in the secretary's conversation, by its path (picked or dropped).
+/// A file attached in Agent Center's conversation, by its path (picked or dropped).
 #[tauri::command]
 fn secretary_upload_path(secretary: State<Arc<secretary::Secretary>>, path: String) -> Result<secretary::UploadView, String> {
     let (name, bytes) = knowledge::read_source(std::path::Path::new(&path))?;

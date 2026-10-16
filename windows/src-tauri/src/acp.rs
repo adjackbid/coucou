@@ -122,7 +122,7 @@ pub struct AgentProfile {
 
 /// What a team agent (Teamwork → Agent Pool) adds to the native agent it is
 /// built on: words for its system prompt, MCP servers, skills, and the
-/// description the secretary picks it by.
+/// description Agent Center picks it by.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Extras {
     pub system_prompt: String,
@@ -130,6 +130,8 @@ pub struct Extras {
     /// Skill folders (each with a SKILL.md), or names the agent may already know.
     pub skills: Vec<String>,
     pub description: String,
+    /// The person's grouping in Agent Pool; empty for none.
+    pub category: String,
     /// The native agent it is built on.
     pub base: String,
 }

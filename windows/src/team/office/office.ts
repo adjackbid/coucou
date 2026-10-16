@@ -175,7 +175,7 @@ export class Office {
   private runs = new Map<string, Snapshot>();
   /** 中二模式: the same work told as a raid; the person's own preference. */
   mode: PresentationMode = savedMode();
-  /** Whether 中二模式 is offered at all (設定 → 團隊與秘書). Off, nothing of it is drawn or named. */
+  /** Whether 中二模式 is offered at all (設定 → 團隊與 Agent Center). Off, nothing of it is drawn or named. */
   battleAllowed = true;
   /** In 中二模式, whether the company map plays every room's fight (it costs more to draw). */
   companyLive = companyLive();

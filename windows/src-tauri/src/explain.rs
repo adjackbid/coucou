@@ -1,4 +1,4 @@
-// 「Ask」on a permission card: the secretary's model reads the request and
+// 「Ask」on a permission card: Agent Center's model reads the request and
 // tells the person what it is for and what it risks — before they choose.
 //
 // It is a single question with no tools: explaining must never be able to
@@ -230,7 +230,7 @@ Answer in English, plainly, for someone who may not read code. Use exactly these
 Rules: rely only on the brief. Agent Center's rule check is computed by code and is reliable — never contradict it. \
 Do not invent files, intentions or effects. If the brief does not let you tell, say so instead of guessing. Keep it under 120 words per section.";
 
-/// The question the secretary's model is asked, and the model to ask it.
+/// The question Agent Center's model is asked, and the model to ask it.
 pub async fn explain(provider: &crate::llm::Provider, payload: &Value, teams: &[crate::team::state::Snapshot]) -> Result<String, String> {
     let chat = crate::llm::Chat::default();
     let question = format!("{}\n\n=== BRIEF ===\n{}", system(), brief(payload, teams));

@@ -2,12 +2,12 @@
 // each built on a native agent of Settings → Agents. A team agent keeps its
 // base's command (or an n8n node's webhook), environment and key, and adds
 // its own name, model, system prompt, MCP servers and skills, and a
-// description the secretary reads to know what it is good for. It is a
+// description Agent Center reads to know what it is good for. It is a
 // Cloud Agent or a Local Agent as its base is. Nothing here holds a key: the
 // base's stays in the Credential Manager, under the base's name.
 //
 // Stored in %APPDATA%\Coucou\team-agents.json, beside constitution.json.
-// New teams — the secretary's and the ones made by hand — are built from
+// New teams — Agent Center's and the ones made by hand — are built from
 // these only. A team set up before that, naming a native agent, still runs.
 //
 // Where they are run, a team agent is simply one more AgentProfile (`profiles`):
@@ -50,9 +50,12 @@ pub struct TeamAgent {
     /// Skill folders (each with a SKILL.md) or skill names.
     #[serde(default)]
     pub skills: Vec<String>,
-    /// What it is for, in the person's words: the secretary picks by it.
+    /// What it is for, in the person's words: Agent Center picks by it.
     #[serde(default)]
     pub description: String,
+    /// The person's own grouping in Agent Pool (程式開發, 文案…); empty for none.
+    #[serde(default)]
+    pub category: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -215,6 +218,7 @@ fn profile_of(a: &TeamAgent, natives: &[AgentProfile]) -> Option<AgentProfile> {
         mcp_servers,
         skills: a.skills.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
         description: a.description.trim().to_string(),
+        category: a.category.trim().to_string(),
         base: base.id.clone(),
     });
     Some(p)
@@ -268,7 +272,7 @@ pub fn brief_text(profile: &AgentProfile) -> String {
     out
 }
 
-/// One line per agent for the secretary: who it is, what it runs on, where,
+/// One line per agent for Agent Center: who it is, what it runs on, where,
 /// what it is for.
 // i18n: model-facing
 pub fn describe(profile: &AgentProfile) -> Option<String> {
@@ -278,6 +282,9 @@ pub fn describe(profile: &AgentProfile) -> Option<String> {
         Location::Local => "Local Agent (works on the user's own machine or network)",
     };
     let mut bits = vec![format!("team agent built on {}", x.base), place.to_string()];
+    if !x.category.is_empty() {
+        bits.push(format!("category: {}", x.category));
+    }
     if profile.protocol == Protocol::N8n {
         bits.push("an n8n workflow: it takes one task at a time and hands back one result, has no tools, and cannot be the leader".into());
     }
@@ -318,6 +325,7 @@ mod tests {
             mcp: vec![Mcp { name: "docs".into(), url: "https://example.test/mcp".into(), ..Default::default() }],
             skills: vec!["code-review".into()],
             description: "審查程式碼".into(),
+            category: "程式開發".into(),
         }
     }
 
@@ -362,11 +370,12 @@ mod tests {
         let profiles = TeamAgents { agents: vec![reviewer(), on_flow] }.profiles(&list);
         assert_eq!(profiles[0].location(), Location::Cloud);
         assert_eq!(profiles[1].location(), Location::Local);
-        // A workflow is not given MCP servers; the secretary hears what it is.
+        // A workflow is not given MCP servers; Agent Center hears what it is.
         assert!(profiles[1].extras.as_ref().unwrap().mcp_servers.is_empty());
         let line = describe(&profiles[1]).unwrap();
         assert!(line.contains("Local Agent") && line.contains("cannot be the leader"), "{line}");
-        assert!(describe(&profiles[0]).unwrap().contains("Cloud Agent"));
+        let line = describe(&profiles[0]).unwrap();
+        assert!(line.contains("Cloud Agent") && line.contains("category: 程式開發"), "{line}");
     }
 
     #[test]

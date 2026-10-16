@@ -1,4 +1,4 @@
-// A conversation in which the model may call tools — for the secretary
+// A conversation in which the model may call tools — for Agent Center
 // (secretary.rs). One request at a time, not streamed: the model answers
 // with text, or with calls; the caller runs the calls and asks again with
 // their results. Spoken in each of the three wires a chat provider can use:

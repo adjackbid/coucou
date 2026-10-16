@@ -336,9 +336,9 @@ export interface KeySpend {
   askedAt: number;
 }
 
-// ── The secretary — mirrors of secretary.rs ─────────────────────────────────
+// ── Agent Center — mirrors of secretary.rs ─────────────────────────────────
 
-/** A look-up or a preparation the secretary made on the way to its answer. */
+/** A look-up or a preparation Agent Center made on the way to its answer. */
 export interface SecretaryStep {
   tool: string;
   label: string;
@@ -380,7 +380,7 @@ export interface KnowledgeAdded {
   keyLike: { line: number; sample: string } | null;
 }
 
-/** Something the secretary prepared; it happens only when the person clicks `confirm`. */
+/** Something Agent Center prepared; it happens only when the person clicks `confirm`. */
 export interface SecretaryProposal {
   id: string;
   kind: "team" | "instruction" | "action" | "knowledge";
@@ -393,7 +393,7 @@ export interface SecretaryProposal {
   uses?: string[];
 }
 
-/** A file attached in the secretary's conversation (secretary.rs UploadView). */
+/** A file attached in Agent Center's conversation (secretary.rs UploadView). */
 export interface SecretaryUpload {
   id: string;
   name: string;
@@ -456,8 +456,10 @@ export interface TeamAgent {
   mcp: TeamAgentMcp[];
   /** Skill folders (each with a SKILL.md) or skill names. */
   skills: string[];
-  /** What it is good for: the secretary picks members by it. */
+  /** What it is good for: Agent Center picks members by it. */
   description: string;
+  /** The person's own grouping in Agent Pool (程式開發, 文案製作…); empty for none. */
+  category: string;
 }
 
 /** New teams are built from these only; an older file's `source` is read past. */

@@ -1745,7 +1745,7 @@ input[type="range"]::-webkit-slider-thumb {
   transform: scale(0.94);
 }
 
-/* 「Ask」: the secretary's reading of a waiting request, under it. */
+/* 「Ask」: Agent Center's reading of a waiting request, under it. */
 .explain {
   flex: 0 1 auto;
   min-height: 0;
@@ -1761,7 +1761,7 @@ input[type="range"]::-webkit-slider-thumb {
   user-select: text;
 }
 
-/* While the secretary explains, the request's headline keeps to two lines. */
+/* While Agent Center explains, the request's headline keeps to two lines. */
 .view.explaining .code-head {
   display: -webkit-box;
   -webkit-line-clamp: 2;

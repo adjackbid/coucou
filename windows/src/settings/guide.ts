@@ -111,14 +111,14 @@ export function openGuide(nav: Nav, root: HTMLElement) {
       }
       case "chat":
         return h("div", { class: "stack" },
-          h("p", { class: "lead", text: tr("聊天和秘書需要一個 AI 模型。", "The chat and the secretary need one AI model.") }),
+          h("p", { class: "lead", text: tr("聊天和 Agent Center 需要一個 AI 模型。", "The chat and Agent Center need one AI model.") }),
           chatPage.render(ctx),
         );
       case "team":
         return h("div", { class: "stack" },
           h("p", { class: "lead", text: tr(
-            "Teamwork 讓好幾個 agent 組成團隊一起做一件事，秘書會幫你組。這一步不用設定任何東西，想看看的話就打開 Teamwork。",
-            "Teamwork lets several agents work on one thing as a team, and the secretary sets the team up for you. Nothing to set here; open Teamwork if you want a look.",
+            "Teamwork 讓好幾個 agent 組成團隊一起做一件事，Agent Center 會幫你組。這一步不用設定任何東西，想看看的話就打開 Teamwork。",
+            "Teamwork lets several agents work on one thing as a team, and Agent Center sets the team up for you. Nothing to set here; open Teamwork if you want a look.",
           ) }),
           teamPage.render(ctx),
         );
