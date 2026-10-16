@@ -69,6 +69,21 @@ pub struct Settings {
     /// the window then shows nothing of it, for a sober look.
     #[serde(default)]
     pub battle_mode: bool,
+    /// "dark" (the default) or "light": the settings window and Teamwork.
+    /// The island stays dark, as a notch is.
+    #[serde(default = "default_theme")]
+    pub theme: String,
+}
+
+fn default_theme() -> String {
+    "dark".into()
+}
+
+impl Settings {
+    /// Light only when asked for; anything else is the dark default.
+    pub fn light(&self) -> bool {
+        self.theme == "light"
+    }
 }
 
 /// The edge the island is docked to. The bottom one is the work area's: the
@@ -225,6 +240,7 @@ impl Default for Settings {
             dock: Dock::default(),
             language: default_language(),
             battle_mode: false,
+            theme: default_theme(),
         }
     }
 }

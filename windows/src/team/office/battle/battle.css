@@ -56,7 +56,7 @@
 }
 
 .bt-tagline {
-  color: #cdb8ff;
+  color: var(--bt-tagline, #cdb8ff);
   font-size: 12px;
 }
 
@@ -856,7 +856,7 @@
 /* ── The worlds (kit v4) ─────────────────────────────────────────────────── */
 
 .bt-arena {
-  color: #cdb8ff;
+  color: var(--bt-tagline, #cdb8ff);
   font-size: 12px;
   font-weight: 600;
 }

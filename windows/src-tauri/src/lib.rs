@@ -162,15 +162,16 @@ fn renamed_autostart(app: &AppHandle, on: bool) {
 
 #[tauri::command]
 fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
-    let (settings, screen_changed, autostart_changed, hotkey_changed) = {
+    let (settings, screen_changed, autostart_changed, hotkey_changed, theme_changed) = {
         let mut current = shared.settings.lock().unwrap();
         // The page's copy of the dock is stale next to a drag: Rust's is kept.
         let settings = current.from_page(settings);
         let screen_changed = current.screen != settings.screen;
         let autostart_changed = current.autostart != settings.autostart;
         let hotkey_changed = current.hotkey != settings.hotkey;
+        let theme_changed = current.light() != settings.light();
         *current = settings.clone();
-        (settings, screen_changed, autostart_changed, hotkey_changed)
+        (settings, screen_changed, autostart_changed, hotkey_changed, theme_changed)
     };
     let lang_changed = i18n::set(&settings.language);
     // A new language also rewrites why the shortcut is not active.
@@ -197,8 +198,27 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
         let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
         island::apply_geometry(&app, &settings, collapsed);
     }
+    if theme_changed {
+        apply_theme(&app, settings.light());
+    }
     // Keep the other window in step (island ⇄ settings window).
     let _ = app.emit("settings-changed", settings);
+}
+
+/// Light or dark, for what Windows draws: the settings window's title bar,
+/// and the tint of Teamwork's glass. The pages switch their own colours.
+fn apply_theme(app: &AppHandle, light: bool) {
+    if let Some(win) = app.get_webview_window("settings") {
+        let _ = win.set_theme(Some(if light { tauri::Theme::Light } else { tauri::Theme::Dark }));
+    }
+    if let Some(win) = app.get_webview_window("team") {
+        glass::apply(&win, if light { GLASS_TINT_LIGHT } else { GLASS_TINT });
+    }
+}
+
+/// Whether the person picked the light look (read before the windows exist, too).
+fn light_theme(app: &AppHandle) -> bool {
+    app.try_state::<Shared>().map(|s| s.settings.lock().unwrap().light()).unwrap_or_else(|| settings::load().light())
 }
 
 /// Puts the island on another edge. A drag writes the dock itself (island.rs);
@@ -1676,9 +1696,9 @@ fn create_settings_window(app: &AppHandle) {
     match WebviewWindowBuilder::new(app, "settings", url)
         .additional_browser_args(BROWSER_ARGS)
         .title(settings_title())
-        // The page is dark whatever Windows is set to; the title bar Windows
-        // draws around it has to be told, or it comes up white.
-        .theme(Some(tauri::Theme::Dark))
+        // The page is dark (or light) whatever Windows is set to; the title
+        // bar Windows draws around it has to be told the same.
+        .theme(Some(if light_theme(app) { tauri::Theme::Light } else { tauri::Theme::Dark }))
         .inner_size(width, height)
         .min_inner_size(460.0, 480.0)
         .resizable(true)
@@ -1804,6 +1824,10 @@ fn open_settings_page(app: AppHandle, page: String, anchor: Option<String>, acti
 /// a white window behind, thin enough that the desktop still shows.
 const GLASS_TINT: u32 = 0x730E_0C0B;
 
+/// The light look's glass: #F3F4F6 at 65 %, light enough that dark text reads
+/// over a black window behind.
+const GLASS_TINT_LIGHT: u32 = 0xA6F6_F4F3;
+
 /// The Teamwork window: like the settings window, made hidden before the
 /// island's webview exists and only shown and hidden afterwards.
 fn create_team_window(app: &AppHandle) {
@@ -1864,7 +1888,7 @@ fn create_team_window(app: &AppHandle) {
     match builder.build() {
         Ok(win) => {
             // Coucou's black, thin enough for the desktop to show through.
-            glass::apply(&win, GLASS_TINT);
+            glass::apply(&win, if light_theme(app) { GLASS_TINT_LIGHT } else { GLASS_TINT });
             glass::drop_caption(&win);
             glass::round_corners(&win);
             let hidden = win.clone();

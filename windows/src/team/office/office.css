@@ -297,7 +297,7 @@
 }
 
 .office-label .who b {
-  color: color-mix(in srgb, var(--c) 70%, white);
+  color: color-mix(in srgb, var(--c) 70%, var(--chip-mix, white));
 }
 
 .office-label .role {
@@ -419,7 +419,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #ff8d97;
+  color: var(--red-text);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -569,10 +569,10 @@
 }
 
 .office-pill i { font-style: normal; }
-.office-pill.work { color: #8cc4ff; background: rgba(59, 158, 255, 0.16); }
-.office-pill.wait { color: #f5c768; background: rgba(245, 165, 36, 0.16); }
-.office-pill.alert { color: #ff9a9f; background: rgba(244, 80, 94, 0.18); }
-.office-pill.done { color: #6ee7b7; background: rgba(52, 211, 153, 0.16); }
+.office-pill.work { color: var(--st-work); background: rgba(59, 158, 255, 0.16); }
+.office-pill.wait { color: var(--st-wait); background: rgba(245, 165, 36, 0.16); }
+.office-pill.alert { color: var(--st-alert); background: rgba(244, 80, 94, 0.18); }
+.office-pill.done { color: var(--st-done); background: rgba(52, 211, 153, 0.16); }
 .office-pill.quiet { color: var(--dim); }
 
 /* The company at a glance, when no room is picked. */
@@ -600,16 +600,16 @@
   font-size: 12px;
 }
 
-.office-stat.work b { color: #8cc4ff; }
-.office-stat.alert b { color: #ff9a9f; }
-.office-stat.done b { color: #6ee7b7; }
+.office-stat.work b { color: var(--st-work); }
+.office-stat.alert b { color: var(--st-alert); }
+.office-stat.done b { color: var(--st-done); }
 .office-stat.quiet b { color: var(--dim-glass); }
 
 .office-demo {
   padding: 2px 8px;
   border-radius: 8px;
   background: rgba(245, 165, 36, 0.16);
-  color: #f5c768;
+  color: var(--st-wait);
   font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
@@ -625,7 +625,7 @@
 
 .office-progress b {
   font-size: 18px;
-  color: #8cc4ff;
+  color: var(--st-work);
 }
 
 .office-progress .bar {
@@ -661,7 +661,7 @@
   padding: 8px 12px;
   border-radius: 12px;
   background: rgba(245, 165, 36, 0.14);
-  color: #f5c768;
+  color: var(--st-wait);
 }
 
 .office-notice {
@@ -677,12 +677,12 @@
   padding: 8px 8px 8px 14px;
   border-radius: 14px;
   background: rgba(167, 139, 250, 0.16);
-  color: #d9ccff;
+  color: var(--st-violet);
   box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.35);
 }
 
 .office-history-bar b {
-  color: #ede7ff;
+  color: var(--st-violet-2);
 }
 
 .office-member-row.here {
@@ -918,7 +918,7 @@
 }
 
 .office-criteria li.ok {
-  color: #6ee7b7;
+  color: var(--st-done);
 }
 
 .office-criteria i {
@@ -962,11 +962,11 @@
 }
 
 .office-sendstate {
-  color: #8cc4ff;
+  color: var(--st-work);
 }
 
 .office-sendstate.bad {
-  color: #ff9a9f;
+  color: var(--st-alert);
 }
 
 .office-thumb {
@@ -1032,7 +1032,7 @@
     padding: 14px;
     overflow: auto;
     border-radius: 18px;
-    background: rgba(18, 19, 22, 0.97);
+    background: rgba(var(--shade), 0.97);
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), var(--edge);
   }
 }
@@ -1189,7 +1189,7 @@
 }
 
 .office-teams tbody tr:hover td {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--fg), 0.04);
 }
 
 .office-dot {

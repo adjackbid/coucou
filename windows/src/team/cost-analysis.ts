@@ -146,7 +146,9 @@ function cumulative(ms: Member[], rows: UsageRow[], host: AnalysisHost): HTMLEle
     let sum = 0;
     return list.filter((r) => r.estimatedUsd != null).map((r) => [r.at, (sum += r.estimatedUsd!)] as [number, number]);
   };
-  const series: Series[] = [{ label: tr("全隊", "Whole team"), color: "#f5f6f8", points: pile(rows), width: 3 }, ...ms.slice(0, 6).map((m) => ({ label: m.name, color: m.color, points: pile(m.rows) }))];
+  // The whole team in the page's own ink: white on dark glass, near-black on light.
+  const ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim() || "#f5f6f8";
+  const series: Series[] = [{ label: tr("全隊", "Whole team"), color: ink, points: pile(rows), width: 3 }, ...ms.slice(0, 6).map((m) => ({ label: m.name, color: m.color, points: pile(m.rows) }))];
   return chart(series, host.money, tr("這段期間沒有可以估價的用量。", "No usage that can be priced in this period."));
 }
 

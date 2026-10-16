@@ -19,7 +19,7 @@
   --dim: #9398a1;
   --dim-3: #6b7079;
   --card: 20, 21, 24; /* #141518 */
-  --hairline: rgba(255, 255, 255, 0.07);
+  --hairline: rgba(var(--fg), 0.07);
   --red: #f4505e;
   --red-text: #ff8d97;
   --green: #22c55e;
@@ -29,17 +29,70 @@
   --violet: #a78bfa;
 
   /* How much of the desktop each layer lets through. */
-  --pane: rgba(11, 12, 14, 0.46);
-  --pane-side: rgba(11, 12, 14, 0.3);
+  --pane: rgba(var(--shade), 0.46);
+  --pane-side: rgba(var(--shade), 0.3);
   --sheet: rgba(var(--card), 0.5);
   /* Secondary text that sits straight on the glass, where what is behind
      may be bright: lighter than the grey used on cards. */
   --dim-glass: rgba(245, 246, 248, 0.72);
   --solid: rgba(var(--card), 0.82);
-  --lift: rgba(255, 255, 255, 0.07);
-  --lift-2: rgba(255, 255, 255, 0.12);
-  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --lift: rgba(var(--fg), 0.07);
+  --lift-2: rgba(var(--fg), 0.12);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(var(--fg), 0.06);
   --radius: 20px;
+
+  /* What flips with the look (core/theme.ts): the colour laid thin over
+     things (lifts, hairlines), the colour of dark sheets, of wells, and of
+     the window's own glass. */
+  --fg: 255, 255, 255;
+  --shade: 11, 12, 14;
+  --well: 0, 0, 0;
+  --well-k: 1;
+  --glass-rgb: 19, 20, 25;
+  /* Status words on the page: pale on dark glass, deeper on light. */
+  --st-work: #8cc4ff;
+  --st-wait: #f5c768;
+  --st-alert: #ff9a9f;
+  --st-done: #6ee7b7;
+  --st-violet: #d9ccff;
+  --st-violet-2: #ede7ff;
+  --panel: #16171c;
+}
+
+/* The light look: dark ink on pale glass. Accents go a shade deeper, to read on white. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ink: #16181d;
+  --ink-2: #1d2026;
+  --dim: #5b616c;
+  --dim-3: #7d838d;
+  --card: 255, 255, 255;
+  --hairline: rgba(22, 26, 34, 0.1);
+  --red: #e0384a;
+  --red-text: #c22636;
+  --green: #16a34a;
+  --green-2: #0b8a5e;
+  --amber: #b26a00;
+  --blue: #1f6fd6;
+  --violet: #7651d6;
+  --pane: rgba(255, 255, 255, 0.5);
+  --pane-side: rgba(255, 255, 255, 0.34);
+  --dim-glass: rgba(22, 26, 34, 0.72);
+  --fg: 22, 26, 34;
+  --shade: 247, 248, 250;
+  --well: 22, 26, 34;
+  --well-k: 0.22;
+  --glass-rgb: 246, 247, 249;
+  /* A chip's words in its own colour: deepened, not paled. */
+  --chip-mix: black;
+  --st-work: #1f6fd6;
+  --st-wait: #9a5800;
+  --st-alert: #c22636;
+  --st-done: #0b8a5e;
+  --st-violet: #5b3cc4;
+  --st-violet-2: #4a2fb0;
+  --panel: #ffffff;
+  --bt-tagline: #6a3fd1;
 }
 
 * {
@@ -76,7 +129,7 @@ html.demo {
 }
 
 html.demo body.team-window {
-  background: rgba(11, 12, 14, 0.4);
+  background: rgba(var(--shade), 0.4);
 }
 
 /* A pane of glass: a tint, a bright upper edge, a hairline all round. */
@@ -91,13 +144,13 @@ html.demo body.team-window {
    how much of the desktop shows through it can — 0 is the bare glass, 1 an
    opaque sheet. The demo page keeps its own painted desktop. */
 html:not(.demo) body.team-window {
-  background: rgba(19, 20, 25, var(--sheet, 0));
+  background: rgba(var(--glass-rgb), var(--sheet, 0));
 }
 
 /* Someone who turned transparency off gets the same layout, opaque. */
 @media (prefers-reduced-transparency: reduce) {
   body.team-window {
-    background: #0b0c0e;
+    background: rgb(var(--shade));
   }
 }
 
@@ -194,7 +247,7 @@ html:not(.demo) body.team-window {
 
 .team-mark .blob:nth-child(2) {
   z-index: 1;
-  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.22), inset 0 1.5px 2px rgba(255, 255, 255, 0.5), 0 0 0 2px rgba(11, 12, 14, 0.55);
+  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.22), inset 0 1.5px 2px rgba(255, 255, 255, 0.5), 0 0 0 2px rgba(var(--shade), 0.55);
 }
 
 .team-mark .blob:nth-child(3) {
@@ -230,12 +283,12 @@ html:not(.demo) body.team-window {
 .btn.primary {
   color: var(--ink);
   font-weight: 600;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.09));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 6px 18px rgba(0, 0, 0, 0.28);
+  background: linear-gradient(180deg, rgba(var(--fg), 0.22), rgba(var(--fg), 0.09));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 0 0 1px rgba(var(--fg), 0.14), 0 6px 18px rgba(0, 0, 0, 0.28);
 }
 
 .btn.primary:hover {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.13));
+  background: linear-gradient(180deg, rgba(var(--fg), 0.3), rgba(var(--fg), 0.13));
 }
 
 .btn.plain {
@@ -368,7 +421,7 @@ html:not(.demo) body.team-window {
   padding: 8px 12px;
   border-radius: 12px;
   border: 1px solid var(--hairline);
-  background: rgba(0, 0, 0, 0.32);
+  background: rgba(var(--well), calc(0.32 * var(--well-k)));
   user-select: text;
   cursor: text;
 }
@@ -398,7 +451,7 @@ select.field {
 }
 
 select.field option {
-  background: #141518;
+  background: rgb(var(--card));
   color: var(--ink);
 }
 
@@ -819,7 +872,7 @@ h2 {
   overflow-x: auto;
   padding: 3px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.26);
+  background: rgba(var(--well), calc(0.26 * var(--well-k)));
   align-self: flex-start;
   max-width: 100%;
 }
@@ -863,7 +916,7 @@ h2 {
   overflow-y: auto;
   padding-right: 2px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: rgba(var(--fg), 0.18) transparent;
 }
 
 .monitor,
@@ -925,7 +978,7 @@ h2 {
   gap: 3px;
   padding: 3px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(var(--well), calc(0.3 * var(--well-k)));
 }
 
 /* Five choices: they share the row evenly and wrap on a narrow form. */
@@ -947,8 +1000,8 @@ h2 {
 .segmented button.on {
   color: var(--ink);
   font-weight: 600;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(var(--fg), 0.2), rgba(var(--fg), 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 0 0 1px rgba(var(--fg), 0.12);
 }
 
 .member-rows {
@@ -1012,7 +1065,7 @@ h2 {
   font: 500 12.5px var(--font);
   padding: 9px;
   border-radius: 14px;
-  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border: 1px dashed rgba(var(--fg), 0.18);
   background: transparent;
   color: var(--ink-2);
   cursor: default;
@@ -1034,7 +1087,7 @@ h2 {
   margin-left: auto;
   padding: 8px;
   border-radius: 999px;
-  background: rgba(11, 12, 14, 0.82);
+  background: rgba(var(--shade), 0.82);
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   box-shadow: var(--edge);
@@ -1068,7 +1121,7 @@ h2 {
   flex: 1 1 220px;
   height: 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.09);
+  background: rgba(var(--fg), 0.09);
   overflow: hidden;
 }
 
@@ -1224,7 +1277,7 @@ h2 {
   font-size: 12.5px;
   line-height: 1.4;
   color: var(--ink-2);
-  background: color-mix(in srgb, var(--c) 13%, rgba(255, 255, 255, 0.05));
+  background: color-mix(in srgb, var(--c) 13%, rgba(var(--fg), 0.05));
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -1239,7 +1292,7 @@ h2 {
   left: 22px;
   border: 6px solid transparent;
   border-top: 0;
-  border-bottom-color: color-mix(in srgb, var(--c) 13%, rgba(255, 255, 255, 0.05));
+  border-bottom-color: color-mix(in srgb, var(--c) 13%, rgba(var(--fg), 0.05));
 }
 
 .bubble.waitingYou,
@@ -1267,14 +1320,14 @@ h2 {
   overflow-x: hidden;
   padding: 8px 10px 10px;
   border-radius: 12px;
-  background: rgba(4, 5, 7, 0.55);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  background: rgba(var(--well), calc(0.55 * var(--well-k)));
+  box-shadow: inset 0 0 0 1px rgba(var(--fg), 0.05);
   font-size: 12px;
   line-height: 1.45;
   user-select: text;
   cursor: text;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  scrollbar-color: rgba(var(--fg), 0.16) transparent;
   outline: none;
 }
 
@@ -1352,7 +1405,7 @@ h2 {
   content: "";
   flex: 1 1 auto;
   height: 1px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--fg), 0.08);
 }
 
 .line.turn.failed .rule,
@@ -1366,7 +1419,7 @@ h2 {
   border-left: 2px solid var(--from, var(--dim));
   border-radius: 2px 8px 8px 2px;
   color: var(--dim);
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(var(--fg), 0.035);
 }
 
 .heard b {
@@ -1423,7 +1476,7 @@ h2 {
   font: 11px/1.4 var(--mono);
   white-space: pre-wrap;
   color: var(--dim);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--fg), 0.04);
   max-height: 6.4em;
   overflow: hidden;
 }
@@ -1657,9 +1710,9 @@ h2 {
   overflow-y: auto;
   padding: 6px 8px;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.22);
+  background: rgba(var(--well), calc(0.22 * var(--well-k)));
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+  scrollbar-color: rgba(var(--fg), 0.35) transparent;
   scrollbar-gutter: stable;
 }
 
@@ -1668,7 +1721,7 @@ h2 {
 }
 
 .ask-what::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(var(--fg), 0.35);
   border-radius: 4px;
 }
 
@@ -1698,7 +1751,7 @@ h2 {
   gap: 8px;
   padding: 10px;
   border-radius: 14px;
-  background: rgba(0, 0, 0, 0.22);
+  background: rgba(var(--well), calc(0.22 * var(--well-k)));
 }
 
 .column-head {
@@ -1789,7 +1842,7 @@ h2 {
   max-height: 430px;
   overflow: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: rgba(var(--fg), 0.18) transparent;
 }
 
 .feed-item {
@@ -1911,7 +1964,7 @@ h2 {
   gap: 8px;
   padding: 8px;
   border-radius: 999px;
-  background: rgba(11, 12, 14, 0.82);
+  background: rgba(var(--shade), 0.82);
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   box-shadow: var(--edge);
@@ -1941,7 +1994,7 @@ h2 {
   gap: 6px;
   padding: 6px 8px;
   border-radius: 14px;
-  background: rgba(11, 12, 14, 0.82);
+  background: rgba(var(--shade), 0.82);
   box-shadow: var(--edge);
 }
 
@@ -2120,8 +2173,8 @@ h2 {
   margin-top: 10px;
   border-radius: 16px;
   background:
-    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.06) 1px, transparent 0) 0 0 / 22px 22px,
-    rgba(0, 0, 0, 0.18);
+    radial-gradient(circle at 1px 1px, rgba(var(--fg), 0.06) 1px, transparent 0) 0 0 / 22px 22px,
+    rgba(var(--well), calc(0.18 * var(--well-k)));
   box-shadow: inset 0 0 0 1px var(--hairline);
   overflow: hidden;
 }
@@ -2168,7 +2221,7 @@ h2 {
   font: 600 11.5px var(--font);
   text-anchor: middle;
   paint-order: stroke;
-  stroke: rgba(11, 12, 14, 0.85);
+  stroke: rgba(var(--shade), 0.85);
   stroke-width: 4px;
 }
 
@@ -2310,7 +2363,7 @@ h2 {
   border-radius: 10px;
   font-size: 12.5px;
   color: var(--ink-2);
-  background: rgba(0, 0, 0, 0.22);
+  background: rgba(var(--well), calc(0.22 * var(--well-k)));
   overflow-wrap: anywhere;
 }
 
@@ -2379,7 +2432,7 @@ h2 {
   font-style: normal;
   font-size: 11px;
   font-weight: 800;
-  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.25);
+  box-shadow: inset 0 0 0 1.5px rgba(var(--fg), 0.25);
 }
 
 .check.on i {
@@ -2425,7 +2478,7 @@ h2 {
   width: 36px;
   height: 20px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(var(--fg), 0.14);
   transition: background 0.15s ease-out;
 }
 
@@ -2437,7 +2490,8 @@ h2 {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--ink);
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
   transition: transform 0.15s ease-out;
 }
 
@@ -2500,8 +2554,8 @@ h2 {
 
 .filter.on {
   color: var(--ink);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(var(--fg), 0.2), rgba(var(--fg), 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), inset 0 0 0 1px rgba(var(--fg), 0.12);
 }
 
 .threads {
@@ -2657,12 +2711,12 @@ h2 {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--ink);
-  background: color-mix(in srgb, var(--c) 16%, rgba(255, 255, 255, 0.05));
+  background: color-mix(in srgb, var(--c) 16%, rgba(var(--fg), 0.05));
 }
 
 .convo-msg.mine .convo-bubble {
   border-radius: 14px 4px 14px 14px;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(var(--fg), 0.12);
 }
 
 .convo-unread {
@@ -2679,7 +2733,7 @@ h2 {
   border-radius: 12px;
   font-size: 12px;
   color: var(--dim-glass);
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(var(--fg), 0.035);
   box-shadow: inset 0 0 0 1px var(--hairline);
 }
 
@@ -2852,7 +2906,7 @@ h2 {
   gap: 6px 10px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.22);
+  background: rgba(var(--well), calc(0.22 * var(--well-k)));
 }
 
 .member-adv-body label {
@@ -3016,4 +3070,39 @@ h2 {
   min-width: 40px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/* The scenes are dark places in either look: the labels drawn on the office
+   floor, the 星域's universe. They keep the dark palette inside them. */
+:root[data-theme="light"] :is(.office-label, .orbit-world) {
+  color-scheme: dark;
+  --ink: #f5f6f8;
+  --ink-2: #f1f2f4;
+  --dim: #9398a1;
+  --dim-3: #6b7079;
+  --card: 20, 21, 24;
+  --hairline: rgba(255, 255, 255, 0.07);
+  --fg: 255, 255, 255;
+  --shade: 11, 12, 14;
+  --well: 0, 0, 0;
+  --well-k: 1;
+  --chip-mix: white;
+  --red-text: #ff8d97;
+  --green-2: #34d399;
+  --amber: #f5a524;
+  --blue: #3b9eff;
+  --st-work: #8cc4ff;
+  --st-wait: #f5c768;
+  --st-alert: #ff9a9f;
+  --st-done: #6ee7b7;
+}
+
+/* Light look: the marks' white details (eyes, ticks) would vanish on their
+   pale fill, so they take the mark's own colour. */
+:root[data-theme="light"] :is(svg.kind-mark, svg.icon) [fill="#fff"] {
+  fill: var(--a);
+}
+
+:root[data-theme="light"] :is(svg.kind-mark, svg.icon) [stroke="#fff"] {
+  stroke: var(--a);
 }

@@ -3,6 +3,7 @@
 // these; Rust echoes each save back as `settings-changed`, which replaces
 // `settings` (see `live()` in the provider and agent cards).
 
+import { applyTheme } from "../core/theme";
 import { Bridge, IS_TAURI, type CliInfo, type HookAgent } from "../core/bridge";
 import { DEFAULT_SETTINGS, type Settings } from "../core/state";
 import type { TeamAgentsView } from "../team/types";
@@ -13,6 +14,7 @@ export let version = "";
 
 export function replaceSettings(next: Settings) {
   settings = next;
+  applyTheme(settings.theme);
   changed();
 }
 

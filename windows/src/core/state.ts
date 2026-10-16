@@ -340,6 +340,8 @@ export interface Settings {
   language: "system" | "zh-TW" | "en";
   /** Whether Teamwork offers 中二模式 at all; off by default, for a sober look. */
   battleMode: boolean;
+  /** The settings window's and Teamwork's look; the island stays dark. */
+  theme: "dark" | "light";
 }
 
 /** A folder as a key: no trailing slash, and case-blind like Windows paths. */
@@ -385,6 +387,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dock: { ...DEFAULT_DOCK },
   language: "system",
   battleMode: false,
+  theme: "dark",
 };
 
 type Listener = () => void;

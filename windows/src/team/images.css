@@ -16,8 +16,8 @@
   border: 0;
   border-radius: 10px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  background: rgba(var(--fg), 0.06);
+  box-shadow: inset 0 0 0 1px rgba(var(--fg), 0.1);
   cursor: zoom-in;
   flex: none;
 }
@@ -42,7 +42,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.08) 50%, transparent 80%);
+  background: linear-gradient(100deg, transparent 20%, rgba(var(--fg), 0.08) 50%, transparent 80%);
   background-size: 200% 100%;
   animation: pic-wait 1.2s linear infinite;
 }

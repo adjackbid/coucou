@@ -5,6 +5,7 @@
 import "./settings.css";
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import { onLangChange, setLang } from "../core/i18n";
+import { applyTheme } from "../core/theme";
 import type { Settings } from "../core/state";
 import { glassify } from "../team/ui";
 import { Nav } from "./nav";
@@ -29,6 +30,7 @@ const root = document.getElementById("settings-root")!;
 const PAGES = [overviewPage, connectPage, installPage, chatPage, agentsPage, integrationsPage, islandPage, teamPage, generalPage];
 
 async function main() {
+  applyTheme(settings.theme);
   // Native dropdowns and model lists are drawn by Windows as a white list: the window's own instead.
   glassify(root);
   const boot = await Bridge.boot();

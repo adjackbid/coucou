@@ -10,6 +10,7 @@
 // stream between pictures (`team-screen`) and are moved into each new one.
 
 import { onLangChange, setLang, tr, trf } from "../core/i18n";
+import { applyTheme } from "../core/theme";
 import "./team.css";
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import type { AgentProfile, ModelChoice } from "../core/state";
@@ -60,6 +61,8 @@ function saveSheet(value: number) {
   }
 }
 applySheet();
+// Dark until the settings say otherwise (or `?theme=light` in a browser).
+applyTheme("dark");
 
 let dir = "";
 let files: TeamFile[] = [];
@@ -1989,6 +1992,7 @@ async function load() {
     const boot = await Bridge.boot();
     agents = boot?.settings.agents ?? [];
     setLang(boot?.lang);
+    applyTheme(boot?.settings.theme);
     // 中二模式 is off unless 設定 → 團隊與 Agent Center turned it on; a raid saved as
     // the last view then opens as the office (the preference itself is kept).
     office.battleAllowed = !!boot?.settings.battleMode;
@@ -2166,8 +2170,9 @@ async function start() {
     }
   });
   // Agents may have been added in the settings window meanwhile.
-  await onEvent<{ agents: AgentProfile[]; battleMode?: boolean }>("settings-changed", (s) => {
+  await onEvent<{ agents: AgentProfile[]; battleMode?: boolean; theme?: string }>("settings-changed", (s) => {
     agents = s.agents ?? agents;
+    applyTheme(s.theme);
     office.allowBattle(!!s.battleMode);
     if (!unsaved) render();
   });
