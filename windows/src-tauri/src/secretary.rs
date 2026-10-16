@@ -148,7 +148,7 @@ pub struct Office {
 }
 
 impl Office {
-    /// The office as the person set it up: `natives` from Settings → Agents,
+    /// The office as the person set it up: `natives` from Settings → Agent Provider,
     /// the team agents from Teamwork.
     pub fn new(teams: Arc<Teams>, natives: &[AgentProfile], driver: Arc<Agents>, tz_minutes: i64, name: String) -> Self {
         let doc = crate::team_agents::current();
@@ -1159,7 +1159,7 @@ fn agent_label(office: &Office, id: &str) -> String {
 // i18n: model-facing
 fn list_agents(office: &Office) -> String {
     if office.choices.is_empty() {
-        return "There are no team agents yet. Teams are built from team agents only: ask the user to add some in Teamwork → Agent Pool (each is built on a Cloud Agent or Local Agent from Settings → Agents).".into();
+        return "There are no team agents yet. Teams are built from team agents only: ask the user to add some in Teamwork → Agent Pool (each is built on a Cloud Agent or Local Agent from Settings → Agent Provider).".into();
     }
     // What each one really costs: its model's price (the same list as Teamwork → 成本與用量) and what it spent lately.
     let choices = crate::pricing::load_choices();

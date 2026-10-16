@@ -93,7 +93,7 @@ pub struct MemberConfig {
     pub role: String,
     #[serde(default)]
     pub duty: String,
-    /// The agent profile (Settings → Agents) this member runs as.
+    /// The agent profile (Settings → Agent Provider) this member runs as.
     pub agent: String,
     /// The model, instead of the agent's own. Empty: the agent's.
     #[serde(default)]
@@ -179,8 +179,8 @@ pub fn preview_path(work_dir: &str, locator: &str) -> Result<std::path::PathBuf,
 /// the window); the Chinese is said()'s own, for where it is shown as is.
 pub fn no_agent(name: &str, agent: &str) -> String {
     tr!(
-        if agent.is_empty() { format!("{name} 還沒有選擇代理") } else { format!("{name} 還沒有選擇代理(「{agent}」不在 設定 → Agents 或 Agent Pool 裡)") },
-        format!("{name} runs as agent '{agent}', which is not in Settings → Agents or Teamwork → Agent Pool.")
+        if agent.is_empty() { format!("{name} 還沒有選擇代理") } else { format!("{name} 還沒有選擇代理(「{agent}」不在 設定 → Agent Provider 或 Agent Pool 裡)") },
+        format!("{name} runs as agent '{agent}', which is not in Settings → Agent Provider or Teamwork → Agent Pool.")
     )
 }
 

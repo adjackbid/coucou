@@ -63,7 +63,7 @@ pub enum Protocol {
     N8n,
 }
 
-/// Where an agent does its work, as the person sorts it in Settings → Agents:
+/// Where an agent does its work, as the person sorts it in Settings → Agent Provider:
 /// on a cloud service, or on their own machine or network. A team agent is
 /// whatever its base is.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

@@ -132,8 +132,8 @@ fn rows() -> Vec<Row> {
             name: "Gemini CLI",
             command: "gemini",
             purpose: tr!(
-                "Google 的 Gemini agent，在 設定 → Agents 裡加成 ACP agent。",
-                "Google's Gemini agent, added in Settings → Agents as an ACP agent."
+                "Google 的 Gemini agent，在 設定 → Agent Provider 裡加成 ACP agent。",
+                "Google's Gemini agent, added in Settings → Agent Provider as an ACP agent."
             ),
             docs: "https://github.com/google-gemini/gemini-cli",
             methods: vec![("npm", "npm install -g @google/gemini-cli", needs_node)],

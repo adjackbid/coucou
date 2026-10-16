@@ -1,4 +1,4 @@
-// n8n nodes as agents (Settings → Agents, always a Local Agent): an n8n
+// n8n nodes as agents (Settings → Agent Provider, always a Local Agent): an n8n
 // workflow that starts with a Webhook node. There is no process and no
 // protocol: a turn is one POST of JSON to the Webhook's URL, and what the
 // workflow answers is the agent's reply — streamed to the sink like a CLI's

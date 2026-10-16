@@ -190,7 +190,7 @@ export const teamPage: Page = {
           h("span", { class: "hint", text: trf("{n} 個團隊 Agent", "{n} team agents", { n: count[where] }) }));
       source.replaceChildren(
         h("div", { class: "choice-list" }, line("cloud"), line("local")),
-        h("p", { class: "field-help", text: tr("新團隊（Agent Center 開的、你在團隊設定新增的成員）只用 Teamwork「Agent Pool」裡的團隊 Agent；以前設定好、用原生 Agent 的團隊照樣能啟動。", "New teams — Agent Center's, and members you add in Team setup — use only the team agents in Teamwork's Agent Pool; teams set up earlier with native agents still start.") }),
+        h("p", { class: "field-help", text: tr("新團隊（Agent Center 開的、你在團隊設定新增的成員）只用 Teamwork「Agent Pool」裡的團隊 Agent；以前設定好、直接用 Agent Provider 的團隊照樣能啟動。", "New teams — Agent Center's, and members you add in Team setup — use only the team agents in Teamwork's Agent Pool; teams set up earlier that use an Agent Provider directly still start.") }),
       );
     };
     ctx.onData(draw);
@@ -205,8 +205,8 @@ export const teamPage: Page = {
         tr("團隊與 Agent Center", "Team & Agent Center"),
         tr("Teamwork 和 Agent Center 在 Teamwork 視窗裡設定。這一頁顯示它們用了什麼，並帶你過去。", "Teamwork and Agent Center are set up in the Teamwork window. This page shows what they use and takes you there."),
         () => tr(
-          "Agent Center 是 Teamwork 裡替你組團隊的助理，它透過聊天模型說話（見「聊天模型」）。團隊成員用你在 Teamwork →「Agent Pool」裡定義的團隊 Agent 執行，每個團隊 Agent 都以「Agents」頁的一個 Cloud Agent 或 Local Agent 為基底。",
-          "Agent Center is the assistant in Teamwork that sets up teams for you. It talks through a chat model (see Chat models). Team members run as the team agents you define in Teamwork → Agent Pool, each built on a Cloud Agent or a Local Agent from the Agents page.",
+          "Agent Center 是 Teamwork 裡替你組團隊的助理，它透過聊天模型說話（見「聊天模型」）。團隊成員用你在 Teamwork →「Agent Pool」裡定義的團隊 Agent 執行，每個團隊 Agent 都用「Agent Provider」頁的一個 Cloud Agent 或 Local Agent 執行。",
+          "Agent Center is the assistant in Teamwork that sets up teams for you. It talks through a chat model (see Chat models). Team members run as the team agents you define in Teamwork → Agent Pool, each running on a Cloud Agent or a Local Agent from the Agent Provider page.",
         ),
       ),
       card({

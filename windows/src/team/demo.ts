@@ -68,7 +68,7 @@ export const demoFiles: { dir: string; files: TeamFile[] } = {
     {
       file: "docs.json",
       config: { ...config, id: "docs", name: tr("文件翻譯團隊", "Docs translation team"), goal: tr("把 README 翻成三種語言", "Translate the README into three languages") },
-      problems: ["The work folder D:\\Projects\\docs does not exist.", "AI 3 runs as agent 'cg', which is not in Settings → Agents."], // i18n-ok: Rust's English, worded by said()
+      problems: ["The work folder D:\\Projects\\docs does not exist.", "AI 3 runs as agent 'cg', which is not in Settings → Agent Provider."], // i18n-ok: Rust's English, worded by said()
     },
   ],
 };

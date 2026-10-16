@@ -57,7 +57,7 @@ async function main() {
   });
   void onEvent<string>("lang-changed", (l) => setLang(l));
   void onEvent<Settings>("settings-changed", (s) => replaceSettings({ ...settings, ...s }));
-  // Another window asked for a page ("Settings → Agents" in Teamwork, an integration's card).
+  // Another window asked for a page ("Settings → Agent Provider" in Teamwork, an integration's card).
   void onEvent<{ page: PageId; anchor: string | null; action: string | null }>("settings-goto", (g) =>
     nav.go(g.page, g.anchor ?? undefined, g.action ?? undefined),
   );

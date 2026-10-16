@@ -237,8 +237,8 @@ export const chatPage: Page = {
             "Claude, OpenAI, or anything that speaks the OpenAI format (OpenRouter, Azure, a local Ollama or LM Studio, your own proxy). The one marked \"In use\" answers the chat. Keys are stored in the Windows Credential Manager, never on disk.",
           ) }),
           h("p", { text: tr(
-            "和「Agents」不一樣：聊天模型只會說話；Agent 還能在你的資料夾裡做事。",
-            "Not the same as Agents: a chat model only talks; an agent can also work in your folders.",
+            "和「Agent Provider」不一樣：聊天模型只會說話；Agent 還能在你的資料夾裡做事。",
+            "Not the same as Agent Provider: a chat model only talks; an agent can also work in your folders.",
           ) }),
         ),
       ),

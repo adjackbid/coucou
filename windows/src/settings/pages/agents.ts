@@ -148,7 +148,7 @@ function locationSwitch(a: AgentProfile, set: (v: AgentLocation) => void): HTMLE
 export const agentsPage: Page = {
   id: "agents",
   icon: "agents",
-  name: () => "Agents",
+  name: () => "Agent Provider",
   render() {
     const list = h("div", { class: "stack" });
 
@@ -298,11 +298,11 @@ export const agentsPage: Page = {
       { class: "page-body" },
       pageHeader(
         "agents",
-        "Agents",
-        tr("Agent Center 會替你啟動、操作的 agent，分成 Cloud Agent 與 Local Agent：在聊天列挑一個，或在 Teamwork 做成團隊 Agent。", "Agents Agent Center starts and drives for you, sorted into Cloud Agents and Local Agents: pick one in the chat bar, or build Teamwork's team agents on them."),
+        "Agent Provider",
+        tr("Agent Center 實際用來做事的 agent，分成 Cloud Agent 與 Local Agent：在聊天列挑一個，或讓 Agent Pool 裡的 Agent 用它執行。", "The agents Agent Center actually works with, sorted into Cloud Agents and Local Agents: pick one in the chat bar, or have the agents in Agent Pool run on it."),
         () => tr(
-          "跟「連結 Agent」不一樣（那是 Agent Center 在旁邊看你自己開的工作階段），這裡的 agent 是 Agent Center 自己執行的：透過 Agent Client Protocol（Copilot CLI）、Codex 的 app server、Claude Code 或 Antigravity，或呼叫 n8n 工作流程的 Webhook。Cloud Agent 在雲端服務上工作；Local Agent 在你自己的電腦或網路裡工作（例如本機模型、自架的 n8n）。它們做事時工具步驟會即時出現，需要許可的會在瀏海島上問你。Teamwork 的團隊 Agent 就是以這些 agent 為基底做的。",
-          "Unlike \"Connect agents\" (Agent Center watches sessions you start yourself), these are agents Agent Center runs itself — over the Agent Client Protocol (Copilot CLI), Codex's app server, Claude Code or Antigravity — or n8n workflows it calls through their webhook. A Cloud Agent works on a cloud service; a Local Agent works on your own machine or network (a local model, a self-hosted n8n). Their tool calls show up as they work, and anything that needs permission asks in the island. Teamwork's team agents are built on these.",
+          "跟「連結 Agent」不一樣（那是 Agent Center 在旁邊看你自己開的工作階段），這裡的 agent 是 Agent Center 自己執行的：透過 Agent Client Protocol（Copilot CLI）、Codex 的 app server、Claude Code 或 Antigravity，或呼叫 n8n 工作流程的 Webhook。Cloud Agent 在雲端服務上工作；Local Agent 在你自己的電腦或網路裡工作（例如本機模型、自架的 n8n）。它們做事時工具步驟會即時出現，需要許可的會在瀏海島上問你。Teamwork Agent Pool 裡的每個 Agent，都用這裡的一個 Provider 執行。",
+          "Unlike \"Connect agents\" (Agent Center watches sessions you start yourself), these are agents Agent Center runs itself — over the Agent Client Protocol (Copilot CLI), Codex's app server, Claude Code or Antigravity — or n8n workflows it calls through their webhook. A Cloud Agent works on a cloud service; a Local Agent works on your own machine or network (a local model, a self-hosted n8n). Their tool calls show up as they work, and anything that needs permission asks in the island. Every agent in Teamwork's Agent Pool runs on one of these providers.",
         ),
       ),
       list,

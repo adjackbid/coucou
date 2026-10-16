@@ -19,7 +19,7 @@ const SKIP = new Set(["core/i18n.ts"]);
 
 /** English that is the same in both languages. */
 const SAME_IN_BOTH = new Set([
-  "Agent Center", "Agent Pool", "Mochi", "Claude", "Claude Code", "Copilot CLI", "Copilot", "Antigravity", "Codex", "Gemini CLI",
+  "Agent Center", "Agent Pool", "Agent Provider", "Provider", "Mochi", "Claude", "Claude Code", "Copilot CLI", "Copilot", "Antigravity", "Codex", "Gemini CLI",
   "GitHub", "Vercel", "Stripe", "n8n", "Resend", "Notion", "Cal.com", "Teamwork", "Agents", "Relay",
   "OpenAI", "OpenRouter", "Ollama", "LM Studio", "Azure OpenAI", "Node.js", "Git", "PowerShell", "WinGet", "npm",
   "ACP", "API", "MCP", "VS Code", "English", "中文", "Leader", "EN", "Agent", "Token", "PDF",

@@ -1,5 +1,5 @@
 // Agent Pool: agents of the person's own making for their teams. Each is built
-// on a native agent of Settings → Agents — its command (or an n8n node's
+// on a native agent of Settings → Agent Provider — its command (or an n8n node's
 // webhook), environment and key — and adds a name, a model, a system prompt,
 // MCP servers, skills, and a description Agent Center reads to pick
 // members. What a base's protocol cannot take is said here rather than
@@ -20,7 +20,7 @@ import type { TeamAgent, TeamAgentMcp, TeamAgents, TeamAgentSupport, TeamAgentSu
 
 export interface AgentsHost {
   render(): void;
-  /** Settings → Agents. */
+  /** Settings → Agent Provider. */
   natives(): AgentProfile[];
   /** The teams whose members run as this agent, by name. */
   usedBy(id: string): string[];
@@ -243,7 +243,7 @@ export function memberChoices(natives: AgentProfile[], keep: string, leader: boo
   }
   const old = natives.find((n) => n.id === keep);
   if (old && !out.some((c) => c.value === keep)) {
-    out.push({ value: old.id, label: old.name, hint: tr("原生 Agent(舊設定,照樣能跑)", "Native agent (set up earlier, still runs)"), group: tr("原生 Agent", "Native agents"), icon: () => kindIcon(markOf(old), 14) });
+    out.push({ value: old.id, label: old.name, hint: tr("直接用 Provider(舊設定,照樣能跑)", "A provider directly (set up earlier, still runs)"), group: "Agent Provider", icon: () => kindIcon(markOf(old), 14) });
   }
   return out;
 }
@@ -353,13 +353,13 @@ function modelField(a: TeamAgent, base: AgentProfile | undefined): HTMLElement {
     placeholder: node
       ? tr("可留空;填了會放進送給 n8n 的 model 欄位", "May be empty; sent to n8n as `model` when set")
       : base?.model || base?.env?.COPILOT_MODEL
-        ? trf("留空用基底的:{model}", "Leave empty for the base's: {model}", { model: base.model || base.env.COPILOT_MODEL })
-        : tr("留空用基底 Agent 的預設", "Leave empty for the base agent's default"),
+        ? trf("留空用 Provider 的:{model}", "Leave empty for the provider's: {model}", { model: base.model || base.env.COPILOT_MODEL })
+        : tr("留空用 Provider 的預設", "Leave empty for the provider's default"),
     autocomplete: "off",
     class: "field ta-model-input",
   }) as HTMLInputElement;
   suggest(input, () => {
-    if (!base) return tr("先選基底 Agent", "Pick a base agent first");
+    if (!base) return tr("先選 Provider", "Pick a provider first");
     if (node) return tr("n8n 節點沒有模型清單,直接輸入名稱", "An n8n node lists no models: type a name");
     const got = modelLists.get(base.id);
     if (got === undefined) return tr("讀取這個 Agent 提供的模型…", "Reading the models this agent offers…");
@@ -384,7 +384,7 @@ function modelField(a: TeamAgent, base: AgentProfile | undefined): HTMLElement {
     "div",
     { class: "ta-model" },
     input,
-    h("button", { type: "button", class: "ta-model-open", tabindex: "-1", "aria-label": tr("列出模型", "List models"), title: tr("列出基底 Agent 提供的模型", "List the models the base agent offers"), html: CHEVRON, onMousedown: (e: Event) => e.preventDefault(), onClick: () => (document.activeElement === input ? input.dispatchEvent(new Event("refresh-suggestions")) : input.focus()) }),
+    h("button", { type: "button", class: "ta-model-open", tabindex: "-1", "aria-label": tr("列出模型", "List models"), title: tr("列出 Provider 提供的模型", "List the models the provider offers"), html: CHEVRON, onMousedown: (e: Event) => e.preventDefault(), onClick: () => (document.activeElement === input ? input.dispatchEvent(new Event("refresh-suggestions")) : input.focus()) }),
   );
 }
 
@@ -392,8 +392,8 @@ function modelField(a: TeamAgent, base: AgentProfile | undefined): HTMLElement {
 function problemsOf(a: TeamAgent, natives: AgentProfile[]): string[] {
   const out: string[] = [];
   if (!a.name.trim()) out.push(tr("請填名稱。", "Enter a name."));
-  if (!a.base) out.push(tr("請選基底 Agent。", "Pick a base agent."));
-  else if (!natives.some((n) => n.id === a.base)) out.push(trf("基底「{base}」不在 設定 → Agents 裡,請改選一個。", "The base “{base}” is not in Settings → Agents: pick another one.", { base: a.base }));
+  if (!a.base) out.push(tr("請選 Provider。", "Pick a provider."));
+  else if (!natives.some((n) => n.id === a.base)) out.push(trf("Provider「{base}」不在 設定 → Agent Provider 裡,請改選一個。", "The provider “{base}” is not in Settings → Agent Provider: pick another one.", { base: a.base }));
   const seen = new Set<string>();
   for (const m of a.mcp.filter((m) => m.name || m.command || m.url)) {
     const label = m.name || tr("(未命名)", "(unnamed)");
@@ -443,7 +443,7 @@ function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
   const node = base?.protocol === "n8n";
   const can = supports[a.base];
   const choices = baseChoices(natives, draftIsNew ? draftWhere : null);
-  if (a.base && !base) choices.unshift({ value: a.base, label: trf("{base}(不存在)", "{base} (missing)", { base: a.base }), hint: tr("不在 設定 → Agents 裡", "Not in Settings → Agents") });
+  if (a.base && !base) choices.unshift({ value: a.base, label: trf("{base}(不存在)", "{base} (missing)", { base: a.base }), hint: tr("不在 設定 → Agent Provider 裡", "Not in Settings → Agent Provider") });
   const mcpOff = can?.mcp === "no";
   const skillsOff = can?.skills === "no";
   const where = base ? locationOf(base) : draftWhere;
@@ -498,12 +498,12 @@ function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
       field("ta-name", a.name, (v) => (a.name = v), { placeholder: tr("例如:嚴格審查員", "e.g. Strict reviewer") }),
       h("label", { text: tr("分類", "Category") }),
       categoryField(a),
-      h("label", { text: tr("基底 Agent", "Base agent") }),
+      h("label", { text: "Provider" }), // i18n-ok: the same in both
       h(
         "div",
         { class: "row nowrap" },
-        dropdown({ value: a.base, choices, placeholder: tr("選擇 設定 → Agents 裡的 Agent…", "Choose an agent from Settings → Agents…"), title: tr("用哪個 Agent 的指令(或 Webhook)、環境變數與金鑰執行", "Whose command (or webhook), environment variables and key it runs with"), onChange: (v) => { a.base = v; host.render(); } }),
-        h("span", { class: "hint" }, tr("來自 ", "From "), h("button", { class: "link", type: "button", onClick: () => host.openSettings() }, tr("設定 → Agents", "Settings → Agents")), tr(";金鑰沿用它的,不另外存。", "; it uses that agent's key, nothing is stored again.")),
+        dropdown({ value: a.base, choices, placeholder: tr("選擇 設定 → Agent Provider 裡的 Agent…", "Choose an agent from Settings → Agent Provider…"), title: tr("用哪個 Agent 的指令(或 Webhook)、環境變數與金鑰執行", "Whose command (or webhook), environment variables and key it runs with"), onChange: (v) => { a.base = v; host.render(); } }),
+        h("span", { class: "hint" }, tr("來自 ", "From "), h("button", { class: "link", type: "button", onClick: () => host.openSettings() }, tr("設定 → Agent Provider", "Settings → Agent Provider")), tr(";金鑰沿用它的,不另外存。", "; it uses that agent's key, nothing is stored again.")),
       ),
       h("label", { text: tr("模型", "Model") }),
       modelField(a, base),
@@ -516,7 +516,7 @@ function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
         "div",
         { class: "ta-mcps" },
         mcpOff
-          ? h("p", { class: node && !a.mcp.length ? "hint" : "problem", text: node ? (a.mcp.length ? tr("n8n 節點用的是工作流程自己的工具,不接 MCP server;這裡存了也不會帶給它。", "An n8n node uses its workflow's own tools, not MCP servers: these are saved but not given to it.") : tr("n8n 節點用的是工作流程自己的工具,不接 MCP server。", "An n8n node uses its workflow's own tools, not MCP servers.")) : tr("這個基底 Agent 的類型不支援個別成員的 MCP server(Antigravity 只讀工作資料夾的設定,會變成全隊共用),存了也不會帶給它。", "This base agent's type doesn't support MCP servers per member (Antigravity only reads the work folder's settings, which the whole team shares), so these are saved but not given to it.") })
+          ? h("p", { class: node && !a.mcp.length ? "hint" : "problem", text: node ? (a.mcp.length ? tr("n8n 節點用的是工作流程自己的工具,不接 MCP server;這裡存了也不會帶給它。", "An n8n node uses its workflow's own tools, not MCP servers: these are saved but not given to it.") : tr("n8n 節點用的是工作流程自己的工具,不接 MCP server。", "An n8n node uses its workflow's own tools, not MCP servers.")) : tr("這個 Provider 的類型不支援個別成員的 MCP server(Antigravity 只讀工作資料夾的設定,會變成全隊共用),存了也不會帶給它。", "This provider's type doesn't support MCP servers per member (Antigravity only reads the work folder's settings, which the whole team shares), so these are saved but not given to it.") })
           : null,
         ...a.mcp.map((m, i) => mcpRow(host, a, m, i, mcpOff)),
         node && !a.mcp.length ? null : h("button", { type: "button", class: "add", onClick: () => { a.mcp.push({ name: "", command: "", args: [], url: "" }); host.render(); } }, tr("＋ 新增 MCP server", "＋ Add MCP server")),
@@ -605,7 +605,7 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
       "header",
       { class: "ta-card-head" },
       h("i", { class: "blob", style: `--c:${face};--s:34px`, "aria-hidden": "true" }),
-      h("div", { class: "ta-card-title" }, h("b", { title: a.name || a.id }, base ? kindIcon(locationOf(base), 15) : null, h("span", { text: a.name || a.id })), h("small", { text: base ? kind.label : tr("基底不存在", "Base missing") })),
+      h("div", { class: "ta-card-title" }, h("b", { title: a.name || a.id }, base ? kindIcon(locationOf(base), 15) : null, h("span", { text: a.name || a.id })), h("small", { text: base ? kind.label : tr("Provider 不存在", "Provider missing") })),
       h(
         "div",
         { class: "ta-card-actions" },
@@ -617,8 +617,8 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
       "div",
       { class: "ta-card-kind" },
       a.category.trim() ? h("span", { class: "ta-cat", title: tr("分類", "Category"), text: a.category.trim() }) : null,
-      h("span", { class: `ta-kind ${kind.tone}`, title: base ? trf("基底 Agent:{name}({kind})", "Base agent: {name} ({kind})", { name: base.name, kind: kind.label }) : trf("基底「{base}」不在 設定 → Agents 裡", "The base “{base}” is not in Settings → Agents", { base: a.base }) }, base?.protocol === "n8n" ? kindIcon("n8n", 13) : null, h("span", { text: base ? base.name : trf("{base}(不存在)", "{base} (missing)", { base: a.base }) })),
-      h("span", { class: "ta-model-name", title: a.model ? trf("模型:{model}", "Model: {model}", { model: a.model }) : tr("沒有指定,用基底的模型", "None set: the base's model") }, model ? `${model}${a.model ? "" : tr("(基底)", " (base)")}` : base?.protocol === "n8n" ? tr("由工作流程決定", "Up to the workflow") : tr("基底預設模型", "Base's default model")),
+      h("span", { class: `ta-kind ${kind.tone}`, title: base ? trf("Provider:{name}({kind})", "Provider: {name} ({kind})", { name: base.name, kind: kind.label }) : trf("Provider「{base}」不在 設定 → Agent Provider 裡", "The provider “{base}” is not in Settings → Agent Provider", { base: a.base }) }, base?.protocol === "n8n" ? kindIcon("n8n", 13) : null, h("span", { text: base ? base.name : trf("{base}(不存在)", "{base} (missing)", { base: a.base }) })),
+      h("span", { class: "ta-model-name", title: a.model ? trf("模型:{model}", "Model: {model}", { model: a.model }) : tr("沒有指定,用 Provider 的模型", "None set: the provider's model") }, model ? `${model}${a.model ? "" : tr("(預設)", " (default)")}` : base?.protocol === "n8n" ? tr("由工作流程決定", "Up to the workflow") : tr("預設模型", "Default model")),
     ),
     h("p", { class: `ta-desc${a.description ? "" : " empty"}`, text: a.description || tr("還沒有說明:Agent Center 不知道它適合做什麼", "No description yet: Agent Center doesn't know what it is good for") }),
     h(
@@ -650,7 +650,7 @@ function startNew(host: AgentsHost, where: AgentLocation) {
 /** Why a kind cannot have a new agent yet, or its hint. */
 function addHint(where: AgentLocation, can: boolean): string {
   if (can) return markHint(where);
-  return where === "local" ? tr("先到 設定 → Agents 新增 Local Agent(本機模型或 n8n 節點)", "First add a Local Agent (a local model or an n8n node) in Settings → Agents") : tr("先到 設定 → Agents 新增 Cloud Agent", "First add a Cloud Agent in Settings → Agents");
+  return where === "local" ? tr("先到 設定 → Agent Provider 新增 Local Agent(本機模型或 n8n 節點)", "First add a Local Agent (a local model or an n8n node) in Settings → Agent Provider") : tr("先到 設定 → Agent Provider 新增 Cloud Agent", "First add a Cloud Agent in Settings → Agent Provider");
 }
 
 /** The tile that starts a new team agent of one kind, at the end of its grid. */
@@ -694,7 +694,7 @@ function section(host: AgentsHost, where: AgentLocation): HTMLElement {
       h("span", { class: "dim", text: markHint(where) }),
     ),
     noBase
-      ? h("p", { class: "hint" }, where === "local" ? tr("設定 → Agents 裡還沒有 Local Agent。先到 ", "Settings → Agents has no Local Agent yet. Add a local model or an n8n node in ") : tr("設定 → Agents 裡還沒有 Cloud Agent。先到 ", "Settings → Agents has no Cloud Agent yet. Add one in "), h("button", { class: "link", type: "button", onClick: () => host.openSettings() }, tr("設定 → Agents", "Settings → Agents")), where === "local" ? tr(" 新增本機模型或 n8n 節點。", " first.") : tr(" 新增一個。", " first."))
+      ? h("p", { class: "hint" }, where === "local" ? tr("設定 → Agent Provider 裡還沒有 Local Agent。先到 ", "Settings → Agent Provider has no Local Agent yet. Add a local model or an n8n node in ") : tr("設定 → Agent Provider 裡還沒有 Cloud Agent。先到 ", "Settings → Agent Provider has no Cloud Agent yet. Add one in "), h("button", { class: "link", type: "button", onClick: () => host.openSettings() }, tr("設定 → Agent Provider", "Settings → Agent Provider")), where === "local" ? tr(" 新增本機模型或 n8n 節點。", " first.") : tr(" 新增一個。", " first."))
       : null,
     h("div", { class: "ta-grid-list" }, ...mine.map(({ a, i }) => card(host, a, i)), addTile(host, where)),
   );
@@ -781,7 +781,7 @@ function ringNode(host: AgentsHost, x: RingPlace, focus: string | null, unfold: 
   const model = a.model || base?.model || "";
   const tip = [
     a.name || a.id,
-    `${base ? `${markName(mark)} · ${kindOf(base).label}` : tr("基底不存在", "Base missing")}${model ? ` · ${model}` : ""}`,
+    `${base ? `${markName(mark)} · ${kindOf(base).label}` : tr("Provider 不存在", "Provider missing")}${model ? ` · ${model}` : ""}`,
     a.description,
     tr("按一下編輯", "Click to edit"),
   ].filter(Boolean).join("\n");
@@ -948,7 +948,7 @@ function ringView(host: AgentsHost, entered: boolean): HTMLElement {
                 "div",
                 { class: "ta-ring-row", style: `--c:${face}` },
                 h("i", { class: "blob", style: `--c:${face};--s:22px`, "aria-hidden": "true" }),
-                h("div", { class: "ta-ring-row-text" }, h("b", {}, x.base ? kindIcon(markOf(x.base), 13) : null, h("span", { text: x.a.name || x.a.id })), h("small", { text: [x.base ? kindOf(x.base).label : tr("基底不存在", "Base missing"), model].filter(Boolean).join(" · ") })),
+                h("div", { class: "ta-ring-row-text" }, h("b", {}, x.base ? kindIcon(markOf(x.base), 13) : null, h("span", { text: x.a.name || x.a.id })), h("small", { text: [x.base ? kindOf(x.base).label : tr("Provider 不存在", "Provider missing"), model].filter(Boolean).join(" · ") })),
                 h("button", { type: "button", class: "ta-icon", title: tr("編輯", "Edit"), "aria-label": trf("編輯 {name}", "Edit {name}", { name: x.a.name }), html: ICON_EDIT, onClick: () => edit(host, x.a) }),
                 deleteButton(host, x.a),
               );

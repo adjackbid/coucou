@@ -155,7 +155,7 @@ export const overviewPage: Page = {
       const cloud = settings.agents.filter((a) => locationOf(a) === "cloud").length;
       const agents = card({
         anchor: "ov-agents",
-        title: tr("Agent Center 能執行的 Agent", "Agents Agent Center can run"),
+        title: "Agent Provider",
         body: [summaryRow(`Cloud ${cloud} · Local ${names.length - cloud}`, names.join(", ") || "—", { text: tr("管理 →", "Manage →"), go: () => ctx.go("agents") })], // i18n-ok: the same in both
       });
 

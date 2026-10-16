@@ -1499,7 +1499,7 @@ fn constitution_try(command: String) -> Option<(constitution::Level, String)> {
     constitution::current().judge(&request, &home).map(|(level, rule)| (level, rule.text))
 }
 
-/// Every agent a team may run as: Settings → Agents, and the team agents built on them.
+/// Every agent a team may run as: Settings → Agent Provider, and the team agents built on them.
 fn runnable(shared: &Shared) -> Vec<AgentProfile> {
     let natives = shared.settings.lock().unwrap().agents.clone();
     team_agents::current().runnable(&natives)

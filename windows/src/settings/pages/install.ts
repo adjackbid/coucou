@@ -70,7 +70,7 @@ function usedBy(cli: CliInfo, ctx: PageCtx): HTMLElement | null {
     return h("button", { type: "button", class: "link", text: tr("Agent Center：未連結，去連結 →", "Agent Center: not connected — Connect →"), onclick: () => ctx.go("connect", `agent-${agent}`, "connect") });
   }
   if (cli.id === "codex") {
-    return h("button", { type: "button", class: "link", text: tr("Agent Center 可以驅動它：Agents →", "Agent Center can run it: Agents →"), onclick: () => ctx.go("agents") });
+    return h("button", { type: "button", class: "link", text: tr("Agent Center 可以驅動它：Agent Provider →", "Agent Center can run it: Agent Provider →"), onclick: () => ctx.go("agents") });
   }
   return null;
 }

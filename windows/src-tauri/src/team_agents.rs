@@ -1,5 +1,5 @@
 // Team agents (Teamwork → Agent Pool): agents of the person's own making,
-// each built on a native agent of Settings → Agents. A team agent keeps its
+// each built on a native agent of Settings → Agent Provider. A team agent keeps its
 // base's command (or an n8n node's webhook), environment and key, and adds
 // its own name, model, system prompt, MCP servers and skills, and a
 // description Agent Center reads to know what it is good for. It is a
@@ -38,7 +38,7 @@ pub struct Mcp {
 pub struct TeamAgent {
     pub id: String,
     pub name: String,
-    /// The native agent (Settings → Agents) it runs on.
+    /// The native agent (Settings → Agent Provider) it runs on.
     pub base: String,
     /// Empty: the base's model.
     #[serde(default)]
@@ -140,7 +140,7 @@ impl TeamAgents {
                 out.push(tr!(format!("有兩個團隊 Agent 的 id 都是「{}」。", a.id), format!("Two team agents have the id '{}'.", a.id)));
             }
             if natives.iter().any(|n| n.id == a.id) {
-                out.push(tr!(format!("團隊 Agent「{name}」的 id 和「設定 → Agents」裡的某個 agent 相同。"), format!("Team agent '{name}' has the id of an agent in Settings → Agents.")));
+                out.push(tr!(format!("團隊 Agent「{name}」的 id 和「設定 → Agent Provider」裡的某個 agent 相同。"), format!("Team agent '{name}' has the id of an agent in Settings → Agent Provider.")));
             }
             if a.name.trim().is_empty() {
                 out.push(tr!(format!("團隊 Agent「{}」沒有名字。", a.id), format!("Team agent '{}' has no name.", a.id)));
@@ -393,7 +393,7 @@ mod tests {
         bad.mcp.push(Mcp { name: "web".into(), url: "ftp://x".into(), ..Default::default() });
         let doc = TeamAgents { agents: vec![bad.clone(), bad], ..Default::default() };
         let problems = doc.problems(&natives()).join("\n");
-        for needle in ["Two team agents", "Settings → Agents", "'x y' cannot be", "needs a command or a URL", "http:// or https://"] {
+        for needle in ["Two team agents", "Settings → Agent Provider", "'x y' cannot be", "needs a command or a URL", "http:// or https://"] {
             assert!(problems.contains(needle), "missing: {needle}\n{problems}");
         }
         assert!(TeamAgents { agents: vec![reviewer()], ..Default::default() }.problems(&natives()).is_empty());

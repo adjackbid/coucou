@@ -66,7 +66,7 @@ applyTheme("dark");
 
 let dir = "";
 let files: TeamFile[] = [];
-/** The agents of Settings → Agents: what a member can run as. */
+/** The agents of Settings → Agent Provider: what a member can run as. */
 let agents: AgentProfile[] = [];
 /** The latest snapshot of each team, by team id. */
 const runs = new Map<string, Snapshot>();
@@ -262,11 +262,11 @@ function said(text: string): string {
     [/^The work folder (.+) does not exist\.$/, (m) => trf("工作資料夾 {p} 不存在", "The work folder {p} doesn't exist", { p: m[1] })],
     [/^The work folder must be a full path\.$/, () => tr("還沒有選擇工作資料夾", "No work folder chosen yet")],
     [
-      /^(.+) runs as agent '(.*)', which is not in Settings → Agents( or Teamwork → Agent Pool)?\.$/,
+      /^(.+) runs as agent '(.*)', which is not in Settings → Agent Provider( or Teamwork → Agent Pool)?\.$/,
       (m) =>
         trf("{who} 還沒有選擇代理{why}", "{who} has no agent yet{why}", {
           who: m[1],
-          why: m[2] ? trf("(「{id}」不在 設定 → Agents 或 Agent Pool 裡)", " (\"{id}\" isn't in Settings → Agents or Agent Pool)", { id: m[2] }) : "",
+          why: m[2] ? trf("(「{id}」不在 設定 → Agent Provider 或 Agent Pool 裡)", " (\"{id}\" isn't in Settings → Agent Provider or Agent Pool)", { id: m[2] }) : "",
         }),
     ],
     [/^The leader '(.+)' is not a member\.$/, (m) => trf("Leader「{id}」不是團隊成員", "The Leader \"{id}\" isn't a member of the team", { id: m[1] })],
@@ -546,7 +546,7 @@ function sidebar(): HTMLElement {
               h("p", { class: "hint" },
                 tr("Agent Center 開團隊、你新增團隊成員時,只從 ", "When Agent Center starts a team or you add a member, agents come only from the team agents in "),
                 h("button", { class: "link", type: "button", onClick: () => { sidePop = null; place = "agents"; render(); } }, "Agent Pool"),
-                tr(" 裡的團隊 Agent(Cloud Agent 與 Local Agent)挑,Agent Center 會照每個 Agent 的說明選人。以前設定好、用原生 Agent 的團隊照樣能啟動。", " (Cloud Agents and Local Agents), and Agent Center picks each one by its description. Teams set up earlier with native agents still start.")))
+                tr(" 裡的團隊 Agent(Cloud Agent 與 Local Agent)挑,Agent Center 會照每個 Agent 的說明選人。以前設定好、直接用 Agent Provider 的團隊照樣能啟動。", " (Cloud Agents and Local Agents), and Agent Center picks each one by its description. Teams set up earlier that use an Agent Provider directly still start.")))
           : h("div", { class: "side-pop-body" },
               h("label", { text: tr("公司名稱", "Company name") }),
               h("input", {
@@ -801,7 +801,7 @@ function memberHelpCard(): HTMLElement {
         tr("2～6 個字的職稱。全隊都看得到,Leader 依它決定任務派給誰;工位和 Office 的標籤也顯示它。", "A job title of a word or two. The whole team sees it, the Leader decides who gets which task by it, and it labels the desk and the Office too."),
         tr("網站開發、圖片生成、測試", "Web dev, Image generation, Testing"),
       ),
-      item(tr("代理", "Agent"), tr("這位成員用哪個 AI 工具工作。每位成員可以用不同的代理;要新增或修改代理,到「設定 → Agents」。", "Which AI tool this member works with. Each member can use a different agent; to add or change agents, go to Settings → Agents.")),
+      item(tr("代理", "Agent"), tr("這位成員用哪個 AI 工具工作。每位成員可以用不同的代理;要新增或修改代理,到「設定 → Agent Provider」。", "Which AI tool this member works with. Each member can use a different agent; to add or change agents, go to Settings → Agent Provider.")),
       item(tr("模型", "Model"), tr("留空就用代理自己的預設模型。也可以指定一個:點這一欄會列出這個代理提供的模型。", "Leave it empty to use the agent's own default model. Or pick one: click the field to list the models this agent offers.")),
       item(
         tr("職責", "Duty"),
@@ -1005,11 +1005,11 @@ function setup(file: TeamFile): HTMLElement {
     // agent set up earlier stays on the list (memberChoices).
     const hintOf = (a: AgentProfile) => {
       const own = teamAgents().find((t) => t.id === a.id);
-      return own ? trf("基底 {base}", "based on {base}", { base: agents.find((n) => n.id === own.base)?.name ?? own.base }) : undefined;
+      return own ? trf("Provider:{base}", "Provider: {base}", { base: agents.find((n) => n.id === own.base)?.name ?? own.base }) : undefined;
     };
     const agentChoices = memberChoices(agents, m.agent, isLeader, hintOf);
     if (m.agent && !agentChoices.some((c) => c.value === m.agent)) {
-      agentChoices.unshift({ value: m.agent, label: trf("{id}(不存在)", "{id} (missing)", { id: m.agent }), hint: tr("不在 設定 → Agents 或 Agent Pool 裡", "Not in Settings → Agents or Agent Pool") });
+      agentChoices.unshift({ value: m.agent, label: trf("{id}(不存在)", "{id} (missing)", { id: m.agent }), hint: tr("不在 設定 → Agent Provider 或 Agent Pool 裡", "Not in Settings → Agent Provider or Agent Pool") });
     }
     const agent = dropdown({
       value: m.agent,
@@ -1033,7 +1033,7 @@ function setup(file: TeamFile): HTMLElement {
       autocomplete: "off",
     });
     suggest(model, () => {
-      const got = lister ? modelLists.get(lister.id) : tr("這個代理不在 設定 → Agents 裡", "This agent isn't in Settings → Agents");
+      const got = lister ? modelLists.get(lister.id) : tr("這個代理不在 設定 → Agent Provider 裡", "This agent isn't in Settings → Agent Provider");
       if (got === undefined) return tr("讀取這個代理提供的模型…", "Reading the models this agent offers…");
       return Array.isArray(got) ? got.map((c) => ({ value: c.id, label: c.id, hint: c.label !== c.id ? c.label : undefined })) : got;
     });
@@ -1137,13 +1137,13 @@ function setup(file: TeamFile): HTMLElement {
       tr("＋ 加入成員", "＋ Add member"),
     ),
     agents.length
-      ? h("p", { class: "hint" }, tr("代理在 ", "Add and edit agents in "), h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, tr("設定 → Agents", "Settings → Agents")), tr(" 裡新增與修改", ""), h("span", {}, tr(";成員只從 ", "; members are chosen from the team agents in "), h("button", { class: "link", type: "button", onClick: () => { place = "agents"; render(); } }, "Agent Pool"), tr(" 裡的團隊 Agent 挑", "")), tr("。 ", ". "),
+      ? h("p", { class: "hint" }, tr("代理在 ", "Add and edit agents in "), h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, tr("設定 → Agent Provider", "Settings → Agent Provider")), tr(" 裡新增與修改", ""), h("span", {}, tr(";成員只從 ", "; members are chosen from the team agents in "), h("button", { class: "link", type: "button", onClick: () => { place = "agents"; render(); } }, "Agent Pool"), tr(" 裡的團隊 Agent 挑", "")), tr("。 ", ". "),
           h("button", { class: "link", type: "button", disabled: doctor === "running", title: tr("逐一確認每個代理的 CLI 找不找得到、能不能回答版本;找得到就等於重新定位成功", "Checks each agent's CLI in turn: can it be found, does it answer with its version. Found means it was located again."), onClick: () => {
             doctor = "running";
             render();
             Bridge.agentsDoctor(agents).then((r) => { doctor = r; render(); }, (e) => { doctor = String(e); render(); });
           } }, doctor === "running" ? tr("檢查中…", "Checking…") : tr("檢查代理", "Check agents")))
-      : h("p", { class: "problem" }, tr("還沒有任何代理。請先到 ", "No agents yet. Create one in "), h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, tr("設定 → Agents", "Settings → Agents")), tr(" 建立。", " first.")),
+      : h("p", { class: "problem" }, tr("還沒有任何代理。請先到 ", "No agents yet. Create one in "), h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, tr("設定 → Agent Provider", "Settings → Agent Provider")), tr(" 建立。", " first.")),
     Array.isArray(doctor)
       ? h("div", { class: "agent-doctor" }, ...doctor.map((c) =>
           h("p", { class: c.error ? "problem" : "hint" },
@@ -1836,7 +1836,7 @@ const secretaryHost: SecretaryHost = {
 /** A team's 知識庫 panel, in its setup. */
 const knowledgeHost: KnowledgeHost = { render: () => render() };
 
-/** The Agent Pool page: team agents built on Settings → Agents. */
+/** The Agent Pool page: team agents built on Settings → Agent Provider. */
 const agentsHost: AgentsHost = {
   render: () => render(),
   natives: () => agents,
