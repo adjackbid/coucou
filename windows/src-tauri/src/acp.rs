@@ -120,7 +120,7 @@ pub struct AgentProfile {
     pub extras: Option<Extras>,
 }
 
-/// What a team agent (Teamwork → Agent 設定) adds to the native agent it is
+/// What a team agent (Teamwork → Agent Pool) adds to the native agent it is
 /// built on: words for its system prompt, MCP servers, skills, and the
 /// description the secretary picks it by.
 #[derive(Debug, Clone, PartialEq, Default)]

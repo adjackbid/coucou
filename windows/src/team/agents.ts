@@ -1,4 +1,4 @@
-// Agent 設定: agents of the person's own making for their teams. Each is built
+// Agent Pool: agents of the person's own making for their teams. Each is built
 // on a native agent of Settings → Agents — its command (or an n8n node's
 // webhook), environment and key — and adds a name, a model, a system prompt,
 // MCP servers, skills, and a description the secretary reads to pick
@@ -605,15 +605,14 @@ export function agentsPage(host: AgentsHost): HTMLElement {
   return h(
     "div",
     { class: "ta" },
-    h(
-      "section",
-      { class: "panel" },
-      h("p", {}, tr("團隊只用這裡的 Agent。每個團隊 Agent 都以 設定 → Agents 裡的一個 Cloud Agent 或 Local Agent 為基底,再加上自己的名稱、模型、system prompt、MCP 與 skill,和一段讓秘書知道它適合做什麼的說明。執行時沿用基底的指令(n8n 節點是 Webhook)、環境變數與金鑰。", "Teams use only the agents here. Each team agent is built on a Cloud Agent or a Local Agent from Settings → Agents, with its own name, model, system prompt, MCP servers and skills, and a description that tells the secretary what it is good for. It runs with the base's command (an n8n node's webhook), environment variables and key.")),
-      h("p", { class: "hint", text: tr("秘書開團隊、你在「團隊設定」新增成員時,Agent 下拉只列這裡的團隊 Agent。以前設定好、用原生 Agent 的團隊照樣能啟動。", "When the secretary sets up a team, or you add a member in Team setup, the agent list shows only the team agents here. Teams set up earlier with native agents still start.") }),
-      h("div", { class: "row ta-legend" }, ...(["cloud", "local", "n8n"] as const).map((m) => h("span", { class: "ta-legend-item", title: markHint(m) }, kindIcon(m, 16), h("span", { text: markName(m) })))),
-      state ? h("p", { class: "hint", role: "status", text: stateText() }) : null,
-      !draft && problem ? h("p", { class: "problem", text: problem }) : null,
-    ),
+    state || (!draft && problem)
+      ? h(
+          "section",
+          { class: "panel" },
+          state ? h("p", { class: "hint", role: "status", text: stateText() }) : null,
+          !draft && problem ? h("p", { class: "problem", text: problem }) : null,
+        )
+      : null,
     draft ? editor(host, draft) : null,
     section(host, "cloud"),
     section(host, "local"),

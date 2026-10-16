@@ -1450,7 +1450,7 @@ fn runnable(shared: &Shared) -> Vec<AgentProfile> {
     team_agents::current().runnable(&natives)
 }
 
-/// The team agents (Teamwork → Agent 設定), and what each native agent's
+/// The team agents (Teamwork → Agent Pool), and what each native agent's
 /// protocol can take of a team agent.
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]

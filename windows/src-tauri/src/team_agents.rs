@@ -1,4 +1,4 @@
-// Team agents (Teamwork → Agent 設定): agents of the person's own making,
+// Team agents (Teamwork → Agent Pool): agents of the person's own making,
 // each built on a native agent of Settings → Agents. A team agent keeps its
 // base's command (or an n8n node's webhook), environment and key, and adds
 // its own name, model, system prompt, MCP servers and skills, and a
@@ -65,7 +65,7 @@ pub struct TeamAgents {
 }
 
 /// What a protocol can take of a team agent: natively, through the member's
-/// brief, or not at all. Shown on the Agent 設定 page.
+/// brief, or not at all. Shown on the Agent Pool page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Support {

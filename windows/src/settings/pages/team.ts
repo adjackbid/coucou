@@ -66,7 +66,7 @@ export const teamPage: Page = {
           h("span", { class: "hint", text: trf("{n} 個團隊 Agent", "{n} team agents", { n: count[where] }) }));
       source.replaceChildren(
         h("div", { class: "choice-list" }, line("cloud"), line("local")),
-        h("p", { class: "field-help", text: tr("新團隊（秘書開的、你在團隊設定新增的成員）只用 Teamwork「Agent 設定」裡的團隊 Agent；以前設定好、用原生 Agent 的團隊照樣能啟動。", "New teams — the secretary's, and members you add in Team setup — use only the team agents in Teamwork's Agent settings; teams set up earlier with native agents still start.") }),
+        h("p", { class: "field-help", text: tr("新團隊（秘書開的、你在團隊設定新增的成員）只用 Teamwork「Agent Pool」裡的團隊 Agent；以前設定好、用原生 Agent 的團隊照樣能啟動。", "New teams — the secretary's, and members you add in Team setup — use only the team agents in Teamwork's Agent Pool; teams set up earlier with native agents still start.") }),
       );
     };
     ctx.onData(draw);
@@ -81,8 +81,8 @@ export const teamPage: Page = {
         tr("團隊與秘書", "Team & secretary"),
         tr("Teamwork 和秘書在 Teamwork 視窗裡設定。這一頁顯示它們用了什麼，並帶你過去。", "Teamwork and the secretary are set up in the Teamwork window. This page shows what they use and takes you there."),
         () => tr(
-          "秘書是 Teamwork 裡替你組團隊的助理，它透過聊天模型說話（見「聊天模型」）。團隊成員用你在 Teamwork →「Agent 設定」裡定義的團隊 Agent 執行，每個團隊 Agent 都以「Agents」頁的一個 Cloud Agent 或 Local Agent 為基底。",
-          "The secretary is the assistant in Teamwork that sets up teams for you. It talks through a chat model (see Chat models). Team members run as the team agents you define in Teamwork → Agent settings, each built on a Cloud Agent or a Local Agent from the Agents page.",
+          "秘書是 Teamwork 裡替你組團隊的助理，它透過聊天模型說話（見「聊天模型」）。團隊成員用你在 Teamwork →「Agent Pool」裡定義的團隊 Agent 執行，每個團隊 Agent 都以「Agents」頁的一個 Cloud Agent 或 Local Agent 為基底。",
+          "The secretary is the assistant in Teamwork that sets up teams for you. It talks through a chat model (see Chat models). Team members run as the team agents you define in Teamwork → Agent Pool, each built on a Cloud Agent or a Local Agent from the Agents page.",
         ),
       ),
       card({
@@ -93,7 +93,7 @@ export const teamPage: Page = {
       card({
         anchor: "team-source",
         title: tr("團隊 Agent", "Team agents"),
-        body: [source, row(h("button", { type: "button", text: tr("Agent 設定 ↗", "Agent settings ↗"), onclick: () => openTeam("agents") }))],
+        body: [source, row(h("button", { type: "button", text: "Agent Pool ↗", onclick: () => openTeam("agents") }))], // i18n-ok: a name, the same in both
       }),
       card({
         anchor: "teams",

@@ -257,11 +257,11 @@ function said(text: string): string {
     [/^The work folder (.+) does not exist\.$/, (m) => trf("工作資料夾 {p} 不存在", "The work folder {p} doesn't exist", { p: m[1] })],
     [/^The work folder must be a full path\.$/, () => tr("還沒有選擇工作資料夾", "No work folder chosen yet")],
     [
-      /^(.+) runs as agent '(.*)', which is not in Settings → Agents( or Teamwork → Agent 設定)?\.$/,
+      /^(.+) runs as agent '(.*)', which is not in Settings → Agents( or Teamwork → Agent Pool)?\.$/,
       (m) =>
         trf("{who} 還沒有選擇代理{why}", "{who} has no agent yet{why}", {
           who: m[1],
-          why: m[2] ? trf("(「{id}」不在 設定 → Agents 或 Agent 設定 裡)", " (\"{id}\" isn't in Settings → Agents or Agent settings)", { id: m[2] }) : "",
+          why: m[2] ? trf("(「{id}」不在 設定 → Agents 或 Agent Pool 裡)", " (\"{id}\" isn't in Settings → Agents or Agent Pool)", { id: m[2] }) : "",
         }),
     ],
     [/^The leader '(.+)' is not a member\.$/, (m) => trf("Leader「{id}」不是團隊成員", "The Leader \"{id}\" isn't a member of the team", { id: m[1] })],
@@ -519,7 +519,7 @@ function sidebar(): HTMLElement {
               h("label", { text: tr("開團隊使用的 Agent", "Agents for new teams") }),
               h("p", { class: "hint" },
                 tr("秘書開團隊、你新增團隊成員時,只從 ", "When the secretary starts a team or you add a member, agents come only from the team agents in "),
-                h("button", { class: "link", type: "button", onClick: () => { sidePop = null; place = "agents"; render(); } }, tr("Agent 設定", "Agent settings")),
+                h("button", { class: "link", type: "button", onClick: () => { sidePop = null; place = "agents"; render(); } }, "Agent Pool"),
                 tr(" 裡的團隊 Agent(Cloud Agent 與 Local Agent)挑,秘書會照每個 Agent 的說明選人。以前設定好、用原生 Agent 的團隊照樣能啟動。", " (Cloud Agents and Local Agents), and the secretary picks each one by its description. Teams set up earlier with native agents still start.")))
           : h("div", { class: "side-pop-body" },
               h("label", { text: tr("公司名稱", "Company name") }),
@@ -640,7 +640,7 @@ function sidebar(): HTMLElement {
           render();
         },
       },
-      h("span", { class: "team-item-name", text: tr("Agent 設定", "Agent settings") }),
+      h("span", { class: "team-item-name", text: "Agent Pool" }),
       h("span", { class: "team-item-state", text: ((c) => `Cloud ${c.cloud} · Local ${c.local}`)(teamAgentCounts(agents)) }), // i18n-ok: the same in both
     ),
     h("div", { class: "side-title", text: tr("團隊", "Teams") }),
@@ -983,7 +983,7 @@ function setup(file: TeamFile): HTMLElement {
     };
     const agentChoices = memberChoices(agents, m.agent, isLeader, hintOf);
     if (m.agent && !agentChoices.some((c) => c.value === m.agent)) {
-      agentChoices.unshift({ value: m.agent, label: trf("{id}(不存在)", "{id} (missing)", { id: m.agent }), hint: tr("不在 設定 → Agents 或 Agent 設定 裡", "Not in Settings → Agents or Agent settings") });
+      agentChoices.unshift({ value: m.agent, label: trf("{id}(不存在)", "{id} (missing)", { id: m.agent }), hint: tr("不在 設定 → Agents 或 Agent Pool 裡", "Not in Settings → Agents or Agent Pool") });
     }
     const agent = dropdown({
       value: m.agent,
@@ -1111,7 +1111,7 @@ function setup(file: TeamFile): HTMLElement {
       tr("＋ 加入成員", "＋ Add member"),
     ),
     agents.length
-      ? h("p", { class: "hint" }, tr("代理在 ", "Add and edit agents in "), h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, tr("設定 → Agents", "Settings → Agents")), tr(" 裡新增與修改", ""), h("span", {}, tr(";成員只從 ", "; members are chosen from the team agents in "), h("button", { class: "link", type: "button", onClick: () => { place = "agents"; render(); } }, tr("Agent 設定", "Agent settings")), tr(" 裡的團隊 Agent 挑", "")), tr("。 ", ". "),
+      ? h("p", { class: "hint" }, tr("代理在 ", "Add and edit agents in "), h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, tr("設定 → Agents", "Settings → Agents")), tr(" 裡新增與修改", ""), h("span", {}, tr(";成員只從 ", "; members are chosen from the team agents in "), h("button", { class: "link", type: "button", onClick: () => { place = "agents"; render(); } }, "Agent Pool"), tr(" 裡的團隊 Agent 挑", "")), tr("。 ", ". "),
           h("button", { class: "link", type: "button", disabled: doctor === "running", title: tr("逐一確認每個代理的 CLI 找不找得到、能不能回答版本;找得到就等於重新定位成功", "Checks each agent's CLI in turn: can it be found, does it answer with its version. Found means it was located again."), onClick: () => {
             doctor = "running";
             render();
@@ -1718,7 +1718,7 @@ function main(): HTMLElement {
     return h(
       "main",
       { class: "main pane" },
-      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": tr("位置", "Location") }, h("b", { text: tr("Agent 設定", "Agent settings") })), windowButtons()),
+      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": tr("位置", "Location") }, h("b", { text: "Agent Pool" })), windowButtons()),
       h("div", { class: "scroll" }, agentsPage(agentsHost)),
     );
   }
@@ -1810,7 +1810,7 @@ const secretaryHost: SecretaryHost = {
 /** A team's 知識庫 panel, in its setup. */
 const knowledgeHost: KnowledgeHost = { render: () => render() };
 
-/** The Agent 設定 page: team agents built on Settings → Agents. */
+/** The Agent Pool page: team agents built on Settings → Agents. */
 const agentsHost: AgentsHost = {
   render: () => render(),
   natives: () => agents,
@@ -2131,7 +2131,7 @@ async function start() {
       if (!unsaved) render();
     });
   });
-  // The settings window's "Open the secretary ↗" / "Agent settings ↗".
+  // The settings window's "Open the secretary ↗" / "Agent Pool ↗".
   await onEvent<string>("team-goto", (page) => {
     if (page === "secretary" || page === "agents") {
       place = page;

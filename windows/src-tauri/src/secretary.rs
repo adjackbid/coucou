@@ -1156,7 +1156,7 @@ fn agent_label(office: &Office, id: &str) -> String {
 // i18n: model-facing
 fn list_agents(office: &Office) -> String {
     if office.choices.is_empty() {
-        return "There are no team agents yet. Teams are built from team agents only: ask the user to add some in Teamwork → Agent 設定 (each is built on a Cloud Agent or Local Agent from Settings → Agents).".into();
+        return "There are no team agents yet. Teams are built from team agents only: ask the user to add some in Teamwork → Agent Pool (each is built on a Cloud Agent or Local Agent from Settings → Agents).".into();
     }
     let lines: Vec<String> = office
         .choices

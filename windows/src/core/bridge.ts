@@ -222,7 +222,7 @@ export const Bridge = {
   constitutionSave: (constitution: Constitution) => callOrThrow<void>("constitution_save", { constitution }),
   /** Which rule a command falls under, if any, and at what level. */
   constitutionTry: (command: string) => call<[ConstitutionLevel, string] | null>("constitution_try", { command }),
-  /** The team agents (Teamwork → Agent 設定), the secretary's switch, and what each native agent supports. */
+  /** The team agents (Teamwork → Agent Pool), the secretary's switch, and what each native agent supports. */
   teamAgentsLoad: () => callOrThrow<TeamAgentsView>("team_agents_load"),
   teamAgentsSave: (doc: TeamAgents) => callOrThrow<void>("team_agents_save", { doc }),
   /** Each agent's own folder (agent id, path), for the team setup. */
