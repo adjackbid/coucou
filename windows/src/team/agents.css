@@ -1028,3 +1028,57 @@
 .segmented.ta-effort button:disabled {
   opacity: 0.4;
 }
+
+/* What the agent can do: price, context, vision, thinking, images (views/caps.ts). */
+.caps-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-height: 18px;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.caps-row.empty {
+  display: none;
+}
+
+.caps-tier b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.caps-tier span {
+  opacity: 0.35;
+}
+
+.caps-tier,
+.caps-context {
+  white-space: nowrap;
+}
+
+.caps-tier + .caps-context::before,
+.caps-context + .caps-pill::before,
+.caps-tier + .caps-pill::before {
+  content: none;
+}
+
+.caps-pill {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: color-mix(in srgb, #8b7cff 70%, var(--chip-mix, white));
+  background: rgba(139, 124, 255, 0.16);
+}
+
+.caps-pill.image {
+  color: color-mix(in srgb, #f472b6 70%, var(--chip-mix, white));
+  background: rgba(244, 114, 182, 0.16);
+}
+
+.ta-model-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

@@ -1183,7 +1183,8 @@ fn list_agents(office: &Office) -> String {
             let plan = [p.id.as_str(), base].iter().any(|id| choices.billing.get(*id).is_some_and(|b| b == "subscription"));
             let found = (!model.is_empty()).then(|| crate::pricing::lookup(&model, &choices, &table)).flatten();
             let cost = cost_note(p.location(), &model, found.as_ref(), plan, spent.get(&p.id).copied());
-            format!("- {} (id {}): {:?}, default model {}{}{own}; {cost}", p.name, p.id, p.protocol, if model.is_empty() { "the agent's own" } else { &model }, endpoint)
+            let can = crate::caps::describe(&crate::caps::of(p, &choices, &table));
+            format!("- {} (id {}): {:?}, default model {}{}{own}; can: {can}; {cost}", p.name, p.id, p.protocol, if model.is_empty() { "the agent's own" } else { &model }, endpoint)
         })
         .collect();
     format!(
@@ -1542,7 +1543,7 @@ mod tests {
 
     #[test]
     fn an_agent_s_cost_is_its_model_s_price_and_what_it_spent() {
-        let found = crate::pricing::Found { price: crate::pricing::Price { input: 0.3, output: 1.2, cache_read: 0.03, cache_write: 0.0 }, source: "list".into(), listed_as: "deepseek-v4-flash".into() };
+        let found = crate::pricing::Found { price: crate::pricing::Price { input: 0.3, output: 1.2, cache_read: 0.03, cache_write: 0.0 }, source: "list".into(), listed_as: "deepseek-v4-flash".into(), can: Default::default() };
         let line = cost_note(crate::acp::Location::Cloud, "deepseek-v4-flash", Some(&found), false, Some((120_000, 0.42)));
         assert!(line.contains("input $0.3 / output $1.2") && line.contains("public price list") && line.contains("about $0.42"), "{line}");
         let plan = cost_note(crate::acp::Location::Cloud, "claude-opus-5", Some(&found), true, None);

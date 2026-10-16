@@ -118,6 +118,9 @@ pub struct AgentProfile {
     /// What a team agent adds to the profile it is built on. Never saved here.
     #[serde(skip)]
     pub extras: Option<Extras>,
+    /// The person says it can make pictures (it has a tool for it): nothing reports that on its own.
+    #[serde(default)]
+    pub image_gen: bool,
 }
 
 /// What a team agent (Teamwork → Agent Pool) adds to the native agent it is
@@ -162,6 +165,7 @@ impl AgentProfile {
             timeout_secs: 0,
             key_of: None,
             extras: None,
+            image_gen: false,
         }
     }
 

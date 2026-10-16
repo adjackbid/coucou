@@ -352,7 +352,7 @@ mod tests {
         assert_eq!((ai3.member_name.as_str(), ai3.agent.as_str(), ai3.team_name.as_str()), ("AI 3", "copilot", "購物網站團隊"));
 
         let table = Table {
-            models: [(pricing::normalize("gpt-5.6-sol"), pricing::Listed { price: pricing::Price { input: 4.0, output: 20.0, ..Default::default() }, listed_as: "gpt-5.6-sol".into(), provider: "openai".into() })].into(),
+            models: [(pricing::normalize("gpt-5.6-sol"), pricing::Listed { price: pricing::Price { input: 4.0, output: 20.0, ..Default::default() }, listed_as: "gpt-5.6-sol".into(), provider: "openai".into(), can: Default::default() })].into(),
             ..Default::default()
         };
         let models = price(&mut rows, &Choices::default(), &table);

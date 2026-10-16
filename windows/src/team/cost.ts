@@ -9,6 +9,7 @@
 //
 // The page keeps its own state here; main.ts draws it inside the window.
 
+import { forgetCaps } from "../views/caps";
 import "./cost.css";
 import { Bridge, IS_TAURI } from "../core/bridge";
 import { num, tr, trf } from "../core/i18n";
@@ -789,6 +790,8 @@ async function run(host: CostHost, what: string, task: () => Promise<string>) {
   try {
     notice = await task();
     forgetQuotes();
+    // A new price list may say more about what each model can do.
+    forgetCaps();
     loadedFor = "";
   } catch (err) {
     notice = trf("沒有成功:{why}", "Didn't work: {why}", { why: String(err instanceof Error ? err.message : err) });

@@ -19,6 +19,7 @@ mod log;
 mod meter;
 mod pipe;
 mod policy;
+mod caps;
 mod constitution;
 mod explain;
 mod cost;
@@ -1548,6 +1549,14 @@ async fn agent_models(agents: State<'_, Arc<Agents>>, profile: AgentProfile) -> 
     agents.models(&profile).await
 }
 
+/// What each agent can do (caps.rs), by the id it was sent with: a provider, a team agent, or a form not yet saved.
+#[tauri::command]
+fn agent_caps(profiles: Vec<AgentProfile>) -> std::collections::BTreeMap<String, caps::Caps> {
+    let choices = pricing::load_choices();
+    let table = pricing::cached_table();
+    profiles.iter().map(|p| (p.id.clone(), caps::of(p, &choices, &table))).collect()
+}
+
 #[tauri::command]
 fn chat_reset(chat: State<Chat>) {
     chat.reset();
@@ -2059,6 +2068,7 @@ pub fn run() {
             secretary_upload_force,
             secretary_upload_remove,
             secretary_reset,
+            agent_caps,
             history_stats,
             history_clear,
             team_past,

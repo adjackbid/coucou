@@ -1251,3 +1251,56 @@ input.short {
 :root[data-theme="light"] input[type="range"]::-webkit-slider-thumb {
   box-shadow: 0 0 0 1px rgba(22, 26, 34, 0.25), 0 1px 3px rgba(0, 0, 0, 0.2);
 }
+
+/* What an agent can do (views/caps.ts), and the tick for making images. */
+.caps-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-height: 20px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.caps-row.empty::before {
+  content: "—";
+}
+
+.caps-tier b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.caps-tier span {
+  opacity: 0.35;
+}
+
+.caps-pill {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: #b3a8ff;
+  background: rgba(139, 124, 255, 0.16);
+}
+
+.caps-pill.image {
+  color: #f9a8d4;
+  background: rgba(244, 114, 182, 0.16);
+}
+
+:root[data-theme="light"] .caps-pill {
+  color: #5b3cc4;
+}
+
+:root[data-theme="light"] .caps-pill.image {
+  color: #b0287a;
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+  color: var(--ink);
+}

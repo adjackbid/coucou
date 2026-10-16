@@ -6,12 +6,13 @@
 import { Bridge } from "../../core/bridge";
 import { tr, trf } from "../../core/i18n";
 import { DEFAULT_AGENT, locationOf, type AgentLocation, type AgentProfile } from "../../core/state";
+import { capsView, forgetCaps } from "../../views/caps";
 import { h, clear } from "../../views/dom";
 import { kindIcon, markHint, markName, markOf } from "../../views/agent-kind";
 import type { Page } from "../nav";
 import { agentKey, agentNeedsKey } from "../status";
 import { present, save, setPresent, settings, teamAgents } from "../store";
-import { badge, card, errText, field, notice, pageHeader, row } from "../ui";
+import { badge, card, errText, field, notice, pageHeader, row, toggle } from "../ui";
 
 export { agentKey };
 
@@ -151,6 +152,8 @@ export const agentsPage: Page = {
   name: () => "Agent Provider",
   render() {
     const list = h("div", { class: "stack" });
+    // Each visit asks afresh: the price list may have been fetched again in Teamwork.
+    forgetCaps();
 
     function redraw() {
       clear(list);
@@ -267,12 +270,23 @@ export const agentsPage: Page = {
         }
       });
 
+      // What it can do: read from the price lists, but making images only the person can say.
+      const abilities = field(
+        tr("能力", "Abilities"),
+        [
+          capsView(a),
+          h("label", { class: "inline-check" },
+            toggle(!!a.imageGen, (v) => { live().imageGen = v; void save(); redraw(); }, tr("可以生圖", "Makes images")),
+            h("span", { text: tr("可以生圖", "Makes images") })),
+        ],
+        tr("看圖、思考、上下文和價位依價目表自動判斷;能不能生圖沒有清單會說,它有產生圖片的工具時(例如 Antigravity)請打開,Agent Center 要做圖時才會挑它。", "Vision, thinking, context and price come from the price list; whether it makes images no list says, so turn this on when it has a tool for it (Antigravity, say): Agent Center picks it for pictures only then."),
+      );
       const usedBy = (teamAgents?.doc.agents ?? []).filter((t) => t.base === a.id).map((t) => t.name);
       const title = h("div", { class: "title-icon" }, kindIcon(markOf(a), 18), h("h2", { text: a.name }));
       const meta = isNode ? `${protocolName(a)} · ${hostOf(a.url) || tr("還沒填網址", "no URL yet")}` : `${protocolName(a)} · ${a.model?.trim() || envModel(a) || tr("它自己的預設模型", "its own default model")}`;
       const body = isNode
         ? [kind, field(tr("說話方式", "Speaks"), protocol), ...nodeFields(a, live, keyRow, syncBadge), keyRow, row(test, h("span", { class: "hint", text: tr("送一個 kind: test 的請求給 Webhook;在聊天列選它,就能跟它說話", "sends the webhook a request with kind: test; pick it in the chat bar to talk to it") })), feedback]
-        : [kind, field(tr("說話方式", "Speaks"), protocol), modelField(a, live, feedback), keyRow, row(test, h("span", { class: "hint", text: tr("在聊天列選它，就能跟它說話", "pick it in the chat bar to talk to it") })), feedback];
+        : [kind, field(tr("說話方式", "Speaks"), protocol), modelField(a, live, feedback), abilities, keyRow, row(test, h("span", { class: "hint", text: tr("在聊天列選它，就能跟它說話", "pick it in the chat bar to talk to it") })), feedback];
       return card({
         anchor: `agent-profile-${a.id}`,
         title,

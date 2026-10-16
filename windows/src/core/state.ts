@@ -168,6 +168,19 @@ export interface AgentProfile {
   headerName?: string;
   /** An n8n node: seconds one call may take; 0 or absent: 300. */
   timeoutSecs?: number;
+  /** The person says it makes images (it has a tool for it): nothing reports that on its own. */
+  imageGen?: boolean;
+}
+
+/** What an agent can do (caps.rs): absent where nothing says. */
+export interface AgentCaps {
+  model: string;
+  vision?: boolean | null;
+  thinking?: boolean | null;
+  context?: number | null;
+  /** 1 cheap … 4 dear. */
+  tier?: number | null;
+  image: boolean;
 }
 
 /** Whether a URL's host is this machine or a private network (acp.rs `is_local_address`). */

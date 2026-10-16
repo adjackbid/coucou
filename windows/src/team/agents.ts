@@ -14,6 +14,7 @@ import { Bridge, IS_TAURI } from "../core/bridge";
 import { tr, trf } from "../core/i18n";
 import { locationOf, type AgentLocation, type AgentProfile, type ModelChoice } from "../core/state";
 import { kindIcon, markColor, markHint, markName, markOf, type KindMark } from "../views/agent-kind";
+import { capsView, forgetCaps } from "../views/caps";
 import { h } from "../views/dom";
 import { CHEVRON, dropdown, refreshSuggestions, suggest, type Choice } from "./ui";
 import type { TeamAgent, TeamAgentMcp, TeamAgents, TeamAgentSupport, TeamAgentSupports } from "./types";
@@ -547,7 +548,7 @@ function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
         h("span", { class: "hint" }, tr("來自 ", "From "), h("button", { class: "link", type: "button", onClick: () => host.openSettings() }, tr("設定 → Agent Provider", "Settings → Agent Provider")), tr(";金鑰沿用它的,不另外存。", "; it uses that agent's key, nothing is stored again.")),
       ),
       h("label", { text: tr("模型", "Model") }),
-      modelField(a, base),
+      h("div", { class: "ta-model-wrap" }, modelField(a, base), base ? capsView({ ...base, id: `draft-${a.id}`, model: a.model || base.model }) : null),
       h("label", {}, "Effort ", badge(can?.effort, node)), // i18n-ok: the same in both
       effortField(host, a, can?.effort === "no"),
       h("label", { text: tr("說明", "Description") }),
@@ -664,6 +665,7 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
       h("span", { class: `ta-kind ${kind.tone}`, title: base ? trf("Provider:{name}({kind})", "Provider: {name} ({kind})", { name: base.name, kind: kind.label }) : trf("Provider「{base}」不在 設定 → Agent Provider 裡", "The provider “{base}” is not in Settings → Agent Provider", { base: a.base }) }, base?.protocol === "n8n" ? kindIcon("n8n", 13) : null, h("span", { text: base ? base.name : trf("{base}(不存在)", "{base} (missing)", { base: a.base }) })),
       h("span", { class: "ta-model-name", title: a.model ? trf("模型:{model}", "Model: {model}", { model: a.model }) : tr("沒有指定,用 Provider 的模型", "None set: the provider's model") }, model ? `${model}${a.model ? "" : tr("(預設)", " (default)")}` : base?.protocol === "n8n" ? tr("由工作流程決定", "Up to the workflow") : tr("預設模型", "Default model")),
     ),
+    base ? capsView({ ...base, id: a.id, model: a.model || base.model }) : null,
     h("p", { class: `ta-desc${a.description ? "" : " empty"}`, text: a.description || tr("還沒有說明:Agent Center 不知道它適合做什麼", "No description yet: Agent Center doesn't know what it is good for") }),
     h(
       "footer",
@@ -1009,7 +1011,8 @@ function ringView(host: AgentsHost, entered: boolean): HTMLElement {
 export function agentsPage(host: AgentsHost, entered = false): HTMLElement {
   void loadTeamAgents(host.render, host.natives());
   if (!doc) return h("div", { class: "ta" }, h("p", { class: "dim", text: tr("讀取中…", "Loading…") }));
-  // Coming back to the page: a form left open is put away, as if clicked away.
+  // Coming back to the page: abilities asked afresh (the price list may be newer), a form left open put away.
+  if (entered) forgetCaps();
   if (entered && draft) {
     draft = null;
     draftWhere = null;

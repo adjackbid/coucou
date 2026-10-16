@@ -5,7 +5,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import type { AgentCheck, AgentProfile, ModelChoice, Provider, Settings } from "./state";
+import type { AgentCheck, AgentProfile, ModelChoice, Provider, Settings, AgentCaps } from "./state";
 import type { Dock } from "./dock";
 import { tr } from "./i18n";
 import type { Constitution, ConstitutionLevel, Found, KnowledgeAdded, KnowledgeDoc, KnowledgeView, KnowledgeVisibility, SecretaryUpload, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
@@ -192,6 +192,8 @@ export const Bridge = {
   acpTest: (profile: AgentProfile) => callOrThrow<string>("acp_test", { profile }),
   /** The models an agent offers (a handshake, no prompt: nothing is spent). */
   agentModels: (profile: AgentProfile) => callOrThrow<ModelChoice[]>("agent_models", { profile }),
+  /** What each agent can do, by the id it was sent with (caps.rs). */
+  agentCaps: (profiles: AgentProfile[]) => call<Record<string, AgentCaps>>("agent_caps", { profiles }),
   /** 檢查代理: each profile's CLI looked up and asked for its version. */
   agentsDoctor: (profiles: AgentProfile[]) => callOrThrow<AgentCheck[]>("agents_doctor", { profiles }),
 
