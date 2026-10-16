@@ -14,15 +14,15 @@ use std::ffi::c_void;
 
 use tauri::WebviewWindow;
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER};
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetWindowLongW, SetWindowLongW, SetWindowPos, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WS_CAPTION,
+};
 
 const WCA_ACCENT_POLICY: u32 = 19;
 const ACCENT_ENABLE_BLURBEHIND: u32 = 3;
 const ACCENT_ENABLE_ACRYLICBLURBEHIND: u32 = 4;
 const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
 const DWMWCP_ROUND: u32 = 2;
-const DWMWA_NCRENDERING_POLICY: u32 = 2;
-const DWMNCRP_DISABLED: u32 = 1;
 
 #[repr(C)]
 struct AccentPolicy {
@@ -122,12 +122,6 @@ pub fn apply(win: &WebviewWindow, tint: u32) {
             };
             let blurred = set_composition().map(|set| set(hwnd, &mut data) != 0).unwrap_or(false);
             crate::log::line(if blurred { "glass: Windows 10 — classic blur behind" } else { "glass: Windows 10 — blur refused; plainly transparent" });
-            // The window keeps a caption style (the windowing library's way
-            // to an undecorated window), and Windows 10 draws that caption —
-            // the title, – □ × — behind a page it can see through. Nothing
-            // of the system frame is drawn: the page is the whole window.
-            let off = DWMNCRP_DISABLED;
-            let _ = DwmSetWindowAttribute(hwnd, DWMWA_NCRENDERING_POLICY, (&off as *const u32).cast(), 4);
         } else {
             let mut policy = AccentPolicy { state: ACCENT_ENABLE_ACRYLICBLURBEHIND, flags: 0, color: tint, animation: 0 };
             let mut data = CompositionData {
@@ -146,6 +140,28 @@ pub fn apply(win: &WebviewWindow, tint: u32) {
         // A window made hidden has its frame measured once, the standard way,
         // title bar included; asking for it to be measured again is what
         // lets the windowing library take the title bar away.
+        let _ = SetWindowPos(hwnd, None, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    }
+}
+
+/// Windows 10 draws a window's standard frame — its title, – □ ×, its
+/// border — under the whole window when the window has a caption style,
+/// and the page lets it show through. The windowing library gives its
+/// undecorated windows that style and puts it back whenever it rewrites
+/// the styles (shown, hidden, maximized, restored): it is taken away again
+/// after each of those.
+pub fn drop_caption(win: &WebviewWindow) {
+    if !win10() {
+        return;
+    }
+    let Ok(raw) = win.hwnd() else { return };
+    let hwnd = HWND(raw.0 as isize as *mut _);
+    unsafe {
+        let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+        if style & WS_CAPTION.0 == 0 {
+            return;
+        }
+        SetWindowLongW(hwnd, GWL_STYLE, (style & !WS_CAPTION.0) as i32);
         let _ = SetWindowPos(hwnd, None, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
     }
 }

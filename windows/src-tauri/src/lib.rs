@@ -1830,6 +1830,7 @@ fn create_team_window(app: &AppHandle) {
         Ok(win) => {
             // Coucou's black, thin enough for the desktop to show through.
             glass::apply(&win, GLASS_TINT);
+            glass::drop_caption(&win);
             glass::round_corners(&win);
             let hidden = win.clone();
             win.on_window_event(move |event| match event {
@@ -1837,7 +1838,11 @@ fn create_team_window(app: &AppHandle) {
                     api.prevent_close();
                     let _ = hidden.hide();
                 }
-                tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => glass::round_corners(&hidden),
+                // Maximized or restored, the window's styles were just rewritten.
+                tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => {
+                    glass::drop_caption(&hidden);
+                    glass::round_corners(&hidden);
+                }
                 _ => {}
             });
         }
@@ -1852,6 +1857,8 @@ pub fn show_team_window(app: &AppHandle) {
     };
     let _ = win.unminimize();
     let _ = win.show();
+    // Shown, its styles were rewritten: no caption again (glass.rs).
+    glass::drop_caption(&win);
     let _ = win.set_focus();
 }
 
