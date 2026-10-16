@@ -507,8 +507,8 @@ function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
       ),
       h("label", { text: tr("模型", "Model") }),
       modelField(a, base),
-      h("label", { text: tr("說明(給 Agent Center 看)", "Description (for Agent Center)") }),
-      field("ta-desc", a.description, (v) => (a.description = v), { rows: "2", placeholder: tr("適合做什麼、擅長什麼。Agent Center 開團隊時照這段話挑人。", "What it is good at. Agent Center picks members by this when it sets up a team.") }, "textarea"),
+      h("label", { text: tr("說明", "Description") }),
+      field("ta-desc", a.description, (v) => (a.description = v), { rows: "2", placeholder: tr("適合做什麼、擅長什麼。", "What it is good at.") }, "textarea"),
       h("label", {}, "System prompt ", badge(can?.systemPrompt, node)), // i18n-ok: the same in both
       field("ta-prompt", a.systemPrompt, (v) => (a.systemPrompt = v), { rows: "6", placeholder: node ? tr("每次呼叫都放在 systemPrompt 欄位送給工作流程", "Sent to the workflow as systemPrompt with every call") : tr("這個 Agent 一直要遵守的指示、口吻、做事方式", "Instructions, tone and ways of working this agent always keeps to") }, "textarea"),
       h("label", {}, "MCP server ", badge(can?.mcp, node)), // i18n-ok: the same in both
@@ -923,7 +923,7 @@ function ringView(host: AgentsHost, entered: boolean): HTMLElement {
         { class: "ta-ring-field" },
         lines,
         h("div", { class: `ta-ring-hub${focus !== null ? " on" : ""}`, style: `left:${(cx / S) * 100}%;top:${(cy / S) * 100}%` }, h("span", { class: "ta-ring-core", html: HUB }), h("b", { text: "Agent Center" })),
-        h("span", { class: "ta-ring-zone local", style: at(edge), title: markHint("local") }, kindIcon("local", 14), h("span", { text: tr("內部 · 你的電腦或網路", "Inside · your machine or network") })),
+        h("span", { class: "ta-ring-zone local", style: at(edge), title: markHint("local") }, kindIcon("local", 14), h("span", { text: tr("內部 · 地端服務", "Inside · on-premises") })),
         cloud ? h("span", { class: "ta-ring-zone cloud", style: at(rCloud), title: markHint("cloud") }, kindIcon("cloud", 14), h("span", { text: tr("外部 · 雲端服務", "Outside · cloud services") })) : null,
         ...places.map((x, n) => ringNode(host, x, focus, unfold(n))),
         all.length ? null : h("p", { class: "ta-ring-empty", text: tr("還沒有 Agent。按左下角新增第一個。", "No agents yet. Add the first one at the bottom left.") }),
