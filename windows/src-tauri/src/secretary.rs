@@ -1158,6 +1158,17 @@ fn list_agents(office: &Office) -> String {
     if office.choices.is_empty() {
         return "There are no team agents yet. Teams are built from team agents only: ask the user to add some in Teamwork → Agent Pool (each is built on a Cloud Agent or Local Agent from Settings → Agents).".into();
     }
+    // What each one really costs: its model's price (the same list as Teamwork → 成本與用量) and what it spent lately.
+    let choices = crate::pricing::load_choices();
+    let table = crate::pricing::cached_table();
+    let now = crate::team::store::now_ms();
+    let report = crate::cost::report(&settings::team_logs_dir(), now.saturating_sub(30 * 86_400_000), now + 86_400_000);
+    let mut spent: BTreeMap<String, (u64, f64)> = BTreeMap::new();
+    for r in &report.rows {
+        let e = spent.entry(r.agent.clone()).or_default();
+        e.0 += r.usage.input + r.usage.output + r.usage.cache_read + r.usage.cache_write;
+        e.1 += r.estimated_usd.unwrap_or(0.0);
+    }
     let lines: Vec<String> = office
         .choices
         .iter()
@@ -1165,13 +1176,44 @@ fn list_agents(office: &Office) -> String {
             let endpoint = p.env.get("COPILOT_PROVIDER_BASE_URL").filter(|b| b.starts_with("http")).map(|b| format!(", own endpoint {b}")).unwrap_or_default();
             let model = crate::acp::running_model(p, &crate::acp::Launch::default());
             let own = crate::team_agents::describe(p).map(|d| format!(" — {d}")).unwrap_or_default();
-            format!("- {} (id {}): {:?}, default model {}{}{own}", p.name, p.id, p.protocol, if model.is_empty() { "the agent's own" } else { &model }, endpoint)
+            let base = p.extras.as_ref().map(|x| x.base.as_str()).unwrap_or(&p.id);
+            let plan = [p.id.as_str(), base].iter().any(|id| choices.billing.get(*id).is_some_and(|b| b == "subscription"));
+            let found = (!model.is_empty()).then(|| crate::pricing::lookup(&model, &choices, &table)).flatten();
+            let cost = cost_note(p.location(), &model, found.as_ref(), plan, spent.get(&p.id).copied());
+            format!("- {} (id {}): {:?}, default model {}{}{own}; {cost}", p.name, p.id, p.protocol, if model.is_empty() { "the agent's own" } else { &model }, endpoint)
         })
         .collect();
     format!(
-        "The user's team agents (build new teams only from these; pick each member by what its description says it is good for; a Local Agent keeps the work on the user's own machine or network, a Cloud Agent sends it to a cloud service; an n8n workflow is never the leader):\n{}",
+        "The user's team agents (build new teams only from these; pick each member by what its description says it is good for; a Local Agent keeps the work on the user's own machine or network, a Cloud Agent sends it to a cloud service; an n8n workflow is never the leader). Prices are US dollars per million tokens, from the same price list as the cost page:\n{}",
         lines.join("\n")
     )
+}
+
+/// What an agent costs, for comparing them: its model's price and where it came from, a plan
+/// that is not billed per token, and what it spent in the last 30 days.
+// i18n: model-facing
+fn cost_note(place: crate::acp::Location, model: &str, found: Option<&crate::pricing::Found>, plan: bool, spent: Option<(u64, f64)>) -> String {
+    let mut out = match found {
+        Some(f) => {
+            let from = match f.source.as_str() {
+                "override" => "the user's own price",
+                "proxy" => "its endpoint's price",
+                _ => "the public price list",
+            };
+            format!("price input ${} / output ${} / cache read ${} ({from})", f.price.input, f.price.output, f.price.cache_read)
+        }
+        None if model.is_empty() => "price unknown: it uses whatever model the agent picks".to_string(),
+        None if place == crate::acp::Location::Local => "no price known: a local model is usually not charged per token".to_string(),
+        None => "no price known for its model (the user can add one in 成本與用量 → 價格表)".to_string(),
+    };
+    if plan {
+        out.push_str("; on a subscription plan: no extra charge per token, the price above is only its API equivalent");
+    }
+    match spent {
+        Some((tokens, usd)) if tokens > 0 => out.push_str(&format!("; spent in the last 30 days: {tokens} tokens, about ${usd:.2}")),
+        _ => out.push_str("; not used in the last 30 days"),
+    }
+    out
 }
 
 // ── What the person confirmed ────────────────────────────────────────────────
@@ -1356,7 +1398,7 @@ Now: {} (the user's local time).\n\
             "" | "秘書" | "Secretary" | "Agent Center" => String::new(),
             name => format!("Your name is {name}; the user calls you that, and you may call yourself that. "),
         },
-        " The user builds teams from their own team agents only: list_agents lists them with what each is good for and whether it is a Cloud Agent or a Local Agent; choose members by those descriptions, and never name an agent that is not listed. When you talk to the user, call a team agent by its name, never by its id (ta-…).",
+        " The user builds teams from their own team agents only: list_agents lists them with what each is good for, whether it is a Cloud Agent or a Local Agent, and what it costs; choose members by those descriptions, and never name an agent that is not listed. When the user wants it cheap, on a budget, or asks which costs less (or wants the best whatever it costs), compare the agents by the prices and recent spend list_agents gives, not only by what their descriptions say, and tell the user the prices you compared; a description is the user's own note, the price is the fact, so when they disagree say so. An agent on a subscription plan costs nothing extra per token. When you talk to the user, call a team agent by its name, never by its id (ta-…).",
         when(crate::team::store::now_ms(), office.tz_minutes),
         crate::i18n::reply_language(),
     )
@@ -1390,7 +1432,7 @@ fn describe() -> Vec<Tool> {
             json!({ "team": team, "period": { "type": "string", "enum": ["today", "yesterday", "7d", "30d", "month", "all"] } }),
             &["team"],
         ),
-        tool("list_agents", "The agents members can run as, with their default models.", json!({}), &[]),
+        tool("list_agents", "The agents members can run as: their default models, what each is good for, its price per million tokens and what it spent in the last 30 days.", json!({}), &[]),
         tool("agent_models", "The models one agent offers (asks the agent's endpoint).", json!({ "agent": { "type": "string", "description": "The agent's id." } }), &["agent"]),
         tool(
             "propose_team",
@@ -1468,6 +1510,17 @@ fn label(call: &Call, office: &Office) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_agent_s_cost_is_its_model_s_price_and_what_it_spent() {
+        let found = crate::pricing::Found { price: crate::pricing::Price { input: 0.3, output: 1.2, cache_read: 0.03, cache_write: 0.0 }, source: "list".into(), listed_as: "deepseek-v4-flash".into() };
+        let line = cost_note(crate::acp::Location::Cloud, "deepseek-v4-flash", Some(&found), false, Some((120_000, 0.42)));
+        assert!(line.contains("input $0.3 / output $1.2") && line.contains("public price list") && line.contains("about $0.42"), "{line}");
+        let plan = cost_note(crate::acp::Location::Cloud, "claude-opus-5", Some(&found), true, None);
+        assert!(plan.contains("subscription") && plan.contains("not used"), "{plan}");
+        assert!(cost_note(crate::acp::Location::Local, "qwen3-coder", None, false, None).contains("local model"));
+        assert!(cost_note(crate::acp::Location::Cloud, "", None, false, None).contains("price unknown"));
+    }
 
     #[test]
     fn a_missing_work_folder_is_created_only_when_the_person_says_so() {

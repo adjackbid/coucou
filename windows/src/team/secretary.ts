@@ -166,7 +166,7 @@ let name = stored("coucou.secretary.name")?.trim() ?? "";
 const OLD_DEFAULT = "\u79d8\u66f8";
 
 /** Whether the person gave Agent Center a name of their own. */
-const named = () => !!name && name !== OLD_DEFAULT;
+const named = () => !!name && name !== OLD_DEFAULT && name !== "Agent Center";
 
 export function secretaryName(): string {
   return named() ? name : "Agent Center";
