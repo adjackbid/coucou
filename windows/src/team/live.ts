@@ -65,7 +65,7 @@ const keyOf = (team: string, member: string) => `${team}/${member}`;
 
 function nameOf(snap: Snapshot | undefined, id: string): string {
   if (id === YOU) return tr("你", "You");
-  if (id === SYSTEM) return "Coucou";
+  if (id === SYSTEM) return "Agent Center";
   return snap?.members.find((m) => m.id === id)?.name ?? id;
 }
 
@@ -173,7 +173,7 @@ export function heardWords(text: string): string {
     [/^No task exists yet/, () => tr("還沒有任務,請馬上建立", "No task yet: create them now")],
     [/^You ended your turn, but this is still open/, () => tr("提醒:手上的工作還沒回報", "Reminder: your open work isn't reported yet")],
     [/^You were restarted/, () => tr("你被重新啟動了", "You were restarted")],
-    [/^Coucou was closed while the team was working/, () => tr("Coucou 重新開啟了,從中斷的地方接著做", "Coucou reopened: carry on where you left off")],
+    [/^(?:Coucou|Agent Center) was closed while the team was working/, () => tr("Agent Center 重新開啟了,從中斷的地方接著做", "Agent Center reopened: carry on where you left off")],
     [/^Every task has been accepted\./, () => tr("全部驗收完成,請寫最終報告", "Everything is accepted: write the final report")],
     [/^You asked: [\s\S]*?\nThe user answers: ([\s\S]+)/, (m) => trf("你的回覆:{answer}", "Your answer: {answer}", { answer: m[1] })],
   ];
@@ -195,7 +195,7 @@ function row(snap: Snapshot | undefined, l: Line): HTMLElement {
             h(
               "div",
               { class: "heard", style: `--from:${colorOf(snap, x.from)}` },
-              h("b", { text: x.from === SYSTEM ? "Coucou" : nameOf(snap, x.from) }),
+              h("b", { text: x.from === SYSTEM ? "Agent Center" : nameOf(snap, x.from) }),
               short(heardWords(x.text), 160),
             ),
           );

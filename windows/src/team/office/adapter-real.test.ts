@@ -31,7 +31,7 @@ describe("teamEntities", () => {
     expect(done.workStatus).toBe("completed");
   });
 
-  it("planning and reviewing come from Coucou's own reading of the board", () => {
+  it("planning and reviewing come from Agent Center's own reading of the board", () => {
     const snap = demoSnapshot();
     snap.members[0] = { ...snap.members[0], status: "working", phase: "planning" };
     snap.members[1] = { ...snap.members[1], status: "working", phase: "reviewing" };

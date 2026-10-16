@@ -133,13 +133,11 @@ pub struct Reply {
 /// What the secretary can see and act on.
 pub struct Office {
     pub teams: Arc<Teams>,
-    /// Every agent a team may run as: the native ones and the team agents.
+    /// Every agent a team may run as: the team agents, and the native ones
+    /// a team set up before may still name.
     pub agents: Vec<AgentProfile>,
-    /// What a new team is built from: the native agents, or — when the
-    /// person switched to them — the team agents only (team_agents.rs).
+    /// What a new team is built from: the team agents only (team_agents.rs).
     pub choices: Vec<AgentProfile>,
-    /// The switch is on the team agents.
-    pub team_agents: bool,
     pub driver: Arc<Agents>,
     /// The person's clock: minutes to add to UTC for local time.
     pub tz_minutes: i64,
@@ -149,14 +147,13 @@ pub struct Office {
 
 impl Office {
     /// The office as the person set it up: `natives` from Settings → Agents,
-    /// the team agents and the switch from Teamwork.
+    /// the team agents from Teamwork.
     pub fn new(teams: Arc<Teams>, natives: &[AgentProfile], driver: Arc<Agents>, tz_minutes: i64, name: String) -> Self {
         let doc = crate::team_agents::current();
         Self {
             teams,
             agents: doc.runnable(natives),
             choices: doc.choices(natives),
-            team_agents: doc.source == crate::team_agents::Source::Team,
             driver,
             tz_minutes,
             name,
@@ -357,9 +354,9 @@ impl Secretary {
         p.outcome = outcome.into();
         // i18n: model-facing
         let note = match state {
-            "done" => format!("[Coucou] The user confirmed {} ({}): {outcome}", p.id, p.title),
-            "declined" => format!("[Coucou] The user declined {} ({}).", p.id, p.title),
-            _ => format!("[Coucou] {} ({}) was confirmed but failed: {outcome}", p.id, p.title),
+            "done" => format!("[Agent Center] The user confirmed {} ({}): {outcome}", p.id, p.title),
+            "declined" => format!("[Agent Center] The user declined {} ({}).", p.id, p.title),
+            _ => format!("[Agent Center] {} ({}) was confirmed but failed: {outcome}", p.id, p.title),
         };
         self.notes.lock().unwrap().push(note);
         Some(p.clone())
@@ -496,6 +493,11 @@ impl Secretary {
             .as_str()
             .unwrap_or("ai1")
             .to_string();
+        let leads_as = list.iter().find(|m| m["id"].as_str() == Some(leader.as_str())).and_then(|m| m["agent"].as_str()).unwrap_or("");
+        if office.choices.iter().any(|p| p.id == leads_as && p.protocol == crate::acp::Protocol::N8n) {
+            // i18n: model-facing
+            return Err("The leader cannot be an n8n workflow: it only takes a task and hands back a result. Make another member the leader.".into());
+        }
         let scope: Vec<String> = a.get("scope").and_then(Value::as_array).map(|s| s.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
         let start = a.get("start").and_then(Value::as_bool).unwrap_or(true);
         let items = self.knowledge_items(a)?;
@@ -1154,11 +1156,7 @@ fn agent_label(office: &Office, id: &str) -> String {
 // i18n: model-facing
 fn list_agents(office: &Office) -> String {
     if office.choices.is_empty() {
-        return if office.team_agents {
-            "There are no team agents yet. The user builds teams from team agents only: ask them to add some in Teamwork → Agent 設定, or to switch the secretary back to native agents.".into()
-        } else {
-            "There are no agents. The user adds them in Settings → Agents.".into()
-        };
+        return "There are no team agents yet. Teams are built from team agents only: ask the user to add some in Teamwork → Agent 設定 (each is built on a Cloud Agent or Local Agent from Settings → Agents).".into();
     }
     let lines: Vec<String> = office
         .choices
@@ -1170,8 +1168,10 @@ fn list_agents(office: &Office) -> String {
             format!("- {} (id {}): {:?}, default model {}{}{own}", p.name, p.id, p.protocol, if model.is_empty() { "the agent's own" } else { &model }, endpoint)
         })
         .collect();
-    let head = if office.team_agents { "The user's team agents (build new teams only from these; pick each member by what its description says it is good for):\n" } else { "" };
-    format!("{head}{}", lines.join("\n"))
+    format!(
+        "The user's team agents (build new teams only from these; pick each member by what its description says it is good for; a Local Agent keeps the work on the user's own machine or network, a Cloud Agent sends it to a cloud service; an n8n workflow is never the leader):\n{}",
+        lines.join("\n")
+    )
 }
 
 // ── What the person confirmed ────────────────────────────────────────────────
@@ -1288,8 +1288,8 @@ async fn create_team(payload: &Value, office: &Office, create_folder: bool, uplo
 fn start(config: &TeamConfig, office: &Office) -> Result<(), String> {
     if !settings::team_mcp_exe_path().is_file() {
         return Err(tr!(
-            "Coucou 的 bin 資料夾裡少了 coucou-team-mcp.exe,成員沒辦法回報。請重新安裝或重新建置 Coucou。",
-            "coucou-team-mcp.exe is missing from Coucou's bin folder, so members could not report. Reinstall or rebuild Coucou."
+            "Agent Center 的 bin 資料夾裡少了 coucou-team-mcp.exe,成員沒辦法回報。請重新安裝或重新建置 Agent Center。",
+            "coucou-team-mcp.exe is missing from Agent Center's bin folder, so members could not report. Reinstall or rebuild Agent Center."
         ));
     }
     office.teams.start(config.clone(), &office.agents).map(|_| ())
@@ -1339,11 +1339,11 @@ async fn act(payload: &Value, office: &Office, create_folder: bool) -> Result<St
 // i18n: model-facing
 fn system_prompt(office: &Office) -> String {
     format!(
-        "{}You are the secretary of the user's company of AI agents, inside Coucou, a Windows app. The company is made of teams: each has a goal, a work folder and AI members (each runs an agent such as Codex, Claude Code, Copilot or Antigravity, with a model); a leader member plans tasks, hands them out and reviews them. The user calls on you when they need you: to find out how the teams are doing, what is stuck or waiting for them, what it cost, or to get something done.\n\
+        "{}You are the secretary of the user's company of AI agents, inside Agent Center, a Windows app. The company is made of teams: each has a goal, a work folder and AI members (each runs an agent such as Codex, Claude Code, Copilot or Antigravity, with a model); a leader member plans tasks, hands them out and reviews them. The user calls on you when they need you: to find out how the teams are doing, what is stuck or waiting for them, what it cost, or to get something done.\n\
 \n\
 How you work:\n\
 - Look things up with your tools before you answer; never guess a team's state. Quote names, numbers and times as the tools give them.\n\
-- You cannot change anything yourself. To get something done (a new team, an instruction to a team, starting, pausing, resuming, stopping or archiving a team) you prepare it with a propose_* tool: it appears on the user's screen as a card, and it happens only if they click it. Never say something was done unless a [Coucou] note says the user confirmed it.\n\
+- You cannot change anything yourself. To get something done (a new team, an instruction to a team, starting, pausing, resuming, stopping or archiving a team) you prepare it with a propose_* tool: it appears on the user's screen as a card, and it happens only if they click it. Never say something was done unless a [Agent Center] note says the user confirmed it.\n\
 - Prefer one proposal that does what was asked. Ask a short question first only when something essential is missing, such as the work folder for a new team.\n\
 - For a new team: pick agents and models from list_agents (agent_models lists what an agent offers); give the leader the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
 - A team has a knowledge base: documents (design notes, specs, pictures, any file) its members work from. When the user attaches files or mentions design documents, specs or reference material for a team, put them in `knowledge` (propose_team for a new team, propose_knowledge for one that exists): attached files by their id (u…), or full paths the user wrote — never a path you guessed. Each is for the leader only unless the user says the whole team should see it (then visibility \"shared\"). You only see the files' names, never what is in them.\n\
@@ -1356,11 +1356,7 @@ Now: {} (the user's local time).\n\
             "" | "秘書" | "Secretary" => String::new(),
             name => format!("Your name is {name}; the user calls you that, and you may call yourself that. "),
         },
-        if office.team_agents {
-            " The user builds teams from their own team agents only: list_agents lists them with what each is good for; choose members by those descriptions, and never name an agent that is not listed. When you talk to the user, call a team agent by its name, never by its id (ta-…)."
-        } else {
-            ""
-        },
+        " The user builds teams from their own team agents only: list_agents lists them with what each is good for and whether it is a Cloud Agent or a Local Agent; choose members by those descriptions, and never name an agent that is not listed. When you talk to the user, call a team agent by its name, never by its id (ta-…).",
         when(crate::team::store::now_ms(), office.tz_minutes),
         crate::i18n::reply_language(),
     )

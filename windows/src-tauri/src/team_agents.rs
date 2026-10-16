@@ -1,32 +1,23 @@
 // Team agents (Teamwork → Agent 設定): agents of the person's own making,
 // each built on a native agent of Settings → Agents. A team agent keeps its
-// base's command, environment and key, and adds its own name, model, system
-// prompt, MCP servers and skills, and a description the secretary reads to
-// know what it is good for. Nothing here holds a key: the base's stays in
-// the Credential Manager, under the base's name.
+// base's command (or an n8n node's webhook), environment and key, and adds
+// its own name, model, system prompt, MCP servers and skills, and a
+// description the secretary reads to know what it is good for. It is a
+// Cloud Agent or a Local Agent as its base is. Nothing here holds a key: the
+// base's stays in the Credential Manager, under the base's name.
 //
-// Stored in %APPDATA%\Coucou\team-agents.json, beside constitution.json,
-// together with the secretary's switch: build teams from the native agents
-// (the default, so existing teams stay as they are) or from these.
+// Stored in %APPDATA%\Coucou\team-agents.json, beside constitution.json.
+// New teams — the secretary's and the ones made by hand — are built from
+// these only. A team set up before that, naming a native agent, still runs.
 //
 // Where they are run, a team agent is simply one more AgentProfile (`profiles`):
 // its base's, under its own id, with `key_of` naming the base and `extras`
-// carrying what it adds. A team that names a native agent runs as before.
+// carrying what it adds.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::acp::{AgentProfile, Extras, McpServer, Protocol};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub enum Source {
-    /// Teams are built from Settings → Agents.
-    #[default]
-    Native,
-    /// Teams are built from the team agents only.
-    Team,
-}
+use crate::acp::{AgentProfile, Extras, Location, McpServer, Protocol};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -67,8 +58,8 @@ pub struct TeamAgent {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamAgents {
-    #[serde(default)]
-    pub source: Source,
+    /// An older file's `source` (native or team agents for new teams) is
+    /// read past: new teams always take these.
     #[serde(default)]
     pub agents: Vec<TeamAgent>,
 }
@@ -102,6 +93,9 @@ pub fn supports(protocol: Protocol) -> Supports {
         // Antigravity reads MCP servers only from the work folder's .agents,
         // which every member shares: one member's servers would be everyone's.
         Protocol::Agy => Supports { system_prompt: Support::Brief, mcp: Support::No, skills: Support::Brief },
+        // An n8n workflow is sent the system prompt with every call (n8n.rs);
+        // its tools and skills are the workflow's own business.
+        Protocol::N8n => Supports { system_prompt: Support::Native, mcp: Support::No, skills: Support::No },
     }
 }
 
@@ -179,19 +173,17 @@ impl TeamAgents {
         self.agents.iter().filter_map(|a| profile_of(a, natives)).collect()
     }
 
-    /// Every profile a team may run as: the native ones and the team agents.
+    /// Every profile a team may run as: the team agents, and the native ones
+    /// a team set up before teams took team agents only may still name.
     pub fn runnable(&self, natives: &[AgentProfile]) -> Vec<AgentProfile> {
         let mut all = natives.to_vec();
         all.extend(self.profiles(natives).into_iter().filter(|p| !natives.iter().any(|n| n.id == p.id)));
         all
     }
 
-    /// The profiles a new team is built from, as the switch says.
+    /// The profiles a new team is built from: the team agents only.
     pub fn choices(&self, natives: &[AgentProfile]) -> Vec<AgentProfile> {
-        match self.source {
-            Source::Native => natives.to_vec(),
-            Source::Team => self.profiles(natives),
-        }
+        self.profiles(natives)
     }
 }
 
@@ -276,11 +268,19 @@ pub fn brief_text(profile: &AgentProfile) -> String {
     out
 }
 
-/// One line per agent for the secretary: who it is, what it runs on, what it is for.
+/// One line per agent for the secretary: who it is, what it runs on, where,
+/// what it is for.
 // i18n: model-facing
 pub fn describe(profile: &AgentProfile) -> Option<String> {
     let x = profile.extras.as_ref()?;
-    let mut bits = vec![format!("team agent built on {}", x.base)];
+    let place = match profile.location() {
+        Location::Cloud => "Cloud Agent (works on a cloud service)",
+        Location::Local => "Local Agent (works on the user's own machine or network)",
+    };
+    let mut bits = vec![format!("team agent built on {}", x.base), place.to_string()];
+    if profile.protocol == Protocol::N8n {
+        bits.push("an n8n workflow: it takes one task at a time and hands back one result, has no tools, and cannot be the leader".into());
+    }
     if !x.mcp_servers.is_empty() {
         bits.push(format!("MCP: {}", x.mcp_servers.iter().map(|m| m.name.as_str()).collect::<Vec<_>>().join(", ")));
     }
@@ -323,7 +323,7 @@ mod tests {
 
     #[test]
     fn a_team_agent_runs_on_its_base_with_its_own_additions() {
-        let doc = TeamAgents { source: Source::Native, agents: vec![reviewer()] };
+        let doc = TeamAgents { agents: vec![reviewer()] };
         let p = &doc.profiles(&natives())[0];
         assert_eq!(p.id, "ta-reviewer");
         assert_eq!(p.command, "claude");
@@ -341,14 +341,32 @@ mod tests {
     }
 
     #[test]
-    fn the_switch_decides_what_new_teams_are_built_from_and_old_teams_still_run() {
-        let mut doc = TeamAgents { source: Source::Native, agents: vec![reviewer()] };
+    fn new_teams_take_team_agents_only_and_old_teams_still_run() {
+        // An older file still says which kind new teams used: it is read past.
+        let doc: TeamAgents = serde_json::from_value(serde_json::json!({ "source": "native", "agents": [reviewer()] })).unwrap();
         let ids = |v: Vec<AgentProfile>| v.into_iter().map(|p| p.id).collect::<Vec<_>>();
-        assert_eq!(ids(doc.choices(&natives())), ["copilot", "claude", "agy"]);
-        doc.source = Source::Team;
         assert_eq!(ids(doc.choices(&natives())), ["ta-reviewer"]);
-        // Whatever the switch, a team naming either kind can run.
+        // A team naming a native agent from before can still run.
         assert_eq!(ids(doc.runnable(&natives())), ["copilot", "claude", "agy", "ta-reviewer"]);
+        assert!(!serde_json::to_string(&doc).unwrap().contains("source"));
+    }
+
+    #[test]
+    fn a_team_agent_is_cloud_or_local_as_its_base_and_an_n8n_one_says_what_it_can_do() {
+        let mut list = natives();
+        // An n8n node is local whatever it was set to.
+        list.push(AgentProfile { id: "flow".into(), name: "Report flow".into(), protocol: Protocol::N8n, location: Some(Location::Cloud), ..Default::default() });
+        let mut on_flow = reviewer();
+        on_flow.id = "ta-flow".into();
+        on_flow.base = "flow".into();
+        let profiles = TeamAgents { agents: vec![reviewer(), on_flow] }.profiles(&list);
+        assert_eq!(profiles[0].location(), Location::Cloud);
+        assert_eq!(profiles[1].location(), Location::Local);
+        // A workflow is not given MCP servers; the secretary hears what it is.
+        assert!(profiles[1].extras.as_ref().unwrap().mcp_servers.is_empty());
+        let line = describe(&profiles[1]).unwrap();
+        assert!(line.contains("Local Agent") && line.contains("cannot be the leader"), "{line}");
+        assert!(describe(&profiles[0]).unwrap().contains("Cloud Agent"));
     }
 
     #[test]

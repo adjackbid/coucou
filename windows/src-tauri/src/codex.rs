@@ -114,7 +114,7 @@ pub async fn setup(
         running,
         "initialize",
         json!({
-            "clientInfo": { "name": "coucou", "title": "Coucou", "version": env!("CARGO_PKG_VERSION") },
+            "clientInfo": { "name": "coucou", "title": "Agent Center", "version": env!("CARGO_PKG_VERSION") },
             "capabilities": null,
         }),
         timeout,
@@ -187,7 +187,7 @@ pub async fn prompt(running: &Running, text: String, timeout: Duration) -> Resul
         Err(_) => Err(tr!("Codex 沒有及時完成這一輪。", "Codex did not finish the turn in time.")),
     };
     running.codex.turn.lock().unwrap().take();
-    outcome.map(|stop_reason| AcpOutcome { stop_reason })
+    outcome.map(|stop_reason| AcpOutcome { stop_reason, ..Default::default() })
 }
 
 /// Interrupts the turn under way, if there is one.

@@ -417,7 +417,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
         { class: "sec-hello" },
         h("h2", { text: named() ? trf("我是{name},需要什麼跟我說", "I'm {name}. Tell me what you need", { name }) : tr("我是秘書,需要什麼跟我說", "I'm your secretary. Tell me what you need") }),
 
-        h("p", { class: "dim", text: tr("我會查 Coucou 的紀錄回答你:各團隊進度、誰卡住、誰在等你、花了多少錢。也可以請我開新團隊、給團隊下指令、暫停或封存團隊——我先擬好,你按確認才會執行。", "I answer from Coucou's records: how each team is getting on, who is stuck, who is waiting for you, what it cost. You can also ask me to set up a team, give a team an instruction, or pause or archive one: I prepare it, and it happens only when you confirm.") }),
+        h("p", { class: "dim", text: tr("我會查 Agent Center 的紀錄回答你:各團隊進度、誰卡住、誰在等你、花了多少錢。也可以請我開新團隊、給團隊下指令、暫停或封存團隊——我先擬好,你按確認才會執行。", "I answer from Agent Center's records: how each team is getting on, who is stuck, who is waiting for you, what it cost. You can also ask me to set up a team, give a team an instruction, or pause or archive one: I prepare it, and it happens only when you confirm.") }),
         h("div", { class: "sec-suggest" }, ...suggestions().map((s) => h("button", { class: "chip pick", type: "button", onClick: () => (s.endsWith("…") ? ((draft = s.replace("…", ":")), host.render()) : void ask(host, s)) }, s))),
       ),
     );

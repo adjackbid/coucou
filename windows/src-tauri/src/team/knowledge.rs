@@ -717,7 +717,7 @@ fn reach(kb: &Kb, index: &Index, d: &Doc) -> String {
         DocKind::Image => format!("look at it with `knowledge_read` (doc \"{}\"), or open {}", d.id, kb.path_of(index, d).display()),
         DocKind::File => {
             let program = if is_program(&d.name) { PROGRAM } else { "" };
-            format!("Coucou does not read this kind of file for you; open it with your own tools: {}.{program}", kb.path_of(index, d).display())
+            format!("Agent Center does not read this kind of file for you; open it with your own tools: {}.{program}", kb.path_of(index, d).display())
         }
     }
 }

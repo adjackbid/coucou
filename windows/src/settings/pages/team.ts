@@ -4,6 +4,8 @@
 
 import { Bridge } from "../../core/bridge";
 import { tr, trf } from "../../core/i18n";
+import { locationOf } from "../../core/state";
+import { kindIcon, markName } from "../../views/agent-kind";
 import { h } from "../../views/dom";
 import type { Page } from "../nav";
 import { todoList } from "../status";
@@ -50,23 +52,21 @@ export const teamPage: Page = {
         source.replaceChildren(h("p", { class: "hint", text: tr("讀取中…（Teamwork 的設定在 App 裡才讀得到）", "Reading… (Teamwork's settings are only there in the app)") }));
         return;
       }
-      const native = settings.agents.length;
-      const defined = doc?.agents.length ?? 0;
-      const usesTeam = doc?.source === "team";
+      // A team agent is a Cloud or a Local Agent as its base is.
+      const count = { cloud: 0, local: 0 };
+      for (const t of doc.agents) {
+        const base = settings.agents.find((n) => n.id === t.base);
+        if (base) count[locationOf(base)]++;
+      }
+      const line = (where: "cloud" | "local") =>
+        h("div", { class: "choice on" },
+          kindIcon(where, 18),
+          h("span", { text: markName(where) }),
+          h("span", { class: "grow" }),
+          h("span", { class: "hint", text: trf("{n} 個團隊 Agent", "{n} team agents", { n: count[where] }) }));
       source.replaceChildren(
-        h("div", { class: "choice-list" },
-          h("div", { class: usesTeam ? "choice" : "choice on" },
-            h("span", { class: "radio" }),
-            h("span", { text: tr("原生 Agent（「Agents」頁的那些）", "Native agents (from the Agents page)") }),
-            h("span", { class: "grow" }),
-            h("span", { class: "hint", text: trf("{n} 個可用", "{n} available", { n: native }) })),
-          h("div", { class: usesTeam ? "choice on" : "choice" },
-            h("span", { class: "radio" }),
-            h("span", { text: tr("團隊 Agent（在 Teamwork 裡定義）", "Team agents (defined in Teamwork)") }),
-            h("span", { class: "grow" }),
-            h("span", { class: "hint", text: trf("已定義 {n} 個", "{n} defined", { n: defined }) })),
-        ),
-        h("p", { class: "field-help", text: tr("要改的話，到 Teamwork 的「Agent 設定」。", "To change it, go to Agent settings in Teamwork.") }),
+        h("div", { class: "choice-list" }, line("cloud"), line("local")),
+        h("p", { class: "field-help", text: tr("新團隊（秘書開的、你在團隊設定新增的成員）只用 Teamwork「Agent 設定」裡的團隊 Agent；以前設定好、用原生 Agent 的團隊照樣能啟動。", "New teams — the secretary's, and members you add in Team setup — use only the team agents in Teamwork's Agent settings; teams set up earlier with native agents still start.") }),
       );
     };
     ctx.onData(draw);
@@ -81,8 +81,8 @@ export const teamPage: Page = {
         tr("團隊與秘書", "Team & secretary"),
         tr("Teamwork 和秘書在 Teamwork 視窗裡設定。這一頁顯示它們用了什麼，並帶你過去。", "Teamwork and the secretary are set up in the Teamwork window. This page shows what they use and takes you there."),
         () => tr(
-          "秘書是 Teamwork 裡替你組團隊的助理，它透過聊天模型說話（見「聊天模型」）。團隊成員用 Agents 執行（見「Agents」），或用你在 Teamwork →「Agent 設定」裡定義的團隊 Agent。",
-          "The secretary is the assistant in Teamwork that sets up teams for you. It talks through a chat model (see Chat models). Team members run as Agents (see Agents), or as team agents you define in Teamwork → Agent settings.",
+          "秘書是 Teamwork 裡替你組團隊的助理，它透過聊天模型說話（見「聊天模型」）。團隊成員用你在 Teamwork →「Agent 設定」裡定義的團隊 Agent 執行，每個團隊 Agent 都以「Agents」頁的一個 Cloud Agent 或 Local Agent 為基底。",
+          "The secretary is the assistant in Teamwork that sets up teams for you. It talks through a chat model (see Chat models). Team members run as the team agents you define in Teamwork → Agent settings, each built on a Cloud Agent or a Local Agent from the Agents page.",
         ),
       ),
       card({
@@ -92,7 +92,7 @@ export const teamPage: Page = {
       }),
       card({
         anchor: "team-source",
-        title: tr("新團隊用哪種 Agent", "New teams use"),
+        title: tr("團隊 Agent", "Team agents"),
         body: [source, row(h("button", { type: "button", text: tr("Agent 設定 ↗", "Agent settings ↗"), onclick: () => openTeam("agents") }))],
       }),
       card({

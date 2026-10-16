@@ -11,7 +11,7 @@ struct TrayItems(Vec<(&'static str, MenuItem<Wry>)>);
 
 fn label(id: &str) -> String {
     match id {
-        "open" => tr!("打開 Coucou", "Open Coucou"),
+        "open" => tr!("打開 Agent Center", "Open Agent Center"),
         "team" => tr!("Teamwork…", "Teamwork…"),
         "settings" => tr!("設定…", "Settings…"),
         "pause" => tr!("暫停", "Pause"),
@@ -43,7 +43,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     ]));
 
     let mut builder = TrayIconBuilder::with_id("coucou")
-        .tooltip("Coucou")
+        .tooltip("Agent Center")
         .menu(&menu)
         .on_menu_event(|app: &AppHandle, event| match event.id.as_ref() {
             "quit" => app.exit(0),

@@ -172,11 +172,11 @@ export function constitutionPage(host: ConstitutionHost): HTMLElement {
       h(
         "ul",
         {},
-        h("li", {}, h("b", { class: "never-text", text: tr("絕對不能做", "Never") }), tr(":Coucou 直接拒絕,", ": Coucou refuses on the spot, "), h("b", { text: tr("不會跳卡片給你", "no card pops up for you") }), tr("(不怕誤點),並告訴那位成員這是憲法禁止的,請它換個做法。", " (nothing to click by mistake), and tells the member the constitution forbids it and to find another way.")),
+        h("li", {}, h("b", { class: "never-text", text: tr("絕對不能做", "Never") }), tr(":Agent Center 直接拒絕,", ": Agent Center refuses on the spot, "), h("b", { text: tr("不會跳卡片給你", "no card pops up for you") }), tr("(不怕誤點),並告訴那位成員這是憲法禁止的,請它換個做法。", " (nothing to click by mistake), and tells the member the constitution forbids it and to find another way.")),
         h("li", {}, h("b", { class: "ask-text", text: tr("要問我", "Ask me") }), tr(":一定跳卡片問你,卡片上寫著是哪一條。就算是「自主協作」也一樣。", ": a card always asks you and names the rule. Even in Autonomous mode.")),
         h("li", {}, h("b", { text: tr("照一般規則", "Usual rules") }), tr(":不額外限制;自主協作下危險的動作本來就會問你。", ": no extra limits; in Autonomous mode risky steps ask you anyway.")),
       ),
-      h("p", { class: "hint", text: tr("成員開工時會先讀到這些條文。判斷由 Coucou 依條文比對,不是讓 AI 猜,所以「絕對不能做」一定擋得住。", "Members read these rules when they start. Coucou checks them itself, an AI does not guess, so a “Never” rule always holds.") }),
+      h("p", { class: "hint", text: tr("成員開工時會先讀到這些條文。判斷由 Agent Center 依條文比對,不是讓 AI 猜,所以「絕對不能做」一定擋得住。", "Members read these rules when they start. Agent Center checks them itself, an AI does not guess, so a “Never” rule always holds.") }),
     ),
     h("section", { class: "panel" }, h("div", { class: "panel-head" }, h("h2", { text: tr("內建條文", "Built-in rules") }), h("span", { class: "law-state dim", role: "status", text: stateText() })), h("div", { class: "law-list" }, ...builtins.map((r) => builtinRow(host, r)))),
     h(

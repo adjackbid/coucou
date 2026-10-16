@@ -422,12 +422,63 @@
 }
 
 /* On the native agents: the team agents put away, and said so. */
-.ta-away {
+/* Cloud Agent / Local Agent: one panel each, under its mark. */
+.ta-section-title {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
 }
 
-.ta-away .hint {
-  margin: 0;
+.ta-section > .hint {
+  margin: 0 0 10px;
+}
+
+.ta-legend {
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.ta-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.ta-editor-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ta-node-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ta-card-title b {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ta-card-title b > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ta-card-title b > svg,
+.ta-kind > svg {
+  flex: none;
+}
+
+.ta-kind:has(> svg)::before {
+  display: none;
+}
+
+.ta-kind.n8n {
+  --k: #f472b6;
 }

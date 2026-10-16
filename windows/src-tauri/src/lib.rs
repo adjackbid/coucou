@@ -27,6 +27,7 @@ mod secretary;
 mod settings;
 mod team;
 mod team_agents;
+mod n8n;
 mod tray;
 mod usage;
 mod win_user;
@@ -133,6 +134,25 @@ fn apply_hotkey(app: &AppHandle, hotkey: &str) {
 #[tauri::command]
 fn hotkey_status(shared: State<Shared>) -> Option<String> {
     shared.hotkey_error.lock().unwrap().clone()
+}
+
+/// The app used to be called Coucou, and its sign-in entry (HKCU\…\Run) is
+/// named after the app: the old "Coucou" one would start whatever is still at
+/// its path. It is removed, and Agent Center's own is written when start at
+/// sign-in is on.
+fn renamed_autostart(app: &AppHandle, on: bool) {
+    #[cfg(windows)]
+    unsafe {
+        use windows::core::w;
+        use windows::Win32::System::Registry::{RegDeleteKeyValueW, HKEY_CURRENT_USER};
+        // Not there is the usual answer, and fine.
+        let _ = RegDeleteKeyValueW(HKEY_CURRENT_USER, w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run"), w!("Coucou"));
+    }
+    if on {
+        if let Err(err) = app.autolaunch().enable() {
+            log::line(format!("autostart under the new name: {err}"));
+        }
+    }
 }
 
 #[tauri::command]
@@ -457,7 +477,7 @@ fn is_pty_pipe(name: &str) -> bool {
 fn pty_send(pipe: String, text: String) -> Result<(), String> {
     use std::io::Write;
     if !is_pty_pipe(&pipe) {
-        return Err(tr!("這不是 Coucou 的終端機。", "That is not a Coucou terminal."));
+        return Err(tr!("這不是 Agent Center 的終端機。", "That is not a Agent Center terminal."));
     }
     // A bare "\r" is a deliberate Enter (accept the highlighted choice,
     // skip an optional field); anything else is typed, trimmed.
@@ -572,7 +592,7 @@ fn read_team_file(file: &str) -> Result<TeamConfig, String> {
     let bytes = std::fs::read(team_file_path(file)?).map_err(|e| -> String { tr!(format!("讀不到 {file}：{e}"), format!("Could not read {file}: {e}")) })?;
     // PowerShell 5 and Notepad both write a BOM; it is not part of the JSON.
     let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(&bytes);
-    serde_json::from_slice(bytes).map_err(|e| tr!(format!("{file} 不是 Coucou 讀得懂的團隊檔：{e}"), format!("{file} is not a team file Coucou can read: {e}")))
+    serde_json::from_slice(bytes).map_err(|e| tr!(format!("{file} 不是 Agent Center 讀得懂的團隊檔：{e}"), format!("{file} is not a team file Agent Center can read: {e}")))
 }
 
 /// An example to start from, written once into an empty teams folder.
@@ -626,8 +646,8 @@ async fn team_start(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, fil
     let profiles = runnable(&shared);
     if !settings::team_mcp_exe_path().is_file() {
         return Err(tr!(
-            "Coucou 的 bin 資料夾裡少了 coucou-team-mcp.exe，成員沒辦法回報。請重新安裝或重新建置 Coucou。",
-            "coucou-team-mcp.exe is missing from Coucou's bin folder, so members could not report. Reinstall or rebuild Coucou."
+            "Agent Center 的 bin 資料夾裡少了 coucou-team-mcp.exe，成員沒辦法回報。請重新安裝或重新建置 Agent Center。",
+            "coucou-team-mcp.exe is missing from Agent Center's bin folder, so members could not report. Reinstall or rebuild Agent Center."
         ));
     }
     teams.start(config, &profiles)
@@ -857,7 +877,8 @@ fn team_new(shared: State<Shared>) -> Result<String, String> {
         .find(|id| !dir.join(format!("{id}.json")).exists())
         .ok_or_else(|| -> String { tr!("團隊檔太多了。", "There are too many team files.") })?;
     let natives = shared.settings.lock().unwrap().agents.clone();
-    let agent = team_agents::current().choices(&natives).first().map(|a| a.id.clone()).unwrap_or_default();
+    // The leader: the first team agent that can lead (an n8n node cannot).
+    let agent = team_agents::current().choices(&natives).iter().find(|a| a.protocol != acp::Protocol::N8n).map(|a| a.id.clone()).unwrap_or_default();
     let config = serde_json::json!({
         "id": id, "name": "", "goal": "", "workDir": "", "leader": "ai1", "autoApprove": true,
         "members": [{ "id": "ai1", "name": "AI 1", "role": "", "duty": "", "agent": agent, "color": "" }],
@@ -1101,8 +1122,8 @@ fn team_knowledge_open(team: String, doc: String) -> Result<(), String> {
     let (found, path) = knowledge_file(&team, &doc)?;
     if knowledge::is_program(&found.name) {
         return Err(tr!(
-            "Coucou 不會打開程式、指令碼或捷徑。請改用「在檔案總管中顯示」。",
-            "Coucou does not open programs, scripts or shortcuts. Show it in Explorer instead."
+            "Agent Center 不會打開程式、指令碼或捷徑。請改用「在檔案總管中顯示」。",
+            "Agent Center does not open programs, scripts or shortcuts. Show it in Explorer instead."
         ));
     }
     Command::new("explorer").arg(&path).spawn().map(|_| ()).map_err(|e| e.to_string())
@@ -1425,8 +1446,8 @@ fn runnable(shared: &Shared) -> Vec<AgentProfile> {
     team_agents::current().runnable(&natives)
 }
 
-/// The team agents (Teamwork → Agent 設定), the secretary's switch, and what
-/// each native agent's protocol can take of a team agent.
+/// The team agents (Teamwork → Agent 設定), and what each native agent's
+/// protocol can take of a team agent.
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TeamAgentsView {
@@ -1702,7 +1723,7 @@ mod settings_place {
 }
 
 fn settings_title() -> String {
-    tr!("設定 — Coucou", "Settings — Coucou")
+    tr!("設定 — Agent Center", "Settings — Agent Center")
 }
 
 /// The settings window's title (taskbar, Alt+Tab) in the language of the
@@ -1774,7 +1795,7 @@ fn create_team_window(app: &AppHandle) {
         .unwrap_or((1280.0, 820.0));
     let mut builder = WebviewWindowBuilder::new(app, "team", url)
         .additional_browser_args(BROWSER_ARGS)
-        .title("Teamwork — Coucou")
+        .title("Teamwork — Agent Center")
         .inner_size(width, height)
         .min_inner_size(720.0, 520.0)
         .resizable(true)
@@ -2038,6 +2059,7 @@ pub fn run() {
 
             log::line(format!("--- Coucou {} started ---", env!("CARGO_PKG_VERSION")));
             apply_hotkey(&handle, &loaded.hotkey);
+            renamed_autostart(&handle, loaded.autostart);
             hooks::ensure_hook_exe(&handle);
             pipe::start(handle.clone());
             integrations::start(handle.clone());

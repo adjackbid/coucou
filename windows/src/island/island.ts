@@ -67,7 +67,7 @@ function dangerWords(d: Danger): string {
     "sends-out": tr("會對外發送或發布", "Sends or publishes something outside"),
     "outside-work-dir": tr("會動到團隊資料夾以外的地方", "Touches something outside the team's folder"),
     system: tr("會變更系統或其他程式", "Changes the system or other programs"),
-    opaque: tr("Coucou 看不出這個指令在做什麼", "Coucou cannot tell what this command does"),
+    opaque: tr("Agent Center 看不出這個指令在做什麼", "Agent Center cannot tell what this command does"),
   };
   return words[d];
 }

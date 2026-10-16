@@ -55,7 +55,7 @@ export const generalPage: Page = {
     return h(
       "div",
       { class: "page-body" },
-      pageHeader("general", tr("一般", "General"), tr("語言、音效、開機啟動，以及關於 Coucou。", "Language, sound, startup, and about Coucou.")),
+      pageHeader("general", tr("一般", "General"), tr("語言、音效、開機啟動，以及關於 Agent Center。", "Language, sound, startup, and about Agent Center.")),
       card({
         anchor: "language",
         title: h("div", { class: "title-icon" }, icon("language", 20), h("h2", { text: tr("語言", "Language") })),
@@ -82,7 +82,7 @@ export const generalPage: Page = {
         anchor: "about",
         title: tr("關於", "About"),
         body: [
-          h("p", {}, h("b", { text: "Coucou" }), " ", h("span", { class: "hint", text: version })),
+          h("p", {}, h("b", { text: "Agent Center" }), " ", h("span", { class: "hint", text: version })),
           h("p", { class: "hint", text: tr("沒有遙測。網路請求只會送到你自己設定的服務。", "No telemetry. Network requests only go to the services you set up yourself.") }),
         ],
       }),

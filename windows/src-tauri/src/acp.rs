@@ -59,6 +59,18 @@ pub enum Protocol {
     Claude,
     /// Antigravity's CLI in headless mode; see agy.rs.
     Agy,
+    /// An n8n workflow behind a Webhook node: no process, one POST a turn; see n8n.rs.
+    N8n,
+}
+
+/// Where an agent does its work, as the person sorts it in Settings → Agents:
+/// on a cloud service, or on their own machine or network. A team agent is
+/// whatever its base is.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Location {
+    Cloud,
+    Local,
 }
 
 /// A coding agent the island can start and talk to.
@@ -85,6 +97,20 @@ pub struct AgentProfile {
     /// agent's own default.
     #[serde(default)]
     pub model: String,
+    /// Cloud Agent or Local Agent, as the person set it. None: never set, and
+    /// `location()` tells it from the profile.
+    #[serde(default)]
+    pub location: Option<Location>,
+    /// An n8n node: its Webhook's URL (the Production URL).
+    #[serde(default)]
+    pub url: String,
+    /// An n8n node: the header its Webhook checks (Header Auth). Its value is
+    /// the profile's key, in the Credential Manager. Empty: no header.
+    #[serde(default)]
+    pub header_name: String,
+    /// An n8n node: how long one call may take, in seconds. 0: n8n::DEFAULT_TIMEOUT.
+    #[serde(default)]
+    pub timeout_secs: u64,
     /// A team agent (team_agents.rs) runs on another profile's key: that
     /// profile's id. Never saved; set when a team agent is made a profile.
     #[serde(skip)]
@@ -126,6 +152,10 @@ impl AgentProfile {
             cwd: String::new(),
             protocol: Protocol::Acp,
             model: String::new(),
+            location: None,
+            url: String::new(),
+            header_name: String::new(),
+            timeout_secs: 0,
             key_of: None,
             extras: None,
         }
@@ -133,6 +163,21 @@ impl AgentProfile {
 
     pub fn secret_key(&self) -> String {
         format!("agent:{}", self.key_of.as_deref().unwrap_or(&self.id))
+    }
+
+    /// Cloud or local. An n8n node is always local; otherwise what the person
+    /// chose, and when they never did, a Copilot on an endpoint of their own
+    /// machine or network is local and everything else cloud. The settings
+    /// window guesses the same way (core/state.ts `locationOf`).
+    pub fn location(&self) -> Location {
+        if self.protocol == Protocol::N8n {
+            return Location::Local;
+        }
+        if let Some(chosen) = self.location {
+            return chosen;
+        }
+        let own_endpoint = self.protocol == Protocol::Acp && self.env.get("COPILOT_PROVIDER_BASE_URL").is_some_and(|u| is_local_address(u));
+        if own_endpoint { Location::Local } else { Location::Cloud }
     }
 
     fn working_dir(&self) -> std::path::PathBuf {
@@ -144,6 +189,25 @@ impl AgentProfile {
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("."))
     }
+}
+
+/// Whether a URL's host is this machine or a private network: localhost,
+/// 127.*, ::1, 10.*, 192.168.*, 172.16–31.*, or a name ending in .local / .lan.
+pub fn is_local_address(url: &str) -> bool {
+    let rest = url.trim().split_once("://").map(|(_, r)| r).unwrap_or(url.trim());
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let authority = authority.rsplit_once('@').map(|(_, h)| h).unwrap_or(authority);
+    let host = if let Some(v6) = authority.strip_prefix('[') {
+        v6.split(']').next().unwrap_or("")
+    } else {
+        authority.split(':').next().unwrap_or("")
+    }
+    .to_ascii_lowercase();
+    if host == "localhost" || host.ends_with(".localhost") || host.ends_with(".local") || host.ends_with(".lan") || host == "::1" {
+        return true;
+    }
+    let Ok(ip) = host.parse::<std::net::Ipv4Addr>() else { return false };
+    ip.is_loopback() || ip.is_private()
 }
 
 /// An MCP server handed to the agent with its session: a command it starts
@@ -243,10 +307,14 @@ pub struct AcpPermission {
     pub rule: Option<String>,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AcpOutcome {
     pub stop_reason: String,
+    /// What an n8n node answered, whole: a team hands it in for the member
+    /// (orchestrator.rs). The CLIs' words only stream as updates: empty.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub reply: String,
 }
 
 #[derive(Clone, Debug)]
@@ -336,6 +404,8 @@ struct Slot {
 pub struct Agents {
     slots: Mutex<HashMap<String, Arc<Slot>>>,
     opener: Opener,
+    /// The n8n calls under way, by session key: cancel and reset abort them.
+    calls: Mutex<HashMap<String, tokio::task::AbortHandle>>,
 }
 
 impl Default for Agents {
@@ -412,6 +482,17 @@ pub async fn doctor(profiles: Vec<AgentProfile>) -> Vec<AgentCheck> {
     for p in profiles {
         let started = std::time::Instant::now();
         let mut check = AgentCheck { id: p.id.clone(), name: p.name.clone(), command: p.command.clone(), found: None, version: None, error: None, took_ms: 0 };
+        // An n8n node has nothing to look for on this machine: its Test calls it.
+        if p.protocol == Protocol::N8n {
+            check.command = p.url.clone();
+            if p.url.trim().is_empty() {
+                check.error = Some(tr!("這個 n8n 節點還沒填 Webhook 網址。", "This n8n node has no webhook URL yet."));
+            } else {
+                check.found = Some(p.url.trim().to_string());
+            }
+            out.push(check);
+            continue;
+        }
         match resolve_agent_exe(&p.command) {
             None => {
                 let dirs: Vec<String> = fallback_dirs().iter().map(|d| d.display().to_string()).collect();
@@ -555,6 +636,9 @@ fn runs_copilot(profile: &AgentProfile) -> bool {
 }
 
 fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, String> {
+    if profile.protocol == Protocol::N8n {
+        return Err(crate::n8n::no_process());
+    }
     let exe = resolve_agent_exe(&profile.command).ok_or_else(|| not_on_path(&profile.command))?;
     let secret = secrets::get(&profile.secret_key()).unwrap_or_default();
     let cwd = working_dir(profile, launch);
@@ -601,6 +685,7 @@ fn spawn_agent(profile: &AgentProfile, launch: &Launch) -> Result<Transport, Str
                 cmd.arg("--additional-mcp-config").arg(format!("@{}", copilot_mcp_file(&launch.mcp_servers)?.display()));
             }
         }
+        Protocol::N8n => unreachable!("an n8n node is turned away above"),
     }
     cmd
         .current_dir(&cwd)
@@ -771,6 +856,7 @@ async fn setup(running: &mut Running, key: &str, profile: &AgentProfile, launch:
             }
             return crate::agy::setup(running, key, &working_dir(profile, launch), launch).await;
         }
+        Protocol::N8n => return Err(crate::n8n::no_process()),
         Protocol::Acp => {}
     }
     let init = request(
@@ -779,7 +865,7 @@ async fn setup(running: &mut Running, key: &str, profile: &AgentProfile, launch:
         json!({
             "protocolVersion": PROTOCOL_VERSION,
             "clientCapabilities": { "fs": { "readTextFile": false, "writeTextFile": false }, "terminal": false },
-            "clientInfo": { "name": "coucou", "title": "Coucou", "version": env!("CARGO_PKG_VERSION") },
+            "clientInfo": { "name": "coucou", "title": "Agent Center", "version": env!("CARGO_PKG_VERSION") },
         }),
         SETUP_TIMEOUT,
     )
@@ -1026,7 +1112,7 @@ fn not_running() -> String {
 
 impl Agents {
     pub fn with_opener(opener: Opener) -> Self {
-        Self { slots: Mutex::new(HashMap::new()), opener }
+        Self { slots: Mutex::new(HashMap::new()), opener, calls: Mutex::new(HashMap::new()) }
     }
 
     fn slot(&self, key: &str) -> Arc<Slot> {
@@ -1057,6 +1143,20 @@ impl Agents {
         let slot = self.slot(key);
         let _turn = slot.turn.lock().await;
 
+        // An n8n node has no process to keep: each turn is one call, and
+        // cancel aborts it.
+        if profile.protocol == Protocol::N8n {
+            let call = tokio::spawn(crate::n8n::prompt(sink.clone(), key.to_string(), profile.clone(), launch.clone(), text));
+            self.calls.lock().unwrap().insert(key.to_string(), call.abort_handle());
+            let ended = call.await;
+            self.calls.lock().unwrap().remove(key);
+            return match ended {
+                Ok(result) => result,
+                Err(e) if e.is_cancelled() => Ok(AcpOutcome { stop_reason: "cancelled".into(), ..Default::default() }),
+                Err(e) => Err(e.to_string()),
+            };
+        }
+
         let current = slot.running.lock().unwrap().clone();
         let fresh = current
             .as_ref()
@@ -1079,7 +1179,7 @@ impl Agents {
             Protocol::Codex => return crate::codex::prompt(&running, text, TURN_TIMEOUT).await,
             Protocol::Claude => return crate::claude::prompt(&running, text, TURN_TIMEOUT).await,
             Protocol::Agy => return crate::agy::prompt(&running, text, TURN_TIMEOUT).await,
-            Protocol::Acp => {}
+            Protocol::N8n | Protocol::Acp => {}
         }
         let result = request(
             &running,
@@ -1105,6 +1205,7 @@ impl Agents {
                 .and_then(Value::as_str)
                 .unwrap_or("end_turn")
                 .to_string(),
+            ..Default::default()
         })
     }
 
@@ -1116,6 +1217,7 @@ impl Agents {
             Protocol::Claude => crate::claude::permission_reply(&running.claude, &request_id, option_id.as_deref()),
             // agy's requests wait at the team's gate, not on its connection.
             Protocol::Agy => return Err(tr!("Antigravity 的請求在團隊的關卡回答。", "Antigravity's requests are answered at the team's gate.")),
+            Protocol::N8n => return Err(not_running()),
             Protocol::Acp => permission_reply(&request_id, option_id.as_deref()),
         };
         write_line(&running.writer, &reply).await
@@ -1123,12 +1225,16 @@ impl Agents {
 
     /// Interrupts the current turn.
     pub async fn cancel(&self, key: &str) -> Result<(), String> {
+        if let Some(call) = self.calls.lock().unwrap().remove(key) {
+            call.abort();
+            return Ok(());
+        }
         let running = self.running(key).ok_or_else(not_running)?;
         match running.profile.protocol {
             Protocol::Codex => return crate::codex::cancel(&running).await,
             Protocol::Claude => return crate::claude::cancel(&running).await,
             Protocol::Agy => return crate::agy::cancel(&running).await,
-            Protocol::Acp => {}
+            Protocol::N8n | Protocol::Acp => {}
         }
         notify(&running.writer, "session/cancel", json!({ "sessionId": running.session_id })).await
     }
@@ -1141,6 +1247,9 @@ impl Agents {
 
     /// A fresh start: the process goes, the next prompt starts a new session.
     pub async fn reset(&self, key: &str) {
+        if let Some(call) = self.calls.lock().unwrap().remove(key) {
+            call.abort();
+        }
         let slot = self.slots.lock().unwrap().get(key).cloned();
         let old = slot.and_then(|s| s.running.lock().unwrap().take());
         if let Some(old) = old {
@@ -1153,6 +1262,10 @@ impl Agents {
     /// Codex and Claude Code are asked (a handshake, no prompt: nothing is
     /// spent); Copilot CLI on its own endpoint lists what the endpoint has.
     pub async fn models(&self, profile: &AgentProfile) -> Result<Vec<ModelChoice>, String> {
+        // A workflow has no list: what is typed goes to it as `model`.
+        if profile.protocol == Protocol::N8n {
+            return Ok(Vec::new());
+        }
         if profile.protocol == Protocol::Acp {
             return copilot_models(profile).await;
         }
@@ -1189,6 +1302,9 @@ impl Agents {
 
     /// The settings window's "Test": start, handshake, report, stop.
     pub async fn test(&self, profile: &AgentProfile) -> Result<String, String> {
+        if profile.protocol == Protocol::N8n {
+            return crate::n8n::test(profile).await;
+        }
         let nowhere: Sink = Arc::new(|_| {});
         let running = start(&self.opener, &nowhere, &format!("test:{}", profile.id), profile, &Launch::default()).await?;
         stop(&running).await;
@@ -1200,6 +1316,9 @@ impl Agents {
     }
 
     pub async fn shutdown(&self) {
+        for (_, call) in self.calls.lock().unwrap().drain() {
+            call.abort();
+        }
         let slots: Vec<Arc<Slot>> = self.slots.lock().unwrap().drain().map(|(_, s)| s).collect();
         for slot in slots {
             let old = slot.running.lock().unwrap().take();
@@ -1230,6 +1349,31 @@ mod tests {
         assert_eq!(running_model(&cg, &member), "minimax-m2.7");
         cg.env.clear();
         assert_eq!(running_model(&cg, &Launch::default()), "deepseek-v4-flash");
+    }
+
+    #[test]
+    fn an_agent_is_cloud_unless_it_is_set_local_runs_on_a_local_endpoint_or_is_an_n8n_node() {
+        let mut cg = AgentProfile::copilot();
+        assert_eq!(cg.location(), Location::Cloud);
+        for local in ["http://localhost:11434/v1", "http://127.0.0.1:8080", "https://192.168.1.20/v1", "http://10.0.0.5:4000", "http://172.20.1.1", "http://[::1]:1234/v1", "http://gpu-box.lan/v1"] {
+            cg.env.insert("COPILOT_PROVIDER_BASE_URL".into(), local.into());
+            assert_eq!(cg.location(), Location::Local, "{local}");
+        }
+        for cloud in ["https://llm-share.duotify.com/v1", "https://172.32.0.1", "https://api.openai.com/v1", "https://user@10.example.com"] {
+            cg.env.insert("COPILOT_PROVIDER_BASE_URL".into(), cloud.into());
+            assert_eq!(cg.location(), Location::Cloud, "{cloud}");
+        }
+        // What the person chose wins over the guess…
+        cg.location = Some(Location::Local);
+        assert_eq!(cg.location(), Location::Local);
+        // …but an n8n node is always local.
+        let node = AgentProfile { protocol: Protocol::N8n, location: Some(Location::Cloud), ..Default::default() };
+        assert_eq!(node.location(), Location::Local);
+        // Older settings without the field still load.
+        let old: AgentProfile = serde_json::from_str(r#"{"id":"c","name":"C","command":"claude","protocol":"claude"}"#).unwrap();
+        assert_eq!((old.location, old.location()), (None, Location::Cloud));
+        let saved = serde_json::to_value(&node).unwrap();
+        assert_eq!((saved["protocol"].as_str(), saved["location"].as_str()), (Some("n8n"), Some("cloud")));
     }
 
     #[test]

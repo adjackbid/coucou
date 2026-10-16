@@ -46,7 +46,7 @@ const MAX_SILENT_TURNS: u32 = 2;
 /// window's thread), spawning would panic and take the app down.
 fn runtime() -> Result<tokio::runtime::Handle, String> {
     tokio::runtime::Handle::try_current().map_err(|_| -> String {
-        tr!("Coucou 沒辦法在這裡執行團隊:這個要求不是從它的非同步執行環境送來的。", "Coucou cannot run a team from here: it was asked outside its async runtime.")
+        tr!("Agent Center 沒辦法在這裡執行團隊:這個要求不是從它的非同步執行環境送來的。", "Agent Center cannot run a team from here: it was asked outside its async runtime.")
     })
 }
 /// Lines of each member's screen in a snapshot.
@@ -54,6 +54,16 @@ const SCREEN_LINES: usize = 150;
 /// A screen's changes go out at most this often: an agent writes a few
 /// characters at a time, and the window needs no more than a smooth line.
 const SCREEN_EVERY: std::time::Duration = std::time::Duration::from_millis(120);
+
+/// Why a team cannot start with an n8n node as its leader: a leader plans,
+/// hands out, reviews and wraps up through the team tools, and a webhook
+/// answers once.
+pub fn n8n_cannot_lead(name: &str) -> String {
+    tr!(
+        format!("Leader「{name}」是 n8n 節點:n8n 節點只能接任務、交結果,不能當 Leader。請換一個 Agent 當 Leader。"),
+        format!("The leader '{name}' is an n8n node: n8n nodes take a task and hand in a result, but cannot lead. Pick another agent as the leader.")
+    )
+}
 
 /// One member's session: its key, the agent it runs as and how it is started.
 #[derive(Clone, Debug)]
@@ -70,6 +80,13 @@ pub struct Seat {
 pub trait Drive: Send + Sync {
     /// One turn: resolves with the stop reason when the agent ends it.
     fn prompt(&self, seat: Seat, text: String, events: Sink) -> BoxFuture<Result<String, String>>;
+    /// The same turn, with what an n8n node answered (`AcpOutcome::reply`),
+    /// for the team to hand in for it. A driver that knows no such node
+    /// has nothing to add to the stop reason.
+    fn turn(&self, seat: Seat, text: String, events: Sink) -> BoxFuture<Result<acp::AcpOutcome, String>> {
+        let turn = self.prompt(seat, text, events);
+        Box::pin(async move { turn.await.map(|stop_reason| acp::AcpOutcome { stop_reason, ..Default::default() }) })
+    }
     fn answer(&self, key: String, request_id: Value, option_id: Option<String>) -> BoxFuture<Result<(), String>>;
     fn cancel(&self, key: String) -> BoxFuture<Result<(), String>>;
     fn stop(&self, key: String) -> BoxFuture<()>;
@@ -82,6 +99,11 @@ impl Drive for AcpDrive {
     fn prompt(&self, seat: Seat, text: String, events: Sink) -> BoxFuture<Result<String, String>> {
         let agents = self.0.clone();
         Box::pin(async move { agents.prompt(&events, &seat.key, &seat.profile, &seat.launch, text).await.map(|o| o.stop_reason) })
+    }
+
+    fn turn(&self, seat: Seat, text: String, events: Sink) -> BoxFuture<Result<acp::AcpOutcome, String>> {
+        let agents = self.0.clone();
+        Box::pin(async move { agents.prompt(&events, &seat.key, &seat.profile, &seat.launch, text).await })
     }
 
     fn answer(&self, key: String, request_id: Value, option_id: Option<String>) -> BoxFuture<Result<(), String>> {
@@ -426,9 +448,15 @@ impl Team {
                 store.append(Event::Paused { why: format!("The team has used its {} turns.", config.max_turns) }); // i18n-ok: said() in team/main.ts translates it
                 break;
             }
+            // An n8n node is sent the team, its task and what it heard as
+            // JSON: it has no use for the brief or the team tools (n8n.rs).
+            let node = self.seat(&member.id).filter(|s| s.profile.protocol == acp::Protocol::N8n);
             // A session that has not heard its role yet hears it first.
             let first = self.briefed.lock().unwrap().insert(member.id.clone());
-            let mut text = if first {
+            let mut text = if let Some(seat) = &node {
+                let words = seat.profile.extras.as_ref().and_then(|x| x.system_prompt()).unwrap_or("");
+                crate::n8n::team_turn(&config, state, &member.id, &unheard, &seat.key, words, &acp::running_model(&seat.profile, &seat.launch))
+            } else if first {
                 // A team agent's words that have no other way in (team_agents.rs).
                 let own = self.seat(&member.id).map(|s| crate::team_agents::brief_text(&s.profile)).unwrap_or_default();
                 // The documents it may read, as the knowledge base is now.
@@ -438,7 +466,9 @@ impl Team {
             } else {
                 String::new()
             };
-            text.push_str(&brief::turn(&config, &unheard));
+            if node.is_none() {
+                text.push_str(&brief::turn(&config, &unheard));
+            }
             let ids: Vec<String> = unheard.iter().map(|m| m.id.clone()).collect();
             let heard: Vec<(String, String)> = unheard.iter().map(|m| (m.from.clone(), m.text.clone())).collect();
             store.append(Event::TurnStarted { member: member.id.clone() });
@@ -570,6 +600,23 @@ impl Team {
         })
     }
 
+    /// An n8n member's answer, made into the team tool calls it would have
+    /// made (n8n::hand_in). A call the team refuses fails the turn.
+    fn hand_in(&self, member: &str, reply: &str) -> Result<(), String> {
+        let model = self.seat(member).map(|s| acp::running_model(&s.profile, &s.launch)).unwrap_or_default();
+        let answer = crate::n8n::read_answer(reply, &model);
+        let calls = {
+            let store = self.store.lock().unwrap();
+            let state = store.state();
+            let Some(config) = state.config.clone() else { return Ok(()) };
+            crate::n8n::hand_in(&config, state, member, &answer)?
+        };
+        for (tool, args) in calls {
+            self.act(member, tool, &args).map_err(|e| -> String { tr!(format!("n8n 的回覆沒辦法交給團隊({tool}):{e}"), format!("The n8n answer could not be handed in ({tool}): {e}")) })?;
+        }
+        Ok(())
+    }
+
     async fn run_turn(self: Arc<Self>, member: String, text: String, heard: Vec<(String, String)>) {
         let Some(seat) = self.seat(&member) else { return };
         log::line(format!("team {}: turn for {member} ({} characters)", self.id, text.chars().count()));
@@ -578,7 +625,14 @@ impl Team {
             screen.turn_started(number, heard);
             true
         });
-        let result = self.drive.prompt(seat, text, self.sink(&member)).await;
+        let node = seat.profile.protocol == acp::Protocol::N8n;
+        let result = self.drive.turn(seat, text, self.sink(&member)).await;
+        // What an n8n node answered is handed in for it before its turn
+        // ends, so the turn counts as one that moved its work along.
+        let result = match result {
+            Ok(outcome) if node => self.hand_in(&member, &outcome.reply).map(|_| outcome.stop_reason),
+            other => other.map(|o| o.stop_reason),
+        };
         self.live.lock().unwrap().remove(&member);
         self.on_screen(&member, |screen| {
             screen.turn_ended(number, result.as_ref().err().map(String::as_str));
@@ -769,6 +823,9 @@ impl Teams {
         let mut tokens = BTreeMap::new();
         for member in &config.members {
             let profile = profiles.iter().find(|p| p.id == member.agent).cloned().ok_or_else(|| -> String { tr!("有一個 agent 不見了", "an agent went missing") })?;
+            if member.id == config.leader && profile.protocol == acp::Protocol::N8n {
+                return Err(n8n_cannot_lead(&member.name));
+            }
             let secret = token();
             let launch = Launch {
                 cwd: Some(config.work_dir.clone()),
@@ -844,12 +901,14 @@ impl Teams {
             }
         }
 
+        // Seats first: a team that cannot start (an n8n node as its leader)
+        // keeps the log of its last run.
+        let (seats, tokens) = self.seats_for(&config, profiles)?;
+
         let store = match &self.root {
             Some(root) => Store::fresh(&root.join(&config.id)).map_err(|e| -> String { tr!(format!("無法開啟團隊的紀錄:{e}"), format!("Could not open the team's log: {e}")) })?,
             None => Store::memory(),
         };
-
-        let (seats, tokens) = self.seats_for(&config, profiles)?;
 
         let team = Arc::new(Team {
             id: config.id.clone(),
@@ -1273,7 +1332,7 @@ impl Teams {
     // i18n: model-facing
     pub async fn gate(&self, team: &str, member: &str, token: &str, tool: &str, args: &Value) -> Value {
         let deny = |why: &str| serde_json::json!({ "decision": "deny", "reason": why });
-        let Ok(team) = self.team(team) else { return deny("Coucou has no such team running.") };
+        let Ok(team) = self.team(team) else { return deny("Agent Center has no such team running.") };
         if !team.token_ok(member, token) {
             return deny("This session is not a member of that team.");
         }
@@ -1504,6 +1563,16 @@ mod tests {
     }
 
     impl Drive for Scripted {
+        /// A member on an n8n node: what its script returns is what the
+        /// webhook answered.
+        fn turn(&self, seat: Seat, text: String, events: Sink) -> BoxFuture<Result<acp::AcpOutcome, String>> {
+            let node = seat.profile.protocol == acp::Protocol::N8n;
+            let turn = self.prompt(seat, text, events);
+            Box::pin(async move {
+                turn.await.map(|said| if node { acp::AcpOutcome { stop_reason: "end_turn".into(), reply: said } } else { acp::AcpOutcome { stop_reason: said, ..Default::default() } })
+            })
+        }
+
         fn prompt(&self, seat: Seat, text: String, events: Sink) -> BoxFuture<Result<String, String>> {
             let member = seat.key.rsplit(':').next().unwrap().to_string();
             self.prompts.lock().unwrap().push((member.clone(), text.clone()));
@@ -1713,7 +1782,7 @@ mod tests {
 
             let turns = bench.turns_of("ai4");
             assert_eq!(turns.len(), 2, "one turn for the task, one for the reminder, and no more");
-            assert!(turns[1].contains("still open and Coucou has no report on it: TASK-01"));
+            assert!(turns[1].contains("still open and Agent Center has no report on it: TASK-01"));
             assert!(bench.member("ai4").lost_why.contains("two turns in a row"));
             assert_eq!(bench.snap().status, TeamStatus::Running);
 
@@ -1722,6 +1791,45 @@ mod tests {
             bench.until("ai4 gets a third turn", |_| bench.turns_of("ai4").len() >= 3).await;
             assert!(bench.turns_of("ai4")[2].contains("You were restarted") && bench.turns_of("ai4")[2].contains("TASK-01"));
             assert!(bench.drive.stopped.lock().unwrap().contains(&"team:shop:ai4".to_string()));
+        });
+    }
+
+    #[test]
+    fn an_n8n_member_s_answer_is_handed_in_for_it_and_it_never_leads() {
+        run(async {
+            let script: Script = Arc::new(|mate, text| {
+                if text.contains("Plan the work for this goal") {
+                    mate.tool("task_create", json!({ "title": "週報", "owner": "ai4" }));
+                }
+                // The n8n member: its webhook's answer.
+                if text.contains("\"kind\":\"team-turn\"") {
+                    return Ok(r#"{"output":"本週完成 3 件工單。"}"#.into());
+                }
+                Ok("end_turn".into())
+            });
+            let dir = std::env::temp_dir().join(format!("agent-center-n8n-team-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let bench = bench(script);
+            let node = AgentProfile { id: "flow".into(), name: "Report flow".into(), protocol: acp::Protocol::N8n, url: "http://localhost/webhook/x".into(), ..Default::default() };
+            let profiles = [AgentProfile::copilot(), node];
+            let mut config = shop(&dir.to_string_lossy());
+            config.members.iter_mut().find(|m| m.id == "ai4").unwrap().agent = "flow".into();
+
+            let mut led = config.clone();
+            led.leader = "ai4".into();
+            assert!(bench.teams.start(led, &profiles).unwrap_err().contains("n8n"));
+
+            bench.teams.start(config, &profiles).expect("start");
+            let snap = bench.until("the n8n answer is handed in", |s| s.deliverables.iter().any(|d| d.by == "ai4")).await;
+            let handed = snap.deliverables.iter().find(|d| d.by == "ai4").unwrap();
+            assert_eq!(handed.locator, "n8n-output/ai4/TASK-01.md");
+            assert!(std::fs::read_to_string(dir.join(&handed.locator)).unwrap().contains("本週完成 3 件工單"));
+            // It was sent the team and its task as JSON, not a CLI's brief.
+            let turn = &bench.turns_of("ai4")[0];
+            assert!(turn.contains("\"title\":\"週報\"") && !turn.contains("You are AI 4"), "{turn}");
+            // Handing in is a move: the member is not reminded or lost.
+            assert_ne!(bench.member("ai4").status, MemberStatus::Lost);
+            let _ = std::fs::remove_dir_all(&dir);
         });
     }
 
@@ -2197,7 +2305,6 @@ mod tests {
         run(async {
             let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));
             let doc = crate::team_agents::TeamAgents {
-                source: crate::team_agents::Source::Team,
                 agents: vec![crate::team_agents::TeamAgent {
                     id: "planner".into(),
                     name: "規劃師".into(),

@@ -238,7 +238,7 @@ function findings(report: UsageReport, ms: Member[], rows: UsageRow[], host: Ana
   const cached = rows.reduce((a, r) => a + r.usage.cacheRead, 0);
   const hit = inputSide ? cached / inputSide : 0;
   if (kinds.input / priced > 0.4 && hit < 0.5) {
-    out.push({ tone: "warn", title: trf("輸入佔成本 {pct}%,快取命中只有 {hit}%", "Input is {pct}% of the cost, with only {hit}% from the cache", { pct: Math.round((kinds.input / priced) * 100), hit: Math.round(hit * 100) }), advice: tr("同樣的內容每次都重新計費。讓成員在同一個 session 裡連續工作(Coucou 會沿用),避免一直換模型或重開;端點若支援提示快取,確認有開。", "The same content is billed again every time. Let members keep working in one session (Coucou keeps it), avoid switching models or restarting; if the endpoint supports prompt caching, make sure it is on.") });
+    out.push({ tone: "warn", title: trf("輸入佔成本 {pct}%,快取命中只有 {hit}%", "Input is {pct}% of the cost, with only {hit}% from the cache", { pct: Math.round((kinds.input / priced) * 100), hit: Math.round(hit * 100) }), advice: tr("同樣的內容每次都重新計費。讓成員在同一個 session 裡連續工作(Agent Center 會沿用),避免一直換模型或重開;端點若支援提示快取,確認有開。", "The same content is billed again every time. Let members keep working in one session (Agent Center keeps it), avoid switching models or restarting; if the endpoint supports prompt caching, make sure it is on.") });
   } else if (hit >= 0.8) {
     const saved = rows.reduce((a, r) => {
       const p = priceOf(report, r.usage.model)?.price;

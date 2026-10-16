@@ -1,20 +1,22 @@
 // Agent 設定: agents of the person's own making for their teams. Each is built
-// on a native agent of Settings → Agents — its command, environment and key —
-// and adds a name, a model, a system prompt, MCP servers, skills, and a
-// description the secretary reads to pick members. What a base's protocol
-// cannot take is said here rather than dropped quietly (team_agents.rs).
+// on a native agent of Settings → Agents — its command (or an n8n node's
+// webhook), environment and key — and adds a name, a model, a system prompt,
+// MCP servers, skills, and a description the secretary reads to pick
+// members. What a base's protocol cannot take is said here rather than
+// dropped quietly (team_agents.rs).
 //
-// The secretary's switch lives with them: new teams — the secretary's and the
-// ones made by hand — take their agents from Settings → Agents (the default)
-// or from these only. Teams already set up run as they are either way.
+// New teams — the secretary's and the ones made by hand — take their agents
+// from here only. The page lists them as Cloud Agents and Local Agents, as
+// their bases are (views/agent-kind.ts).
 
 import "./agents.css";
 import { Bridge, IS_TAURI } from "../core/bridge";
 import { tr, trf } from "../core/i18n";
-import type { AgentProfile, ModelChoice } from "../core/state";
+import { locationOf, type AgentLocation, type AgentProfile, type ModelChoice } from "../core/state";
+import { kindIcon, markHint, markName, markOf } from "../views/agent-kind";
 import { h } from "../views/dom";
-import { CHEVRON, dropdown, refreshSuggestions, suggest } from "./ui";
-import type { TeamAgent, TeamAgentMcp, TeamAgents, TeamAgentSource, TeamAgentSupport, TeamAgentSupports } from "./types";
+import { CHEVRON, dropdown, refreshSuggestions, suggest, type Choice } from "./ui";
+import type { TeamAgent, TeamAgentMcp, TeamAgents, TeamAgentSupport, TeamAgentSupports } from "./types";
 
 export interface AgentsHost {
   render(): void;
@@ -34,13 +36,14 @@ let stateError = "";
 /** The agent being edited (a copy), and whether it is new. */
 let draft: TeamAgent | null = null;
 let draftIsNew = false;
+/** A new agent's section: its base is picked among that kind only. */
+let draftWhere: AgentLocation | null = null;
 let problem = "";
 /** The agent whose 刪除 has been pressed once. */
 let deleting: string | null = null;
 
 /** The browser preview's agents, in the language of the moment they are first read. */
 const demoAgents = (): TeamAgents => ({
-  source: "native",
   agents: [
     {
       id: "ta-reviewer",
@@ -82,12 +85,33 @@ const demoAgents = (): TeamAgents => ({
       skills: [],
       description: tr("適合拿來畫圖、生成 UI SVG,也可以寫 Code,但品質高的代價是很貴", "Good for drawing and making UI SVGs; it writes code too, but the quality comes at a high price"),
     },
+    {
+      id: "ta-local-coder",
+      name: tr("本機寫手", "Local coder"),
+      base: "ollama",
+      model: "",
+      systemPrompt: "",
+      mcp: [],
+      skills: [],
+      description: tr("在本機模型上寫程式;資料不出公司,適合處理機密的程式碼。", "Writes code on a local model; nothing leaves the company, so it suits confidential code."),
+    },
+    {
+      id: "ta-weekly",
+      name: tr("週報流程", "Weekly report flow"),
+      base: "n8n-report",
+      model: "",
+      systemPrompt: tr("用條列寫,最多 10 行。", "Use bullet points, 10 lines at most."),
+      mcp: [],
+      skills: [],
+      description: tr("n8n 工作流程:彙整本週的工單與提交,產出一份週報。", "An n8n workflow: gathers the week's tickets and commits into a weekly report."),
+    },
   ],
 });
 
 function demoSupports(protocol: AgentProfile["protocol"]): TeamAgentSupports {
   if (protocol === "claude" || protocol === "codex") return { systemPrompt: "native", mcp: "native", skills: "brief" };
   if (protocol === "agy") return { systemPrompt: "brief", mcp: "no", skills: "brief" };
+  if (protocol === "n8n") return { systemPrompt: "native", mcp: "no", skills: "no" };
   return { systemPrompt: "brief", mcp: "native", skills: "brief" };
 }
 
@@ -98,7 +122,7 @@ export async function loadTeamAgents(render: () => void, natives: AgentProfile[]
   try {
     if (IS_TAURI) {
       const view = await Bridge.teamAgentsLoad();
-      doc = view.doc;
+      doc = { agents: view.doc.agents };
       supports = view.supports;
     } else {
       doc = doc ?? demoAgents();
@@ -107,7 +131,7 @@ export async function loadTeamAgents(render: () => void, natives: AgentProfile[]
   } catch (err) {
     state = "unreadable";
     stateError = String(err instanceof Error ? err.message : err);
-    doc = doc ?? { source: "native", agents: [] };
+    doc = doc ?? { agents: [] };
   }
   loading = false;
   render();
@@ -117,18 +141,14 @@ export function teamAgents(): TeamAgent[] {
   return doc?.agents ?? [];
 }
 
-/** How a member's agent is shown: a team agent by its name (its id is Coucou's own), a native one by its id. */
+/** How a member's agent is shown: a team agent by its name (its id is Agent Center's own), a native one by its id. */
 export function agentLabel(id: string): string {
   return teamAgents().find((a) => a.id === id)?.name || id;
 }
 
-export function agentSource(): TeamAgentSource {
-  return doc?.source ?? "native";
-}
-
 /**
- * The team agents as profiles, for names and default models: each its base's,
- * under its own id. One whose base is gone is left out.
+ * The team agents as profiles, for names, default models, kinds and marks:
+ * each its base's, under its own id. One whose base is gone is left out.
  */
 export function teamProfiles(natives: AgentProfile[]): AgentProfile[] {
   return teamAgents().flatMap((a) => {
@@ -140,6 +160,41 @@ export function teamProfiles(natives: AgentProfile[]): AgentProfile[] {
 /** The native agent a member's agent runs on: itself, or a team agent's base. */
 export function baseOf(id: string, natives: AgentProfile[]): AgentProfile | undefined {
   return natives.find((n) => n.id === id) ?? natives.find((n) => n.id === teamAgents().find((a) => a.id === id)?.base);
+}
+
+/** How many team agents are Cloud and how many Local, for the sidebar. */
+export function teamAgentCounts(natives: AgentProfile[]): Record<AgentLocation, number> {
+  const out = { cloud: 0, local: 0 };
+  for (const p of teamProfiles(natives)) out[locationOf(p)]++;
+  return out;
+}
+
+/**
+ * The agents a member may be given, as dropdown choices: the team agents,
+ * Cloud first, then Local, each under its heading and with its mark. A
+ * leader is never an n8n node. `keep` is the member's agent now: a native
+ * agent from a team set up earlier stays on the list, said to be one.
+ */
+export function memberChoices(natives: AgentProfile[], keep: string, leader: boolean, hintOf: (p: AgentProfile) => string | undefined): Choice[] {
+  const out: Choice[] = [];
+  for (const where of ["cloud", "local"] as const) {
+    for (const p of teamProfiles(natives).filter((p) => locationOf(p) === where)) {
+      if (leader && p.protocol === "n8n" && p.id !== keep) continue;
+      out.push({
+        value: p.id,
+        label: p.name,
+        hint: p.protocol === "n8n" && leader ? tr("n8n 節點不能當 Leader", "An n8n node cannot lead") : hintOf(p),
+        group: markName(where),
+        groupIcon: () => kindIcon(where, 14),
+        icon: () => kindIcon(markOf(p), 14),
+      });
+    }
+  }
+  const old = natives.find((n) => n.id === keep);
+  if (old && !out.some((c) => c.value === keep)) {
+    out.push({ value: old.id, label: old.name, hint: tr("原生 Agent(舊設定,照樣能跑)", "Native agent (set up earlier, still runs)"), group: tr("原生 Agent", "Native agents"), icon: () => kindIcon(markOf(old), 14) });
+  }
+  return out;
 }
 
 async function persist(next: TeamAgents, render: () => void): Promise<boolean> {
@@ -163,21 +218,8 @@ function stateText(): string {
   return "";
 }
 
-/** The secretary's switch: new teams from the native agents, or from the team agents only. */
-export async function setAgentSource(source: TeamAgentSource, render: () => void) {
-  if (!doc || doc.source === source) return;
-  await persist({ ...doc, source }, render);
-}
-
-/** The switch as two buttons, for the secretary's settings and this page. */
-export function sourceSwitch(render: () => void): HTMLElement {
-  const current = agentSource();
-  const item = (v: TeamAgentSource, label: string) =>
-    h("button", { type: "button", class: current === v ? "on" : "", "aria-pressed": String(current === v), onClick: () => void setAgentSource(v, render) }, label);
-  return h("div", { class: "segmented", role: "group", "aria-label": tr("團隊使用哪種 Agent", "Which agents teams use") }, item("native", tr("原生 Agent", "Native agents")), item("team", tr("團隊定義的 Agent", "Team agents")));
-}
-
-function supportText(s: TeamAgentSupport): string {
+function supportText(s: TeamAgentSupport, node: boolean): string {
+  if (node) return s === "no" ? tr("n8n 節點不支援", "Not for an n8n node") : tr("放進送給 n8n 的資料", "Sent to n8n with each call");
   switch (s) {
     case "native": return tr("原生支援", "Supported");
     case "brief": return tr("寫進成員的開場說明", "Added to the member's brief");
@@ -185,9 +227,9 @@ function supportText(s: TeamAgentSupport): string {
   }
 }
 
-function badge(s: TeamAgentSupport | undefined): HTMLElement | null {
+function badge(s: TeamAgentSupport | undefined, node: boolean): HTMLElement | null {
   if (!s) return null;
-  return h("span", { class: `ta-support ${s}`, text: supportText(s) });
+  return h("span", { class: `ta-support ${s}`, text: supportText(s, node) });
 }
 
 /** `a "b c" d` → [a, b c, d]. */
@@ -239,16 +281,23 @@ const modelLists = new Map<string, ModelChoice[] | string | null>();
 /**
  * The model, typed or picked from what the base agent offers. The list is
  * asked for the first time the field is used: a handshake with the base, with
- * its own key, nothing spent.
+ * its own key, nothing spent. An n8n node lists none: what is typed is sent
+ * to the workflow as `model`.
  */
 function modelField(a: TeamAgent, base: AgentProfile | undefined): HTMLElement {
+  const node = base?.protocol === "n8n";
   const input = field("ta-model", a.model, (v) => (a.model = v.trim()), {
-    placeholder: base?.model ? trf("留空用基底的:{model}", "Leave empty for the base's: {model}", { model: base.model }) : tr("留空用基底 Agent 的預設", "Leave empty for the base agent's default"),
+    placeholder: node
+      ? tr("可留空;填了會放進送給 n8n 的 model 欄位", "May be empty; sent to n8n as `model` when set")
+      : base?.model
+        ? trf("留空用基底的:{model}", "Leave empty for the base's: {model}", { model: base.model })
+        : tr("留空用基底 Agent 的預設", "Leave empty for the base agent's default"),
     autocomplete: "off",
     class: "field ta-model-input",
   }) as HTMLInputElement;
   suggest(input, () => {
     if (!base) return tr("先選基底 Agent", "Pick a base agent first");
+    if (node) return tr("n8n 節點沒有模型清單,直接輸入名稱", "An n8n node lists no models: type a name");
     const got = modelLists.get(base.id);
     if (got === undefined) return tr("讀取這個 Agent 提供的模型…", "Reading the models this agent offers…");
     if (got === null) return tr("載入中…", "Loading…");
@@ -256,7 +305,7 @@ function modelField(a: TeamAgent, base: AgentProfile | undefined): HTMLElement {
     return Array.isArray(got) ? got.map((c) => ({ value: c.id, label: c.id, hint: c.label !== c.id ? c.label : undefined })) : got;
   });
   input.addEventListener("focus", () => {
-    if (!base || modelLists.has(base.id)) return;
+    if (!base || node || modelLists.has(base.id)) return;
     if (!IS_TAURI) {
       modelLists.set(base.id, (base.protocol === "codex" ? ["gpt-5.6-sol", "gpt-5.6-luna"] : base.protocol === "claude" ? ["opus", "sonnet", "haiku"] : ["deepseek-v4-flash", "glm-5.3-flash"]).map((id) => ({ id, label: id })));
       refreshSuggestions(input);
@@ -294,17 +343,46 @@ function problemsOf(a: TeamAgent, natives: AgentProfile[]): string[] {
   return out;
 }
 
+/** What kind of agent a base is, in a word, a colour and a mark. */
+function kindOf(base: AgentProfile | undefined): { label: string; tone: string } {
+  if (!base) return { label: tr("不存在", "Missing"), tone: "gone" };
+  if (base.protocol === "claude") return { label: "Claude Code", tone: "claude" };
+  if (base.protocol === "codex") return { label: "Codex", tone: "codex" };
+  if (base.protocol === "agy") return { label: "Antigravity", tone: "agy" };
+  if (base.protocol === "n8n") return { label: "n8n Webhook", tone: "n8n" }; // i18n-ok: a product name
+  return { label: /copilot/i.test(base.command) ? "Copilot" : "ACP", tone: "acp" };
+}
+
+/** The bases a team agent may run on, Cloud first then Local, each under its heading. */
+function baseChoices(natives: AgentProfile[], only: AgentLocation | null): Choice[] {
+  const out: Choice[] = [];
+  for (const where of ["cloud", "local"] as const) {
+    if (only && only !== where) continue;
+    for (const n of natives.filter((n) => locationOf(n) === where)) {
+      out.push({ value: n.id, label: n.name, hint: kindOf(n).label, group: markName(where), groupIcon: () => kindIcon(where, 14), icon: () => kindIcon(markOf(n), 14) });
+    }
+  }
+  return out;
+}
+
 function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
   const natives = host.natives();
   const base = natives.find((n) => n.id === a.base);
+  const node = base?.protocol === "n8n";
   const can = supports[a.base];
-  const choices = natives.map((n) => ({ value: n.id, label: n.name, hint: n.protocol === "codex" ? "Codex" : n.protocol === "claude" ? "Claude Code" : n.protocol === "agy" ? "Antigravity" : n.command }));
+  const choices = baseChoices(natives, draftIsNew ? draftWhere : null);
   if (a.base && !base) choices.unshift({ value: a.base, label: trf("{base}(不存在)", "{base} (missing)", { base: a.base }), hint: tr("不在 設定 → Agents 裡", "Not in Settings → Agents") });
   const mcpOff = can?.mcp === "no";
+  const skillsOff = can?.skills === "no";
+  const where = base ? locationOf(base) : draftWhere;
   return h(
     "section",
     { class: "panel form ta-editor" }, // i18n-ok: CSS classes
-    h("div", { class: "panel-head" }, h("h2", { text: draftIsNew ? tr("新增團隊 Agent", "New team agent") : trf("編輯「{name}」", "Edit “{name}”", { name: a.name || tr("未命名", "unnamed") }) })),
+    h(
+      "div",
+      { class: "panel-head" },
+      h("h2", { class: "ta-editor-title" }, where ? kindIcon(where, 20) : null, draftIsNew ? (where === "local" ? tr("新增 Local Agent", "New Local Agent") : where === "cloud" ? tr("新增 Cloud Agent", "New Cloud Agent") : tr("新增團隊 Agent", "New team agent")) : trf("編輯「{name}」", "Edit “{name}”", { name: a.name || tr("未命名", "unnamed") })),
+    ),
     h(
       "div",
       { class: "ta-grid" },
@@ -314,37 +392,40 @@ function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
       h(
         "div",
         { class: "row nowrap" },
-        dropdown({ value: a.base, choices, placeholder: tr("選擇原生 Agent…", "Choose a native agent…"), title: tr("用哪個原生 Agent 的指令、環境變數與金鑰執行", "Whose command, environment variables and key it runs with"), onChange: (v) => { a.base = v; host.render(); } }),
+        dropdown({ value: a.base, choices, placeholder: tr("選擇 設定 → Agents 裡的 Agent…", "Choose an agent from Settings → Agents…"), title: tr("用哪個 Agent 的指令(或 Webhook)、環境變數與金鑰執行", "Whose command (or webhook), environment variables and key it runs with"), onChange: (v) => { a.base = v; host.render(); } }),
         h("span", { class: "hint" }, tr("來自 ", "From "), h("button", { class: "link", type: "button", onClick: () => host.openSettings() }, tr("設定 → Agents", "Settings → Agents")), tr(";金鑰沿用它的,不另外存。", "; it uses that agent's key, nothing is stored again.")),
       ),
       h("label", { text: tr("模型", "Model") }),
       modelField(a, base),
       h("label", { text: tr("說明(給秘書看)", "Description (for the secretary)") }),
       field("ta-desc", a.description, (v) => (a.description = v), { rows: "2", placeholder: tr("適合做什麼、擅長什麼。秘書開團隊時照這段話挑人。", "What it is good at. The secretary picks members by this when it sets up a team.") }, "textarea"),
-      h("label", {}, "System prompt ", badge(can?.systemPrompt)), // i18n-ok: the same in both
-      field("ta-prompt", a.systemPrompt, (v) => (a.systemPrompt = v), { rows: "6", placeholder: tr("這個 Agent 一直要遵守的指示、口吻、做事方式", "Instructions, tone and ways of working this agent always keeps to") }, "textarea"),
-      h("label", {}, "MCP server ", badge(can?.mcp)), // i18n-ok: the same in both
+      h("label", {}, "System prompt ", badge(can?.systemPrompt, node)), // i18n-ok: the same in both
+      field("ta-prompt", a.systemPrompt, (v) => (a.systemPrompt = v), { rows: "6", placeholder: node ? tr("每次呼叫都放在 systemPrompt 欄位送給工作流程", "Sent to the workflow as systemPrompt with every call") : tr("這個 Agent 一直要遵守的指示、口吻、做事方式", "Instructions, tone and ways of working this agent always keeps to") }, "textarea"),
+      h("label", {}, "MCP server ", badge(can?.mcp, node)), // i18n-ok: the same in both
       h(
         "div",
         { class: "ta-mcps" },
-        mcpOff ? h("p", { class: "problem", text: tr("這個基底 Agent 的類型不支援個別成員的 MCP server(Antigravity 只讀工作資料夾的設定,會變成全隊共用),存了也不會帶給它。", "This base agent's type doesn't support MCP servers per member (Antigravity only reads the work folder's settings, which the whole team shares), so these are saved but not given to it.") }) : null,
+        mcpOff
+          ? h("p", { class: node && !a.mcp.length ? "hint" : "problem", text: node ? (a.mcp.length ? tr("n8n 節點用的是工作流程自己的工具,不接 MCP server;這裡存了也不會帶給它。", "An n8n node uses its workflow's own tools, not MCP servers: these are saved but not given to it.") : tr("n8n 節點用的是工作流程自己的工具,不接 MCP server。", "An n8n node uses its workflow's own tools, not MCP servers.")) : tr("這個基底 Agent 的類型不支援個別成員的 MCP server(Antigravity 只讀工作資料夾的設定,會變成全隊共用),存了也不會帶給它。", "This base agent's type doesn't support MCP servers per member (Antigravity only reads the work folder's settings, which the whole team shares), so these are saved but not given to it.") })
+          : null,
         ...a.mcp.map((m, i) => mcpRow(host, a, m, i, mcpOff)),
-        h("button", { type: "button", class: "add", onClick: () => { a.mcp.push({ name: "", command: "", args: [], url: "" }); host.render(); } }, tr("＋ 新增 MCP server", "＋ Add MCP server")),
-        h("p", { class: "hint", text: tr("啟動指令(stdio)或網址(HTTP)。不能填金鑰:需要金鑰的 MCP 請用它自己的登入方式。這些工具每次使用都會照一般規則問你,不像團隊工具自動放行。", "A start command (stdio) or an address (HTTP). No keys here: an MCP that needs one signs in its own way. These tools ask you each time under the usual rules; unlike the team tools, they are not let through on their own.") }),
+        node && !a.mcp.length ? null : h("button", { type: "button", class: "add", onClick: () => { a.mcp.push({ name: "", command: "", args: [], url: "" }); host.render(); } }, tr("＋ 新增 MCP server", "＋ Add MCP server")),
+        node ? null : h("p", { class: "hint", text: tr("啟動指令(stdio)或網址(HTTP)。不能填金鑰:需要金鑰的 MCP 請用它自己的登入方式。這些工具每次使用都會照一般規則問你,不像團隊工具自動放行。", "A start command (stdio) or an address (HTTP). No keys here: an MCP that needs one signs in its own way. These tools ask you each time under the usual rules; unlike the team tools, they are not let through on their own.") }),
       ),
-      h("label", {}, "Skill ", badge(can?.skills)), // i18n-ok: the same in both
+      h("label", {}, "Skill ", badge(can?.skills, node)), // i18n-ok: the same in both
       h(
         "div",
         {},
-        field("ta-skills", a.skills.join("\n"), (v) => (a.skills = v.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)), { rows: "3", placeholder: tr("一行一個:含 SKILL.md 的資料夾完整路徑,或 skill 名稱(會到 ~/.claude/skills 等常見位置找)", "One per line: the full path of a folder with a SKILL.md, or a skill name (looked for in ~/.claude/skills and other usual places)"), class: "field mono" }, "textarea"),
-        h("p", { class: "hint", text: tr("成員開工時會被告知每個 skill 的 SKILL.md 在哪、適合做什麼,需要時自己讀。", "When a member starts it is told where each skill's SKILL.md is and what it is for, and reads it when it needs to.") }),
+        field("ta-skills", a.skills.join("\n"), (v) => (a.skills = v.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)), { rows: "3", placeholder: tr("一行一個:含 SKILL.md 的資料夾完整路徑,或 skill 名稱(會到 ~/.claude/skills 等常見位置找)", "One per line: the full path of a folder with a SKILL.md, or a skill name (looked for in ~/.claude/skills and other usual places)"), class: "field mono", ...(skillsOff && !a.skills.length ? { disabled: "" } : {}) }, "textarea"),
+        h("p", { class: "hint", text: skillsOff ? tr("n8n 節點不讀 skill;工作流程該做什麼,在 n8n 裡設定。", "An n8n node reads no skills: what the workflow does is set up in n8n.") : tr("成員開工時會被告知每個 skill 的 SKILL.md 在哪、適合做什麼,需要時自己讀。", "When a member starts it is told where each skill's SKILL.md is and what it is for, and reads it when it needs to.") }),
       ),
     ),
+    node ? h("p", { class: "hint ta-node-note" }, kindIcon("n8n", 14), h("span", { text: markHint("n8n") })) : null,
     problem ? h("p", { class: "problem", text: problem }) : null,
     h(
       "div",
       { class: "row end" },
-      h("button", { type: "button", class: "btn plain", onClick: () => { draft = null; problem = ""; host.render(); } }, tr("取消", "Cancel")),
+      h("button", { type: "button", class: "btn plain", onClick: () => { draft = null; draftWhere = null; problem = ""; host.render(); } }, tr("取消", "Cancel")),
       h(
         "button",
         {
@@ -363,8 +444,11 @@ function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
             const clean: TeamAgent = { ...a, name: a.name.trim(), mcp: a.mcp.filter((m) => m.name || m.command || m.url) };
             if (at < 0) all.push(clean);
             else all.splice(at, 0, clean);
-            void persist({ source: agentSource(), agents: all }, host.render).then((ok) => {
-              if (ok) draft = null;
+            void persist({ agents: all }, host.render).then((ok) => {
+              if (ok) {
+                draft = null;
+                draftWhere = null;
+              }
               host.render();
             });
           },
@@ -378,15 +462,6 @@ function editor(host: AgentsHost, a: TeamAgent): HTMLElement {
 /** Each team agent's Mochi, by its place in the list: neighbours never share a colour. */
 const FACES = ["#6F93FF", "#34D399", "#A78BFA", "#F5A524", "#F472B6", "#22D3EE", "#84CC16", "#FB7185"];
 
-/** What kind of agent a base is, in a word and a colour. */
-function kindOf(base: AgentProfile | undefined): { label: string; tone: string } {
-  if (!base) return { label: tr("不存在", "Missing"), tone: "gone" };
-  if (base.protocol === "claude") return { label: "Claude Code", tone: "claude" };
-  if (base.protocol === "codex") return { label: "Codex", tone: "codex" };
-  if (base.protocol === "agy") return { label: "Antigravity", tone: "agy" };
-  return { label: /copilot/i.test(base.command) ? "Copilot" : "ACP", tone: "acp" };
-}
-
 const ICON_EDIT = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>';
 const ICON_DELETE = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
 
@@ -394,6 +469,7 @@ const ICON_DELETE = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden
 function edit(host: AgentsHost, a: TeamAgent) {
   draft = structuredClone(a);
   draftIsNew = false;
+  draftWhere = null;
   problem = "";
   deleting = null;
   host.render();
@@ -426,7 +502,7 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
       "header",
       { class: "ta-card-head" },
       h("i", { class: "blob", style: `--c:${face};--s:34px`, "aria-hidden": "true" }),
-      h("div", { class: "ta-card-title" }, h("b", { text: a.name || a.id, title: a.name || a.id }), h("small", { text: base ? kind.label : tr("基底不存在", "Base missing") })),
+      h("div", { class: "ta-card-title" }, h("b", { title: a.name || a.id }, base ? kindIcon(locationOf(base), 15) : null, h("span", { text: a.name || a.id })), h("small", { text: base ? kind.label : tr("基底不存在", "Base missing") })),
       h(
         "div",
         { class: "ta-card-actions" },
@@ -446,7 +522,7 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
                 return;
               }
               deleting = null;
-              void persist({ source: agentSource(), agents: teamAgents().filter((x) => x.id !== a.id) }, host.render);
+              void persist({ agents: teamAgents().filter((x) => x.id !== a.id) }, host.render);
             },
           },
           arming ? tr("確定刪除?", "Delete?") : null,
@@ -456,8 +532,8 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
     h(
       "div",
       { class: "ta-card-kind" },
-      h("span", { class: `ta-kind ${kind.tone}`, title: base ? trf("基底 Agent:{name}({kind})", "Base agent: {name} ({kind})", { name: base.name, kind: kind.label }) : trf("基底「{base}」不在 設定 → Agents 裡", "The base “{base}” is not in Settings → Agents", { base: a.base }) }, h("span", { text: base ? base.name : trf("{base}(不存在)", "{base} (missing)", { base: a.base }) })),
-      h("span", { class: "ta-model-name", title: a.model ? trf("模型:{model}", "Model: {model}", { model: a.model }) : tr("沒有指定,用基底的模型", "None set: the base's model") }, model ? `${model}${a.model ? "" : tr("(基底)", " (base)")}` : tr("基底預設模型", "Base's default model")),
+      h("span", { class: `ta-kind ${kind.tone}`, title: base ? trf("基底 Agent:{name}({kind})", "Base agent: {name} ({kind})", { name: base.name, kind: kind.label }) : trf("基底「{base}」不在 設定 → Agents 裡", "The base “{base}” is not in Settings → Agents", { base: a.base }) }, base?.protocol === "n8n" ? kindIcon("n8n", 13) : null, h("span", { text: base ? base.name : trf("{base}(不存在)", "{base} (missing)", { base: a.base }) })),
+      h("span", { class: "ta-model-name", title: a.model ? trf("模型:{model}", "Model: {model}", { model: a.model }) : tr("沒有指定,用基底的模型", "None set: the base's model") }, model ? `${model}${a.model ? "" : tr("(基底)", " (base)")}` : base?.protocol === "n8n" ? tr("由工作流程決定", "Up to the workflow") : tr("基底預設模型", "Base's default model")),
     ),
     h("p", { class: `ta-desc${a.description ? "" : " empty"}`, text: a.description || tr("還沒有說明:秘書不知道它適合做什麼", "No description yet: the secretary doesn't know what it is good for") }),
     h(
@@ -473,26 +549,53 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
   );
 }
 
-/** The tile that starts a new team agent, at the end of the grid. */
-function addTile(host: AgentsHost): HTMLElement {
-  const natives = host.natives();
+/** The tile that starts a new team agent of one kind, at the end of its grid. */
+function addTile(host: AgentsHost, where: AgentLocation): HTMLElement {
+  const bases = host.natives().filter((n) => locationOf(n) === where);
   return h(
     "button",
     {
       type: "button",
-      class: "ta-card ta-add",
-      disabled: !natives.length,
-      title: natives.length ? "" : tr("先到 設定 → Agents 建立原生 Agent", "First add a native agent in Settings → Agents"),
+      class: `ta-card ta-add ${where}`,
+      disabled: !bases.length,
+      title: bases.length ? markHint(where) : where === "local" ? tr("先到 設定 → Agents 新增 Local Agent(本機模型或 n8n 節點)", "First add a Local Agent (a local model or an n8n node) in Settings → Agents") : tr("先到 設定 → Agents 新增 Cloud Agent", "First add a Cloud Agent in Settings → Agents"),
       onClick: () => {
-        draft = { id: `ta-${Date.now().toString(36)}`, name: "", base: natives[0]?.id ?? "", model: "", systemPrompt: "", mcp: [], skills: [], description: "" };
+        draft = { id: `ta-${Date.now().toString(36)}`, name: "", base: bases[0]?.id ?? "", model: "", systemPrompt: "", mcp: [], skills: [], description: "" };
         draftIsNew = true;
+        draftWhere = where;
         problem = "";
         host.render();
         requestAnimationFrame(() => document.querySelector(".ta-editor")?.scrollIntoView({ block: "start", behavior: "smooth" }));
       },
     },
     h("span", { class: "ta-add-plus", text: "+" }),
-    h("span", { text: tr("新增團隊 Agent", "New team agent") }),
+    h("span", { text: where === "local" ? tr("新增 Local Agent", "New Local Agent") : tr("新增 Cloud Agent", "New Cloud Agent") }),
+  );
+}
+
+/** One kind's panel: its mark, its team agents and a tile for one more. */
+function section(host: AgentsHost, where: AgentLocation): HTMLElement {
+  const natives = host.natives();
+  // A team agent whose base is gone is shown with the Cloud ones, marked broken.
+  const whereOf = (a: TeamAgent) => {
+    const base = natives.find((n) => n.id === a.base);
+    return base ? locationOf(base) : "cloud";
+  };
+  const mine = teamAgents().map((a, i) => ({ a, i })).filter(({ a }) => whereOf(a) === where);
+  const noBase = !natives.some((n) => locationOf(n) === where);
+  return h(
+    "section",
+    { class: `panel ta-section ${where}` },
+    h(
+      "div",
+      { class: "panel-head" },
+      h("h2", { class: "ta-section-title" }, kindIcon(where, 22), h("span", { text: markName(where) }), h("span", { class: "count", text: String(mine.length) })),
+      h("span", { class: "dim", text: markHint(where) }),
+    ),
+    noBase
+      ? h("p", { class: "hint" }, where === "local" ? tr("設定 → Agents 裡還沒有 Local Agent。先到 ", "Settings → Agents has no Local Agent yet. Add a local model or an n8n node in ") : tr("設定 → Agents 裡還沒有 Cloud Agent。先到 ", "Settings → Agents has no Cloud Agent yet. Add one in "), h("button", { class: "link", type: "button", onClick: () => host.openSettings() }, tr("設定 → Agents", "Settings → Agents")), where === "local" ? tr(" 新增本機模型或 n8n 節點。", " first.") : tr(" 新增一個。", " first."))
+      : null,
+    h("div", { class: "ta-grid-list" }, ...mine.map(({ a, i }) => card(host, a, i)), addTile(host, where)),
   );
 }
 
@@ -505,28 +608,14 @@ export function agentsPage(host: AgentsHost): HTMLElement {
     h(
       "section",
       { class: "panel" },
-      h("p", {}, tr("以 設定 → Agents 裡的原生 Agent 為基底,做出團隊專用的 Agent:自己的名稱、模型、system prompt、MCP 與 skill,再寫一段說明讓秘書知道它適合做什麼。執行時沿用基底的指令、環境變數與金鑰。", "Build agents for your teams on a native agent from Settings → Agents: their own name, model, system prompt, MCP servers and skills, plus a description that tells the secretary what each is good for. They run with the base's command, environment variables and key.")),
-      h("div", { class: "row" }, h("b", { text: tr("新團隊使用", "New teams use") }), sourceSwitch(host.render)),
-      h("p", { class: "hint", text: agentSource() === "team" ? tr("現在秘書開團隊、你在「團隊設定」新增成員時,Agent 下拉只列這裡的團隊 Agent。已經設定好的團隊照舊能啟動。", "When the secretary sets up a team, or you add a member in Team setup, the agent list now shows only the team agents here. Teams already set up still start as before.") : tr("現在秘書與新增成員用的是原生 Agent;切到「團隊定義的 Agent」後只列這裡的。這個開關也在秘書的設定裡。", "The secretary and new members now use native agents; switch to Team agents to list only the ones here. This switch is in the secretary's settings too.") }),
+      h("p", {}, tr("團隊只用這裡的 Agent。每個團隊 Agent 都以 設定 → Agents 裡的一個 Cloud Agent 或 Local Agent 為基底,再加上自己的名稱、模型、system prompt、MCP 與 skill,和一段讓秘書知道它適合做什麼的說明。執行時沿用基底的指令(n8n 節點是 Webhook)、環境變數與金鑰。", "Teams use only the agents here. Each team agent is built on a Cloud Agent or a Local Agent from Settings → Agents, with its own name, model, system prompt, MCP servers and skills, and a description that tells the secretary what it is good for. It runs with the base's command (an n8n node's webhook), environment variables and key.")),
+      h("p", { class: "hint", text: tr("秘書開團隊、你在「團隊設定」新增成員時,Agent 下拉只列這裡的團隊 Agent。以前設定好、用原生 Agent 的團隊照樣能啟動。", "When the secretary sets up a team, or you add a member in Team setup, the agent list shows only the team agents here. Teams set up earlier with native agents still start.") }),
+      h("div", { class: "row ta-legend" }, ...(["cloud", "local", "n8n"] as const).map((m) => h("span", { class: "ta-legend-item", title: markHint(m) }, kindIcon(m, 16), h("span", { text: markName(m) })))),
       state ? h("p", { class: "hint", role: "status", text: stateText() }) : null,
+      !draft && problem ? h("p", { class: "problem", text: problem }) : null,
     ),
-    // On the native agents the team agents are put away, not deleted: nobody
-    // reading the page should think they are what new teams are made of.
-    agentSource() === "team" && draft ? editor(host, draft) : null,
-    agentSource() === "team"
-      ? h(
-          "section",
-          { class: "panel" },
-          h("div", { class: "panel-head" }, h("h2", {}, tr("團隊 Agent", "Team agents"), h("span", { class: "count", text: String(teamAgents().length) })), h("span", { class: "dim", text: tr("按兩下卡片也可以編輯", "You can also double-click a card to edit it") })),
-          !draft && problem ? h("p", { class: "problem", text: problem }) : null,
-          h("div", { class: "ta-grid-list" }, ...teamAgents().map((a, i) => card(host, a, i)), addTile(host)),
-        )
-      : h(
-          "section",
-          { class: "panel ta-away" },
-          h("b", { text: teamAgents().length ? trf("團隊 Agent 已收起({n} 個,都還在)", "Team agents put away ({n}, all still there)", { n: teamAgents().length }) : tr("團隊 Agent 已收起", "Team agents put away") }),
-          h("p", { class: "hint", text: tr("現在用的是原生 Agent,所以這裡不顯示團隊 Agent,免得誤會;資料沒有刪除。切到上方的「團隊定義的 Agent」就會再出現,也能新增與編輯。已經設定好、用到團隊 Agent 的團隊照樣能啟動。", "Native agents are in use now, so the team agents are not shown here, to avoid confusion; nothing was deleted. Switch to Team agents above to see them again and to add or edit them. Teams already set up with team agents still start as before.") }),
-
-        ),
+    draft ? editor(host, draft) : null,
+    section(host, "cloud"),
+    section(host, "local"),
   );
 }

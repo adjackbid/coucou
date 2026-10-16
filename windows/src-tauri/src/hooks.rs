@@ -166,12 +166,12 @@ fn parse_settings(bytes: &[u8], path: &str) -> Result<Value, String> {
     match serde_json::from_slice::<Value>(text) {
         Ok(v) if v.is_object() => Ok(v),
         Ok(_) => Err(tr!(
-            format!("{path} 不是 JSON 物件，Coucou 不會動它。"),
-            format!("{path} isn't a JSON object — Coucou won't touch it.")
+            format!("{path} 不是 JSON 物件，Agent Center 不會動它。"),
+            format!("{path} isn't a JSON object — Agent Center won't touch it.")
         )),
         Err(err) => Err(tr!(
-            format!("{path} 不是有效的 JSON（{err}）。請修好或移走它再試一次，Coucou 不會覆寫它。"),
-            format!("{path} isn't valid JSON ({err}). Fix or move it, then try again — Coucou won't overwrite it.")
+            format!("{path} 不是有效的 JSON（{err}）。請修好或移走它再試一次，Agent Center 不會覆寫它。"),
+            format!("{path} isn't valid JSON ({err}). Fix or move it, then try again — Agent Center won't overwrite it.")
         )),
     }
 }

@@ -123,7 +123,7 @@ pub async fn prompt(running: &Running, text: String, timeout: Duration) -> Resul
         return Err(e);
     }
     match tokio::time::timeout(timeout, rx).await {
-        Ok(Ok(result)) => result.map(|stop_reason| AcpOutcome { stop_reason }),
+        Ok(Ok(result)) => result.map(|stop_reason| AcpOutcome { stop_reason, ..Default::default() }),
         Ok(Err(_)) => Err(tr!("Antigravity 已經結束了。", "Antigravity went away.")),
         Err(_) => Err(tr!("Antigravity 沒有及時完成這一輪。", "Antigravity did not finish the turn in time.")),
     }

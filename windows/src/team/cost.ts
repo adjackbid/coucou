@@ -352,7 +352,7 @@ export function costPage(host: CostHost): HTMLElement {
         "section",
         { class: "panel cost-empty" },
         h("h2", { text: tr("這段期間沒有用量紀錄", "No usage in this period") }),
-        h("p", { class: "dim", text: tr("團隊成員工作時,Coucou 會記下每個模型用了多少 token。換一個期間看看,或讓團隊跑一輪。", "While team members work, Coucou records how many tokens each model used. Try another period, or let a team run.") }),
+        h("p", { class: "dim", text: tr("團隊成員工作時,Agent Center 會記下每個模型用了多少 token。換一個期間看看,或讓團隊跑一輪。", "While team members work, Agent Center records how many tokens each model used. Try another period, or let a team run.") }),
         coverage(),
       ),
     );
@@ -708,7 +708,7 @@ function actualPanel(rows: UsageRow[], host: CostHost): HTMLElement | null {
       const asking = busy === `bill:${a.id}`;
       const button = h("button", { class: "btn plain", type: "button", disabled: !!busy, onClick: () => void askBill(host, a) }, asking ? tr("查詢中…", "Asking…") : got ? tr("重新查詢", "Ask again") : tr("查詢", "Ask"));
       const head = h("div", { class: "actual-head" }, h("div", {}, h("b", { text: a.name }), h("span", { class: "dim", text: ` ${a.env.COPILOT_PROVIDER_BASE_URL}` })), button);
-      if (!got) return h("div", { class: "actual" }, head, h("p", { class: "hint", text: trf("按「查詢」才會連線。Coucou 在所選期間估計這個代理花了 {usd}。", "Nothing connects until you click Ask. Coucou estimates this agent spent {usd} in the chosen period.", { usd: moneyText(estimate) }) }));
+      if (!got) return h("div", { class: "actual" }, head, h("p", { class: "hint", text: trf("按「查詢」才會連線。Agent Center 在所選期間估計這個代理花了 {usd}。", "Nothing connects until you click Ask. Agent Center estimates this agent spent {usd} in the chosen period.", { usd: moneyText(estimate) }) }));
       if (typeof got === "string") return h("div", { class: "actual" }, head, h("p", { class: "problem", text: got }));
       const [big, small] = money(got.spend);
       const share = got.maxBudget ? Math.min(1, got.spend / got.maxBudget) : 0;
@@ -741,7 +741,7 @@ function actualPanel(rows: UsageRow[], host: CostHost): HTMLElement | null {
                   }),
                 )
               : null,
-            h("span", { class: "hint", text: trf("端點的數字也包含這把金鑰在 Coucou 以外的使用。Coucou 在所選期間估計:{usd}。查詢於 {when}。", "The endpoint's number includes this key's use outside Coucou too. Coucou's estimate for the chosen period: {usd}. Asked at {when}.", { usd: moneyText(estimate), when: whenText(got.askedAt) }) }),
+            h("span", { class: "hint", text: trf("端點的數字也包含這把金鑰在 Agent Center 以外的使用。Agent Center 在所選期間估計:{usd}。查詢於 {when}。", "The endpoint's number includes this key's use outside Agent Center too. Agent Center's estimate for the chosen period: {usd}. Asked at {when}.", { usd: moneyText(estimate), when: whenText(got.askedAt) }) }),
           ),
           models.length
             ? h(
@@ -892,7 +892,7 @@ function prices(rows: UsageRow[], host: CostHost): HTMLElement {
   for (const row of rows) used.set(row.usage.model, (used.get(row.usage.model) ?? 0) + tokensOf(row.usage));
   const models = [...r.models].sort((a, b) => Number(!!a.found) - Number(!!b.found) || (used.get(b.model) ?? 0) - (used.get(a.model) ?? 0));
   const endpoints = endpointAgents(host);
-  const fetched = r.tableFetchedAt ? trf("更新於 {date}", "updated {date}", { date: dateText(r.tableFetchedAt) }) : tr("隨 Coucou 附帶", "shipped with Coucou");
+  const fetched = r.tableFetchedAt ? trf("更新於 {date}", "updated {date}", { date: dateText(r.tableFetchedAt) }) : tr("隨 Agent Center 附帶", "shipped with Agent Center");
 
   const rateField = h("input", { class: "field narrow", type: "number", min: "0", step: "0.1", "data-key": "cost-rate", value: String(r.choices.rate || "") }) as HTMLInputElement;
   rateField.addEventListener("change", () => {
@@ -1008,8 +1008,8 @@ function coverage(): HTMLElement {
       {},
       item("Claude Code", tr("每一輪結束時回報各模型的 token(含快取),也附上它自己估的費用。", "Reports each model's tokens (cache included) at the end of every turn, with its own cost estimate.")),
       item("Codex", tr("工作時即時回報整個對話串的 token,子代理的也算在內。", "Reports the whole thread's tokens live as it works, sub-agents included.")),
-      item(tr("Copilot(自備端點)", "Copilot (own endpoint)"), tr("像 cg 這樣接自己的 API 端點時,請求經過 Coucou 在本機的計量器轉送,逐筆讀出 token 和實際使用的模型;內容不保存。Copilot 自己每輪回報的累計值和計量器重複,不另外計算。", "On an API endpoint of your own (as with cg), requests pass through Coucou's meter on this computer, which reads each one's tokens and the model really used; nothing of the content is kept. The totals Copilot reports each turn repeat the meter's and are not counted again.")),
-      item(tr("Copilot(GitHub 登入)", "Copilot (GitHub sign-in)"), tr("每一輪結束時回報整個 session 的累計用量(Coucou 換算成這一輪新增的部分),但不附模型名稱,以這位成員設定的模型記錄;費用以 GitHub 的方案為準,建議把計費方式設成「訂閱」。", "Reports the session's running total at the end of every turn (Coucou works out what the turn added), but with no model name, so it is recorded under the member's model; the cost is what your GitHub plan says, so set its billing to Subscription.")),
+      item(tr("Copilot(自備端點)", "Copilot (own endpoint)"), tr("像 cg 這樣接自己的 API 端點時,請求經過 Agent Center 在本機的計量器轉送,逐筆讀出 token 和實際使用的模型;內容不保存。Copilot 自己每輪回報的累計值和計量器重複,不另外計算。", "On an API endpoint of your own (as with cg), requests pass through Agent Center's meter on this computer, which reads each one's tokens and the model really used; nothing of the content is kept. The totals Copilot reports each turn repeat the meter's and are not counted again.")),
+      item(tr("Copilot(GitHub 登入)", "Copilot (GitHub sign-in)"), tr("每一輪結束時回報整個 session 的累計用量(Agent Center 換算成這一輪新增的部分),但不附模型名稱,以這位成員設定的模型記錄;費用以 GitHub 的方案為準,建議把計費方式設成「訂閱」。", "Reports the session's running total at the end of every turn (Agent Center works out what the turn added), but with no model name, so it is recorded under the member's model; the cost is what your GitHub plan says, so set its billing to Subscription.")),
       item("Antigravity", tr("它的結果有附用量時才會記錄。", "Recorded only when its results come with usage.")),
       item(tr("預估成本", "Estimated cost"), tr("用量 × 價格表的每百萬 token 價格。實際帳單以各服務商為準(例如 LiteLLM 後台的 Spend)。", "Usage × the price per million tokens in the price table. Your real bill is what each provider says (e.g. Spend in the LiteLLM admin).")),
 

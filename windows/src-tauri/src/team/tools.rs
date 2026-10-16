@@ -487,7 +487,7 @@ pub fn describe(config: &TeamConfig, member: &str) -> Vec<Value> {
     if member == config.leader {
         tools.push(tool(
             "task_create",
-            "Leader only. Creates a task for one member. Coucou hands it to its owner as soon as everything in depends_on has been handed in.",
+            "Leader only. Creates a task for one member. Agent Center hands it to its owner as soon as everything in depends_on has been handed in.",
             json!({
                 "title": { "type": "string" },
                 "detail": { "type": "string", "description": "What to do, in enough words for someone who has not seen the goal." },
@@ -507,7 +507,7 @@ pub fn describe(config: &TeamConfig, member: &str) -> Vec<Value> {
         ));
         tools.push(tool(
             "knowledge_share",
-            "Leader only. Shares a leader-only document of the knowledge base with the whole team. Only when the user has asked you to share that document; Coucou checks that they did.",
+            "Leader only. Shares a leader-only document of the knowledge base with the whole team. Only when the user has asked you to share that document; Agent Center checks that they did.",
             json!({ "doc": { "type": "string", "description": "The document's id (from knowledge_read) or its file name." } }),
             &["doc"],
         ));

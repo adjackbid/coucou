@@ -14,7 +14,7 @@ use super::{LinkKind, TeamConfig, SYSTEM, YOU};
 pub fn who(config: &TeamConfig, id: &str) -> String {
     match id {
         YOU => "the user".to_string(),
-        SYSTEM => "Coucou".to_string(),
+        SYSTEM => "Agent Center".to_string(),
         other => match config.member(other) {
             Some(m) => format!("{} ({})", m.name, m.id),
             None => other.to_string(),
@@ -44,7 +44,7 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
     let mut out = String::new();
 
     out.push_str(&format!(
-        "You are {name} (id `{id}`), the {role} of the team \"{team}\". The team is a group of AI coding agents, each in its own session, coordinated by Coucou. The others cannot see your screen or your replies: the only things that reach them are what you send and hand in through the `coucou-team` tools.\n\n",
+        "You are {name} (id `{id}`), the {role} of the team \"{team}\". The team is a group of AI coding agents, each in its own session, coordinated by Agent Center. The others cannot see your screen or your replies: the only things that reach them are what you send and hand in through the `coucou-team` tools.\n\n",
         name = member.name,
         id = member.id,
         role = member.role,
@@ -78,7 +78,7 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
     out.push_str("\nHow the team works:\n");
     if is_leader {
         out.push_str(
-            "- You are the leader. Break the goal into tasks with `task_create`: one owner each, the criteria that make it done, the tasks it depends on (`depends_on`) and who receives the result (`deliver_to`). Give every teammate work that fits their role, then end your turn. Coucou hands each task to its owner as soon as what it depends on has been delivered.\n\
+            "- You are the leader. Break the goal into tasks with `task_create`: one owner each, the criteria that make it done, the tasks it depends on (`depends_on`) and who receives the result (`deliver_to`). Give every teammate work that fits their role, then end your turn. Agent Center hands each task to its owner as soon as what it depends on has been delivered.\n\
              - When a teammate hands something in you are told. Check it against the criteria and call `review` to accept it or send it back with the reason.\n\
              - Answer teammates' questions with `message_send`. The user may send you new instructions at any time: adjust the tasks to them.\n",
         );
@@ -188,7 +188,7 @@ pub fn nudge(tasks: &[&Task]) -> String {
         .map(|t| format!("{} ({}, {})", t.id, t.title, if t.status == TaskStatus::Doing { "doing" } else { "not started" }))
         .collect();
     format!(
-        "You ended your turn, but this is still open and Coucou has no report on it: {}.\nIf it is finished, call `deliver`. If you are stuck, call `task_block` with the reason. Otherwise carry on with it now.",
+        "You ended your turn, but this is still open and Agent Center has no report on it: {}.\nIf it is finished, call `deliver`. If you are stuck, call `task_block` with the reason. Otherwise carry on with it now.",
         list.join("; ")
     )
 }
@@ -217,7 +217,7 @@ pub fn finish_reminder() -> String {
 /// A member's request the constitution refused.
 // i18n: model-facing
 pub fn refused(title: &str, rule: &str) -> String {
-    format!("Coucou refused \"{title}\": the user's constitution says {rule}. It will be refused every time — do not try it again. Find another way, or tell the leader (or ask the user with `ask_human`) if the task cannot be done without it.")
+    format!("Agent Center refused \"{title}\": the user's constitution says {rule}. It will be refused every time — do not try it again. Find another way, or tell the leader (or ask the user with `ask_human`) if the task cannot be done without it.")
 }
 
 /// The leader of a finished team, when the person comes back with more.
@@ -249,7 +249,7 @@ pub fn turn(config: &TeamConfig, messages: &[&Message]) -> String {
 /// member's agent is a new session that remembers nothing.
 // i18n: model-facing
 pub fn revived(open: &[&Task], to_review: &[&Task]) -> String {
-    let mut out = "Coucou was closed while the team was working and has now picked the team up again. Your session is a new one: call `team_status` to see where the team stands.".to_string();
+    let mut out = "Agent Center was closed while the team was working and has now picked the team up again. Your session is a new one: call `team_status` to see where the team stands.".to_string();
     if !open.is_empty() {
         let list: Vec<String> = open
             .iter()

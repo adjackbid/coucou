@@ -65,7 +65,7 @@ function clock(ms: number): string {
 
 function nameIn(config: TeamConfig, snap: Snapshot | undefined, id: string): string {
   if (id === YOU) return tr("你", "You");
-  if (id === SYSTEM) return "Coucou";
+  if (id === SYSTEM) return "Agent Center";
   return config.members.find((m) => m.id === id)?.name ?? snap?.members.find((m) => m.id === id)?.name ?? id;
 }
 
@@ -504,7 +504,7 @@ export function logScreen(config: TeamConfig, snap: Snapshot, page: Page): HTMLE
           "span",
           { class: "thread-body" },
           h("span", { class: "thread-title" }, t.blocked ? h("i", { class: "flag blocked", text: "!" }) : null, t.title),
-          h("span", { class: "thread-sub", text: `${t.people.map((p) => nameIn(config, snap, p)).join(tr("、", ", ")) || "Coucou"} · ${count === 1 ? tr("1 則訊息", "1 message") : trf("{n} 則訊息", "{n} messages", { n: count })}` }),
+          h("span", { class: "thread-sub", text: `${t.people.map((p) => nameIn(config, snap, p)).join(tr("、", ", ")) || "Agent Center"} · ${count === 1 ? tr("1 則訊息", "1 message") : trf("{n} 則訊息", "{n} messages", { n: count })}` }),
         ),
         h("time", { text: t.last ? clock(t.last) : "" }),
       ),
@@ -525,7 +525,7 @@ export function logScreen(config: TeamConfig, snap: Snapshot, page: Page): HTMLE
         const m = item.message;
         if (m.from === SYSTEM) {
           // What Coucou handed over, in a line.
-          convo.append(h("div", { class: "convo-note" }, h("b", { text: "Coucou" }), ` → ${nameIn(config, snap, m.to)}:${short(heardWords(m.text), 120)}`, h("time", { text: clock(m.at) })));
+          convo.append(h("div", { class: "convo-note" }, h("b", { text: "Agent Center" }), ` → ${nameIn(config, snap, m.to)}:${short(heardWords(m.text), 120)}`, h("time", { text: clock(m.at) })));
           continue;
         }
         const mine = m.from === YOU;

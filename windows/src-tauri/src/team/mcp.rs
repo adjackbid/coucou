@@ -69,8 +69,8 @@ pub fn answer(teams: &Teams, who: &Hello, line: &str) -> Option<String> {
                 json!({
                     "protocolVersion": version,
                     "capabilities": { "tools": {} },
-                    "serverInfo": { "name": "coucou-team", "title": "Coucou team", "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "The tools of your Coucou team: report on your task, hand in results, message teammates. Your teammates only see what goes through these tools.",
+                    "serverInfo": { "name": "coucou-team", "title": "Agent Center team", "version": env!("CARGO_PKG_VERSION") },
+                    "instructions": "The tools of your Agent Center team: report on your task, hand in results, message teammates. Your teammates only see what goes through these tools.",
                 }),
             )
         }

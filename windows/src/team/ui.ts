@@ -16,6 +16,12 @@ export interface Choice {
   label: string;
   /** A second, dimmer line: what the choice is. */
   hint?: string;
+  /** The heading it is listed under; a group's choices come one after another. */
+  group?: string;
+  /** A small picture before the group's heading. */
+  groupIcon?: () => Element;
+  /** A small picture before the label, also on the closed dropdown. */
+  icon?: () => Element;
 }
 
 interface Open {
@@ -61,11 +67,14 @@ function popover(anchor: HTMLElement, choices: Choice[], current: string, pick: 
     if (c) pick(c.value);
   };
   const mark = () => items.forEach((el, i) => el.classList.toggle("active", i === active));
+  let group: string | undefined;
   choices.forEach((c, i) => {
+    if (c.group && c.group !== group) menu.append(h("div", { class: "menu-group", role: "presentation" }, c.groupIcon?.() ?? null, h("span", { text: c.group })));
+    group = c.group;
     const el = h(
       "button",
       { type: "button", class: `menu-item${c.value === current ? " on" : ""}`, role: "option", tabindex: "-1" },
-      h("span", { class: "menu-label", text: c.label }),
+      h("span", { class: "menu-label" }, c.icon ? h("span", { class: "menu-icon" }, c.icon()) : null, c.label),
       c.hint ? h("span", { class: "menu-hint", text: c.hint }) : null,
     );
     // Picking must not take the focus from a field being typed in.
@@ -146,6 +155,7 @@ export function dropdown(opts: { value: string; choices: Choice[]; onChange: (va
   const button = h(
     "button",
     { type: "button", class: `field dropdown ${opts.className ?? ""}`, title: opts.title ?? "", "aria-haspopup": "listbox" },
+    current?.icon ? h("span", { class: "dropdown-icon" }, current.icon()) : null,
     label,
     h("span", { class: "dropdown-chevron", html: CHEVRON }),
   ) as HTMLButtonElement;

@@ -169,3 +169,35 @@
   box-shadow: inset 0 0 0 1px rgba(59, 158, 255, 0.7);
   outline: none;
 }
+
+/* Headings in a list of choices (Cloud Agent / Local Agent), and the small
+   pictures beside a choice. */
+.menu-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 3px;
+  font: 600 11.5px system-ui, "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", sans-serif;
+  color: #9398a1;
+}
+
+.menu-group:not(:first-child) {
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.menu-icon,
+.dropdown-icon {
+  display: inline-flex;
+  vertical-align: -3px;
+  margin-right: 6px;
+}
+
+.dropdown-icon {
+  flex: none;
+  margin-right: -2px;
+}
+
+.dropdown-icon + .dropdown-label {
+  flex: 1;
+}

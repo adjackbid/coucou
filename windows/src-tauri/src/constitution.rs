@@ -146,10 +146,10 @@ impl Constitution {
         }
         let mut out = String::from("\nThe user's constitution — rules you must keep, whatever the task:\n");
         for t in never {
-            out.push_str(&format!("- Never: {t}. Coucou refuses such a request; do not try it, find another way or tell the leader.\n"));
+            out.push_str(&format!("- Never: {t}. Agent Center refuses such a request; do not try it, find another way or tell the leader.\n"));
         }
         for t in ask {
-            out.push_str(&format!("- Ask the user first: {t}. Coucou shows the user a card; it may be refused.\n"));
+            out.push_str(&format!("- Ask the user first: {t}. Agent Center shows the user a card; it may be refused.\n"));
         }
         out
     }

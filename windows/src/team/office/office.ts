@@ -1413,7 +1413,7 @@ export class Office {
     const items: { at: string; who: string | null; head: string; body: string; artifact?: string }[] = [];
     for (const m of this.store.messages(teamId)) {
       const from = m.from.kind === "member" ? m.from.memberId : null;
-      const fromName = m.from.kind === "member" ? name(m.from.memberId) : m.from.kind === "user" ? tr("你", "You") : "Coucou";
+      const fromName = m.from.kind === "member" ? name(m.from.memberId) : m.from.kind === "user" ? tr("你", "You") : "Agent Center";
       items.push({ at: m.occurredAt, who: from, head: `${fromName}${m.toMemberIds.length ? ` → ${m.toMemberIds.map(name).join(tr("、", ", "))}` : ""}`, body: m.text });
     }
     for (const a of this.store.artifacts(teamId)) {
@@ -1546,7 +1546,7 @@ export class Office {
       ? h("li", { class: "office-more" }, h("button", { class: "link", type: "button", onClick: () => { this.threadLength.set(key, shown + 40); this.host.render(); } }, trf("顯示更早的 {n} 則(還有 {left} 則)", "Show {n} earlier ({left} left)", { n: Math.min(40, hidden), left: hidden })))
       : null;
     return h("ol", { class: "office-thread" }, more, ...talk.slice(-shown).map((x) => {
-      const from = x.from.kind === "member" ? name(x.from.memberId) : x.from.kind === "user" ? tr("你", "You") : "Coucou";
+      const from = x.from.kind === "member" ? name(x.from.memberId) : x.from.kind === "user" ? tr("你", "You") : "Agent Center";
       const long = x.text.length > 160;
       const body = h("p", { class: long ? "clip" : "", text: x.text });
       return h("li", {},

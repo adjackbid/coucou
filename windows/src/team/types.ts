@@ -432,9 +432,6 @@ export interface Constitution {
 
 // ── Team agents — mirror of team_agents.rs ───────────────────────────────────
 
-/** Where new teams take their agents from: Settings → Agents, or the team agents only. */
-export type TeamAgentSource = "native" | "team";
-
 export interface TeamAgentMcp {
   name: string;
   /** A command to start (stdio)… */
@@ -444,11 +441,14 @@ export interface TeamAgentMcp {
   url: string;
 }
 
-/** An agent of the person's own making, built on a native agent of Settings → Agents. */
+/**
+ * An agent of the person's own making, built on a native agent of Settings →
+ * Agents; a Cloud Agent or a Local Agent as its base is.
+ */
 export interface TeamAgent {
   id: string;
   name: string;
-  /** The native agent it runs on: its command, environment and key. */
+  /** The native agent it runs on: its command (or webhook), environment and key. */
   base: string;
   /** Empty: the base's model. */
   model: string;
@@ -460,8 +460,8 @@ export interface TeamAgent {
   description: string;
 }
 
+/** New teams are built from these only; an older file's `source` is read past. */
 export interface TeamAgents {
-  source: TeamAgentSource;
   agents: TeamAgent[];
 }
 

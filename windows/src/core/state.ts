@@ -141,8 +141,11 @@ export interface ChatMessage {
   kind?: "tool" | "streaming";
 }
 
-/** How an agent is driven: the Agent Client Protocol, Codex's app server, Claude Code's stream-json, or Antigravity's headless mode. */
-export type AgentProtocol = "acp" | "codex" | "claude" | "agy";
+/** How an agent is driven: the Agent Client Protocol, Codex's app server, Claude Code's stream-json, Antigravity's headless mode, or an n8n workflow's webhook. */
+export type AgentProtocol = "acp" | "codex" | "claude" | "agy" | "n8n";
+
+/** Where an agent works: on a cloud service, or on the person's own machine or network. */
+export type AgentLocation = "cloud" | "local";
 
 /** A coding agent the island can start and talk to — mirror of acp::AgentProfile. */
 export interface AgentProfile {
@@ -157,6 +160,39 @@ export interface AgentProfile {
   protocol?: AgentProtocol;
   /** The model it runs unless a team member names another; empty for its own default. */
   model?: string;
+  /** Cloud Agent or Local Agent as the person set it; absent or null: guessed (`locationOf`). */
+  location?: AgentLocation | null;
+  /** An n8n node: its webhook's Production URL. */
+  url?: string;
+  /** An n8n node: the header its webhook checks; the value is the agent's key. Empty: none. */
+  headerName?: string;
+  /** An n8n node: seconds one call may take; 0 or absent: 300. */
+  timeoutSecs?: number;
+}
+
+/** Whether a URL's host is this machine or a private network (acp.rs `is_local_address`). */
+export function isLocalAddress(url: string): boolean {
+  const rest = url.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+  let host = rest.split(/[/?#]/)[0] ?? "";
+  host = host.slice(host.lastIndexOf("@") + 1);
+  host = (host.startsWith("[") ? host.slice(1, host.indexOf("]")) : host.split(":")[0]).toLowerCase();
+  if (host === "localhost" || host === "::1" || /\.(localhost|local|lan)$/.test(host)) return true;
+  const ip = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!ip) return false;
+  const [a, b] = [Number(ip[1]), Number(ip[2])];
+  return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31);
+}
+
+/**
+ * Cloud or local, the way acp.rs `AgentProfile::location` tells it: an n8n
+ * node is always local; otherwise what the person chose, and when they never
+ * did, a Copilot on an endpoint of their own machine or network is local.
+ */
+export function locationOf(a: Pick<AgentProfile, "protocol" | "location" | "env">): AgentLocation {
+  if (a.protocol === "n8n") return "local";
+  if (a.location === "cloud" || a.location === "local") return a.location;
+  const base = (a.protocol ?? "acp") === "acp" ? a.env?.COPILOT_PROVIDER_BASE_URL : undefined;
+  return base && isLocalAddress(base) ? "local" : "cloud";
 }
 
 /** One agent's health, from `agents_doctor` (檢查代理). */

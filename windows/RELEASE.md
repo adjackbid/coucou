@@ -1,4 +1,4 @@
-# Coucou Windows — 發佈與疑難排解
+# Agent Center Windows — 發佈與疑難排解
 
 照這份文件做,就能從原始碼走到交給使用者的檔案。所有指令都在 `windows\` 資料夾執行。
 
@@ -17,7 +17,7 @@ npx vite
 1. `npm test` — 前端測試全綠。
 2. `cargo test` — Rust 測試全綠。
 3. 升版號:`src-tauri\tauri.conf.json` 的 `version`(目前 0.1.1)。
-4. 從系統匣結束正在執行的 Coucou,否則編譯無法覆蓋 exe。
+4. 從系統匣結束正在執行的 Agent Center,否則編譯無法覆蓋 exe。
 5. cargo 卡在下載索引時:`$env:CARGO_HTTP_MULTIPLEXING="false"`。
 
 ## 3. 正式編譯與打包
@@ -28,8 +28,8 @@ npx vite
 npm run pack:portable
 ```
 
-產出 `windows\release\Coucou-Windows-<版號>-portable.zip`(約 15 MB)。
-解壓得到 `Coucou\` 資料夾,裡面就是使用者需要的全部四個檔案:
+產出 `windows\release\AgentCenter-Windows-<版號>-portable.zip`(約 15 MB)。
+解壓得到 `Agent Center\` 資料夾,裡面就是使用者需要的全部四個檔案:
 
 | 檔案 | 作用 |
 |---|---|
@@ -47,7 +47,7 @@ npm run pack:portable
 npm run pack
 ```
 
-產出 `windows\release\Coucou-Windows-<版號>-setup.exe`(NSIS,裝到目前使用者)。
+產出 `windows\release\AgentCenter-Windows-<版號>-setup.exe`(NSIS,裝到目前使用者)。
 比免安裝版多:開始選單捷徑、解除安裝項、缺 WebView2 時自動安裝。
 
 ### 只想自己測

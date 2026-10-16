@@ -60,7 +60,7 @@ impl Store {
             store.append(Event::TurnEnded { member, ok: false, outcome: "interrupted".into() });
         }
         if store.state.status == TeamStatus::Running {
-            store.append(Event::Paused { why: "Coucou was closed while the team was running.".into() }); // i18n-ok: said() in team/main.ts translates it
+            store.append(Event::Paused { why: "Agent Center was closed while the team was running.".into() }); // i18n-ok: said() in team/main.ts translates it
         }
         Ok(store)
     }

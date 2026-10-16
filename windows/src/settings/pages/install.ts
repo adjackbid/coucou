@@ -65,12 +65,12 @@ function usedBy(cli: CliInfo, ctx: PageCtx): HTMLElement | null {
   const agent = HOOK_AGENTS.find((a) => HOOK_CLI[a] === cli.id);
   if (agent) {
     const state = agentLink(hooks[agent], clis, agent);
-    if (state === "connected" || state === "update") return h("span", { class: "used ok", text: tr("Coucou：已連結 ✓", "Coucou: connected ✓") });
+    if (state === "connected" || state === "update") return h("span", { class: "used ok", text: tr("Agent Center：已連結 ✓", "Agent Center: connected ✓") });
     if (!cli.found) return null;
-    return h("button", { type: "button", class: "link", text: tr("Coucou：未連結，去連結 →", "Coucou: not connected — Connect →"), onclick: () => ctx.go("connect", `agent-${agent}`, "connect") });
+    return h("button", { type: "button", class: "link", text: tr("Agent Center：未連結，去連結 →", "Agent Center: not connected — Connect →"), onclick: () => ctx.go("connect", `agent-${agent}`, "connect") });
   }
   if (cli.id === "codex") {
-    return h("button", { type: "button", class: "link", text: tr("Coucou 可以驅動它：Agents →", "Coucou can run it: Agents →"), onclick: () => ctx.go("agents") });
+    return h("button", { type: "button", class: "link", text: tr("Agent Center 可以驅動它：Agents →", "Agent Center can run it: Agents →"), onclick: () => ctx.go("agents") });
   }
   return null;
 }

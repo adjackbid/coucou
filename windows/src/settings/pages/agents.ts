@@ -1,10 +1,13 @@
-// Agents Coucou starts and drives itself (ACP, Codex, Claude Code,
-// Antigravity): picked in the chat bar, or run as Teamwork members.
+// Agents Agent Center starts and drives itself (ACP, Codex, Claude Code,
+// Antigravity), and n8n workflows it calls through their webhook: picked in
+// the chat bar, or built on by Teamwork's team agents. Each is a Cloud Agent
+// or a Local Agent, and the page lists them that way (views/agent-kind.ts).
 
 import { Bridge } from "../../core/bridge";
 import { tr, trf } from "../../core/i18n";
-import { DEFAULT_AGENT, type AgentProfile } from "../../core/state";
+import { DEFAULT_AGENT, locationOf, type AgentLocation, type AgentProfile } from "../../core/state";
 import { h, clear } from "../../views/dom";
+import { kindIcon, markHint, markName, markOf } from "../../views/agent-kind";
 import type { Page } from "../nav";
 import { agentKey, agentNeedsKey } from "../status";
 import { present, save, setPresent, settings, teamAgents } from "../store";
@@ -62,6 +65,21 @@ function presets(): { label: string; make: () => AgentProfile }[] {
         },
       }),
     },
+    {
+      label: tr("Local · Copilot CLI 用本機模型（Ollama / LM Studio）", "Local · Copilot CLI on a model of your own machine (Ollama / LM Studio)"),
+      make: () => ({
+        ...DEFAULT_AGENT, id: "", name: tr("本機模型", "Local model"), location: "local",
+        env: {
+          COPILOT_PROVIDER_TYPE: "openai",
+          COPILOT_PROVIDER_BASE_URL: "http://localhost:11434/v1",
+          COPILOT_MODEL: "",
+        },
+      }),
+    },
+    {
+      label: tr("Local · n8n 節點（Webhook）", "Local · n8n node (webhook)"),
+      make: () => ({ id: "", name: "n8n", command: "", args: [], env: {}, cwd: "", protocol: "n8n", location: "local", url: "", headerName: "", timeoutSecs: 0 }),
+    },
     { label: tr("其他 ACP agent（自訂）", "Other ACP agent (custom)"), make: () => ({ id: "", name: "Agent", command: "", args: [], env: {}, cwd: "" }) },
   ];
 }
@@ -78,8 +96,53 @@ function protocolName(a: AgentProfile): string {
     case "codex": return "Codex";
     case "claude": return "Claude Code";
     case "agy": return "Antigravity";
+    case "n8n": return "n8n Webhook"; // i18n-ok: a product name
     default: return a.command.toLowerCase().includes("copilot") ? "Copilot CLI" : "ACP";
   }
+}
+
+/** The webhook's host, for the card's one-line summary. */
+function hostOf(url: string | undefined): string {
+  try {
+    return url?.trim() ? new URL(url.trim()).host : "";
+  } catch {
+    return "";
+  }
+}
+
+/** The section of one location: its mark, its name, how many, and what it means. */
+function sectionHead(where: AgentLocation, count: number): HTMLElement {
+  return h(
+    "div",
+    { class: `kind-section-head ${where}` },
+    kindIcon(where, 22),
+    h("h2", { text: markName(where) }),
+    h("span", { class: "count", text: String(count) }),
+    h("span", { class: "hint", text: markHint(where) }),
+  );
+}
+
+/** Cloud Agent / Local Agent as two buttons; an n8n node is local and says so. */
+function locationSwitch(a: AgentProfile, set: (v: AgentLocation) => void): HTMLElement {
+  const now = locationOf(a);
+  const fixed = a.protocol === "n8n";
+  const item = (v: AgentLocation) =>
+    h(
+      "button",
+      {
+        type: "button",
+        class: now === v ? "on" : "",
+        "aria-pressed": String(now === v),
+        disabled: fixed && v !== now,
+        title: fixed && v !== now ? tr("n8n 節點固定是 Local Agent", "An n8n node is always a Local Agent") : markHint(v),
+        onclick: () => {
+          if (now !== v) set(v);
+        },
+      },
+      kindIcon(v, 16),
+      h("span", { text: markName(v) }),
+    );
+  return h("div", { class: "segmented kind-switch", role: "group", "aria-label": tr("類別", "Kind") }, item("cloud"), item("local"));
 }
 
 export const agentsPage: Page = {
@@ -91,7 +154,14 @@ export const agentsPage: Page = {
 
     function redraw() {
       clear(list);
-      for (const a of settings.agents) list.append(agentCard(a));
+      for (const where of ["cloud", "local"] as const) {
+        const mine = settings.agents.filter((a) => locationOf(a) === where);
+        list.append(sectionHead(where, mine.length));
+        if (!mine.length) {
+          list.append(h("p", { class: "kind-empty", text: where === "local" ? tr("還沒有 Local Agent:可以從下面新增本機模型的 Copilot 或 n8n 節點,或把一張卡片的類別改成 Local Agent。", "No Local Agent yet: add a Copilot on a local model or an n8n node below, or set a card's kind to Local Agent.") : tr("還沒有 Cloud Agent。", "No Cloud Agent yet.") }));
+        }
+        for (const a of mine) list.append(agentCard(a));
+      }
       const all = presets();
       const preset = h("select", { title: tr("從哪一種開始", "Start from") }) as HTMLSelectElement;
       all.forEach((pr, i) => preset.append(h("option", { value: String(i), text: pr.label })));
@@ -102,6 +172,7 @@ export const agentsPage: Page = {
         settings.agents = [...settings.agents, a];
         void save();
         redraw();
+        requestAnimationFrame(() => list.querySelector(`[data-anchor="agent-profile-${a.id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
       });
       list.append(h("div", { class: "add-row" }, h("span", { class: "add-label", text: tr("新增 Agent", "Add an agent") }), preset, add));
     }
@@ -110,6 +181,7 @@ export const agentsPage: Page = {
       const feedback = h("div", {});
       // Same reason as the chat models: every save echoes new objects back.
       const live = (): AgentProfile => settings.agents.find((x) => x.id === a.id) ?? a;
+      const isNode = a.protocol === "n8n";
       const keyName = agentKey(a);
       const keyBadge = () => {
         if (!agentNeedsKey(live())) return null;
@@ -120,44 +192,38 @@ export const agentsPage: Page = {
         clear(badgeSlot);
         const b = keyBadge();
         if (b) badgeSlot.append(b);
-        if (!live().command.trim()) badgeSlot.append(badge("todo", tr("沒有指令", "No command")));
+        if (isNode ? !live().url?.trim() : !live().command.trim()) badgeSlot.append(badge("todo", isNode ? tr("沒有網址", "No URL") : tr("沒有指令", "No command")));
       };
       syncBadge();
 
-      const protocol = h("select", { title: tr("Coucou 用什麼方式跟它說話", "How Coucou talks to it") }) as HTMLSelectElement;
+      const kind = field(tr("類別", "Kind"), locationSwitch(a, (v) => {
+        live().location = v;
+        void save();
+        redraw();
+      }), isNode ? tr("n8n 節點固定是 Local Agent。", "An n8n node is always a Local Agent.") : null);
+
+      const protocol = h("select", { title: tr("Agent Center 用什麼方式跟它說話", "How Agent Center talks to it") }) as HTMLSelectElement;
       protocol.append(
         h("option", { value: "acp", text: "ACP" }),
         h("option", { value: "codex", text: "Codex app-server" }), // i18n-ok: a protocol name
         h("option", { value: "claude", text: "Claude Code (stream-json)" }), // i18n-ok: a protocol name
         h("option", { value: "agy", text: tr("Antigravity（agy 無介面模式）", "Antigravity (agy headless)") }),
+        h("option", { value: "n8n", text: tr("n8n Webhook（Local Agent）", "n8n webhook (Local Agent)") }),
       );
       protocol.value = a.protocol ?? "acp";
-      protocol.addEventListener("change", () => { live().protocol = protocol.value as AgentProfile["protocol"]; void save(); });
-
-      // The model it runs unless a team member names another. The list is the
-      // agent's own: asked with a handshake, so nothing is spent.
-      const modelList = h("datalist", { id: `agent-models-${a.id}` }) as HTMLDataListElement;
-      const model = h("input", { type: "text", value: a.model ?? "", placeholder: tr("用它自己的預設", "its own default"), list: `agent-models-${a.id}`, spellcheck: "false", class: "grow-input" }) as HTMLInputElement;
-      model.addEventListener("change", () => { live().model = model.value.trim(); void save(); });
-      const listModels = h("button", { type: "button", text: tr("列出模型", "List models") }) as HTMLButtonElement;
-      listModels.addEventListener("click", async () => {
-        listModels.disabled = true;
-        clear(feedback);
-        try {
-          const found = await Bridge.agentModels(live());
-          clear(modelList);
-          for (const m of found) modelList.append(h("option", { value: m.id, text: m.label }));
-          feedback.append(notice("ok", trf("找到 {n} 個模型，在「模型」欄選一個。", "{n} models — pick one in the Model field.", { n: found.length })));
-        } catch (err) {
-          feedback.append(notice("err", errText(err)));
-        } finally {
-          listModels.disabled = false;
-        }
+      protocol.addEventListener("change", () => {
+        const next = protocol.value as NonNullable<AgentProfile["protocol"]>;
+        const crossed = (next === "n8n") !== isNode;
+        live().protocol = next;
+        if (next === "n8n") live().location = "local";
+        void save();
+        // The fields of a webhook are not a CLI's: the card is drawn again.
+        if (crossed) redraw();
       });
 
       const keyField = h("input", {
         type: "password",
-        placeholder: present[keyName] ? tr("••••••••••••（已存）", "••••••••••••  (stored)") : tr("貼上 {secret} 代表的金鑰", "paste the key {secret} stands for"),
+        placeholder: present[keyName] ? tr("••••••••••••（已存）", "••••••••••••  (stored)") : isNode ? tr("貼上 Header 的值", "paste the header's value") : tr("貼上 {secret} 代表的金鑰", "paste the key {secret} stands for"),
         autocomplete: "off",
         spellcheck: "false",
         class: "grow-input",
@@ -177,14 +243,18 @@ export const agentsPage: Page = {
           feedback.append(notice("err", trf("存不進去：{err}", "Could not save: {err}", { err: errText(err) })));
         }
       });
-      const keyRow = field(tr("金鑰", "Key"), [keyField, keySave], tr("環境變數裡的 {secret} 會換成這把金鑰。", "{secret} in the environment is replaced by this key."));
+      const keyRow = field(
+        tr("金鑰", "Key"),
+        [keyField, keySave],
+        isNode ? tr("放在驗證 Header 裡送出;存在 Windows 認證管理員,不會寫進設定檔。", "Sent in the auth header; kept in the Windows Credential Manager, never in the settings file.") : tr("環境變數裡的 {secret} 會換成這把金鑰。", "{secret} in the environment is replaced by this key."),
+      );
       keyRow.style.display = agentNeedsKey(a) ? "" : "none";
 
       const test = h("button", { type: "button", text: tr("測試", "Test") }) as HTMLButtonElement;
       test.addEventListener("click", async () => {
         test.disabled = true;
         clear(feedback);
-        feedback.append(h("p", { class: "hint", text: tr("正在啟動 agent 並握手…", "Starting the agent and shaking hands…") }));
+        feedback.append(h("p", { class: "hint", text: isNode ? tr("正在呼叫 Webhook…", "Calling the webhook…") : tr("正在啟動 agent 並握手…", "Starting the agent and shaking hands…") }));
         try {
           const reply = await Bridge.acpTest(live());
           clear(feedback);
@@ -198,20 +268,19 @@ export const agentsPage: Page = {
       });
 
       const usedBy = (teamAgents?.doc.agents ?? []).filter((t) => t.base === a.id).map((t) => t.name);
+      const title = h("div", { class: "title-icon" }, kindIcon(markOf(a), 18), h("h2", { text: a.name }));
+      const meta = isNode ? `${protocolName(a)} · ${hostOf(a.url) || tr("還沒填網址", "no URL yet")}` : `${protocolName(a)} · ${a.model || tr("它自己的預設模型", "its own default model")}`;
+      const body = isNode
+        ? [kind, field(tr("說話方式", "Speaks"), protocol), ...nodeFields(a, live, keyRow, syncBadge), keyRow, row(test, h("span", { class: "hint", text: tr("送一個 kind: test 的請求給 Webhook;在聊天列選它,就能跟它說話", "sends the webhook a request with kind: test; pick it in the chat bar to talk to it") })), feedback]
+        : [kind, field(tr("說話方式", "Speaks"), protocol), modelField(a, live, feedback), keyRow, row(test, h("span", { class: "hint", text: tr("在聊天列選它，就能跟它說話", "pick it in the chat bar to talk to it") })), feedback];
       return card({
         anchor: `agent-profile-${a.id}`,
-        title: a.name,
-        meta: `${protocolName(a)} · ${a.model || tr("它自己的預設模型", "its own default model")}`,
+        title,
+        meta,
         badge: badgeSlot,
-        body: [
-          field(tr("說話方式", "Speaks"), protocol),
-          field(tr("模型", "Model"), [model, modelList, listModels]),
-          keyRow,
-          row(test, h("span", { class: "hint", text: tr("在聊天列選它，就能跟它說話", "pick it in the chat bar to talk to it") })),
-          feedback,
-        ],
-        advanced: () => advanced(a, live, keyRow, syncBadge),
-        advancedOpen: !a.command.trim(),
+        body,
+        advanced: () => (isNode ? nodeAdvanced(a, live) : advanced(a, live, keyRow, syncBadge)),
+        advancedOpen: !isNode && !a.command.trim(),
         details: () => h("div", { class: "stack" },
           h("div", { class: "details-grid" },
             h("span", { class: "k", text: "id" }), h("span", { class: "path", text: a.id }),
@@ -230,16 +299,76 @@ export const agentsPage: Page = {
       pageHeader(
         "agents",
         "Agents",
-        tr("Coucou 會替你啟動、操作的 coding agent：在聊天列挑一個，或當 Teamwork 的成員。", "Coding agents Coucou starts and drives for you: pick one in the chat bar, or use it as a Teamwork member."),
+        tr("Agent Center 會替你啟動、操作的 agent，分成 Cloud Agent 與 Local Agent：在聊天列挑一個，或在 Teamwork 做成團隊 Agent。", "Agents Agent Center starts and drives for you, sorted into Cloud Agents and Local Agents: pick one in the chat bar, or build Teamwork's team agents on them."),
         () => tr(
-          "跟「連結 Agent」不一樣（那是 Coucou 在旁邊看你自己開的工作階段），這裡的 agent 是 Coucou 自己執行的：透過 Agent Client Protocol（Copilot CLI）、Codex 的 app server、Claude Code 或 Antigravity。它們做事時工具步驟會即時出現，需要許可的會在瀏海島上問你。Teamwork 的成員就是用這些 agent 跑的。",
-          "Unlike \"Connect agents\" (Coucou watches sessions you start yourself), these are agents Coucou runs itself — over the Agent Client Protocol (Copilot CLI), Codex's app server, Claude Code or Antigravity. Their tool calls show up as they work, and anything that needs permission asks in the island. Teamwork members run as one of these.",
+          "跟「連結 Agent」不一樣（那是 Agent Center 在旁邊看你自己開的工作階段），這裡的 agent 是 Agent Center 自己執行的：透過 Agent Client Protocol（Copilot CLI）、Codex 的 app server、Claude Code 或 Antigravity，或呼叫 n8n 工作流程的 Webhook。Cloud Agent 在雲端服務上工作；Local Agent 在你自己的電腦或網路裡工作（例如本機模型、自架的 n8n）。它們做事時工具步驟會即時出現，需要許可的會在瀏海島上問你。Teamwork 的團隊 Agent 就是以這些 agent 為基底做的。",
+          "Unlike \"Connect agents\" (Agent Center watches sessions you start yourself), these are agents Agent Center runs itself — over the Agent Client Protocol (Copilot CLI), Codex's app server, Claude Code or Antigravity — or n8n workflows it calls through their webhook. A Cloud Agent works on a cloud service; a Local Agent works on your own machine or network (a local model, a self-hosted n8n). Their tool calls show up as they work, and anything that needs permission asks in the island. Teamwork's team agents are built on these.",
         ),
       ),
       list,
     );
   },
 };
+
+/** The model, with the agent's own list a click away. */
+function modelField(a: AgentProfile, live: () => AgentProfile, feedback: HTMLElement): HTMLElement {
+  // The model it runs unless a team member names another. The list is the
+  // agent's own: asked with a handshake, so nothing is spent.
+  const modelList = h("datalist", { id: `agent-models-${a.id}` }) as HTMLDataListElement;
+  const model = h("input", { type: "text", value: a.model ?? "", placeholder: tr("用它自己的預設", "its own default"), list: `agent-models-${a.id}`, spellcheck: "false", class: "grow-input" }) as HTMLInputElement;
+  model.addEventListener("change", () => { live().model = model.value.trim(); void save(); });
+  const listModels = h("button", { type: "button", text: tr("列出模型", "List models") }) as HTMLButtonElement;
+  listModels.addEventListener("click", async () => {
+    listModels.disabled = true;
+    clear(feedback);
+    try {
+      const found = await Bridge.agentModels(live());
+      clear(modelList);
+      for (const m of found) modelList.append(h("option", { value: m.id, text: m.label }));
+      feedback.append(notice("ok", trf("找到 {n} 個模型，在「模型」欄選一個。", "{n} models — pick one in the Model field.", { n: found.length })));
+    } catch (err) {
+      feedback.append(notice("err", errText(err)));
+    } finally {
+      listModels.disabled = false;
+    }
+  });
+  return field(tr("模型", "Model"), [model, modelList, listModels]);
+}
+
+/** An n8n node's webhook and the header it checks. */
+function nodeFields(a: AgentProfile, live: () => AgentProfile, keyRow: HTMLElement, syncBadge: () => void): HTMLElement[] {
+  const url = h("input", { type: "text", inputmode: "url", value: a.url ?? "", placeholder: "https://n8n.example.lan/webhook/…", spellcheck: "false", class: "grow-input mono" }) as HTMLInputElement;
+  url.addEventListener("change", () => { live().url = url.value.trim(); void save(); syncBadge(); });
+  const header = h("input", { type: "text", value: a.headerName ?? "", placeholder: tr("例如 X-API-Key;留空表示不驗證", "e.g. X-API-Key; empty for none"), spellcheck: "false", class: "grow-input" }) as HTMLInputElement;
+  header.addEventListener("change", () => {
+    live().headerName = header.value.trim();
+    keyRow.style.display = agentNeedsKey(live()) ? "" : "none";
+    syncBadge();
+    void save();
+  });
+  return [
+    field(tr("Webhook 網址", "Webhook URL"), url, tr("n8n Webhook 節點的 Production URL(工作流程要設成 Active)。回應設成 When Last Node Finishes,或用 Respond to Webhook 節點;回覆可以是文字,或含 reply / output 的 JSON。", "The Production URL of the n8n Webhook node (the workflow must be Active). Set it to respond When Last Node Finishes, or use a Respond to Webhook node; the answer may be text, or JSON with reply / output.")),
+    field(tr("驗證 Header", "Auth header"), header, tr("Webhook 節點用 Header Auth 時填它檢查的 Header 名稱,值在下面的金鑰。", "When the Webhook node uses Header Auth, the header it checks; its value is the key below.")),
+  ];
+}
+
+/** An n8n node's name and how long a call may take. */
+function nodeAdvanced(a: AgentProfile, live: () => AgentProfile): Node {
+  const name = h("input", { type: "text", value: a.name, spellcheck: "false" }) as HTMLInputElement;
+  name.addEventListener("change", () => { live().name = name.value.trim() || a.id; void save(); });
+  const timeout = h("input", { type: "number", min: "5", max: "3600", step: "5", value: String(a.timeoutSecs || 300), class: "short" }) as HTMLInputElement;
+  timeout.addEventListener("change", () => {
+    const n = Math.round(Number(timeout.value));
+    live().timeoutSecs = Number.isFinite(n) && n >= 5 ? Math.min(n, 3600) : 0;
+    void save();
+  });
+  return h(
+    "div",
+    { class: "stack" },
+    field(tr("名稱", "Name"), name),
+    field(tr("逾時（秒）", "Timeout (s)"), timeout, tr("一次呼叫最多等這麼久;工作流程跑比較久就調高。", "How long one call may take; raise it for a slow workflow.")),
+  );
+}
 
 function deleteButton(a: AgentProfile, redraw: () => void): HTMLElement {
   return h("button", {

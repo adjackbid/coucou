@@ -193,7 +193,7 @@ pub async fn prompt(running: &Running, text: String, timeout: Duration) -> Resul
         return Err(e);
     }
     match tokio::time::timeout(timeout, rx).await {
-        Ok(Ok(result)) => result.map(|stop_reason| AcpOutcome { stop_reason }),
+        Ok(Ok(result)) => result.map(|stop_reason| AcpOutcome { stop_reason, ..Default::default() }),
         Ok(Err(_)) => Err(went_away()),
         Err(_) => Err(tr!("Claude Code 沒有及時完成這一輪。", "Claude Code did not finish the turn in time.")),
     }

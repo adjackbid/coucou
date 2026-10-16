@@ -1090,3 +1090,73 @@ button.link {
 button.link:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.06);
 }
+
+/* ── Agents: Cloud Agent / Local Agent ─────────────────────────────────── */
+
+.kind-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 0 2px;
+}
+
+.kind-section-head:first-child {
+  margin-top: 0;
+}
+
+.kind-section-head h2 {
+  font: 600 15px var(--font);
+}
+
+.kind-section-head .count {
+  min-width: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--dim);
+  font-size: 11.5px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.kind-section-head .hint {
+  color: var(--dim-2);
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.kind-empty {
+  color: var(--dim-2);
+  font-size: 12.5px;
+  padding: 0 2px 6px;
+}
+
+.kind-mark {
+  flex: none;
+}
+
+.kind-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kind-switch button.on {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ink);
+}
+
+.kind-switch button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+input.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+input.short {
+  width: 110px;
+}

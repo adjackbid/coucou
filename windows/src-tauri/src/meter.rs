@@ -116,7 +116,7 @@ impl Meter {
         let found = self.routes.lock().unwrap().get(&token).map(|r| (r.upstream.clone(), r.key.clone()));
         let Some((upstream, key)) = found else { return respond(&mut conn, 404, "unknown route").await };
         if header("upgrade").is_some() {
-            return respond(&mut conn, 501, "Coucou's meter does not carry upgraded connections").await;
+            return respond(&mut conn, 501, "Agent Center's meter does not carry upgraded connections").await;
         }
 
         // The body, as sent (by length, or chunked).
@@ -153,7 +153,7 @@ impl Meter {
         req = req.header("accept-encoding", "identity");
         let resp = match req.body(body).send().await {
             Ok(r) => r,
-            Err(e) => return respond(&mut conn, 502, &format!("Coucou's meter could not reach the endpoint: {e}")).await,
+            Err(e) => return respond(&mut conn, 502, &format!("Agent Center's meter could not reach the endpoint: {e}")).await,
         };
 
         // Its answer, passed back as it streams, read for usage on the way.

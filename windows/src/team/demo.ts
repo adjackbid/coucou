@@ -53,6 +53,8 @@ export const demoAgents: import("../core/state").AgentProfile[] = [
   { id: "claude", name: "Claude Code", command: "claude", args: [], env: {}, cwd: "", protocol: "claude" },
   { id: "codex", name: "Codex", command: "codex", args: ["app-server"], env: {}, cwd: "", protocol: "codex" },
   { id: "agy", name: "Antigravity", command: "agy", args: [], env: {}, cwd: "", protocol: "agy" },
+  { id: "ollama", name: tr("本機模型 · qwen3-coder", "Local model · qwen3-coder"), command: "copilot", args: ["--acp", "--stdio"], env: { COPILOT_PROVIDER_BASE_URL: "http://localhost:11434/v1" }, cwd: "", model: "qwen3-coder", location: "local" },
+  { id: "n8n-report", name: tr("n8n 週報流程", "n8n weekly report"), command: "", args: [], env: {}, cwd: "", protocol: "n8n", location: "local", url: "http://n8n.office.lan/webhook/weekly-report", headerName: "X-API-Key" },
 ];
 
 function used(model: string, input: number, output: number, cacheRead = 0, cacheWrite = 0): Usage {
@@ -124,7 +126,7 @@ const team = (name: string, input: unknown, status = "done") => line("tool", `co
 /** What each member's screen shows, eighteen minutes in. */
 const screens: Record<string, Line[]> = {
   ai1: [
-    turn(1, [{ from: "system", text: "The team has started. Plan the work for this goal and create the tasks now:" }]), // i18n-ok: what Coucou tells a member
+    turn(1, [{ from: "system", text: "The team has started. Plan the work for this goal and create the tasks now:" }]), // i18n-ok: what Agent Center tells a member
     line("say", tr("我先看一下團隊與需求,再把工作拆成可以驗收的任務。", "Let me look at the team and the requirements first, then split the work into tasks that can be reviewed.")),
     team("team_status", {}),
     team("task_create", { title: tr("商品圖片", "Product images"), owner: "ai4" }),
@@ -135,13 +137,13 @@ const screens: Record<string, Line[]> = {
     line("say", tr("首版先完成基本結帳流程,優惠券規則後續再擴充。我回覆 AI 3,", "The first version does the basic checkout; coupon rules can come later.")),
   ],
   ai2: [
-    turn(1, [{ from: "system", text: `TASK-06 is yours and ready to start: ${tr("整合測試", "Integration tests")}` }]), // i18n-ok: what Coucou tells a member
+    turn(1, [{ from: "system", text: `TASK-06 is yours and ready to start: ${tr("整合測試", "Integration tests")}` }]), // i18n-ok: what Agent Center tells a member
     line("say", tr("TASK-06 要等 AI 3 的購物車功能交付才能開始,我先把測試清單寫好。", "TASK-06 has to wait for AI 3's cart, so I'm writing the test checklist first.")),
     tool("Edit tests/checklist.md", "edit", "done"),
     line("turn", "1", { status: "end" }),
   ],
   ai3: [
-    turn(3, [{ from: "system", text: `AI 4 (ai4) handed in TASK-03 (${tr("商品圖片", "Product images")}), which is meant for you: ${tr("6 張商品圖", "6 product pictures")}` }]), // i18n-ok: what Coucou tells a member
+    turn(3, [{ from: "system", text: `AI 4 (ai4) handed in TASK-03 (${tr("商品圖片", "Product images")}), which is meant for you: ${tr("6 張商品圖", "6 product pictures")}` }]), // i18n-ok: what Agent Center tells a member
     line("say", tr("收到商品圖,接著把購物車頁面做出來。", "Got the product pictures; now building the cart page.")),
     team("task_update", { task: "TASK-04", status: "doing" }),
     tool("Run npm install zustand", "execute", "done", { input: { command: '"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -NoProfile -Command npm install zustand' } }), // i18n-ok: the agent's step title
@@ -149,7 +151,7 @@ const screens: Record<string, Line[]> = {
     tool("Run npm test -- cart", "execute", "running", { input: { command: "npm test -- cart" }, output: "PASS src/cart/add.test.ts\nPASS src/cart/qty.test.ts\nRUNS src/cart/total.test.ts" }), // i18n-ok: the agent's step title
   ],
   ai4: [
-    turn(2, [{ from: "system", text: `TASK-03 is yours and ready to start: ${tr("商品圖片", "Product images")}` }]), // i18n-ok: what Coucou tells a member
+    turn(2, [{ from: "system", text: `TASK-03 is yours and ready to start: ${tr("商品圖片", "Product images")}` }]), // i18n-ok: what Agent Center tells a member
     line("say", tr("六張商品圖都生成好了,放在 public/images:主圖 public/images/hero.png、情境圖 public/images/scene.jpg。", "All six product pictures are made, in public/images: the main one public/images/hero.png, the scene public/images/scene.jpg.")),
     tool("Generate an image", "other", "done"), // i18n-ok: the agent's step title
     tool("Read public/images/hero.png", "read", "done", { input: { path: "public/images/hero.png" } }),
@@ -218,7 +220,7 @@ export function demoSnapshot(): Snapshot {
       { id: "D-3", task: "TASK-02", kind: "preview", locator: "http://localhost:5173/", summary: tr("購物網站首頁(開發中)", "Shopping site home page (in progress)"), by: "ai3", at: ago(6), accepted: true },
     ],
     messages: [
-      { id: "M-1", from: "system", to: "ai4", text: `TASK-03 is yours and ready to start: ${tr("商品圖片", "Product images")}`, task: "TASK-03", at: ago(17), heard: true }, // i18n-ok: what Coucou tells a member
+      { id: "M-1", from: "system", to: "ai4", text: `TASK-03 is yours and ready to start: ${tr("商品圖片", "Product images")}`, task: "TASK-03", at: ago(17), heard: true }, // i18n-ok: what Agent Center tells a member
       { id: "M-2", from: "ai4", to: "ai3", text: tr("這是 6 張商品圖,包含主圖、情境圖與細節圖,請用於購物車與商品頁面。", "Here are the 6 product pictures: main, scene and detail shots. Use them on the cart and product pages."), task: "TASK-03", at: ago(4), heard: true },
       { id: "M-3", from: "ai1", to: "ai3", text: tr("請完成購物車、數量調整與小計。", "Please finish the cart, quantity changes and the subtotal."), task: "TASK-04", at: ago(8), heard: true },
       { id: "M-4", from: "ai3", to: "ai1", text: tr("請問優惠券是否需要支援滿額折扣?以及是否需要會員限定的優惠?", "Should coupons support discounts above a spend? And do we need members-only offers?"), task: "TASK-04", at: ago(3), heard: true },
@@ -278,7 +280,7 @@ export function demoSnapshot(): Snapshot {
   if (new URLSearchParams(location.search).get("state") === "earlier") {
     snapshot.status = "paused";
     snapshot.detached = true;
-    snapshot.pausedWhy = "Coucou was closed while the team was running."; // i18n-ok: Rust's English, worded by said()
+    snapshot.pausedWhy = "Agent Center was closed while the team was running."; // i18n-ok: Rust's English, worded by said()
     snapshot.members = snapshot.members.map((m) => ({ ...m, status: m.status === "working" ? "idle" : m.status }));
     snapshot.members[0] = { ...snapshot.members[0], status: "lost", lostWhy: "It ended two turns in a row without a word about its open work." }; // i18n-ok: Rust's English, worded by said()
   }
@@ -423,7 +425,7 @@ export function demoReport(from: number, to: number): UsageReport {
     activity,
     models: [...seen].map(([model, found]) => ({ model, found })).sort((a, b) => a.model.localeCompare(b.model)),
     choices: structuredClone(demoChoices),
-    tableSource: tr("Coucou 內建的價目表 (LiteLLM)", "Coucou's built-in price list (LiteLLM)"),
+    tableSource: tr("Agent Center 內建的價目表 (LiteLLM)", "Agent Center's built-in price list (LiteLLM)"),
     tableFetchedAt: NOW - 3 * day,
     tableSize: 1329,
   };

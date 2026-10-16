@@ -157,7 +157,7 @@ describe("OrbitFeed", () => {
     expect(feed.pull(s, Date.parse(now))).toEqual([]);
   });
 
-  it("skips what the person or Coucou sent, and a message to oneself", () => {
+  it("skips what the person or Agent Center sent, and a message to oneself", () => {
     const s = store();
     const feed = new OrbitFeed();
     feed.pull(s, Date.parse(now));

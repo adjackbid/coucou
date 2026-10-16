@@ -149,7 +149,7 @@ export const Bridge = {
    * as the raw request body; the name, URL-encoded, in a header.
    */
   ingestBytes: (name: string, bytes: ArrayBuffer) => {
-    if (!IS_TAURI) throw new Error(tr("不是在 Coucou 裡執行", "not running inside Coucou"));
+    if (!IS_TAURI) throw new Error(tr("不是在 Agent Center 裡執行", "not running inside Agent Center"));
     return invoke<DroppedFile>("ingest_bytes", new Uint8Array(bytes), {
       headers: { "x-file-name": encodeURIComponent(name) },
     });
@@ -396,7 +396,7 @@ export interface HookPreview {
 
 /** Same as `call`, but surfaces the error so the UI can show what went wrong. */
 async function callOrThrow<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (!IS_TAURI) throw new Error(tr("不是在 Coucou 裡執行", "not running inside Coucou"));
+  if (!IS_TAURI) throw new Error(tr("不是在 Agent Center 裡執行", "not running inside Agent Center"));
   return invoke<T>(cmd, args);
 }
 

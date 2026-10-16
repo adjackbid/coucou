@@ -401,7 +401,7 @@ fn found_on_page(text: &str, anchor: &str, irm: bool) -> Option<String> {
 /// 「向官方確認」: reads each vendor's page and notes, per command, whether
 /// it is still there or what replaced it.
 pub async fn check_official() -> Result<Vec<Cli>, String> {
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20)).user_agent("Coucou").build().map_err(|e| e.to_string())?;
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20)).user_agent("Agent Center").build().map_err(|e| e.to_string())?;
     let mut list = table();
     let mut reached = 0;
     for cli in list.iter_mut() {
@@ -443,15 +443,15 @@ pub fn run(id: &str, method: usize) -> Result<String, String> {
     let cli = list.iter().find(|c| c.id == id).ok_or_else(|| -> String { tr!("不認得的 CLI。", "Unknown CLI.") })?;
     let m = cli.methods.get(method).ok_or_else(|| -> String { tr!("不認得的安裝方式。", "Unknown install method.") })?;
     if !plain(&m.command) {
-        return Err(tr!("這條指令裡有 Coucou 不會執行的字元。", "That command has characters Coucou will not run."));
+        return Err(tr!("這條指令裡有 Agent Center 不會執行的字元。", "That command has characters Agent Center will not run."));
     }
     // What the window says before and after; the name is from the table, and
     // neither line holds a quote that would end PowerShell's '…'.
     let name = &cli.name;
-    let before: String = tr!(format!("Coucou：正在安裝 {name}，指令："), format!("Coucou: installing {name} with:"));
+    let before: String = tr!(format!("Agent Center：正在安裝 {name}，指令："), format!("Agent Center: installing {name} with:"));
     let after: String = tr!(
-        "完成。請關掉這個視窗，再到 Coucou 設定按「重新檢查」。",
-        "Done. Close this window, then click Check again in Coucou Settings."
+        "完成。請關掉這個視窗，再到 Agent Center 設定按「重新檢查」。",
+        "Done. Close this window, then click Check again in Agent Center Settings."
     );
     let script = format!(
         "Write-Host '{before}' -ForegroundColor Cyan; Write-Host '  {cmd}'; Write-Host ''; {cmd}; Write-Host ''; Write-Host '{after}' -ForegroundColor Cyan",

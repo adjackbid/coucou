@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="src-tauri/icons/128x128.png" width="96" alt="Coucou icon">
+<img src="src-tauri/icons/128x128.png" width="96" alt="Agent Center icon">
 
-# Coucou for Windows
+# Agent Center for Windows
 
 **Mochi doesn't get a notch on a PC — so it lives at the top of your screen instead.**
 
@@ -28,6 +28,13 @@ installer will be published again once it is cleared and code-signed.
 
 Until then, [build it yourself](#build-it-yourself): it takes a few minutes and
 installs for the current user only — no admin prompt.
+
+**Coming from Coucou?** The app is now called Agent Center, and its installer
+installs it as a new app: remove the old *Coucou* from Settings → Apps first,
+then start Agent Center (it puts its relay back in `%LOCALAPPDATA%\Coucou\bin`
+every time it starts). Your settings, keys, teams and connected hooks carry
+over — they stay where they were (`%APPDATA%\Coucou`, `%LOCALAPPDATA%\Coucou`,
+the Credential Manager), and the old sign-in entry is replaced on first launch.
 
 ## Using it
 
@@ -71,13 +78,13 @@ can always deny from the island, but never approve something you could not read.
 Open **Settings… → Claude Code → Install hooks…**. You get the exact diff of what
 will change in `%USERPROFILE%\.claude\settings.json`, the path of the dated backup
 that will be taken, and nothing is written until you click. Your own hooks are
-never touched, and uninstalling removes only Coucou's entries.
+never touched, and uninstalling removes only Agent Center's entries.
 
 The relay is a tiny executable, `coucou-hook.exe`, copied to
-`%LOCALAPPDATA%\Coucou\bin\` at launch. It is given 300 ms to reach Coucou and
+`%LOCALAPPDATA%\Coucou\bin\` at launch. It is given 300 ms to reach Agent Center and
 exits cleanly if the app is closed, slow or crashed — **a Claude Code session is
-never blocked or slowed down by Coucou.** If nobody answers a permission request
-in time, Coucou stays quiet and Claude Code asks in the terminal as usual.
+never blocked or slowed down by Agent Center.** If nobody answers a permission request
+in time, Agent Center stays quiet and Claude Code asks in the terminal as usual.
 
 It works from any terminal — Windows Terminal, PowerShell, VS Code, Git Bash.
 
@@ -85,7 +92,7 @@ It works from any terminal — Windows Terminal, PowerShell, VS Code, Git Bash.
 
 **Settings… → Copilot CLI → Install hooks…** does the same for GitHub Copilot
 CLI (`copilot`, or a wrapper function around it): it writes one file of
-Coucou's own, `%USERPROFILE%\.copilot\hooks\coucou.json`, and nothing else.
+Agent Center's own, `%USERPROFILE%\.copilot\hooks\coucou.json`, and nothing else.
 Copilot's PascalCase hook events send the same payloads as Claude Code, so the
 same relay serves both; `--agent copilot` on the command line tells the island
 which CLI is talking, and Copilot sessions get their own pill next to Mochi.
@@ -106,7 +113,7 @@ that ran and the final reply out of Antigravity's own transcript.
 ## Typing into a terminal you opened yourself
 
 An agent already running in your own PowerShell cannot be taken over through
-ACP, so Coucou ships a small wrapper, `coucou-pty.exe` (copied next to the relay
+ACP, so Agent Center ships a small wrapper, `coucou-pty.exe` (copied next to the relay
 in `%LOCALAPPDATA%\Coucou\bin\`). Start the CLI through it:
 
 ```powershell
@@ -131,7 +138,7 @@ still shows what was asked and says to answer in the terminal.
 
 ## Agents you drive from the island
 
-**Settings… → Agents** lists coding agents Coucou starts itself and talks to
+**Settings… → Agents** lists coding agents Agent Center starts itself and talks to
 over the [Agent Client Protocol](https://agentclientprotocol.com): Copilot CLI
 (`copilot --acp --stdio`) out of the box, with a BYOK preset for a provider of
 your own, or any other ACP-speaking agent by command. Pick one in the chat
@@ -139,7 +146,36 @@ bar (the chip at the left cycles through providers and agents) and your
 question goes to it: the reply streams in as it speaks, its tool calls show
 as small lines, and whatever it needs permission for asks on the island, like
 a hook's request. **New** starts a fresh session. The agent's process is
-stopped when you reset it and when Coucou quits.
+stopped when you reset it and when Agent Center quits.
+
+Each agent is a **Cloud Agent** (a cloud mark: it works on a cloud service) or a
+**Local Agent** (a house mark: it works on your own machine or network). You
+choose under *Kind* on its card; one you never set is guessed — a Copilot on a
+`localhost`, `127.*`, `10.*`, `172.16–31.*` or `192.168.*` endpoint is local,
+everything else cloud.
+
+A Local Agent can also be an **n8n node**: an n8n workflow that starts with a
+Webhook node. Give it the webhook's Production URL (the workflow must be
+Active) and, for Header Auth, the header's name — its value is kept in the
+Credential Manager. Each turn is one `POST` of JSON
+(`{source: "agent-center", kind, sessionId, message, …}`); the answer may be
+plain text or JSON with `reply` / `output` (n8n's AI Agent node), plus an
+optional `locator` (a URL of what it made), `blocked` (why it cannot go on) and
+`usage` (`inputTokens`, `outputTokens`, `costUsd`). **Test** sends `kind: "test"`.
+
+### Team agents
+
+Teamwork builds new teams only from the **team agents** in Teamwork → *Agent
+settings*, listed as Cloud Agents and Local Agents. Each is built on an agent
+from Settings → Agents and adds its own name, model, system prompt, MCP servers,
+skills, and a description the secretary picks members by. Teams set up earlier
+with an agent from Settings → Agents still start.
+
+A team member on an n8n node gets `kind: "team-turn"` with the team, its task,
+its other open tasks and what it heard. Its answer is handed in for it: written
+to `n8n-output/<member>/<task>.md` in the work folder (or the `locator` URL) and
+delivered to the leader for review, or, with `blocked`, its task is marked as
+waiting on the leader. An n8n node takes tasks; it cannot be the leader.
 
 ## Chat and keys
 
@@ -165,7 +201,7 @@ Keys live in the **Windows Credential Manager** under `provider:<id>`, never on
 disk and never in the interface — the island can only ask whether a key exists.
 Same for every integration key.
 
-No telemetry. The only network requests Coucou makes are to the services you
+No telemetry. The only network requests Agent Center makes are to the services you
 configure yourself.
 
 ## Build it yourself
@@ -190,8 +226,8 @@ otherwise needs a real drag from Explorer to see. Neither page ships in the app.
 workflow publishes:
 
 ```
-Coucou-Windows-X.Y.Z-setup.exe    the versioned installer
-Coucou-Windows-setup.exe          the same file under the rolling name
+AgentCenter-Windows-X.Y.Z-setup.exe    the versioned installer
+AgentCenter-Windows-setup.exe          the same file under the rolling name
 ```
 
 Installing is optional — `target/release/coucou.exe` runs on its own. There is no

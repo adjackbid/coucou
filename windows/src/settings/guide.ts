@@ -176,7 +176,7 @@ export function openGuide(nav: Nav, root: HTMLElement) {
       h("div", { class: "guide-panel" },
         h("header", { class: "guide-head" },
           icon("guide", 22),
-          h("h1", { text: tr("設定 Coucou", "Set up Coucou") }),
+          h("h1", { text: tr("設定 Agent Center", "Set up Agent Center") }),
           h("span", { class: "grow" }),
           step === "done" ? null : h("button", { type: "button", class: "link", text: tr("稍後再說 ✕", "Later ✕"), onclick: () => close("later") }),
         ),

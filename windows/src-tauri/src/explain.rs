@@ -145,7 +145,7 @@ pub fn team_brief(snap: &crate::team::state::Snapshot, member: &str, request_jso
     let wanted: Value = serde_json::from_str(request_json).unwrap_or(Value::Null);
     let perm = m.permission.iter().chain(m.more_permissions.iter()).find(|p| p.request_id == wanted).or(m.permission.as_ref())?;
     let payload = serde_json::json!({
-        "agent": format!("team member \"{}\" ({}) of the Coucou team \"{}\", running {} {}", m.name, m.role, snap.name, m.agent, m.model),
+        "agent": format!("team member \"{}\" ({}) of the Agent Center team \"{}\", running {} {}", m.name, m.role, snap.name, m.agent, m.model),
         "tool_name": if perm.title.is_empty() { perm.kind.clone() } else { format!("{} — {}", perm.kind, perm.title) },
         "cwd": snap.work_dir,
         "tool_input": perm.raw_input,
@@ -215,7 +215,7 @@ Answer in Traditional Chinese (繁體中文), plainly, for someone who may not r
 【風險】低 / 中 / 高, then the reasons. Say whether the effect can be undone.\n\
 【建議】同意 / 拒絕 / 先確認某件事 — and why in one or two sentences.\n\
 【不確定的地方】what you cannot tell from what you were given (omit the section if nothing).\n\
-Rules: rely only on the brief. Coucou's rule check is computed by code and is reliable — never contradict it. \
+Rules: rely only on the brief. Agent Center's rule check is computed by code and is reliable — never contradict it. \
 Do not invent files, intentions or effects. If the brief does not let you tell, say so instead of guessing. Keep it under 250 Chinese characters per section.";
 
 // i18n: model-facing
@@ -227,7 +227,7 @@ Answer in English, plainly, for someone who may not read code. Use exactly these
 [Risk] Low / Medium / High, then the reasons. Say whether the effect can be undone.\n\
 [Advice] Allow / Deny / Check something first — and why in one or two sentences.\n\
 [Not sure] what you cannot tell from what you were given (omit the section if nothing).\n\
-Rules: rely only on the brief. Coucou's rule check is computed by code and is reliable — never contradict it. \
+Rules: rely only on the brief. Agent Center's rule check is computed by code and is reliable — never contradict it. \
 Do not invent files, intentions or effects. If the brief does not let you tell, say so instead of guessing. Keep it under 120 words per section.";
 
 /// The question the secretary's model is asked, and the model to ask it.

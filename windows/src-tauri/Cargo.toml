@@ -1,6 +1,6 @@
 [package]
 name = "coucou"
-description = "Coucou for Windows — Mochi lives at the top of your screen"
+description = "Agent Center for Windows — Mochi lives at the top of your screen"
 authors = ["Louis Raille"]
 version.workspace = true
 edition.workspace = true
@@ -31,6 +31,7 @@ windows = { version = "0.61", features = [
   "Win32_System_Com",
   "Win32_System_DataExchange",
   "Win32_System_Ole",
+  "Win32_System_Registry",
   "Win32_System_SystemInformation",
   "Win32_Storage_FileSystem",
   "Win32_System_Threading",
