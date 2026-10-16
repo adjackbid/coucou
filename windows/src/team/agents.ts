@@ -796,7 +796,7 @@ function ringNode(host: AgentsHost, x: RingPlace, focus: string | null, unfold: 
       onClick: () => edit(host, a),
     },
     h("span", { class: "ta-node-ring" }, h("i", { class: "blob", style: `--c:${face};--s:26px`, "aria-hidden": "true" })),
-    h("span", { class: "ta-node-name", text: a.name || a.id }),
+    h("span", { class: "ta-node-name" }, kindIcon(mark, 12), h("span", { text: a.name || a.id })),
     h("span", { class: `ta-node-cat${a.category.trim() ? "" : " none"}`, text: a.category.trim() || tr("未分類", "Uncategorized") }),
   );
 }
@@ -811,6 +811,8 @@ interface RingPlace {
   /** From it to the centre, in stage units: where it flies out from. */
   dx: number;
   dy: number;
+  /** Where round the ring, in radians from the right, clockwise. */
+  angle: number;
 }
 
 /**
@@ -825,15 +827,22 @@ function ringView(host: AgentsHost, entered: boolean): HTMLElement {
   const all = teamAgents().map((a, i) => ({ a, i, base: natives.find((n) => n.id === a.base) }));
   const placeOf = (x: { base: AgentProfile | undefined }) => (x.base ? locationOf(x.base) : "cloud");
   const rings = (["local", "cloud"] as const).map((where) => ({ where, list: byCategory(all.filter((x) => placeOf(x) === where)) })).filter((r) => r.list.length);
-  // Each ring far enough out for its agents' names to sit side by side, the outer one clear of the inner.
-  const radii: number[] = [];
-  for (const r of rings) radii.push(Math.max(radii.length ? radii[radii.length - 1] + 140 : 170, (r.list.length * 104) / (2 * Math.PI)));
-  const R = radii[radii.length - 1] ?? 175;
-  const W = Math.max(1000, 2 * R + 560);
-  // Names hang under the agents: more room below the rings than above.
-  const H = Math.max(560, 2 * R + 170);
-  const cx = W / 2;
-  const cy = H / 2 - 12;
+  // Inside the company — the user's machine or network — a disc round Agent Center with the Local
+  // Agents on it; its edge is the boundary; the Cloud Agents go round outside it. Each ring is far
+  // enough out for its agents' names to sit side by side.
+  const room = (n: number) => (n * 104) / (2 * Math.PI);
+  const local = rings.find((r) => r.where === "local");
+  const cloud = rings.find((r) => r.where === "cloud");
+  const radii = rings.map(() => 0);
+  const rLocal = local ? Math.max(170, room(local.list.length)) : 0;
+  const edge = local ? rLocal + 70 : 120;
+  const rCloud = cloud ? Math.max(edge + 90, 240, room(cloud.list.length)) : 0;
+  rings.forEach((r, k) => (radii[k] = r.where === "local" ? rLocal : rCloud));
+  const R = Math.max(edge, rCloud);
+  // A square field, so the rings stay round however wide the window is; names hang under the agents.
+  const S = 2 * R + 190;
+  const cx = S / 2;
+  const cy = S / 2 - 8;
   const focus = only;
 
   if (entered) unfoldAt = performance.now();
@@ -862,16 +871,31 @@ function ringView(host: AgentsHost, entered: boolean): HTMLElement {
       const t = -Math.PI / 2 + j * step + turns[k];
       const px = cx + radii[k] * Math.cos(t);
       const py = cy + radii[k] * Math.sin(t);
-      places.push({ ...x, left: (px / W) * 100, top: (py / H) * 100, dx: cx - px, dy: cy - py });
+      places.push({ ...x, left: (px / S) * 100, top: (py / S) * 100, dx: cx - px, dy: cy - py, angle: t });
     });
   });
+  // The words for inside and outside go where the rings are emptiest.
+  const angles = places.map((x) => x.angle).sort((a, b) => a - b);
+  let label = -Math.PI / 2;
+  if (angles.length) {
+    let widest = -1;
+    angles.forEach((a, k) => {
+      const next = k + 1 < angles.length ? angles[k + 1] : angles[0] + 2 * Math.PI;
+      if (next - a > widest) {
+        widest = next - a;
+        label = (a + next) / 2;
+      }
+    });
+  }
+  const at = (r: number) => `left:${((cx + r * Math.cos(label)) / S) * 100}%;top:${((cy + r * Math.sin(label)) / S) * 100}%`;
 
-  const lines = svgEl("svg", { class: "ta-ring-lines", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", "aria-hidden": "true" });
-  for (const r of radii) lines.append(svgEl("ellipse", { class: "ta-ring-orbit", cx, cy, rx: r, ry: r }));
+  const lines = svgEl("svg", { class: "ta-ring-lines", viewBox: `0 0 ${S} ${S}`, "aria-hidden": "true" });
+  lines.append(svgEl("circle", { class: "ta-ring-inside", cx, cy, r: edge }));
+  rings.forEach((r, k) => lines.append(svgEl("circle", { class: `ta-ring-orbit ${r.where}`, cx, cy, r: radii[k] })));
   const litPlaces = focus === null ? [] : places.filter((x) => x.a.category.trim() === focus);
   for (const x of litPlaces) {
-    const px = (x.left / 100) * W;
-    const py = (x.top / 100) * H;
+    const px = (x.left / 100) * S;
+    const py = (x.top / 100) * S;
     lines.append(svgEl("line", { class: "ta-ring-link", x1: cx, y1: cy, x2: px, y2: py }));
     lines.append(svgEl("circle", { class: "ta-ring-knot", cx: (cx + px) / 2, cy: (cy + py) / 2, r: 4 }));
   }
@@ -890,7 +914,7 @@ function ringView(host: AgentsHost, entered: boolean): HTMLElement {
 
   return h(
     "section",
-    { class: "ta-ring", style: `--w:${W};--h:${H}` },
+    { class: "ta-ring" },
     h(
       "div",
       { class: "ta-ring-stage" },
@@ -898,7 +922,9 @@ function ringView(host: AgentsHost, entered: boolean): HTMLElement {
         "div",
         { class: "ta-ring-field" },
         lines,
-        h("div", { class: `ta-ring-hub${focus !== null ? " on" : ""}`, style: `left:${(cx / W) * 100}%;top:${(cy / H) * 100}%` }, h("span", { class: "ta-ring-core", html: HUB }), h("b", { text: "Agent Center" })),
+        h("div", { class: `ta-ring-hub${focus !== null ? " on" : ""}`, style: `left:${(cx / S) * 100}%;top:${(cy / S) * 100}%` }, h("span", { class: "ta-ring-core", html: HUB }), h("b", { text: "Agent Center" })),
+        h("span", { class: "ta-ring-zone local", style: at(edge), title: markHint("local") }, kindIcon("local", 14), h("span", { text: tr("內部 · 你的電腦或網路", "Inside · your machine or network") })),
+        cloud ? h("span", { class: "ta-ring-zone cloud", style: at(rCloud), title: markHint("cloud") }, kindIcon("cloud", 14), h("span", { text: tr("外部 · 雲端服務", "Outside · cloud services") })) : null,
         ...places.map((x, n) => ringNode(host, x, focus, unfold(n))),
         all.length ? null : h("p", { class: "ta-ring-empty", text: tr("還沒有 Agent。按左下角新增第一個。", "No agents yet. Add the first one at the bottom left.") }),
       ),

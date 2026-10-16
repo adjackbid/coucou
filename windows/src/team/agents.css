@@ -534,13 +534,18 @@
 .ta-ring-stage {
   position: relative;
   width: 100%;
-  /* As drawn, unless the window is shorter: then the rings flatten a little. */
-  height: max(560px, min(calc(100cqw * var(--h) / var(--w)), calc(100vh - 150px)));
+  height: max(560px, calc(100vh - 150px));
+  container-type: size;
 }
 
+/* A square in the middle of the stage, as big as it fits: the rings are round whatever the window's shape. */
 .ta-ring-field {
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 50%;
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+  transform: translate(-50%, -50%);
 }
 
 .ta-ring-lines {
@@ -553,10 +558,53 @@
 
 .ta-ring-orbit {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.13);
   stroke-width: 1.2;
   stroke-dasharray: 3 7;
   vector-effect: non-scaling-stroke;
+}
+
+.ta-ring-orbit.local {
+  stroke: rgba(52, 211, 153, 0.35);
+}
+
+.ta-ring-orbit.cloud {
+  stroke: rgba(79, 179, 255, 0.45);
+}
+
+/* Inside: the user's own machine or network, a green disc with a solid edge. */
+.ta-ring-inside {
+  fill: rgba(52, 211, 153, 0.06);
+  stroke: rgba(52, 211, 153, 0.55);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The words for inside and outside, on the edge and on the outer ring. */
+.ta-ring-zone {
+  position: absolute;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.ta-ring-zone.local {
+  color: #8ff0c8;
+  background: rgba(10, 30, 24, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.55);
+}
+
+.ta-ring-zone.cloud {
+  color: #a9d8ff;
+  background: rgba(10, 22, 36, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(79, 179, 255, 0.55);
 }
 
 .ta-ring-link {
@@ -642,13 +690,24 @@
 }
 
 .ta-node-name {
-  max-width: 104px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 110px;
   font-size: 12px;
   font-weight: 600;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+
+.ta-node-name > svg {
+  flex: none;
+}
+
+.ta-node-name > span {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
 }
 
 .ta-node-cat {
