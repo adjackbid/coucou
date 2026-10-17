@@ -30,6 +30,8 @@ function guess(p: AgentProfile): AgentCaps {
     context: m.includes("deepseek") || m.includes("gemini") ? 1_000_000 : claude ? 200_000 : undefined,
     tier: m ? (big ? 4 : /flash|luna|haiku|mini/.test(m) ? 1 : 2) : undefined,
     image: !!p.imageGen,
+    web: p.protocol !== "n8n",
+    code: p.protocol !== "n8n",
   };
 }
 
@@ -61,6 +63,8 @@ function fill(slot: HTMLElement, c: AgentCaps) {
     c.vision ? h("span", { class: "caps-pill", title: tr("看得懂圖片", "Understands images"), text: tr("看圖", "vision") }) : null,
     c.thinking ? h("span", { class: "caps-pill", title: tr("回答前會先思考(可以調 Effort)", "Thinks before answering (Effort applies)"), text: tr("思考", "thinking") }) : null,
     c.image ? h("span", { class: "caps-pill image", title: tr("會產生圖片(在 設定 → Agent Provider 勾選的)", "Makes images (ticked in Settings → Agent Provider)"), text: tr("生圖", "image gen") }) : null,
+    c.web ? h("span", { class: "caps-pill", title: tr("能用自己的工具上網查資料、讀網頁", "Searches and reads the web with its own tools"), text: tr("上網", "web") }) : null,
+    c.code ? h("span", { class: "caps-pill", title: tr("能在自己的機器上執行指令和程式", "Runs commands and code on its machine"), text: tr("跑碼", "code") }) : null,
   ];
   const shown = parts.filter((x): x is HTMLElement => !!x);
   slot.replaceChildren(...shown);

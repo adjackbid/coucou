@@ -30,6 +30,12 @@ pub struct Caps {
     pub tier: Option<u8>,
     /// Makes pictures, as the person ticked it on the provider.
     pub image: bool,
+    /// Reads web pages and searches the web: every coding CLI does through its
+    /// own tools (Claude Code's WebFetch/WebSearch, Codex's web search, Gemini
+    /// CLI's and Copilot's fetch, Antigravity's browser); an n8n workflow does not.
+    pub web: bool,
+    /// Runs commands and code on the machine: every coding CLI does; n8n does not.
+    pub code: bool,
     /// Some of it is told from the model's name, not said by a list.
     pub guessed: bool,
 }
@@ -99,6 +105,8 @@ pub fn of(profile: &AgentProfile, choices: &Choices, table: &Table, offered: Opt
         context: can.context.or_else(|| (claude && model.contains("[1m]")).then_some(1_000_000)),
         tier: found.as_ref().map(|f| tier(&f.price)),
         image: profile.image_gen,
+        web: profile.protocol != Protocol::N8n,
+        code: profile.protocol != Protocol::N8n,
         guessed: (said_vision.is_none() && guess_vision.is_some()) || (said_thinking.is_none() && guess_thinking.is_some()),
         model,
     }
@@ -115,6 +123,12 @@ pub fn describe(c: &Caps) -> String {
     let mut bits: Vec<String> = [yes(c.vision, "see images"), yes(c.thinking, "think before answering")].into_iter().flatten().collect();
     if c.image {
         bits.push("make images (the user says so)".into());
+    }
+    if c.web {
+        bits.push("browse and search the web (through its own CLI tools)".into());
+    }
+    if c.code {
+        bits.push("run code and commands on its machine".into());
     }
     if let Some(n) = c.context {
         bits.push(format!("reads up to {n} tokens"));
@@ -154,6 +168,12 @@ mod tests {
         let c = of(&cg, &Choices::default(), &table(), None);
         assert_eq!((c.vision, c.thinking, c.context, c.tier, c.image, c.guessed), (Some(true), Some(true), Some(1_000_000), Some(2), true, false));
         assert!(describe(&c).contains("see images") && describe(&c).contains("make images"));
+        // A coding CLI browses and runs code on its own; an n8n workflow does neither.
+        assert!((c.web, c.code) == (true, true) && describe(&c).contains("browse and search the web") && describe(&c).contains("run code"));
+        let mut flow = AgentProfile::copilot();
+        flow.protocol = Protocol::N8n;
+        let f = of(&flow, &Choices::default(), &table(), None);
+        assert!((f.web, f.code) == (false, false) && !describe(&f).contains("web"));
 
         let mut claude = AgentProfile::copilot();
         claude.protocol = Protocol::Claude;
@@ -162,7 +182,7 @@ mod tests {
         let c = of(&claude, &Choices::default(), &table(), None);
         assert_eq!((c.vision, c.thinking, c.tier, c.image), (Some(true), Some(true), Some(4), false));
 
-        let unknown = of(&AgentProfile::copilot(), &Choices::default(), &table(), None);
+        let unknown = of(&flow, &Choices::default(), &table(), None);
         assert_eq!(describe(&unknown), "abilities unknown");
     }
 

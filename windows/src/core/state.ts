@@ -181,6 +181,9 @@ export interface AgentCaps {
   /** 1 cheap … 4 dear. */
   tier?: number | null;
   image: boolean;
+  /** Browses the web / runs code through its own CLI tools (every coding CLI; not n8n). */
+  web?: boolean;
+  code?: boolean;
   /** Some of it is told from the model's name, not said by a list. */
   guessed?: boolean;
 }
