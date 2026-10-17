@@ -2006,7 +2006,7 @@ const agentsHost: AgentsHost = {
   render: () => render(),
   natives: () => agents,
   usedBy: (id) => files.filter((f) => f.config?.members.some((m) => m.agent === id)).map((f) => f.config!.name || f.file),
-  openSettings: () => void Bridge.openSettingsPage("agents"),
+  openSettings: (anchor, action) => void Bridge.openSettingsPage("agents", anchor ?? null, action ?? null),
 };
 
 /** Every agent a member may name, for names and default models: native and team. */

@@ -57,14 +57,16 @@ function size(n: number): string {
 }
 
 function fill(slot: HTMLElement, c: AgentCaps) {
+  // Settings → Agent Provider shows only what the price list says; the rest are its own chips.
+  const auto = slot.classList.contains("auto");
   const parts: (HTMLElement | null)[] = [
     c.tier ? h("span", { class: "caps-tier", title: tr("價位:依模型每百萬 token 的價格分成四級", "Price: four steps by the model's price per million tokens") }, h("b", { text: "$".repeat(c.tier) }), h("span", { text: "$".repeat(4 - c.tier) })) : null,
     c.context ? h("span", { class: "caps-context", text: trf("{n} 上下文", "{n} context", { n: size(c.context) }) }) : null,
     c.vision ? h("span", { class: "caps-pill", title: tr("看得懂圖片", "Understands images"), text: tr("看圖", "vision") }) : null,
     c.thinking ? h("span", { class: "caps-pill", title: tr("回答前會先思考(可以調 Effort)", "Thinks before answering (Effort applies)"), text: tr("思考", "thinking") }) : null,
-    c.image ? h("span", { class: "caps-pill image", title: tr("會產生圖片(在 設定 → Agent Provider 勾選的)", "Makes images (ticked in Settings → Agent Provider)"), text: tr("生圖", "image gen") }) : null,
-    c.web ? h("span", { class: "caps-pill", title: tr("能用自己的工具上網查資料、讀網頁", "Searches and reads the web with its own tools"), text: tr("上網", "web") }) : null,
-    c.code ? h("span", { class: "caps-pill", title: tr("能在自己的機器上執行指令和程式", "Runs commands and code on its machine"), text: tr("Code", "code") }) : null,
+    c.image && !auto ? h("span", { class: "caps-pill image", title: tr("會產生圖片(在 設定 → Agent Provider 勾選的)", "Makes images (ticked in Settings → Agent Provider)"), text: tr("生圖", "image gen") }) : null,
+    c.web && !auto ? h("span", { class: "caps-pill", title: tr("能用自己的工具上網查資料、讀網頁", "Searches and reads the web with its own tools"), text: tr("上網", "web") }) : null,
+    c.code && !auto ? h("span", { class: "caps-pill", title: tr("能在自己的機器上執行指令和程式", "Runs commands and code on its machine"), text: tr("Code", "code") }) : null,
   ];
   const shown = parts.filter((x): x is HTMLElement => !!x);
   slot.replaceChildren(...shown);
@@ -77,9 +79,9 @@ function fill(slot: HTMLElement, c: AgentCaps) {
     : tr("價目表沒寫這個模型能做什麼;到「成本與用量」更新價格表後會補上。", "The price list says nothing about what this model can do; updating it in Cost & usage fills this in.");
 }
 
-/** A row of the agent's abilities: filled now if known, else when Rust answers. */
-export function capsView(profile: AgentProfile): HTMLElement {
-  const slot = h("div", { class: "caps-row empty" });
+/** A row of the agent's abilities: filled now if known, else when Rust answers. `auto` shows only what the price list says. */
+export function capsView(profile: AgentProfile, opts: { auto?: boolean } = {}): HTMLElement {
+  const slot = h("div", { class: `caps-row empty${opts.auto ? " auto" : ""}` });
   const key = keyOf(profile);
   const had = known.get(key);
   if (had) {

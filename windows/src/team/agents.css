@@ -1082,3 +1082,10 @@
   flex-direction: column;
   gap: 6px;
 }
+
+/* ✎ 編輯 / ＋ 新增 beside the Provider dropdown: small, so the dropdown keeps the room. */
+.ta-provider-btn {
+  padding: 5px 10px;
+  font-size: 12px;
+  flex: none;
+}

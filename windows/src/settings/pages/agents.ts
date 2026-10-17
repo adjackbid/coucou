@@ -12,7 +12,7 @@ import { kindIcon, markHint, markName, markOf } from "../../views/agent-kind";
 import type { Page } from "../nav";
 import { agentKey, agentNeedsKey } from "../status";
 import { present, save, setPresent, settings, teamAgents } from "../store";
-import { badge, card, errText, field, notice, pageHeader, row, toggle } from "../ui";
+import { badge, card, errText, field, notice, pageHeader, row } from "../ui";
 
 export { agentKey };
 
@@ -124,30 +124,29 @@ function sectionHead(where: AgentLocation, count: number): HTMLElement {
 }
 
 /** Cloud Agent / Local Agent as two buttons; an n8n node is local and says so. */
-/** One ability the person may leave to Coucou or set either way: 自動 / 開 / 關. */
-function abilitySwitch(name: string, set: boolean | null | undefined, auto: boolean, onChange: (v: boolean | null) => void): HTMLElement {
-  const now: boolean | null = set ?? null;
-  const item = (v: boolean | null, text: string, title: string) =>
-    h(
-      "button",
-      {
-        type: "button",
-        class: now === v ? "on" : "",
-        "aria-pressed": String(now === v),
-        title,
-        onclick: () => {
-          if (now !== v) onChange(v);
-        },
+/**
+ * One ability as a chip: grey when the agent lacks it, coloured when it has it;
+ * a click flips it. `auto` is what Coucou tells from the agent's kind; the
+ * person's own setting is kept only while it differs, so an unchanged chip
+ * follows the kind again.
+ */
+function abilityChip(name: string, set: boolean | null | undefined, auto: boolean | null, tone: "" | "image", help: string, onChange: (v: boolean | null) => void): HTMLElement {
+  const has = set ?? auto ?? false;
+  const own = set != null && set !== auto;
+  const title = `${help}\n${has ? tr("有:點一下拿掉", "Has it: click to take it away") : tr("沒有:點一下加上", "Lacks it: click to give it")}${auto == null ? "" : own ? tr("(你改的;依種類判斷是", " (your setting; its kind says ") + (auto ? tr("有)", "yes)") : tr("沒有)", "no)")) : tr("(依種類判斷)", " (told from its kind)")}`;
+  return h(
+    "button",
+    {
+      type: "button",
+      class: `ability-chip ${has ? "on" : "off"} ${tone}${own ? " own" : ""}`,
+      "aria-pressed": String(has),
+      title,
+      onclick: () => {
+        const next = !has;
+        onChange(auto != null && next === auto ? null : next);
       },
-      h("span", { text }),
-    );
-  return h("div", { class: "ability-switch" },
-    h("span", { class: "ability-name", text: name }),
-    h("div", { class: "segmented", role: "group", "aria-label": name },
-      item(null, tr("自動", "Auto"), auto ? tr("依種類判斷:會", "Told from its kind: yes") : tr("依種類判斷:不會", "Told from its kind: no")),
-      item(true, tr("開", "On"), tr("Agent Center 會當它有這個能力", "Agent Center treats it as able")),
-      item(false, tr("關", "Off"), tr("Agent Center 不會為這種工作挑它", "Agent Center will not pick it for this")),
-    ),
+    },
+    h("span", { text: name }),
   );
 }
 
@@ -177,21 +176,15 @@ export const agentsPage: Page = {
   id: "agents",
   icon: "agents",
   name: () => "Agent Provider",
-  render() {
+  render(ctx) {
     const list = h("div", { class: "stack" });
+    let addAsked = ctx.action === "add";
     // Each visit asks afresh: the price list may have been fetched again in Teamwork.
     forgetCaps();
 
     function redraw() {
       clear(list);
-      for (const where of ["cloud", "local"] as const) {
-        const mine = settings.agents.filter((a) => locationOf(a) === where);
-        list.append(sectionHead(where, mine.length));
-        if (!mine.length) {
-          list.append(h("p", { class: "kind-empty", text: where === "local" ? tr("還沒有 Local Agent:可以從下面新增本機模型的 Copilot 或 n8n 節點,或把一張卡片的類別改成 Local Agent。", "No Local Agent yet: add a Copilot on a local model or an n8n node below, or set a card's kind to Local Agent.") : tr("還沒有 Cloud Agent。", "No Cloud Agent yet.") }));
-        }
-        for (const a of mine) list.append(agentCard(a));
-      }
+      // Adding comes first: it is what a person opening this page most often came for.
       const all = presets();
       const preset = h("select", { title: tr("從哪一種開始", "Start from") }) as HTMLSelectElement;
       all.forEach((pr, i) => preset.append(h("option", { value: String(i), text: pr.label })));
@@ -204,7 +197,20 @@ export const agentsPage: Page = {
         redraw();
         requestAnimationFrame(() => list.querySelector(`[data-anchor="agent-profile-${a.id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
       });
-      list.append(h("div", { class: "add-row" }, h("span", { class: "add-label", text: tr("新增 Agent", "Add an agent") }), preset, add));
+      list.append(h("div", { class: "add-row", "data-anchor": "agent-add" }, h("span", { class: "add-label", text: tr("新增 Agent Provider", "Add an Agent Provider") }), preset, add));
+      // Agent Pool's "新增 Provider" lands here with the list of kinds ready to pick.
+      if (addAsked) {
+        addAsked = false;
+        requestAnimationFrame(() => preset.focus());
+      }
+      for (const where of ["cloud", "local"] as const) {
+        const mine = settings.agents.filter((a) => locationOf(a) === where);
+        list.append(sectionHead(where, mine.length));
+        if (!mine.length) {
+          list.append(h("p", { class: "kind-empty", text: where === "local" ? tr("還沒有 Local Agent:可以從上面新增本機模型的 Copilot 或 n8n 節點,或把一張卡片的類別改成 Local Agent。", "No Local Agent yet: add a Copilot on a local model or an n8n node above, or set a card's kind to Local Agent.") : tr("還沒有 Cloud Agent。", "No Cloud Agent yet.") }));
+        }
+        for (const a of mine) list.append(agentCard(a));
+      }
     }
 
     function agentCard(a: AgentProfile): HTMLElement {
@@ -297,35 +303,38 @@ export const agentsPage: Page = {
         }
       });
 
-      // What it can do: read from the price lists, but making images only the person can say.
-      let capsSlot = capsView(a);
-      // Only this row changes: drawing the page again would take the person back to its top.
-      const refreshCaps = () => {
-        void save();
-        const next = capsView(live());
-        capsSlot.replaceWith(next);
-        capsSlot = next;
-      };
-      const abilities = field(
-        tr("能力", "Abilities"),
-        [
-          capsSlot,
-          h("label", { class: "inline-check" },
-            toggle(!!a.imageGen, (v) => {
-              live().imageGen = v;
-              refreshCaps();
-            }, tr("可以生圖", "Makes images")),
-            h("span", { text: tr("可以生圖", "Makes images") })),
-          abilitySwitch(tr("上網", "Web"), a.web, a.protocol !== "n8n", (v) => {
+      // What it can do: price, context, vision and thinking come from the price
+      // lists; making images, the web and code are chips the person can flip.
+      const abilityRow = (x: AgentProfile): HTMLElement => {
+        const fromKind = x.protocol !== "n8n";
+        return h("div", { class: "ability-row" },
+          capsView(x, { auto: true }),
+          abilityChip(tr("生圖", "image gen"), x.imageGen, null, "image", tr("會產生圖片:它有產生圖片的工具時(例如 Antigravity)點亮,Agent Center 要做圖時才會挑它", "Makes images: light this when it has a tool for it (Antigravity, say); Agent Center picks it for pictures only then"), (v) => {
+            live().imageGen = !!v;
+            refreshCaps();
+          }),
+          abilityChip(tr("上網", "web"), x.web, fromKind, "", tr("能用自己的工具上網查資料、讀網頁", "Searches and reads the web with its own tools"), (v) => {
             live().web = v;
             refreshCaps();
           }),
-          abilitySwitch("Code", a.code, a.protocol !== "n8n", (v) => {
+          abilityChip("Code", x.code, fromKind, "", tr("能在自己的機器上執行指令和程式", "Runs commands and code on its machine"), (v) => {
             live().code = v;
             refreshCaps();
           }),
-        ],
-        tr("看圖、思考、上下文和價位依價目表自動判斷;能不能生圖沒有清單會說,它有產生圖片的工具時(例如 Antigravity)請打開,Agent Center 要做圖時才會挑它。上網和 Code 預設依種類判斷(coding CLI 都會,n8n 不會),判斷錯了可以在這裡改,Agent Center 會照你設的挑人。", "Vision, thinking, context and price come from the price list; whether it makes images no list says, so turn this on when it has a tool for it (Antigravity, say): Agent Center picks it for pictures only then. Web and Code are told from its kind (every coding CLI has them, n8n does not); override here when that is wrong, and Agent Center picks by what you set."),
+        );
+      };
+      let abilitySlot = abilityRow(a);
+      // Only this row changes: drawing the page again would take the person back to its top.
+      const refreshCaps = () => {
+        void save();
+        const next = abilityRow(live());
+        abilitySlot.replaceWith(next);
+        abilitySlot = next;
+      };
+      const abilities = field(
+        tr("能力", "Abilities"),
+        abilitySlot,
+        tr("價位、上下文、看圖和思考依價目表自動判斷。灰色代表沒有、彩色代表有,點一下就能改:生圖沒有清單會說,它有產生圖片的工具時(例如 Antigravity)請點亮;上網和 Code 預設依種類判斷(coding CLI 都會,n8n 不會),判斷錯了點一下改掉,Agent Center 會照你設的挑人。", "Price, context, vision and thinking come from the price list. Grey means it lacks the ability, colour means it has it, and a click flips it: no list says whether it makes images, so light that when it has a tool for it (Antigravity, say); web and code are told from its kind (every coding CLI has them, n8n does not), and a click fixes a wrong guess. Agent Center picks by what you set."),
       );
       const usedBy = (teamAgents?.doc.agents ?? []).filter((t) => t.base === a.id).map((t) => t.name);
       const title = h("div", { class: "title-icon" }, kindIcon(markOf(a), 18), h("h2", { text: a.name }));

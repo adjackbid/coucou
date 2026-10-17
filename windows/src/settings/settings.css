@@ -1305,18 +1305,77 @@ input.short {
   color: var(--ink);
 }
 
-/* 上網 / Code on a provider: a name and a three-way 自動 / 開 / 關. */
-.ability-switch {
-  display: inline-flex;
+/* Abilities on a provider: one row, the price list's marks first, then chips
+   the person flips. Grey = lacks it, coloured = has it. */
+.ability-row {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-right: 12px;
+  gap: 6px 8px;
 }
-.ability-switch .ability-name {
-  font-size: 13px;
-  opacity: 0.85;
+
+.ability-row .caps-row {
+  margin-right: 4px;
 }
-.ability-switch .segmented button {
-  padding: 2px 10px;
-  font-size: 12px;
+
+.ability-row .caps-row.empty::before {
+  content: none;
+}
+
+.ability-chip {
+  padding: 2px 11px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: 600 12px var(--font);
+  cursor: default;
+  transition: background 0.12s ease-out, color 0.12s ease-out, transform 0.08s ease-out;
+}
+
+.ability-chip:active {
+  transform: scale(0.94);
+}
+
+.ability-chip.off {
+  color: var(--dim);
+  background: rgba(128, 128, 128, 0.12);
+  border-color: rgba(128, 128, 128, 0.18);
+}
+
+.ability-chip.off:hover {
+  background: rgba(128, 128, 128, 0.2);
+}
+
+.ability-chip.on {
+  color: #b3a8ff;
+  background: rgba(139, 124, 255, 0.2);
+  border-color: rgba(139, 124, 255, 0.35);
+}
+
+.ability-chip.on:hover {
+  background: rgba(139, 124, 255, 0.3);
+}
+
+.ability-chip.on.image {
+  color: #f9a8d4;
+  background: rgba(244, 114, 182, 0.2);
+  border-color: rgba(244, 114, 182, 0.35);
+}
+
+.ability-chip.on.image:hover {
+  background: rgba(244, 114, 182, 0.3);
+}
+
+/* A chip the person set against its kind: a small notch so a later look knows why. */
+.ability-chip.own::after {
+  content: "·";
+  margin-left: 4px;
+  opacity: 0.6;
+}
+
+:root[data-theme="light"] .ability-chip.on {
+  color: #5b3cc4;
+}
+
+:root[data-theme="light"] .ability-chip.on.image {
+  color: #b0287a;
 }
