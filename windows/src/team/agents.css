@@ -1089,3 +1089,44 @@
   font-size: 12px;
   flex: none;
 }
+
+/* 進階 in the editor: System prompt, MCP server and Skill wait behind one line. */
+.ta-advanced {
+  margin-top: 12px;
+  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  padding-top: 8px;
+}
+
+.ta-advanced > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font: 600 13px var(--font);
+  cursor: default;
+  list-style: none;
+}
+
+.ta-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ta-advanced > summary::before {
+  content: "›";
+  display: inline-block;
+  width: 10px;
+  opacity: 0.6;
+  transition: transform 0.12s ease-out;
+}
+
+.ta-advanced[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.ta-advanced > summary .hint {
+  font-weight: 400;
+}
+
+.ta-advanced > .ta-grid {
+  margin-top: 8px;
+}

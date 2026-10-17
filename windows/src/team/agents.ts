@@ -39,6 +39,8 @@ let stateError = "";
 /** The agent being edited (a copy), and whether it is new. */
 let draft: TeamAgent | null = null;
 let draftIsNew = false;
+/** The form's 進階 fold (System prompt, MCP server, Skill): closed when a form opens, kept while it is edited. */
+let draftAdvanced = false;
 /** A new agent's section: its base is picked among that kind only. */
 let draftWhere: AgentLocation | null = null;
 let problem = "";
@@ -533,6 +535,7 @@ function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
       tr("儲存", "Save"),
     ),
   );
+  const advancedSet = [a.systemPrompt.trim(), a.mcp.length, a.skills.length].filter(Boolean).length;
   return h(
     "section",
     { class: `panel form ta-editor${pinned ? " pinned" : ""}` }, // i18n-ok: CSS classes
@@ -566,6 +569,15 @@ function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
       effortField(host, a, can?.effort === "no"),
       h("label", { text: tr("說明", "Description") }),
       field("ta-desc", a.description, (v) => (a.description = v), { rows: "2", placeholder: tr("適合做什麼、擅長什麼。", "What it is good at.") }, "textarea"),
+    ),
+    // The rarely-touched parts wait behind 進階, so a new member is name, kind, provider and model.
+    h(
+      "details",
+      { class: "ta-advanced", ...(draftAdvanced ? { open: "" } : {}), ontoggle: (e: Event) => { draftAdvanced = (e.currentTarget as HTMLDetailsElement).open; } },
+      h("summary", {}, h("span", { text: tr("進階", "Advanced") }), h("span", { class: "hint", text: advancedSet ? trf("System prompt、MCP server、Skill(已設定 {n} 項)", "System prompt, MCP server, Skill ({n} set)", { n: advancedSet }) : tr("System prompt、MCP server、Skill", "System prompt, MCP server, Skill") })),
+      h(
+        "div",
+        { class: "ta-grid" },
       h("label", {}, "System prompt ", badge(can?.systemPrompt, node)), // i18n-ok: the same in both
       field("ta-prompt", a.systemPrompt, (v) => (a.systemPrompt = v), { rows: "6", placeholder: node ? tr("每次呼叫都放在 systemPrompt 欄位送給工作流程", "Sent to the workflow as systemPrompt with every call") : tr("這個 Agent 一直要遵守的指示、口吻、做事方式", "Instructions, tone and ways of working this agent always keeps to") }, "textarea"),
       h("label", {}, "MCP server ", badge(can?.mcp, node)), // i18n-ok: the same in both
@@ -585,6 +597,7 @@ function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
         {},
         field("ta-skills", a.skills.join("\n"), (v) => (a.skills = v.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)), { rows: "3", placeholder: tr("一行一個:含 SKILL.md 的資料夾完整路徑,或 skill 名稱(會到 ~/.claude/skills 等常見位置找)", "One per line: the full path of a folder with a SKILL.md, or a skill name (looked for in ~/.claude/skills and other usual places)"), class: "field mono", ...(skillsOff && !a.skills.length ? { disabled: "" } : {}) }, "textarea"),
         h("p", { class: "hint", text: skillsOff ? tr("n8n 節點不讀 skill;工作流程該做什麼,在 n8n 裡設定。", "An n8n node reads no skills: what the workflow does is set up in n8n.") : tr("成員開工時會被告知每個 skill 的 SKILL.md 在哪、適合做什麼,需要時自己讀。", "When a member starts it is told where each skill's SKILL.md is and what it is for, and reads it when it needs to.") }),
+      ),
       ),
     ),
     node ? h("p", { class: "hint ta-node-note" }, kindIcon("n8n", 14), h("span", { text: markHint("n8n") })) : null,
@@ -606,6 +619,7 @@ function edit(host: AgentsHost, a: TeamAgent) {
   drawerScroll = 0;
   drawerAt = performance.now();
   draftIsNew = false;
+  draftAdvanced = false;
   draftWhere = null;
   problem = "";
   deleting = null;
@@ -701,6 +715,7 @@ function startNew(host: AgentsHost, where: AgentLocation) {
   drawerScroll = 0;
   drawerAt = performance.now();
   draftIsNew = true;
+  draftAdvanced = false;
   draftWhere = where;
   problem = "";
   deleting = null;
