@@ -141,6 +141,7 @@ export interface Task {
   criteria: { text: string; claimed: boolean }[];
   dependsOn: string[];
   deliverTo: string | null;
+  reviewer: string | null;
   blocked: { reason: string; on: string } | null;
   note: string;
   rejections: number;

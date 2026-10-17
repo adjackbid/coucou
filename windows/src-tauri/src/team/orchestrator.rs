@@ -418,7 +418,15 @@ impl Team {
                 }
             }
             settle(&mut store);
-            outcome.text
+            // Messages are otherwise read only at the start of a turn: a
+            // member in a long turn would miss a ruling and redo its work.
+            // `team_status` has just read them.
+            let unread = if tool == "team_status" { 0 } else { store.state().unheard(member).len() };
+            if unread > 0 {
+                format!("{}\n\n{}", outcome.text, brief::unread(unread))
+            } else {
+                outcome.text
+            }
         };
         log::line(format!("team {}: {member} {tool}", self.id));
         self.changed();

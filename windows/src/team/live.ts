@@ -113,6 +113,8 @@ function teamWords(snap: Snapshot | undefined, l: Line): string {
       return trf("建立任務「{title}」→ {owner}", "Create task “{title}” → {owner}", { title: a("title"), owner: nameOf(snap, a("owner")) });
     case "task_assign":
       return trf("把 {task} 交給 {owner}", "Give {task} to {owner}", { task: task(a("task")), owner: nameOf(snap, a("owner")) });
+    case "set_reviewer":
+      return trf("指定 {task} 由 {who} 驗收", "Have {who} review {task}", { task: task(a("task")), who: nameOf(snap, a("reviewer")) });
     case "team_finish":
       return tr("宣告團隊工作完成", "Declare the team's work done");
     case "task_update":

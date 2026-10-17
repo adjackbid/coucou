@@ -78,9 +78,18 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
     out.push_str("\nHow the team works:\n");
     if is_leader {
         out.push_str(
-            "- You are the leader. Break the goal into tasks with `task_create`: one owner each, the criteria that make it done, the tasks it depends on (`depends_on`) and who receives the result (`deliver_to`). Give every teammate work that fits their role, then end your turn. Agent Center hands each task to its owner as soon as what it depends on has been delivered.\n\
+            "- You are the leader. Break the goal into tasks with `task_create`: one owner each, the criteria that make it done, the tasks it depends on (`depends_on`), who receives the result (`deliver_to`) and, if not you, who accepts it (`reviewer`). Give every teammate work that fits their role, then end your turn. Agent Center hands each task to its owner as soon as what it depends on has been delivered.\n\
              - When a teammate hands something in you are told. Check it against the criteria and call `review` to accept it or send it back with the reason.\n\
              - Answer teammates' questions with `message_send`. The user may send you new instructions at any time: adjust the tasks to them.\n",
+        );
+        out.push_str(
+            "\nHow Agent Center runs the team, and what follows for your plan:\n\
+             - Each member runs one turn at a time. Two tasks owned by the same member run one after the other, so spread independent tasks over different members (yourself included) and give everyone work in your first turn. A member holding most of the tasks sets the finish time.\n\
+             - A member reads messages only at the start of a turn. A ruling sent while someone is deep in a long turn reaches them after they hand in, and the work is redone. Put the rules in the task itself; send corrections in one message, not several.\n\
+             - A dependent task starts as soon as its inputs are handed in, before they are accepted. Only a rejection sends the chain backwards.\n\
+             - Size the goal first. A fact or a short answer: one task for yourself, do it, deliver, report to the user with `message_send` (to \"you\"), `team_finish`. One document with no natural split: one member does it, another accepts it (`reviewer`). Several parts: split by scope (themes, chapters, product lines), each member from start to finish, chains of at most two links; if the user fixed the roles, split by batch instead and have each member deliver batch by batch. Do not put the cheapest model at the head of a chain.\n\
+             - Review against the criteria you wrote. Send back once with every fix listed; accepted is final, no follow-up checks by message. If a task comes back a second time, move it with `task_assign` or do it yourself. Spot-check two or three items rather than redoing a member's work.\n\
+             - A member out of quota, missing a tool, or blocked for more than a turn: move its remaining work with `task_assign` at once.\n",
         );
     } else {
         out.push_str("- The leader hands out tasks. You are told when one is yours and ready; until then there is nothing to do.\n");
@@ -91,9 +100,16 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
          - When you cannot go on: `task_block` with the reason and who you are waiting for, or `ask_human` if only the user can decide. Then end your turn.\n\
          - To ask or tell a teammate something: `message_send`. `team_status` shows your tasks, the board and any new messages.\n\
          - Then end your turn. You get a new turn when a task, a delivery or a message arrives for you. Do not wait or poll.\n\
+         - Tool results tell you when messages arrived during your turn: call `team_status` to read them before you deliver, so a ruling does not reach you after the work is done.\n\
          - Write notes, messages and summaries in the language named on the last line of this brief.\n",
     );
     out
+}
+
+/// Appended to a tool result when messages arrived during the turn.
+// i18n: model-facing
+pub fn unread(n: usize) -> String {
+    format!("You have {n} unread message{}. Call `team_status` to read {} before you go on.", if n == 1 { "" } else { "s" }, if n == 1 { "it" } else { "them" })
 }
 
 /// The leader's first message.
@@ -146,7 +162,7 @@ pub fn task(state: &State, task: &Task) -> String {
 pub fn to_review(config: &TeamConfig, task: &Task, by: &str, locator: &str, summary: &str) -> String {
     let criteria: Vec<String> = task.criteria.iter().enumerate().map(|(i, c)| format!("{}. {}", i + 1, c.text)).collect();
     format!(
-        "{} handed in {} ({}): {}\nWhere: {}\n{}Check it and call `review` (task \"{}\", accept true or false, and the reason when you send it back).",
+        "{} handed in {} ({}): {}\nWhere: {}\n{}Check it against these and call `review` (task \"{}\", accept true or false). If you send it back, list every fix in the reason at once; once accepted, it is final.",
         who(config, by),
         task.id,
         task.title,
@@ -177,6 +193,16 @@ pub fn rejected(config: &TeamConfig, task: &Task, by: &str, reason: &str) -> Str
         task.id,
         task.title,
         reason
+    )
+}
+
+/// A task was sent back for the second time: the leader changes the plan
+/// rather than the reviewer trying a third time.
+// i18n: model-facing
+pub fn rejected_again(task: &Task) -> String {
+    format!(
+        "{} ({}) has now been sent back twice. Rather than another round, move it to someone else with `task_assign` or do it yourself; a third rejection pauses the team for the user.",
+        task.id, task.title,
     )
 }
 

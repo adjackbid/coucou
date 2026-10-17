@@ -21,7 +21,7 @@ const HEARD_TEXT: usize = 240;
 
 /// Coucou's own team tools, as the agents call them.
 pub const TEAM_TOOLS: &[&str] =
-    &["team_status", "task_create", "task_assign", "team_finish", "task_update", "task_block", "deliver", "review", "message_send", "ask_human"];
+    &["team_status", "task_create", "task_assign", "set_reviewer", "team_finish", "task_update", "task_block", "deliver", "review", "message_send", "ask_human"];
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

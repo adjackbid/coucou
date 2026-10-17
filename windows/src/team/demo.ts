@@ -93,6 +93,7 @@ const task = (
   criteria: [],
   dependsOn: [],
   deliverTo: null,
+  reviewer: null,
   blocked: null,
   note: "",
   rejections: 0,

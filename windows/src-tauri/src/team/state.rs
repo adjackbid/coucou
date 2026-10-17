@@ -64,6 +64,9 @@ pub enum Event {
         by: String,
     },
     TaskAssigned { id: String, owner: String, by: String },
+    /// The leader named who accepts a task (`None` goes back to the rule:
+    /// the leader, or whoever receives the leader's own work).
+    ReviewerSet { id: String, reviewer: Option<String>, by: String },
     /// `checked` are the criteria the owner says are met (indexes from 0).
     TaskUpdated { id: String, status: Option<TaskStatus>, note: Option<String>, checked: Vec<usize>, by: String },
     TaskBlocked { id: String, reason: String, on: String, by: String },
@@ -138,6 +141,8 @@ pub struct Task {
     pub criteria: Vec<Criterion>,
     pub depends_on: Vec<String>,
     pub deliver_to: Option<String>,
+    /// Who accepts it, when the leader named someone (`set_reviewer`).
+    pub reviewer: Option<String>,
     pub blocked: Option<Block>,
     pub note: String,
     pub rejections: u32,
@@ -292,10 +297,14 @@ impl State {
             && self.messages.iter().all(|m| m.heard || !config.has_member(&m.to) || self.lost.contains_key(&m.to))
     }
 
-    /// Who accepts a task: the leader, unless the leader did it — then
-    /// whoever receives it, and failing that nobody (it is accepted as is).
+    /// Who accepts a task: whoever the leader named for it; else the leader,
+    /// unless the leader did it — then whoever receives it, and failing that
+    /// nobody (it is accepted as is).
     pub fn reviewer(&self, task: &Task) -> Option<String> {
         let leader = self.leader();
+        if let Some(r) = task.reviewer.as_ref().filter(|r| **r != task.owner) {
+            return Some(r.clone());
+        }
         if task.owner != leader {
             return Some(leader.to_string());
         }
@@ -382,6 +391,7 @@ impl State {
                     criteria: criteria.iter().map(|c| Criterion { text: c.clone(), claimed: false }).collect(),
                     depends_on: depends_on.clone(),
                     deliver_to: deliver_to.clone(),
+                    reviewer: None,
                     blocked: None,
                     note: String::new(),
                     rejections: 0,
@@ -397,6 +407,13 @@ impl State {
                     t.owner = owner.clone();
                     t.dispatched = false;
                     t.blocked = None;
+                    t.updated_at = at;
+                }
+                self.moved(by);
+            }
+            Event::ReviewerSet { id, reviewer, by } => {
+                if let Some(t) = self.task_mut(id) {
+                    t.reviewer = reviewer.clone();
                     t.updated_at = at;
                 }
                 self.moved(by);
