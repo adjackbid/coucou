@@ -571,7 +571,7 @@ dependencies = [
 
 [[package]]
 name = "coucou"
-version = "0.2.13"
+version = "0.2.14"
 dependencies = [
  "keyring",
  "reqwest 0.12.28",
@@ -588,7 +588,7 @@ dependencies = [
 
 [[package]]
 name = "coucou-hook"
-version = "0.2.13"
+version = "0.2.14"
 dependencies = [
  "serde_json",
  "windows 0.61.3",
@@ -596,11 +596,11 @@ dependencies = [
 
 [[package]]
 name = "coucou-pty"
-version = "0.2.13"
+version = "0.2.14"
 
 [[package]]
 name = "coucou-team-mcp"
-version = "0.2.13"
+version = "0.2.14"
 dependencies = [
  "serde_json",
  "windows 0.61.3",
