@@ -1443,6 +1443,22 @@ fn secretary_decline(secretary: State<Arc<secretary::Secretary>>, id: String) ->
     secretary.decline(&id)
 }
 
+/// The person changed a proposed team's members on its card (the Agent Pool picker).
+#[tauri::command]
+fn secretary_revise_team(
+    shared: State<'_, Shared>,
+    teams: State<'_, Arc<Teams>>,
+    agents: State<'_, Arc<Agents>>,
+    secretary: State<'_, Arc<secretary::Secretary>>,
+    id: String,
+    members: Vec<serde_json::Value>,
+    tz_minutes: i64,
+) -> Result<secretary::Proposal, String> {
+    let profiles = shared.settings.lock().unwrap().agents.clone();
+    let office = secretary::Office::new(teams.inner().clone(), &profiles, agents.inner().clone(), tz_minutes, String::new());
+    secretary.revise_team(&id, &members, &office)
+}
+
 /// 安裝 CLI: the table, without looking anything up.
 #[tauri::command]
 fn cli_list() -> Vec<cli_install::Cli> {
@@ -2112,6 +2128,7 @@ pub fn run() {
             cli_check_official,
             cli_run_install,
             secretary_decline,
+            secretary_revise_team,
             secretary_upload_path,
             secretary_upload_bytes,
             secretary_upload_force,

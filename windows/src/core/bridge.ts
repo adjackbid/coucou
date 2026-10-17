@@ -250,6 +250,8 @@ export const Bridge = {
   /** The work folder a proposal needs that does not exist yet (null when there is none to create). */
   secretaryMissingFolder: (id: string) => call<string | null>("secretary_missing_folder", { id }),
   secretaryDecline: (id: string) => call<SecretaryProposal | null>("secretary_decline", { id }),
+  /** The person changed a proposed team's members on its card: `{agent, name, role, leader}` in their order. */
+  secretaryReviseTeam: (id: string, members: { agent: string; name: string; role: string; leader: boolean }[], tzMinutes: number) => callOrThrow<SecretaryProposal>("secretary_revise_team", { id, members, tzMinutes }),
   secretaryReset: () => call<void>("secretary_reset"),
   /** What 清除歷史紀錄 would clear (null outside the app). */
   historyStats: () => call<HistoryStats>("history_stats"),

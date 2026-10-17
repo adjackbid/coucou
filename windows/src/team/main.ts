@@ -1899,6 +1899,7 @@ const secretaryHost: SecretaryHost = {
   render: () => render(),
   reload: () => load(),
   pool: () => poolForShow(agents),
+  profiles: () => agents,
   openTeam: (id) => {
     const file = files.find((f) => f.config?.id === id);
     if (file) {

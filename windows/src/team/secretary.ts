@@ -14,6 +14,10 @@ import { tr, trf } from "../core/i18n";
 import { h } from "../views/dom";
 import { dropdown, editableText } from "./ui";
 import { kbSaid, sizeText } from "./knowledge";
+import { FACES, teamAgents } from "./agents";
+import { capsView } from "../views/caps";
+import { kindIcon, markOf } from "../views/agent-kind";
+import type { AgentProfile } from "../core/state";
 import type { LibrarySkill, SecretaryChoices, SecretaryProposal, SecretaryReply, SecretaryStep, SecretaryUpload } from "./types";
 
 export interface SecretaryHost {
@@ -24,6 +28,8 @@ export interface SecretaryHost {
   openTeam(id: string): void;
   /** Agent Pool, for the picking animation. */
   pool(): PoolAgent[];
+  /** The native agents (Settings → Agent Provider), for the picker's cards. */
+  profiles(): AgentProfile[];
 }
 
 interface Entry {
@@ -538,8 +544,8 @@ async function ensureProviders(host: SecretaryHost) {
  */
 export async function consult(text: string, render: () => void): Promise<string> {
   if (waiting) return named() ? trf("{name}還在處理上一件事,稍等一下再試。", "{name} is still on the last request: try again in a moment.", { name }) : tr("Agent Center 還在處理上一件事,稍等一下再試。", "Agent Center is still on the last request: try again in a moment.");
-  if (!providers) await ensureProviders({ render, reload: async () => {}, openTeam: () => {}, pool: () => [] });
-  await ask({ render, reload: async () => {}, openTeam: () => {}, pool: () => [] }, text, false);
+  if (!providers) await ensureProviders({ render, reload: async () => {}, openTeam: () => {}, pool: () => [], profiles: () => [] });
+  await ask({ render, reload: async () => {}, openTeam: () => {}, pool: () => [], profiles: () => [] }, text, false);
   const last = entries[entries.length - 1];
   return last?.who === "error" ? trf("沒有成功:{why}", "Didn't work: {why}", { why: last.text }) : (last?.text ?? "");
 }
@@ -613,6 +619,129 @@ async function confirm(host: SecretaryHost, p: SecretaryProposal, createFolder =
 async function keepOut(host: SecretaryHost, p: SecretaryProposal) {
   askFolder.delete(p.id);
   await decline(host, p, tr("沒有建立資料夾,團隊也沒有開", "No folder was created and the team was not opened"));
+}
+
+/**
+ * 調整人選 on a team card: Agent Center picked first, and the person changes the
+ * team by ticking Agent Pool's cards. One draft per team agent, in Agent Pool's
+ * order, plus any member picked from outside it (a provider by its id).
+ */
+interface PickDraft {
+  agent: string;
+  name: string;
+  role: string;
+  leader: boolean;
+  on: boolean;
+}
+
+const picking = new Map<string, PickDraft[]>();
+
+function startPick(host: SecretaryHost, p: SecretaryProposal) {
+  const picks = p.picks ?? [];
+  const drafts: PickDraft[] = teamAgents().map((a) => {
+    const had = picks.find((k) => k.agent === a.id);
+    return { agent: a.id, name: had?.name ?? (a.name || a.id), role: had?.role ?? "", leader: had?.leader ?? false, on: !!had };
+  });
+  for (const k of picks) if (!drafts.some((d) => d.agent === k.agent)) drafts.push({ agent: k.agent, name: k.name, role: k.role, leader: k.leader, on: true });
+  picking.set(p.id, drafts);
+  host.render();
+}
+
+async function applyPick(host: SecretaryHost, p: SecretaryProposal) {
+  const drafts = picking.get(p.id) ?? [];
+  const members = drafts.filter((d) => d.on).map(({ agent, name, role, leader }) => ({ agent, name, role: role.trim(), leader }));
+  if (!members.length) return;
+  if (!members.some((m) => m.leader)) members[0].leader = true;
+  doing.add(p.id);
+  host.render();
+  try {
+    const revised = IS_TAURI
+      ? await Bridge.secretaryReviseTeam(p.id, members, tz())
+      : { ...p, picks: members, lines: p.lines.filter((l) => !/ · /.test(l)).concat(members.map((m) => `${m.name}${m.leader ? tr("(Leader)", " (Leader)") : ""} · ${m.role || "—"} · ${m.agent}`)) };
+    replace(revised);
+    picking.delete(p.id);
+  } catch (err) {
+    replace({ ...p, outcome: String(err instanceof Error ? err.message : err) });
+  }
+  doing.delete(p.id);
+  host.render();
+}
+
+function pickCard(host: SecretaryHost, p: SecretaryProposal, d: PickDraft, at: number): HTMLElement {
+  const natives = host.profiles();
+  const a = teamAgents().find((x) => x.id === d.agent);
+  const base = a ? natives.find((n) => n.id === a.base) : natives.find((n) => n.id === d.agent);
+  const face = FACES[at % FACES.length];
+  const model = a?.model || base?.model || "";
+  const drafts = picking.get(p.id) ?? [];
+  return h(
+    "div",
+    { class: `sec-pick${d.on ? " on" : ""}${base ? "" : " broken"}`, style: `--c:${face}` },
+    h(
+      "label",
+      { class: "sec-pick-head" },
+      h("input", {
+        type: "checkbox",
+        checked: d.on,
+        onChange: (e: Event) => {
+          d.on = (e.target as HTMLInputElement).checked;
+          if (!d.on) d.leader = false;
+          host.render();
+        },
+      }),
+      h("i", { class: "blob", style: `--c:${face};--s:28px`, "aria-hidden": "true" }),
+      h(
+        "div",
+        { class: "sec-pick-title" },
+        h("b", {}, base ? kindIcon(markOf(base), 14) : null, h("span", { text: a?.name || base?.name || d.agent })),
+        h("small", { text: [a?.category.trim(), base ? base.name : tr("Provider 不存在", "Provider missing"), model].filter(Boolean).join(" · ") }),
+      ),
+    ),
+    base ? capsView({ ...base, id: d.agent, model }) : null,
+    a?.description ? h("p", { class: "sec-pick-desc", text: a.description }) : null,
+    d.on
+      ? h(
+          "div",
+          { class: "sec-pick-role" },
+          h("input", { type: "text", value: d.role, placeholder: tr("角色(選填)", "Role (optional)"), maxlength: "20", onInput: (e: Event) => { d.role = (e.target as HTMLInputElement).value; } }),
+          h(
+            "label",
+            { class: `sec-pick-lead${d.leader ? " on" : ""}` },
+            h("input", {
+              type: "radio",
+              name: `sec-lead-${p.id}`,
+              checked: d.leader,
+              onChange: () => {
+                for (const x of drafts) x.leader = false;
+                d.leader = true;
+                host.render();
+              },
+            }),
+            "Leader", // i18n-ok: the same in both
+          ),
+        )
+      : null,
+  );
+}
+
+function picker(host: SecretaryHost, p: SecretaryProposal): HTMLElement {
+  const drafts = picking.get(p.id) ?? [];
+  const chosen = drafts.filter((d) => d.on);
+  const leader = chosen.find((d) => d.leader) ?? chosen[0];
+  const busy = doing.has(p.id);
+  return h(
+    "div",
+    { class: "sec-pick-box" },
+    h("p", { class: "sec-pick-hint", text: tr("勾選要加入的 Agent,可以填角色、指定 Leader;沒勾的不會進團隊。", "Tick the agents to put in the team, give them a role and pick the Leader; unticked ones stay out.") }),
+    h("div", { class: "sec-pick-grid" }, ...drafts.map((d, i) => pickCard(host, p, d, i))),
+    h(
+      "div",
+      { class: "sec-card-actions" },
+      h("button", { class: "btn primary", type: "button", disabled: busy || !chosen.length, onClick: () => void applyPick(host, p) }, busy ? tr("處理中…", "Working…") : tr("套用人選", "Use these members")),
+      h("button", { class: "btn plain", type: "button", disabled: busy, onClick: () => { picking.delete(p.id); host.render(); } }, tr("取消", "Cancel")),
+      h("span", { class: "hint", text: chosen.length ? trf("{n} 位,Leader:{who}", "{n} members, Leader: {who}", { n: chosen.length, who: leader?.name ?? "" }) : tr("還沒有勾選任何人", "No one is ticked yet") }),
+    ),
+  );
 }
 
 async function decline(host: SecretaryHost, p: SecretaryProposal, why = "") {
@@ -708,13 +837,16 @@ function card(host: SecretaryHost, p: SecretaryProposal): HTMLElement {
         ? h("div", { class: "sec-card-state", text: p.outcome ? trf("已取消:{why}", "Cancelled: {why}", { why: p.outcome }) : tr("已取消", "Cancelled") })
         : p.state === "failed"
           ? h("div", { class: "sec-card-state failed", text: trf("沒有成功:{why}", "Didn't work: {why}", { why: p.outcome }) })
-          : h(
-              "div",
-              { class: "sec-card-actions" },
-              h("button", { class: "btn primary", type: "button", disabled: busy, onClick: () => void confirm(host, p) }, busy ? tr("處理中…", "Working…") : p.confirm),
-              h("button", { class: "btn plain", type: "button", disabled: busy, onClick: () => void decline(host, p) }, tr("不用了", "No thanks")),
-              h("span", { class: "hint", text: tr("按下才會執行", "Nothing happens until you click") }),
-            );
+          : picking.has(p.id)
+            ? picker(host, p)
+            : h(
+                "div",
+                { class: "sec-card-actions" },
+                h("button", { class: "btn primary", type: "button", disabled: busy, onClick: () => void confirm(host, p) }, busy ? tr("處理中…", "Working…") : p.confirm),
+                p.kind === "team" ? h("button", { class: "btn plain", type: "button", disabled: busy, onClick: () => startPick(host, p) }, tr("調整人選", "Change members")) : null,
+                h("button", { class: "btn plain", type: "button", disabled: busy, onClick: () => void decline(host, p) }, tr("不用了", "No thanks")),
+                h("span", { class: "hint", text: p.outcome && p.state === "open" ? p.outcome : tr("按下才會執行", "Nothing happens until you click") }),
+              );
   const team = p.state === "done" ? /\(id ([A-Za-z0-9_-]+)\)/.exec(p.outcome)?.[1] : undefined;
   return h(
     "div",

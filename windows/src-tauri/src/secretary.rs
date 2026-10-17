@@ -535,18 +535,7 @@ impl Secretary {
     fn add(&self, kind: &str, title: String, lines: Vec<String>, confirm: &str, payload: Value) -> Proposal {
         let mut all = self.proposals.lock().unwrap();
         let uses = payload["knowledge"].as_array().into_iter().flatten().filter_map(|k| k["upload"].as_str()).filter(|u| !u.is_empty()).map(str::to_string).collect();
-        let config = &payload["config"];
-        let picks = config["members"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|m| Pick {
-                agent: s(m, "agent").to_string(),
-                name: s(m, "name").to_string(),
-                role: s(m, "role").to_string(),
-                leader: m["id"] == config["leader"],
-            })
-            .collect();
+        let picks = picks_of(&payload["config"]);
         let p = Proposal {
             id: format!("P-{}", all.len() + 1),
             kind: kind.into(),
@@ -665,23 +654,94 @@ impl Secretary {
         };
         lines.push(tr!(format!("工作資料夾:{work_dir}{note}"), format!("Work folder: {work_dir}{note}")));
         lines.extend(knowledge_lines(&items, from.as_ref().map(|(_, name, n)| (name.as_str(), *n))));
-        for m in &draft.members {
-            let model: String = if m.model.trim().is_empty() { tr!("代理預設", "agent default") } else { m.model.clone() };
-            let lead: &str = if m.id == draft.leader { tr!("(Leader)", " (Leader)") } else { "" };
-            let skills: String = if m.skills.is_empty() { String::new() } else { tr!(format!(" · skill:{}", m.skills.join("、")), format!(" · skills: {}", m.skills.join(", "))) };
-            lines.push(format!("{}{lead} · {} · {} / {}{}{skills}", m.name, if m.role.is_empty() { "—" } else { &m.role }, m.agent, model, if m.duty.is_empty() { String::new() } else { format!(" — {}", m.duty) }));
-        }
+        let head = lines.clone();
+        lines.extend(member_lines(&draft));
+        let mut tail: Vec<String> = Vec::new();
         if !draft.kickoff.trim().is_empty() {
-            lines.push(tr!(format!("開局指示:{}", cut(draft.kickoff.trim(), 240)), format!("Kickoff: {}", cut(draft.kickoff.trim(), 240))));
+            tail.push(tr!(format!("開局指示:{}", cut(draft.kickoff.trim(), 240)), format!("Kickoff: {}", cut(draft.kickoff.trim(), 240))));
         }
         if draft.fast {
-            lines.push(tr!("快速模式:最小團隊、一次審查、不來回", "Fast mode: the smallest team, one review, no second round"));
+            tail.push(tr!("快速模式:最小團隊、一次審查、不來回", "Fast mode: the smallest team, one review, no second round"));
         }
+        lines.extend(tail.iter().cloned());
         let confirm: &str = if start { tr!("建立並啟動", "Create and start") } else { tr!("建立團隊", "Create team") };
         let knowledge = serde_json::to_value(&items).map_err(|e| e.to_string())?;
         let from = from.map(|(id, _, _)| id).unwrap_or_default();
         let title: String = tr!(format!("新團隊「{}」", draft.name), format!("New team \"{}\"", draft.name));
-        Ok(self.add("team", title, lines, confirm, json!({ "config": config, "start": start, "knowledge": knowledge, "knowledgeFrom": from })))
+        // The card's lines around the members are kept so the members can be changed by hand (revise_team).
+        Ok(self.add("team", title, lines, confirm, json!({ "config": config, "start": start, "knowledge": knowledge, "knowledgeFrom": from, "linesHead": head, "linesTail": tail })))
+    }
+
+    /// The person changed a proposed team's members by hand (the picker on the card):
+    /// `members` are `{agent, name, role, leader}` in their order. A member kept from
+    /// Agent Center's pick (same agent and name) keeps its duty, model, brief and
+    /// skills; a new one runs its agent as set in Agent Pool. The card is redrawn,
+    /// and Agent Center is told, so its next proposal follows the person's taste.
+    pub fn revise_team(&self, id: &str, members: &[Value], office: &Office) -> Result<Proposal, String> {
+        let mut all = self.proposals.lock().unwrap();
+        let p = all.iter_mut().find(|p| p.id == id).ok_or_else(|| -> String { tr!("沒有這張提案卡。", "There is no such proposal.") })?;
+        if p.kind != "team" || p.state != "open" {
+            return Err(tr!("這張卡已經不能改了。", "This card can no longer be changed."));
+        }
+        if members.is_empty() {
+            return Err(tr!("至少要留一位成員。", "Keep at least one member."));
+        }
+        if members.len() > 12 {
+            return Err(tr!("一個團隊最多 12 位成員。", "A team has at most 12 members."));
+        }
+        let old: Vec<Value> = p.payload["config"]["members"].as_array().cloned().unwrap_or_default();
+        let mut list = Vec::new();
+        let mut leader = String::new();
+        for (i, m) in members.iter().enumerate() {
+            let given = s(m, "agent");
+            let agent = office
+                .choices
+                .iter()
+                .find(|c| c.id.eq_ignore_ascii_case(given) || c.name.eq_ignore_ascii_case(given))
+                .ok_or_else(|| -> String { tr!(format!("Agent Pool 裡沒有「{given}」。"), format!("There is no \"{given}\" in Agent Pool.")) })?;
+            let name = text(m, "name").unwrap_or_else(|| agent.name.clone());
+            let kept = old
+                .iter()
+                .find(|o| o["agent"].as_str() == Some(agent.id.as_str()) && o["name"].as_str() == Some(name.as_str()))
+                .or_else(|| old.iter().find(|o| o["agent"].as_str() == Some(agent.id.as_str())))
+                .cloned()
+                .unwrap_or_else(|| json!({}));
+            let id = format!("ai{}", i + 1);
+            if leader.is_empty() && m.get("leader").and_then(Value::as_bool).unwrap_or(false) {
+                leader = id.clone();
+            }
+            list.push(json!({
+                "id": id,
+                "name": name,
+                "role": text(m, "role").or_else(|| text(&kept, "role")).unwrap_or_default(),
+                "duty": text(&kept, "duty").unwrap_or_default(),
+                "agent": agent.id,
+                "model": text(&kept, "model").unwrap_or_default(),
+                "color": COLORS[i % COLORS.len()],
+                "brief": text(&kept, "brief").unwrap_or_default(),
+                "skills": kept.get("skills").cloned().unwrap_or_else(|| json!([])),
+            }));
+        }
+        if leader.is_empty() {
+            leader = "ai1".into();
+        }
+        let leads_as = list.iter().find(|m| m["id"].as_str() == Some(leader.as_str())).and_then(|m| m["agent"].as_str()).unwrap_or("");
+        if office.choices.iter().any(|c| c.id == leads_as && c.protocol == crate::acp::Protocol::N8n) {
+            return Err(tr!("n8n 工作流程不能當 Leader:它只接任務、交結果。請換一位當 Leader。", "An n8n workflow cannot be the leader: it only takes a task and hands back a result. Pick another leader."));
+        }
+        p.payload["config"]["members"] = Value::Array(list);
+        p.payload["config"]["leader"] = Value::String(leader);
+        let draft: TeamConfig = serde_json::from_value(p.payload["config"].clone()).map_err(|e| e.to_string())?;
+        let strings = |v: &Value| v.as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>();
+        let mut lines = strings(&p.payload["linesHead"]);
+        lines.extend(member_lines(&draft));
+        lines.extend(strings(&p.payload["linesTail"]));
+        p.lines = lines;
+        p.picks = picks_of(&p.payload["config"]);
+        let who: Vec<String> = draft.members.iter().map(|m| format!("{}{} ({}, {})", m.name, if m.id == draft.leader { " [leader]" } else { "" }, m.agent, if m.role.is_empty() { "-" } else { &m.role })).collect();
+        // i18n: model-facing
+        self.notes.lock().unwrap().push(format!("[Agent Center] The user changed the members of {} ({}) by hand; it is now: {}. Follow this taste in later proposals.", p.id, p.title, who.join("; ")));
+        Ok(p.clone())
     }
 
     /// The documents a proposal names, checked now so the card is honest:
@@ -973,6 +1033,35 @@ fn civil(z: i64) -> (i64, i64, i64) {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     (yoe + era * 400 + i64::from(m <= 2), m, d)
+}
+
+/// A team card's member lines: one per member, the leader marked.
+fn member_lines(draft: &TeamConfig) -> Vec<String> {
+    draft
+        .members
+        .iter()
+        .map(|m| {
+            let model: String = if m.model.trim().is_empty() { tr!("代理預設", "agent default") } else { m.model.clone() };
+            let lead: &str = if m.id == draft.leader { tr!("(Leader)", " (Leader)") } else { "" };
+            let skills: String = if m.skills.is_empty() { String::new() } else { tr!(format!(" · skill:{}", m.skills.join("、")), format!(" · skills: {}", m.skills.join(", "))) };
+            format!("{}{lead} · {} · {} / {}{}{skills}", m.name, if m.role.is_empty() { "—" } else { &m.role }, m.agent, model, if m.duty.is_empty() { String::new() } else { format!(" — {}", m.duty) })
+        })
+        .collect()
+}
+
+/// A proposed team's members as Agent Pool picks, from its config.
+fn picks_of(config: &Value) -> Vec<Pick> {
+    config["members"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|m| Pick {
+            agent: s(m, "agent").to_string(),
+            name: s(m, "name").to_string(),
+            role: s(m, "role").to_string(),
+            leader: m["id"] == config["leader"],
+        })
+        .collect()
 }
 
 fn s<'a>(v: &'a Value, key: &str) -> &'a str {
@@ -1773,6 +1862,39 @@ mod tests {
         assert!(sec.propose_team(&ask(member(""), json!({})), &office).is_ok());
         assert!(sec.propose_team(&ask(member("claude-opus-5"), json!({})), &office).is_ok());
         assert!(sec.propose_team(&ask(member("claude-sonnet-5"), json!({ "model_change_asked": true })), &office).is_ok());
+    }
+
+    #[test]
+    fn the_person_can_change_a_proposed_team_s_members_by_hand() {
+        let mut planner = crate::acp::AgentProfile::copilot();
+        planner.id = "ta-plan".into();
+        planner.name = "規劃大師".into();
+        planner.protocol = crate::acp::Protocol::Claude;
+        let mut coder = planner.clone();
+        coder.id = "ta-code".into();
+        coder.name = "工程師".into();
+        let driver = Arc::new(crate::acp::Agents::default());
+        let teams = Arc::new(crate::team::orchestrator::Teams::new(Arc::new(crate::team::orchestrator::AcpDrive(driver.clone())), Arc::new(|_| {}), Some(std::env::temp_dir().join(format!("coucou-secretary-revise-{}", std::process::id()))), settings::team_mcp_exe_path()));
+        let mut office = Office::new(teams, &[], driver, 480, String::new());
+        office.choices = vec![planner, coder];
+        let sec = Secretary::default();
+        let ask = json!({ "name": "t", "goal": "g", "work_dir": "D:\\x", "kickoff": "go", "members": [{ "name": "規劃", "role": "規劃", "duty": "plan it", "agent": "ta-plan", "skills": [] }] });
+        let p = sec.propose_team(&ask, &office).unwrap();
+        assert_eq!(p.picks.len(), 1);
+        let revised = sec
+            .revise_team(&p.id, &[json!({ "agent": "ta-code", "name": "工程師", "role": "寫程式", "leader": true }), json!({ "agent": "ta-plan", "name": "規劃", "leader": false })], &office)
+            .unwrap();
+        assert_eq!(revised.picks.len(), 2);
+        assert!(revised.picks[0].leader && revised.picks[0].agent == "ta-code" && !revised.picks[1].leader);
+        let config = &revised.payload["config"];
+        assert_eq!(config["leader"], "ai1");
+        // The kept member keeps what Agent Center gave it; the new one starts plain.
+        assert_eq!(config["members"][1]["duty"], "plan it");
+        assert_eq!(config["members"][1]["role"], "規劃");
+        assert_eq!(config["members"][0]["duty"], "");
+        assert!(revised.lines[0].contains("g") && revised.lines.iter().any(|l| l.starts_with("工程師")) && revised.lines.last().unwrap().contains("go"), "{:?}", revised.lines);
+        assert!(sec.notes.lock().unwrap().last().unwrap().contains("by hand"));
+        assert!(sec.revise_team(&p.id, &[], &office).is_err());
     }
 
     #[test]
