@@ -558,8 +558,8 @@ function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
         "div",
         { class: "row nowrap" },
         dropdown({ value: a.base, choices, placeholder: tr("選擇 設定 → Agent Provider 裡的 Agent…", "Choose an agent from Settings → Agent Provider…"), title: tr("用哪個 Agent 的指令(或 Webhook)、環境變數與金鑰執行", "Whose command (or webhook), environment variables and key it runs with"), onChange: (v) => { a.base = v; host.render(); } }),
-        h("button", { type: "button", class: "btn plain ta-provider-btn", disabled: !base, title: base ? trf("在 設定 → Agent Provider 打開「{name}」", "Open “{name}” in Settings → Agent Provider", { name: base.name }) : tr("先選一個 Provider", "Pick a provider first"), onClick: () => host.openSettings(`agent-profile-${a.base}`) }, tr("✎ 編輯", "✎ Edit")),
-        h("button", { type: "button", class: "btn plain ta-provider-btn", title: tr("到 設定 → Agent Provider 新增一個", "Add one in Settings → Agent Provider"), onClick: () => host.openSettings("agent-add", "add") }, tr("＋ 新增", "+ Add")),
+        h("button", { type: "button", class: "btn plain ta-provider-btn", disabled: !base, title: base ? trf("在 設定 → Agent Provider 打開「{name}」", "Open “{name}” in Settings → Agent Provider", { name: base.name }) : tr("先選一個 Provider", "Pick a provider first"), onClick: () => host.openSettings(`agent-profile-${a.base}`) }, tr("✎ 編輯", "✎ Edit")), // i18n-ok: CSS classes
+        h("button", { type: "button", class: "btn plain ta-provider-btn", title: tr("到 設定 → Agent Provider 新增一個", "Add one in Settings → Agent Provider"), onClick: () => host.openSettings("agent-add", "add") }, tr("＋ 新增", "+ Add")), // i18n-ok: CSS classes
       ),
       h("span", {}),
       h("span", { class: "hint" }, tr("金鑰沿用 Provider 的,不另外存;在設定裡改完,回來這裡會自動更新。", "It uses the provider's key, nothing is stored again; changes made in Settings show up here on their own.")),

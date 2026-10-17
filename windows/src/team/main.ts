@@ -604,7 +604,7 @@ function sidebar(): HTMLElement {
               h("p", { class: "hint", text: tr("你沒指定工作資料夾時,Agent Center 不會再問,直接在這底下開一個以團隊為名的資料夾;你指定的完整路徑照舊。", "When you name no work folder, Agent Center no longer asks: it opens a folder named after the team under this one. A full path you name is used as it is.") }),
               h("label", { text: tr("任務完成速度", "Speed of the work") }),
               h("p", { class: "hint", text: trf("現在是「{level}」。用聊天框旁的 ⚡ 拉桿調整:愈左愈仔細(多一層審查、可以來回),愈右愈快(最小團隊、一次審查、不來回);拉到「快」以上就是強制快速模式。每個團隊的設定頁也能單獨開關快速模式。", "Now \"{level}\". Set it with the ⚡ slider by the chat box: left is thorough (an extra review, work may go back), right is fast (the smallest team, one review, no second round); \"Fast\" and beyond force fast mode. Each team's settings page has its own fast-mode switch too.", { level: speedName(secretarySpeed()) }) }),
-              h("label", { text: "Skills" }),
+              h("label", { text: "Skills" }), // i18n-ok: the same in both
               skillRows(),
               h("div", { class: "side-pop-row" },
                 h("button", { class: "btn plain", type: "button", onClick: () => void Bridge.teamOpenSkills() }, tr("開啟 skill 資料夾", "Open the skills folder")),
@@ -1819,7 +1819,7 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
   const workDir = snap?.workDir ?? editing?.workDir ?? file.config?.workDir ?? "";
   if (workDir) {
     actions.append(
-      h("button", { class: "btn plain folder", type: "button", title: trf("在檔案總管打開工作資料夾\n{dir}", "Open the work folder in Explorer\n{dir}", { dir: workDir }), onClick: () => void Bridge.openFolder(workDir).catch((err) => alert(String(err))) }, tr("📂 資料夾", "📂 Folder")),
+      h("button", { class: "btn plain folder", type: "button", title: trf("在檔案總管打開工作資料夾\n{dir}", "Open the work folder in Explorer\n{dir}", { dir: workDir }), onClick: () => void Bridge.openFolder(workDir).catch((err) => alert(String(err))) }, tr("📂 資料夾", "📂 Folder")), // i18n-ok: CSS classes
     );
   }
   if (snap?.status === "running") {

@@ -317,7 +317,7 @@ export const agentsPage: Page = {
             live().web = v;
             refreshCaps();
           }),
-          abilityChip("Code", x.code, fromKind, "", tr("能在自己的機器上執行指令和程式", "Runs commands and code on its machine"), (v) => {
+          abilityChip("Code", x.code, fromKind, "", tr("能在自己的機器上執行指令和程式", "Runs commands and code on its machine"), (v) => { // i18n-ok: Code is the same in both
             live().code = v;
             refreshCaps();
           }),
