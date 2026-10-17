@@ -171,6 +171,8 @@ pub struct Team {
     show: Show,
     /// Where the teams' knowledge bases are; this team's is `<it>\<id>`.
     knowledge: PathBuf,
+    /// Constitution asks the person waived for this team, shared with every seat's rules.
+    waived: crate::policy::Waived,
 }
 
 /// An earlier run of a team, as the history list shows it.
@@ -583,6 +585,7 @@ impl Team {
                             raw_input: p.raw_input,
                             options: p.options,
                             danger: p.danger,
+                            rule_id: p.rule_id,
                             rule: p.rule,
                         });
                         true
@@ -833,7 +836,7 @@ impl Teams {
     }
 
     /// An agent session per member, each with its own way into the team's tools.
-    fn seats_for(&self, config: &TeamConfig, profiles: &[AgentProfile]) -> Result<(BTreeMap<String, Seat>, BTreeMap<String, String>), String> {
+    fn seats_for(&self, config: &TeamConfig, profiles: &[AgentProfile], waived: &crate::policy::Waived) -> Result<(BTreeMap<String, Seat>, BTreeMap<String, String>), String> {
         let mut seats = BTreeMap::new();
         let mut tokens = BTreeMap::new();
         for member in &config.members {
@@ -867,7 +870,7 @@ impl Teams {
                     if config.agent_folders {
                         also.extend(crate::acp::agent_folder(&profile));
                     }
-                    Scope::new(&config.work_dir).with_also(also)
+                    Scope::new(&config.work_dir).with_also(also).with_waived(waived.clone())
                 }),
                 model: Some(member.model.trim().to_string()).filter(|m| !m.is_empty()),
                 // No team's knowledge base is anybody's to read but for its
@@ -918,7 +921,8 @@ impl Teams {
 
         // Seats first: a team that cannot start (an n8n node as its leader)
         // keeps the log of its last run.
-        let (seats, tokens) = self.seats_for(&config, profiles)?;
+        let waived = crate::policy::Waived::default();
+        let (seats, tokens) = self.seats_for(&config, profiles, &waived)?;
 
         let store = match &self.root {
             Some(root) => Store::fresh(&root.join(&config.id)).map_err(|e| -> String { tr!(format!("無法開啟團隊的紀錄:{e}"), format!("Could not open the team's log: {e}")) })?,
@@ -941,6 +945,7 @@ impl Teams {
             emit: self.emit.clone(),
             show: self.show.clone(),
             knowledge: self.knowledge.clone(),
+            waived,
         });
         {
             let mut store = team.store.lock().unwrap();
@@ -972,7 +977,8 @@ impl Teams {
         if !problems.is_empty() {
             return Err(problems.join("\n"));
         }
-        let (seats, tokens) = self.seats_for(&config, profiles)?;
+        let waived = crate::policy::Waived::from_iter(old.with_state(|s| s.waived.iter().cloned().collect::<Vec<_>>()));
+        let (seats, tokens) = self.seats_for(&config, profiles, &waived)?;
         let store = std::mem::replace(&mut *old.store.lock().unwrap(), Store::memory());
         let team = Arc::new(Team {
             id: id.to_string(),
@@ -990,6 +996,7 @@ impl Teams {
             emit: self.emit.clone(),
             show: self.show.clone(),
             knowledge: self.knowledge.clone(),
+            waived,
         });
         {
             let mut store = team.store.lock().unwrap();
@@ -1051,7 +1058,7 @@ impl Teams {
         // Their seats are made exactly as at the start, from the running setup.
         let mut theirs = config.clone();
         theirs.members = new.clone();
-        let (seats, tokens) = self.seats_for(&theirs, profiles)?;
+        let (seats, tokens) = self.seats_for(&theirs, profiles, &team.waived)?;
         team.seats.lock().unwrap().extend(seats);
         team.tokens.lock().unwrap().extend(tokens);
         {
@@ -1078,6 +1085,7 @@ impl Teams {
             return team.snapshot();
         }
         let store = Store::open(&self.root.as_ref()?.join(id)).ok()?;
+        let waived = crate::policy::Waived::from_iter(store.state().waived.iter().cloned());
         let team = Arc::new(Team {
             id: id.to_string(),
             store: Mutex::new(store),
@@ -1094,6 +1102,7 @@ impl Teams {
             emit: self.emit.clone(),
             show: self.show.clone(),
             knowledge: self.knowledge.clone(),
+            waived,
         });
         let snapshot = team.snapshot()?;
         self.teams.lock().unwrap().insert(id.to_string(), team);
@@ -1219,7 +1228,8 @@ impl Teams {
         if !problems.is_empty() {
             return Err(problems.join("\n"));
         }
-        let (seats, tokens) = self.seats_for(&config, profiles)?;
+        let waived = old.waived.clone();
+        let (seats, tokens) = self.seats_for(&config, profiles, &waived)?;
         let store = std::mem::replace(&mut *old.store.lock().unwrap(), Store::memory());
         let requests = std::mem::take(&mut *old.requests.lock().unwrap());
         let team = Arc::new(Team {
@@ -1238,6 +1248,7 @@ impl Teams {
             emit: self.emit.clone(),
             show: self.show.clone(),
             knowledge: self.knowledge.clone(),
+            waived,
         });
         let message = {
             let mut store = team.store.lock().unwrap();
@@ -1307,14 +1318,36 @@ impl Teams {
     /// or, with `all`, every one it holds, each with its own option of the
     /// same kind (allow once, reject once) as the one chosen.
     pub async fn permit(&self, team: &str, member: &str, option_id: Option<String>, all: bool) -> Result<(), String> {
+        self.permit_remembering(team, member, option_id, all, false).await
+    }
+
+    /// `remember`: the check behind the first card is waived for the whole
+    /// team from now on (Event::Waived), and every card of this member that
+    /// asks the same is answered with it.
+    pub async fn permit_remembering(&self, team: &str, member: &str, option_id: Option<String>, all: bool, remember: bool) -> Result<(), String> {
         let team = self.team(team)?;
         let key = team.seat(member).map(|s| s.key).ok_or("That is not a member of the team.")?; // i18n-ok: said() in team/main.ts translates it
         let requests: Vec<PermissionView> = {
             let mut live = team.live.lock().unwrap();
             let held = live.get_mut(member).map(|l| &mut l.permissions).filter(|p| !p.is_empty());
             let held = held.ok_or_else(|| -> String { tr!("這位成員沒有在等權限。", "That member is not waiting for a permission.") })?;
-            if all { std::mem::take(held) } else { vec![held.remove(0)] }
+            let waive = remember.then(|| held[0].rule_id.clone()).flatten();
+            match waive {
+                Some(rule) => {
+                    team.waived.add(&rule);
+                    let (same, rest): (Vec<PermissionView>, Vec<PermissionView>) = std::mem::take(held).into_iter().partition(|p| p.rule_id.as_deref() == Some(rule.as_str()));
+                    *held = rest;
+                    same
+                }
+                None if all => std::mem::take(held),
+                None => vec![held.remove(0)],
+            }
         };
+        if remember {
+            if let Some(rule) = requests[0].rule_id.clone() {
+                team.record(vec![Event::Waived { rule, by: "you".into() }]);
+            }
+        }
         let option_of = |r: &PermissionView, id: &str| r.options.iter().find(|o| o.get("optionId").and_then(Value::as_str) == Some(id)).cloned();
         let kind = option_id.as_deref().and_then(|id| option_of(&requests[0], id)).and_then(|o| o.get("kind").and_then(Value::as_str).map(str::to_string));
         let mut result = Ok(());
@@ -1339,6 +1372,24 @@ impl Teams {
         result
     }
 
+    /// Waives, or takes back, one of the constitution's asks for this team (its setup page).
+    pub fn waive(&self, team: &str, rule: &str, on: bool) -> Result<(), String> {
+        let team = self.team(team)?;
+        let rule = rule.trim();
+        if rule.is_empty() {
+            return Err("Which rule?".into()); // i18n-ok: said() in team/main.ts translates it
+        }
+        if on {
+            team.waived.add(rule);
+            team.record(vec![Event::Waived { rule: rule.to_string(), by: "you".into() }]);
+        } else {
+            team.waived.remove(rule);
+            team.record(vec![Event::Unwaived { rule: rule.to_string(), by: "you".into() }]);
+        }
+        team.changed();
+        Ok(())
+    }
+
     /// An agent's hook asks before a step (agy, whose headless mode cannot
     /// ask anyone): the rules answer what is safe at once; anything else
     /// becomes a card like every other agent's and waits for the person.
@@ -1360,7 +1411,7 @@ impl Teams {
             return deny(crate::policy::PRIVATE_REFUSAL);
         }
         // The constitution first: refused here, or asked for whatever the rules say.
-        let ruled = crate::constitution::rule_for(&asked, &work_dir);
+        let ruled = crate::constitution::rule_for_in(&asked, &work_dir, seat.launch.auto.as_ref());
         if let Some((crate::constitution::Level::Never, rule)) = &ruled {
             let (title, _) = crate::agy::title_of(tool, args);
             log::line(format!("team {}: {member} {tool} refused by the constitution — {}", team.id, rule.text));
@@ -1368,6 +1419,7 @@ impl Teams {
             team.record(vec![Event::Message { id, from: SYSTEM.into(), to: member.to_string(), text: brief::refused(&title, &rule.text), task: None }]);
             return deny(&format!("Refused by the user's constitution: {}. Do not try this again.", rule.text));
         }
+        let mut rule_id = ruled.as_ref().map(|(_, r)| r.id.clone());
         let rule = ruled.map(|(_, r)| r.text);
         let verdict = seat.launch.auto.as_ref().filter(|_| rule.is_none()).map(|scope| crate::policy::decide(scope, &asked));
         if verdict == Some(crate::policy::Verdict::Allow) {
@@ -1377,6 +1429,7 @@ impl Teams {
             Some(crate::policy::Verdict::Ask(why)) => Some(why),
             _ => None,
         };
+        rule_id = rule_id.or_else(|| danger.and_then(crate::policy::check_of).map(str::to_string));
         let (title, kind) = crate::agy::title_of(tool, args);
         log::line(format!("team {}: {member} {tool} waits for a person — {danger:?}", team.id));
         let id = format!("gate:{}:{}", member, token_short());
@@ -1399,6 +1452,7 @@ impl Teams {
                 serde_json::json!({ "optionId": "deny", "name": "Deny", "kind": "reject_once" }),
             ],
             danger,
+            rule_id,
             rule,
         });
         team.changed();
@@ -1616,6 +1670,7 @@ mod tests {
                             json!({ "optionId": format!("no{i}"), "name": "Reject", "kind": "reject_once" }),
                         ],
                         danger: Some(crate::policy::Danger::DeletesFolder),
+                        rule_id: Some("download".into()),
                         rule: None,
                     }));
                 }
@@ -2334,6 +2389,34 @@ mod tests {
             let answered: Vec<Option<String>> = bench.drive.answered.lock().unwrap().iter().map(|(_, o)| o.clone()).collect();
             assert_eq!(answered, vec![Some("yes0".to_string()), Some("no1".to_string()), Some("no2".to_string())]);
             assert_eq!(bench.member("ai1").status, MemberStatus::Working);
+            bench.drive.hold.notify_one();
+        });
+    }
+
+    /// "Allow this for the whole team": the check is waived for every seat
+    /// from now on, every card asking the same is answered, and the setup
+    /// page can take it back.
+    #[test]
+    fn a_waiver_answers_every_card_of_its_kind_and_holds_for_the_team() {
+        run(async {
+            let bench = bench(diligent());
+            bench.drive.held.lock().unwrap().push("ai1".into());
+            bench.drive.asks.lock().unwrap().extend(["ai1".to_string(), "ai1".to_string()]);
+            bench.start(shop(&work_dir()));
+            bench.until("both are held", |s| s.members[0].permission.is_some() && s.members[0].more_permissions.len() == 1).await;
+            assert_eq!(bench.member("ai1").permission.unwrap().rule_id.as_deref(), Some("download"));
+
+            bench.teams.permit_remembering("shop", "ai1", Some("yes0".into()), false, true).await.unwrap();
+            let answered: Vec<Option<String>> = bench.drive.answered.lock().unwrap().iter().map(|(_, o)| o.clone()).collect();
+            assert_eq!(answered, vec![Some("yes0".to_string()), Some("yes1".to_string())]);
+            assert_eq!(bench.member("ai1").status, MemberStatus::Working);
+            let team = bench.teams.team("shop").unwrap();
+            assert_eq!(bench.snap().waived, vec!["download".to_string()]);
+            assert!(team.seats.lock().unwrap()["ai1"].launch.auto.as_ref().unwrap().waived.contains("download"));
+
+            bench.teams.waive("shop", "download", false).unwrap();
+            assert!(bench.snap().waived.is_empty());
+            assert!(!team.seats.lock().unwrap()["ai1"].launch.auto.as_ref().unwrap().waived.contains("download"));
             bench.drive.hold.notify_one();
         });
     }

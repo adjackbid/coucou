@@ -286,8 +286,10 @@ export const Bridge = {
    * Answers the oldest request a member's agent is holding with one of its own
    * options — or, with `all`, every request it holds, each the same way.
    */
-  teamPermit: (team: string, member: string, optionId: string | null, all = false) =>
-    callOrThrow<void>("team_permit", { team, member, optionId, all }),
+  teamPermit: (team: string, member: string, optionId: string | null, all = false, remember = false) =>
+    callOrThrow<void>("team_permit", { team, member, optionId, all, remember }),
+  /** Waives (on) or takes back one of the constitution's asks for a running team. */
+  teamWaive: (team: string, rule: string, on: boolean) => callOrThrow<void>("team_waive", { team, rule, on }),
   teamPause: (team: string) => callOrThrow<void>("team_pause", { team }),
   /** Ends the team now, done or not: every member's agent stops. */
   teamEnd: (team: string) => callOrThrow<void>("team_end", { team }),

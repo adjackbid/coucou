@@ -311,13 +311,14 @@ pub async fn dispatch(route: &Route, state: &ClaudeState, msg: Value) {
                 return;
             }
             // The constitution first: refused here, or asked for whatever the rules say.
-            let ruled = crate::constitution::rule_for(&asked, &route.work_dir);
+            let ruled = crate::constitution::rule_for_in(&asked, &route.work_dir, route.auto.as_ref());
             if let Some((crate::constitution::Level::Never, rule)) = &ruled {
                 log::line(format!("claude {key}: {tool} refused by the constitution — {}", rule.text));
                 let _ = acp::write_line(&route.writer, &refusal_reply(state, &id, &rule.text)).await;
                 (route.sink)(Event::Refused(acp::Refusal { agent_id: key.clone(), title, rule: rule.text.clone() }));
                 return;
             }
+            let mut rule_id = ruled.as_ref().map(|(_, r)| r.id.clone());
             let rule = ruled.map(|(_, r)| r.text);
             let mut danger = None;
             if let Some(scope) = route.auto.as_ref().filter(|_| rule.is_none()) {
@@ -331,6 +332,7 @@ pub async fn dispatch(route: &Route, state: &ClaudeState, msg: Value) {
                     Verdict::Ask(why) => {
                         log::line(format!("claude {key}: {tool} waits for a person — {why:?}"));
                         danger = Some(why);
+                        rule_id = rule_id.or_else(|| policy::check_of(why).map(str::to_string));
                     }
                 }
             } else {
@@ -344,6 +346,7 @@ pub async fn dispatch(route: &Route, state: &ClaudeState, msg: Value) {
                 raw_input: input,
                 options: options(),
                 danger,
+                rule_id,
                 rule,
             }));
         }

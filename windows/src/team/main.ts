@@ -215,6 +215,32 @@ function endButton(snap: Snapshot): HTMLElement {
 }
 
 /** Why a step waits for approval, after "Needs your approval:". */
+/** What a waived constitution check is about (one of Coucou's checks by id; a rule of the person's own by its id). */
+function waivedLabel(rule: string): string {
+  const labels: Record<string, string> = {
+    install: tr("安裝軟體或套件", "installing software or packages"),
+    download: tr("從網路下載檔案", "downloading files from the internet"),
+    "git-destructive": tr("會丟掉變更的 git 指令", "git commands that throw changes away"),
+    "send-out": tr("對外發送或發布", "sending or publishing outside"),
+    system: tr("變更系統", "changing the system"),
+  };
+  return labels[rule] ?? rule;
+}
+
+/** The constitution asks the person waived for this team ("allow for this team" on a card), each with a way back. */
+function waivedRules(team: string, waived: string[]): HTMLElement {
+  return h(
+    "div",
+    { class: "trusted" },
+    h("label", { text: tr("這個團隊不再問的事", "Not asked again in this team") }),
+    ...waived.map((rule) =>
+      h("div", { class: "row nowrap" },
+        h("span", { text: waivedLabel(rule) }),
+        h("button", { class: "link", type: "button", onClick: () => void act(() => Bridge.teamWaive(team, rule, false)) }, tr("改回要問", "Ask again")))),
+    h("p", { class: "hint", text: tr("你在批准卡上按了「這個團隊都允許」。只對這個團隊有效,憲法本身沒有改;團隊重新啟動後仍然記得。", "You pressed \"Allow for this team\" on a card. It holds for this team only and leaves the constitution as it is; the team remembers it when started again.") }),
+  );
+}
+
 function dangerLabel(d: Danger): string {
   const labels: Record<Danger, string> = {
     "deletes-folder": tr("會刪除資料夾", "it deletes a folder"),
@@ -1011,6 +1037,7 @@ function setup(file: TeamFile): HTMLElement {
         : tr("成員的每一個權限請求都會問你。", "You're asked about every permission request a member makes."),
     }),
     config.autoApprove ? trustedFolders(config) : null,
+    config.autoApprove && run && run.waived?.length ? waivedRules(config.id, run.waived) : null,
     h("label", { text: tr("辦公室風格", "Office style") }),
     h(
       "div",
@@ -1379,6 +1406,7 @@ function asks(snap: Snapshot, m: MemberView): HTMLElement[] {
           { class: "row" },
           button(tr("允許這一次", "Allow once"), "primary", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null)), !allow),
           button(tr("拒絕", "Deny"), "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null))),
+          p.ruleId && allow ? button(tr("這個團隊都允許", "Allow for this team"), "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow.optionId, false, true))) : null,
           more.length ? button(trf("全部允許({n})", "Allow all ({n})", { n: more.length + 1 }), "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null, true)), !allow) : null,
           more.length ? button(tr("全部拒絕", "Deny all"), "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null, true))) : null,
         ),

@@ -698,8 +698,14 @@ fn team_answer(teams: State<Arc<Teams>>, team: String, question: String, text: S
 /// The person's answer to the card a member's agent is holding: one of the
 /// agent's own options, or nothing for "cancelled".
 #[tauri::command]
-async fn team_permit(teams: State<'_, Arc<Teams>>, team: String, member: String, option_id: Option<String>, all: Option<bool>) -> Result<(), String> {
-    teams.permit(&team, &member, option_id, all.unwrap_or(false)).await
+async fn team_permit(teams: State<'_, Arc<Teams>>, team: String, member: String, option_id: Option<String>, all: Option<bool>, remember: Option<bool>) -> Result<(), String> {
+    teams.permit_remembering(&team, &member, option_id, all.unwrap_or(false), remember.unwrap_or(false)).await
+}
+
+/// Waives, or takes back, one of the constitution's asks for a running team.
+#[tauri::command]
+fn team_waive(teams: State<Arc<Teams>>, team: String, rule: String, on: bool) -> Result<(), String> {
+    teams.waive(&team, &rule, on)
 }
 
 #[tauri::command]
@@ -2071,6 +2077,7 @@ pub fn run() {
             team_attach_path,
             team_answer,
             team_permit,
+            team_waive,
             team_pause,
             team_end,
             team_resume,

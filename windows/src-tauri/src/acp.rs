@@ -323,6 +323,10 @@ pub struct AcpPermission {
     /// Why the session's rules would not answer this themselves.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub danger: Option<Danger>,
+    /// The check behind the card (a constitution rule's id, or the danger's
+    /// check): what "allow this for the whole team" waives. None: nothing to waive.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rule_id: Option<String>,
     /// The constitution's rule that asks the person about it, when one does.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rule: Option<String>,
@@ -1094,7 +1098,7 @@ async fn dispatch(route: &Route, msg: Value) {
                         let _ = write_line(&route.writer, &permission_reply(&id, refuse.as_deref())).await;
                         return;
                     }
-                    let ruled = crate::constitution::rule_for(&asked, &route.work_dir);
+                    let ruled = crate::constitution::rule_for_in(&asked, &route.work_dir, route.auto.as_ref());
                     if let Some((crate::constitution::Level::Never, rule)) = &ruled {
                         log::line(format!("acp {key}: {kind} refused by the constitution — {}", rule.text));
                         let refuse = option_of(&options, &["reject_once", "reject_always"]);
@@ -1102,6 +1106,7 @@ async fn dispatch(route: &Route, msg: Value) {
                         (route.sink)(Event::Refused(Refusal { agent_id: key.clone(), title, rule: rule.text.clone() }));
                         return;
                     }
+                    let mut rule_id = ruled.as_ref().map(|(_, r)| r.id.clone());
                     let rule = ruled.map(|(_, r)| r.text);
                     // Then the session's rules. Allowed once, never "always":
                     // the next request is judged on its own.
@@ -1126,6 +1131,7 @@ async fn dispatch(route: &Route, msg: Value) {
                             Verdict::Ask(why) => {
                                 log::line(format!("acp {key}: {kind} waits for a person — {why:?} (input: {fields:?})"));
                                 danger = Some(why);
+                                rule_id = rule_id.or_else(|| policy::check_of(why).map(str::to_string));
                             }
                         }
                     } else {
@@ -1140,6 +1146,7 @@ async fn dispatch(route: &Route, msg: Value) {
                         raw_input: tool.get("rawInput").cloned().unwrap_or(Value::Null),
                         options,
                         danger,
+                        rule_id,
                         rule,
                     }));
                 }

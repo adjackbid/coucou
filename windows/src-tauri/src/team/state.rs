@@ -71,6 +71,11 @@ pub enum Event {
     /// skills it named, as text). Read with the member's role at its first
     /// turn; a member already at work hears it as a message too.
     Briefed { member: String, text: String, by: String },
+    /// The person waived one of the constitution's asks for this team
+    /// ("allow this for the whole team" on a card): `rule` is the rule's id.
+    Waived { rule: String, by: String },
+    /// The person took a waiver back (the team's setup).
+    Unwaived { rule: String, by: String },
     /// `checked` are the criteria the owner says are met (indexes from 0).
     TaskUpdated { id: String, status: Option<TaskStatus>, note: Option<String>, checked: Vec<usize>, by: String },
     TaskBlocked { id: String, reason: String, on: String, by: String },
@@ -248,6 +253,8 @@ pub struct State {
     pub total_turns: u32,
     /// What the leader told each member to keep (`brief_member`), in order.
     pub briefs: BTreeMap<String, Vec<String>>,
+    /// Constitution asks the person waived for this team, by rule id.
+    pub waived: std::collections::BTreeSet<String>,
 }
 
 impl State {
@@ -427,6 +434,12 @@ impl State {
             Event::Briefed { member, text, by } => {
                 self.briefs.entry(member.clone()).or_default().push(text.clone());
                 self.moved(by);
+            }
+            Event::Waived { rule, .. } => {
+                self.waived.insert(rule.clone());
+            }
+            Event::Unwaived { rule, .. } => {
+                self.waived.remove(rule);
             }
             Event::TaskUpdated { id, status, note, checked, by } => {
                 if let Some(t) = self.task_mut(id) {
@@ -663,6 +676,9 @@ pub struct PermissionView {
     pub raw_input: Value,
     pub options: Vec<Value>,
     pub danger: Option<Danger>,
+    /// The check "allow this for the whole team" would waive: a rule's id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rule_id: Option<String>,
     /// The constitution's rule that asks about it, when one does.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rule: Option<String>,
@@ -744,6 +760,8 @@ pub struct Snapshot {
     pub messages: Vec<Message>,
     pub questions: Vec<Question>,
     pub feed: Vec<FeedItem>,
+    /// Constitution asks the person waived for this team, by rule id.
+    pub waived: Vec<String>,
 }
 
 impl State {
@@ -867,6 +885,7 @@ impl State {
             messages: self.messages.clone(),
             questions: self.questions.clone(),
             feed: self.feed.clone(),
+            waived: self.waived.iter().cloned().collect(),
         })
     }
 }

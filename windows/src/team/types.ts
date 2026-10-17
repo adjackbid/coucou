@@ -76,6 +76,8 @@ export interface Permission {
   rawInput: unknown;
   options: { optionId: string; name: string; kind: string }[];
   danger: Danger | null;
+  /** The check "allow this for the whole team" would waive: a constitution rule's id. */
+  ruleId?: string;
   /** The constitution's rule that asks about it, when one does. */
   rule?: string;
 }
@@ -246,6 +248,8 @@ export interface Snapshot {
   messages: Message[];
   questions: Question[];
   feed: FeedItem[];
+  /** Constitution asks the person waived for this team, by rule id. */
+  waived?: string[];
 }
 
 // ── Usage and cost — mirrors of usage::Usage, pricing.rs and cost.rs ──────────
