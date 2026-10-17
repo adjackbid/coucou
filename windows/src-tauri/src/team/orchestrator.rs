@@ -467,10 +467,12 @@ impl Team {
             } else if first {
                 // A team agent's words that have no other way in (team_agents.rs).
                 let own = self.seat(&member.id).map(|s| crate::team_agents::brief_text(&s.profile)).unwrap_or_default();
+                // What the leader gave it to keep (`brief_member`).
+                let from_leader = brief::briefs(state, &member.id);
                 // The documents it may read, as the knowledge base is now.
                 let docs = knowledge::brief_text(&self.kb(), member.id == config.leader);
                 // Last, the language the person reads the team in.
-                format!("{}{own}{docs}\n{}\n\n", brief::role(&config, &member.id), crate::i18n::reply_language())
+                format!("{}{own}{from_leader}{docs}\n{}\n\n", brief::role(&config, &member.id), crate::i18n::reply_language())
             } else {
                 String::new()
             };

@@ -171,6 +171,39 @@ pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Out
             Ok(Outcome { text: format!("{} is now reviewed by {who}. They are told when it is handed in.", task.id), events })
         }
 
+        "brief_member" => {
+            if !is_leader {
+                return Err("Only the leader briefs members.".into());
+            }
+            let given = need(args, "member")?;
+            let to = member_id(config, &given).ok_or_else(|| format!("'{given}' is not a member. Members: {}.", members_line(config)))?;
+            if to == member {
+                return Err("Brief a teammate, not yourself.".into());
+            }
+            let skills = list(args, "skills");
+            let mut body = text(args, "text").unwrap_or_default();
+            if !skills.is_empty() {
+                // The one place a tool reads the disk besides the delivery check: the skill texts.
+                let lines = crate::team_agents::skill_text(&skills);
+                if !body.is_empty() {
+                    body.push_str("\n\n");
+                }
+                body.push_str(lines.trim_end());
+            }
+            if body.trim().is_empty() {
+                return Err("Give `text`, `skills`, or both.".into());
+            }
+            let mut events = vec![Event::Briefed { member: to.clone(), text: body.clone(), by: member.to_string() }];
+            // Not yet at work: it reads this with its role. At work already:
+            // it hears it at its next turn, like any message.
+            let started = state.turns.get(&to).map(|t| t.count > 0).unwrap_or(false);
+            if started {
+                events.push(message(&mut ids, member, &to, brief::briefed(&body), None));
+            }
+            let when = if started { "They read it at the start of their next turn." } else { "They read it with their role when they start." };
+            Ok(Outcome { text: format!("{} briefed. {when}", brief::who(config, &to)), events })
+        }
+
         "team_finish" => {
             if !is_leader {
                 return Err("Only the leader closes the team. Tell the leader with `message_send` that your part is done.".into());
@@ -559,6 +592,16 @@ pub fn describe(config: &TeamConfig, member: &str) -> Vec<Value> {
             &["task", "reviewer"],
         ));
         tools.push(tool(
+            "brief_member",
+            "Leader only. Gives a teammate instructions to keep throughout their work, and/or skills from Agent Center's library (by name) whose text they then get. Before their first turn it comes with their role; later it reaches them as a message.",
+            json!({
+                "member": { "type": "string", "description": format!("One of: {members}.") },
+                "text": { "type": "string", "description": "Rules, conventions or a way of working for this member." },
+                "skills": { "type": "array", "items": { "type": "string" }, "description": "Names of skills from the library listed in your brief, or paths to a SKILL.md." },
+            }),
+            &["member"],
+        ));
+        tools.push(tool(
             "knowledge_share",
             "Leader only. Shares a leader-only document of the knowledge base with the whole team. Only when the user has asked you to share that document; Agent Center checks that they did.",
             json!({ "doc": { "type": "string", "description": "The document's id (from knowledge_read) or its file name." } }),
@@ -857,6 +900,27 @@ mod tests {
     }
 
     #[test]
+    fn the_leader_briefs_a_teammate_with_its_role_or_by_message_once_at_work() {
+        let mut run = Run::new("brief");
+        plan(&mut run);
+        assert!(run.call("ai3", "brief_member", json!({ "member": "ai4", "text": "x" })).is_err());
+        assert!(run.call("ai1", "brief_member", json!({ "member": "ai4" })).is_err());
+        // Before its first turn: kept for its role, not a message.
+        run.ok("ai1", "brief_member", json!({ "member": "ai4", "text": "只附實際打開過的連結" }));
+        assert!(brief::briefs(run.store.state(), "ai4").contains("只附實際打開過的連結"));
+        assert!(!run.inbox("ai4").contains("只附實際打開過的連結"));
+        // At work already: a message too, so it is not missed.
+        run.store.append(Event::TurnStarted { member: "ai4".into() });
+        run.store.append(Event::TurnEnded { member: "ai4".into(), ok: true, outcome: "end_turn".into() });
+        run.ok("ai1", "brief_member", json!({ "member": "ai4", "text": "每筆附日期" }));
+        assert!(run.inbox("ai4").contains("每筆附日期"), "{}", run.inbox("ai4"));
+        assert_eq!(run.store.state().briefs.get("ai4").map(Vec::len), Some(2));
+        // A skill nobody has is still named, so the member can look for it.
+        run.ok("ai1", "brief_member", json!({ "member": "ai3", "skills": ["no-such-skill-xyz"] }));
+        assert!(brief::briefs(run.store.state(), "ai3").contains("no-such-skill-xyz"));
+    }
+
+    #[test]
     fn the_leader_s_own_work_needs_no_reviewer() {
         let mut run = Run::new("own");
         run.ok("ai1", "task_create", json!({ "title": "需求拆解", "owner": "ai1" }));
@@ -913,7 +977,7 @@ mod tests {
         let names = |member: &str| describe(&config, member).iter().map(|t| t["name"].as_str().unwrap().to_string()).collect::<Vec<_>>();
         assert_eq!(
             names("ai1"),
-            ["team_status", "task_create", "task_assign", "set_reviewer", "knowledge_share", "team_finish", "task_update", "task_block", "deliver", "review", "message_send", "knowledge_read", "ask_human"]
+            ["team_status", "task_create", "task_assign", "set_reviewer", "brief_member", "knowledge_share", "team_finish", "task_update", "task_block", "deliver", "review", "message_send", "knowledge_read", "ask_human"]
         );
         assert_eq!(names("ai3"), ["team_status", "task_update", "task_block", "deliver", "review", "message_send", "knowledge_read", "ask_human"]);
         for tool in describe(&config, "ai1") {

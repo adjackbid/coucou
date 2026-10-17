@@ -249,13 +249,82 @@ fn profile_of(a: &TeamAgent, natives: &[AgentProfile]) -> Option<AgentProfile> {
     Some(p)
 }
 
-/// Where a skill named only by its name lives, if it is in one of the usual places.
+/// Where a skill named only by its name lives, if it is in Agent Center's
+/// library or one of the usual places.
 fn find_skill(name: &str) -> Option<PathBuf> {
-    let home = PathBuf::from(std::env::var_os("USERPROFILE")?);
-    [home.join(".claude").join("skills"), home.join(".codex").join("skills"), home.join(".agents").join("skills"), home.join(".copilot").join("skills")]
-        .into_iter()
-        .map(|d| d.join(name))
-        .find(|d| d.join("SKILL.md").is_file())
+    let mut dirs = vec![crate::settings::team_skills_dir()];
+    if let Some(home) = std::env::var_os("USERPROFILE").map(PathBuf::from) {
+        dirs.extend([home.join(".claude").join("skills"), home.join(".codex").join("skills"), home.join(".agents").join("skills"), home.join(".copilot").join("skills")]);
+    }
+    dirs.into_iter().map(|d| d.join(name)).find(|d| d.join("SKILL.md").is_file())
+}
+
+/// A skill in Agent Center's library (settings::team_skills_dir).
+#[derive(Debug, Clone)]
+pub struct LibrarySkill {
+    pub name: String,
+    /// The `description:` of its front matter, or nothing.
+    pub description: String,
+    pub path: PathBuf,
+}
+
+/// The library, by name: `<name>/SKILL.md` folders and `<name>.md` files.
+pub fn library() -> Vec<LibrarySkill> {
+    let Ok(entries) = std::fs::read_dir(crate::settings::team_skills_dir()) else { return Vec::new() };
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let p = entry.path();
+        let (name, md) = if p.is_dir() && p.join("SKILL.md").is_file() {
+            (entry.file_name().to_string_lossy().to_string(), p.join("SKILL.md"))
+        } else if p.is_file() && p.extension().is_some_and(|x| x.eq_ignore_ascii_case("md")) {
+            (p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default(), p.clone())
+        } else {
+            continue;
+        };
+        if name.is_empty() {
+            continue;
+        }
+        out.push(LibrarySkill { description: skill_description(&md).unwrap_or_default(), name, path: md });
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+/// Characters of a skill a member is given in its brief.
+const SKILL_TEXT_MAX: usize = 16_000;
+
+/// What a member is given for the skills its leader named (`brief_member`):
+/// a library skill's own text, so every vendor's CLI gets it without
+/// reading a file outside the work folder; a skill elsewhere by its path.
+// i18n: model-facing
+pub fn skill_text(names: &[String]) -> String {
+    let lib = library();
+    let mut out = String::new();
+    for s in names {
+        let p = PathBuf::from(s);
+        let md = if p.is_absolute() {
+            Some(if p.is_dir() { p.join("SKILL.md") } else { p })
+        } else if let Some(l) = lib.iter().find(|l| l.name.eq_ignore_ascii_case(s)) {
+            Some(l.path.clone())
+        } else {
+            find_skill(s).map(|d| d.join("SKILL.md"))
+        };
+        let Some(md) = md.filter(|m| m.is_file()) else {
+            out.push_str(&format!("- {s}: a skill you may already have under this name; use it when it fits.\n"));
+            continue;
+        };
+        match std::fs::read_to_string(&md) {
+            Ok(text) => {
+                let body = text.trim_start_matches('\u{feff}');
+                // The front matter is for Agent Center; the member gets the instructions.
+                let body = body.strip_prefix("---").and_then(|b| b.find("\n---").map(|i| &b[i + 4..])).unwrap_or(body).trim();
+                let body: String = body.chars().take(SKILL_TEXT_MAX).collect();
+                out.push_str(&format!("\n### Skill: {s}\n{body}\n"));
+            }
+            Err(_) => out.push_str(&format!("- {s}: read {} and follow it.\n", md.display())),
+        }
+    }
+    out
 }
 
 /// The `description:` of a SKILL.md's front matter.

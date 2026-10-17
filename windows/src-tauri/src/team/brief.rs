@@ -91,6 +91,13 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
              - Review against the criteria you wrote. Send back once with every fix listed; accepted is final, no follow-up checks by message. If a task comes back a second time, move it with `task_assign` or do it yourself. Spot-check two or three items rather than redoing a member's work.\n\
              - A member out of quota, missing a tool, or blocked for more than a turn: move its remaining work with `task_assign` at once.\n",
         );
+        let library = crate::team_agents::library();
+        if !library.is_empty() {
+            out.push_str("\nSkills in Agent Center's library. Hand one to a teammate with `brief_member` (skills: [name]) when it fits their task; they get its text with their role:\n");
+            for s in &library {
+                out.push_str(&format!("- {}{}\n", s.name, if s.description.is_empty() { String::new() } else { format!(": {}", s.description) }));
+            }
+        }
     } else {
         out.push_str("- The leader hands out tasks. You are told when one is yours and ready; until then there is nothing to do.\n");
     }
@@ -104,6 +111,23 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
          - Write notes, messages and summaries in the language named on the last line of this brief.\n",
     );
     out
+}
+
+/// What the leader gave a member to keep (`brief_member`), as a message to
+/// one already at work.
+// i18n: model-facing
+pub fn briefed(text: &str) -> String {
+    format!("From the leader, to keep throughout your work:\n{text}")
+}
+
+/// Everything the leader gave a member to keep, for its first-turn brief;
+/// nothing when there is none.
+// i18n: model-facing
+pub fn briefs(state: &State, member: &str) -> String {
+    match state.briefs.get(member).filter(|b| !b.is_empty()) {
+        Some(items) => format!("\nFrom the leader, to keep throughout your work:\n{}\n", items.join("\n\n")),
+        None => String::new(),
+    }
 }
 
 /// Appended to a tool result when messages arrived during the turn.

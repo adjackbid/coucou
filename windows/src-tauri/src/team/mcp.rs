@@ -233,7 +233,7 @@ mod tests {
             assert!(answer(&teams, &leader, r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#).is_none());
 
             let list = ask(&leader, json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }));
-            assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 12);
+            assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 14);
             // The knowledge base is read through the same server.
             let docs = ask(&leader, json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": "knowledge_read", "arguments": {} } }));
             assert_eq!(docs["result"]["isError"], false);

@@ -295,6 +295,13 @@ pub fn team_logs_dir() -> PathBuf {
     local_dir().join("teams")
 }
 
+/// %APPDATA%\Coucou\skills — the library a leader hands out to its team
+/// (`brief_member`): one folder per skill holding a SKILL.md, or one
+/// `<name>.md`, written by the person.
+pub fn team_skills_dir() -> PathBuf {
+    config_dir().join("skills")
+}
+
 fn settings_path() -> PathBuf {
     config_dir().join("settings.json")
 }

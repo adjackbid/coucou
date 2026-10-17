@@ -67,6 +67,10 @@ pub enum Event {
     /// The leader named who accepts a task (`None` goes back to the rule:
     /// the leader, or whoever receives the leader's own work).
     ReviewerSet { id: String, reviewer: Option<String>, by: String },
+    /// The leader gave a member words to keep throughout its work (and the
+    /// skills it named, as text). Read with the member's role at its first
+    /// turn; a member already at work hears it as a message too.
+    Briefed { member: String, text: String, by: String },
     /// `checked` are the criteria the owner says are met (indexes from 0).
     TaskUpdated { id: String, status: Option<TaskStatus>, note: Option<String>, checked: Vec<usize>, by: String },
     TaskBlocked { id: String, reason: String, on: String, by: String },
@@ -242,6 +246,8 @@ pub struct State {
     pub finish_reminded: bool,
     pub feed: Vec<FeedItem>,
     pub total_turns: u32,
+    /// What the leader told each member to keep (`brief_member`), in order.
+    pub briefs: BTreeMap<String, Vec<String>>,
 }
 
 impl State {
@@ -416,6 +422,10 @@ impl State {
                     t.reviewer = reviewer.clone();
                     t.updated_at = at;
                 }
+                self.moved(by);
+            }
+            Event::Briefed { member, text, by } => {
+                self.briefs.entry(member.clone()).or_default().push(text.clone());
                 self.moved(by);
             }
             Event::TaskUpdated { id, status, note, checked, by } => {
