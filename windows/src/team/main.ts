@@ -23,7 +23,7 @@ import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
 import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCompanyFps, type Tempo } from "./office/battle/session";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
-import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, pickShowOn, previewPickShow, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setCenterReads, setMembersGet, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
+import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, pickShowOn, previewPickShow, fastModeOn, setFastModeOn, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setCenterReads, setMembersGet, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
 import { agentLabel, agentsPage, baseOf, loadTeamAgents, memberChoices, poolForShow, teamAgentCounts, teamAgents, teamProfiles, type AgentsHost } from "./agents";
@@ -563,6 +563,11 @@ function sidebar(): HTMLElement {
                 count,
               ])(h("span", { class: "side-pop-count", text: `${secretaryInstructions().length} / ${MAX_INSTRUCTIONS}` })),
               h("p", { class: "hint", text: tr("每次問 Agent Center 都會接在它的系統提示後面,下一個問題就生效。可以調它的做法、口吻和偏好;它還是不會不經你按確認就做事。", "Added after Agent Center's own system prompt each time you ask; it applies from your next question. Shape how it works, its tone and what it prefers; it still never acts without your click.") }),
+              h("label", { text: tr("快速模式", "Fast mode") }),
+              h("label", { class: "side-pop-check" },
+                h("input", { type: "checkbox", checked: fastModeOn(), onChange: (e: Event) => { setFastModeOn((e.target as HTMLInputElement).checked); render(); } }),
+                h("span", { text: tr("強制快速模式:擬的每個團隊都走最小規模、一次審查、不來回", "Force fast mode: every team it proposes takes the smallest size, one review, no second round") })),
+              h("p", { class: "hint", text: tr("關掉時 Agent Center 自己判斷題目大小;開了就一律以最快為先,精準度靠一次獨立審查。每個團隊的設定頁也能單獨開關。", "Off, Agent Center sizes each request itself; on, speed comes first and accuracy rests on one independent review. Each team's settings page has its own switch too.") }),
               h("label", { text: "Skills" }),
               skillRows(),
               h("div", { class: "side-pop-row" },
@@ -971,6 +976,10 @@ function setup(file: TeamFile): HTMLElement {
     h("label", { text: tr("給組長的開局指示", "Kickoff for the leader") }),
     // Agent Center writes this when it proposes the team; the person may change it.
     bound("textarea", "kickoff", config.kickoff ?? "", (v) => (config.kickoff = v.trim() || undefined), { rows: "4", placeholder: tr("題目大小、怎麼切、誰驗收什麼、第一批交什麼、工作規則;留空就讓組長自己規劃", "How big the goal is, how to split it, who reviews what, the first batch, the rules; empty lets the leader plan alone") }),
+    h("label", { text: tr("快速模式", "Fast mode") }),
+    h("label", { class: "trusted-check" },
+      h("input", { type: "checkbox", checked: !!config.fast, onChange: (e: Event) => { config.fast = (e.target as HTMLInputElement).checked || undefined; unsaved = true; render(); } }),
+      h("span", { text: tr("組長走快速規則:最小團隊、每個任務一次審查、退件一次後改派或自己做、驗收後不追加", "The leader runs fast: the smallest team, one review per task, a task sent back once is moved or done by the leader, nothing added after acceptance") })),
     h("label", { text: tr("工作資料夾", "Work folder") }),
     h(
       "div",

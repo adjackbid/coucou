@@ -232,8 +232,8 @@ export const Bridge = {
   /** The chat providers Agent Center can think with: (id, name, model). */
   secretaryProviders: () => call<[string, string, string][]>("secretary_providers"),
   /** The person asks Agent Center; its steps arrive as `secretary-step` while it works. */
-  secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string, uploads: string[] = [], instructions = "", skills: string[] = [], hiddenSkills: string[] = []) =>
-    callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name, uploads, instructions, skills, hiddenSkills }),
+  secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string, uploads: string[] = [], instructions = "", skills: string[] = [], hiddenSkills: string[] = [], fast = false) =>
+    callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name, uploads, instructions, skills, hiddenSkills, fast }),
   /** Agent Center's skill library (%APPDATA%\\Coucou\\skills), made with its first skill when empty. */
   teamSkillLibrary: () => call<LibrarySkill[]>("team_skill_library"),
   teamOpenSkills: () => call<void>("team_open_skills"),

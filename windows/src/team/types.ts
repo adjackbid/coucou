@@ -43,6 +43,8 @@ export interface TeamConfig {
   trustedDirs?: string[];
   /** Agent Center's plan for the leader, read with its first message. */
   kickoff?: string;
+  /** Fast mode: the smallest team that does the job, one review per task, no second round. */
+  fast?: boolean;
 }
 
 export interface TeamFile {

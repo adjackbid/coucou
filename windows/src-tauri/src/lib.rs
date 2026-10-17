@@ -1349,6 +1349,7 @@ async fn secretary_ask(
     instructions: Option<String>,
     skills: Option<Vec<String>>,
     hidden_skills: Option<Vec<String>>,
+    fast: Option<bool>,
 ) -> Result<secretary::Reply, String> {
     let (provider, profiles) = {
         let settings = shared.settings.lock().unwrap();
@@ -1367,6 +1368,7 @@ async fn secretary_ask(
     office.instructions = instructions.unwrap_or_default();
     office.skills = skills.unwrap_or_default();
     office.hidden_skills = hidden_skills.unwrap_or_default();
+    office.fast = fast.unwrap_or(false);
     let window = app.clone();
     secretary
         .ask(&provider, &office, &text, &uploads.unwrap_or_default(), &move |step| {

@@ -102,6 +102,9 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
              - Review against the criteria you wrote. Send back once with every fix listed; accepted is final, no follow-up checks by message. If a task comes back a second time, move it with `task_assign` or do it yourself. Spot-check two or three items rather than redoing a member's work.\n\
              - A member out of quota, missing a tool, or blocked for more than a turn: move its remaining work with `task_assign` at once.\n",
         );
+        if config.fast {
+            out.push_str(&format!("\n{}\n", fast_rules()));
+        }
         let library = crate::team_agents::member_library();
         if !library.is_empty() {
             out.push_str("\nSkills in Agent Center's library. Hand one to a teammate with `brief_member` (skills: [name]) when it fits their task; they get its text with their role:\n");
@@ -155,10 +158,26 @@ pub fn kickoff(config: &TeamConfig) -> String {
     } else {
         format!("\n\nAgent Center's plan for this team, from the user's request. Follow it unless the board shows it is wrong; then say what you changed and why:\n{}", config.kickoff.trim())
     };
+    let fast = if config.fast { format!("\n\n{}", fast_rules()) } else { String::new() };
     format!(
-        "The team has started. Plan the work for this goal and create the tasks now:\n{}\nUse `team_status` to see your teammates and `task_create` for each task.{plan}",
+        "The team has started. Plan the work for this goal and create the tasks now:\n{}\nUse `team_status` to see your teammates and `task_create` for each task.{plan}{fast}",
         config.goal.trim()
     )
+}
+
+/// What fast mode asks of the leader (TeamConfig::fast): the smallest team that
+/// does the job, one review, no second round. Said with the kickoff and again
+/// in the leader's role, so it holds for the whole run.
+// i18n: model-facing
+pub fn fast_rules() -> String {
+    "FAST MODE is on: the user wants the result in the shortest time, with one independent check for accuracy. Rules that override your planning habits:\n\
+     1. Size first, and choose the smaller size when in doubt. A fact, a short answer or one small file: one task owned by you, do it yourself now, `deliver`, report to the user with `message_send` (to \"you\"), `team_finish`. Do not give teammates work for a quick goal.\n\
+     2. One deliverable with no natural split: one member does the whole thing and one other member, on a different model, is its `reviewer`. Nobody else works on it.\n\
+     3. Several parts: split by scope so every member works at the same time, from start to finish on its slice; hand-off chains of at most two links. When the user fixed the roles, split by batch and have each member deliver batch by batch.\n\
+     4. Every task is reviewed once. Send it back at most once, with every fix listed; if it comes back again, accept it and fix the rest yourself or move it with `task_assign`. Accepted is final: no follow-up checks or additions by message.\n\
+     5. Spot-check two or three items; never redo a member's work. Keep your own messages short.\n\
+     6. A member blocked, out of quota or silent for a turn: move its work at once."
+        .to_string()
 }
 
 /// A task handed to its owner.
@@ -202,7 +221,7 @@ pub fn task(state: &State, task: &Task) -> String {
 pub fn to_review(config: &TeamConfig, task: &Task, by: &str, locator: &str, summary: &str) -> String {
     let criteria: Vec<String> = task.criteria.iter().enumerate().map(|(i, c)| format!("{}. {}", i + 1, c.text)).collect();
     format!(
-        "{} handed in {} ({}): {}\nWhere: {}\n{}Check it against these and call `review` (task \"{}\", accept true or false). If you send it back, list every fix in the reason at once; once accepted, it is final.",
+        "{} handed in {} ({}): {}\nWhere: {}\n{}Check it against these and call `review` (task \"{}\", accept true or false). If you send it back, list every fix in the reason at once; once accepted, it is final.{}",
         who(config, by),
         task.id,
         task.title,
@@ -210,6 +229,7 @@ pub fn to_review(config: &TeamConfig, task: &Task, by: &str, locator: &str, summ
         locator,
         if criteria.is_empty() { String::new() } else { format!("It is done when:\n{}\n", criteria.join("\n")) },
         task.id,
+        if config.fast && task.rejections >= 1 { " Fast mode: it was sent back once already, so accept it now and fix what is left yourself, or move it with `task_assign`." } else if config.fast { " Fast mode: spot-check two or three criteria; this is the one review it gets." } else { "" },
     )
 }
 

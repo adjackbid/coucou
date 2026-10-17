@@ -207,6 +207,8 @@ pub struct Office {
     pub skills: Vec<String>,
     /// Library skills the person took away from members (its ⚙ → Skills), by name.
     pub hidden_skills: Vec<String>,
+    /// Fast mode forced from Agent Center's ⚙: every team it proposes is a fast one.
+    pub fast: bool,
 }
 
 impl Office {
@@ -224,6 +226,7 @@ impl Office {
             instructions: String::new(),
             skills: Vec::new(),
             hidden_skills: Vec::new(),
+            fast: false,
         }
     }
 
@@ -626,6 +629,7 @@ impl Secretary {
             }
             None => None,
         };
+        let fast = office.fast || a.get("fast").and_then(Value::as_bool).unwrap_or(false);
         let config = json!({
             "id": "draft",
             "name": name,
@@ -636,6 +640,7 @@ impl Secretary {
             "autoApprove": true,
             "members": list,
             "kickoff": kickoff,
+            "fast": fast,
         });
         let draft: TeamConfig = serde_json::from_value(config.clone()).map_err(|e| e.to_string())?;
         let mut lines: Vec<String> = vec![tr!(format!("目標:{goal}"), format!("Goal: {goal}"))];
@@ -657,6 +662,9 @@ impl Secretary {
         }
         if !draft.kickoff.trim().is_empty() {
             lines.push(tr!(format!("開局指示:{}", cut(draft.kickoff.trim(), 240)), format!("Kickoff: {}", cut(draft.kickoff.trim(), 240))));
+        }
+        if draft.fast {
+            lines.push(tr!("快速模式:最小團隊、一次審查、不來回", "Fast mode: the smallest team, one review, no second round"));
         }
         let confirm: &str = if start { tr!("建立並啟動", "Create and start") } else { tr!("建立團隊", "Create team") };
         let knowledge = serde_json::to_value(&items).map_err(|e| e.to_string())?;
@@ -1515,7 +1523,7 @@ How you work:\n\
 - For a new team: pick agents and models from list_agents (agent_models lists what an agent offers); give the leader the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
 - Size the request before you shape the team (quick: the leader alone; medium: one does, one on another model reviews once; large: split by scope), and say which size in `kickoff`; your skills below, when you have them, say how in detail. Every coding CLI agent (Claude Code, Codex, Gemini CLI, Copilot, Antigravity) browses the web and runs code through its own tools, and its `can:` line says so; only an n8n workflow cannot. Never tell the user the agents cannot go online unless no agent's `can:` line says it browses. Pick an agent for images only when its `can:` line says it makes them.\n\
 - In `kickoff` tell the leader: the size, the split, who reviews what (so reviews are not all on the leader), the first batch each member delivers, and the rules of the work (sources, formats, what counts as done). Give a member its own rules in `brief`. Members read messages only when a turn starts, so rules belong in the tasks and briefs, not in later messages.{}\n\
-- A team has a knowledge base: documents (design notes, specs, pictures, any file) its members work from. When the user attaches files or mentions design documents, specs or reference material for a team, put them in `knowledge` (propose_team for a new team, propose_knowledge for one that exists): attached files by their id (u…), or full paths the user wrote — never a path you guessed. Each is for the leader only unless the user says the whole team should see it (then visibility \"shared\"). You only see the files' names, never what is in them.\n\
+{}- A team has a knowledge base: documents (design notes, specs, pictures, any file) its members work from. When the user attaches files or mentions design documents, specs or reference material for a team, put them in `knowledge` (propose_team for a new team, propose_knowledge for one that exists): attached files by their id (u…), or full paths the user wrote — never a path you guessed. Each is for the leader only unless the user says the whole team should see it (then visibility \"shared\"). You only see the files' names, never what is in them.\n\
 - Answer in the language named on the last line of this prompt, short and concrete: a few lines or a short list. Point out anything waiting for the user (permission cards, questions) first.\n\
 \n\
 Now: {} (the user's local time).\n\
@@ -1527,6 +1535,7 @@ Now: {} (the user's local time).\n\
         },
         " The user builds teams from their own team agents only: list_agents lists them with what each is good for, whether it is a Cloud Agent or a Local Agent, and what it costs; choose members by those descriptions, and never name an agent that is not listed. When the user wants it cheap, on a budget, or asks which costs less (or wants the best whatever it costs), compare the agents by the prices and recent spend list_agents gives, not only by what their descriptions say, and tell the user the prices you compared; a description is the user's own note, the price is the fact, so when they disagree say so. An agent on a subscription plan costs nothing extra per token. When you talk to the user, call a team agent by its name, never by its id (ta-…).",
         library_line(office),
+        fast_line(office.fast),
         when(crate::team::store::now_ms(), office.tz_minutes),
         format!("{}{}", center_skills(&office.skills), own_instructions(&office.instructions)),
         crate::i18n::reply_language(),
@@ -1542,6 +1551,15 @@ fn library_line(office: &Office) -> String {
     }
     let items: Vec<String> = lib.iter().map(|s| if s.description.is_empty() { s.name.clone() } else { format!("{} ({})", s.name, s.description) }).collect();
     format!(" Skills in Agent Center's library, which you may give a member with `skills` (they get the skill's text with their role): {}.", items.join("; "))
+}
+
+/// Fast mode forced from Agent Center's ⚙: one more rule for the prompt, or nothing.
+// i18n: model-facing
+fn fast_line(fast: bool) -> String {
+    if !fast {
+        return String::new();
+    }
+    "- FAST MODE is on (the user set it in your settings): every team you propose is a fast team, and `fast` is set for you. Take the smallest team that does the job: a quick request gets one member, who is the leader; a medium one gets one worker and one reviewer on a different model; only a goal with several independent parts gets more, split by scope, at most 4 members. No pipelines (gather → verify → write). In `kickoff` say that the team runs in fast mode: one review per task, no second round, accepted is final.\n".to_string()
 }
 
 /// The skills Agent Center reads itself (its ⚙ → Skills): their text, after the rules and
@@ -1632,6 +1650,7 @@ fn describe() -> Vec<Tool> {
                 }, "required": ["name", "role", "agent"] } },
                 "leader": { "type": "string", "description": "The leader's name; the first member if empty." },
                 "kickoff": { "type": "string", "description": "Your plan for the leader, read with its first message: how big the goal is (quick / medium / large), how to split it (by scope, by batch, or one member plus one reviewer), who reviews what, what to deliver first, and the rules of the work. A few lines." },
+                "fast": { "type": "boolean", "description": "Fast mode: the leader takes the smallest team that does the job, one review per task, no second round. Set it when the user asks for speed or a quick answer." },
                 "start": { "type": "boolean", "description": "Start it as soon as it is created (default true)." },
                 "knowledge": knowledge.clone(),
                 "knowledge_from": { "type": "string", "description": "Another team (id or name) whose knowledge base the new team starts with, each document as it was shared." },
@@ -1717,6 +1736,12 @@ mod tests {
         let said = own_instructions("開團隊預設 3 人,預算優先。");
         assert!(said.contains("<user_instructions>\n開團隊預設 3 人,預算優先。\n</user_instructions>") && said.contains("nothing happens without the user's click"), "{said}");
         assert!(own_instructions(&"字".repeat(MAX_INSTRUCTIONS + 500)).chars().count() < MAX_INSTRUCTIONS + 400);
+    }
+
+    #[test]
+    fn fast_mode_from_the_settings_marks_every_proposed_team() {
+        assert_eq!(fast_line(false), "");
+        assert!(fast_line(true).contains("FAST MODE") && fast_line(true).contains("smallest team"));
     }
 
     #[test]

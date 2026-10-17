@@ -366,6 +366,9 @@ pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Out
             if !accept && reason.is_empty() {
                 return Err("Say why it is sent back: `reason` is missing.".into());
             }
+            if !accept && config.fast && task.rejections >= 1 {
+                return Err(format!("Fast mode: {} was already sent back once, and gets one round. Accept it and fix what is left yourself, or move it with `task_assign`.", task.id));
+            }
             let mut events = vec![Event::Reviewed { task: task.id.clone(), accepted: accept, reason: reason.clone(), by: member.to_string() }];
             // Sent back, the owner must hear why. Accepted, there is nothing
             // for it to do: the board says so, and a turn is not spent on it.
@@ -897,6 +900,25 @@ mod tests {
         run.ok("ai1", "review", json!({ "task": "TASK-01", "accept": false, "reason": "還是少" }));
         assert!(run.inbox("ai1").contains("sent back twice"), "{}", run.inbox("ai1"));
         assert_eq!(run.store.state().task("TASK-01").unwrap().rejections, 2);
+    }
+
+    #[test]
+    fn fast_mode_gives_a_task_one_round_and_says_so_in_the_briefs() {
+        let mut run = Run::new("fast");
+        let mut config = shop(&run.dir.to_string_lossy());
+        config.fast = true;
+        run.store = Store::memory();
+        run.store.append(Event::Started { config: config.clone() });
+        assert!(brief::kickoff(&config).contains("FAST MODE") && brief::role(&config, "ai1").contains("FAST MODE") && !brief::role(&config, "ai4").contains("FAST MODE"));
+        plan(&mut run);
+        run.ok("ai4", "deliver", json!({ "task": "TASK-01", "locator": "http://localhost/", "summary": "s" }));
+        assert!(run.inbox("ai1").contains("the one review it gets"), "{}", run.inbox("ai1"));
+        run.ok("ai1", "review", json!({ "task": "TASK-01", "accept": false, "reason": "少兩張" }));
+        run.ok("ai4", "deliver", json!({ "task": "TASK-01", "locator": "http://localhost/", "summary": "s" }));
+        assert!(run.inbox("ai1").contains("sent back once already"), "{}", run.inbox("ai1"));
+        let err = run.call("ai1", "review", json!({ "task": "TASK-01", "accept": false, "reason": "還是少" })).unwrap_err();
+        assert!(err.contains("Fast mode") && err.contains("task_assign"), "{err}");
+        run.ok("ai1", "review", json!({ "task": "TASK-01", "accept": true }));
     }
 
     #[test]

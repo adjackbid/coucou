@@ -87,6 +87,11 @@ pub struct TeamConfig {
     /// Read with the leader's first message; empty for none.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub kickoff: String,
+    /// Fast mode, as the person set it: the leader sizes the goal and takes the
+    /// smallest team that does it, one review per task, a task sent back once
+    /// is moved rather than sent back again (brief.rs, tools.rs).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fast: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -317,6 +322,7 @@ pub(crate) mod fixtures {
             agent_folders: false,
             trusted_dirs: vec![],
             kickoff: String::new(),
+            fast: false,
         }
     }
 }
