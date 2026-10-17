@@ -44,6 +44,10 @@ pub struct Settings {
     /// Never hide: the island stays at least compact at the top of the screen.
     #[serde(default)]
     pub always_visible: bool,
+    /// 勿擾: the island does not pop up or sound on its own (a request waits
+    /// until the person opens it); the moon on its header switches it.
+    #[serde(default)]
+    pub do_not_disturb: bool,
     /// Copilot asks the island before every tool, --yolo or not (1.0.91 runs
     /// the PermissionRequest hook regardless). Off leaves that hook out, so a
     /// --yolo session runs without a card for each step.
@@ -233,6 +237,7 @@ impl Default for Settings {
             active_provider: "anthropic".into(),
             max_session_cards: default_max_cards(),
             always_visible: false,
+            do_not_disturb: false,
             copilot_permission_cards: true,
             hide_after: default_hide_after(),
             agents: vec![AgentProfile::copilot()],

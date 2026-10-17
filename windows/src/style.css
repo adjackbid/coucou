@@ -299,6 +299,11 @@ body {
   color: var(--ink);
 }
 
+/* 勿擾 lit: the moon in amber, so a glance says nothing will pop up. */
+.header-actions button.dnd.on {
+  color: #f5b63d;
+}
+
 #views {
   position: relative;
   flex: 1 1 auto;

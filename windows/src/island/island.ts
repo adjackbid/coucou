@@ -300,7 +300,15 @@ export class Island {
       },
       toggleSound: () => {
         State.settings.soundEnabled = !State.settings.soundEnabled;
-        Sound.setEnabled(State.settings.soundEnabled);
+        Sound.setEnabled(State.settings.soundEnabled && !State.settings.doNotDisturb);
+        void Bridge.saveSettings(State.settings);
+        State.notify();
+      },
+      // 勿擾: nothing pops up or sounds on its own. A request that comes in waits,
+      // and comes up first when the person opens the island themselves.
+      toggleDnd: () => {
+        State.settings.doNotDisturb = !State.settings.doNotDisturb;
+        Sound.setEnabled(State.settings.soundEnabled && !State.settings.doNotDisturb);
         void Bridge.saveSettings(State.settings);
         State.notify();
       },
@@ -520,6 +528,13 @@ export class Island {
 
   /** Alert from the hook server: open on this view. Pinned alerts never auto-close. */
   alert(view: IslandViewName) {
+    // 勿擾: a drop the person is making still opens; anything that would pop up by
+    // itself (a request, a confusion) stays put until they open the island.
+    if (State.settings.doNotDisturb && view !== "upload") {
+      this.fsm.pinned = State.isPinned;
+      State.notify();
+      return;
+    }
     this.fsm.pinned = State.isPinned;
     this.fsm.forceHome();
     this.expand(view);
@@ -1530,7 +1545,7 @@ export class Island {
   }
 
   applySettings() {
-    Sound.setEnabled(State.settings.soundEnabled);
+    Sound.setEnabled(State.settings.soundEnabled && !State.settings.doNotDisturb);
     Sound.setVolume(State.settings.soundVolume);
     this.fsm.homeToPetitDelay = State.settings.autoCloseInterval;
     this.fsm.petitToHiddenDelay = Math.max(3, State.settings.hideAfter || 60);

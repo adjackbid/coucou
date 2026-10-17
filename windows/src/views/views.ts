@@ -32,6 +32,8 @@ export interface ViewActions {
   /** Answers the current field of the focused session's question, in its terminal. */
   answerQuestion(answer: QuestionAnswer): Promise<void>;
   toggleSound(): void;
+  /** 勿擾 on or off. */
+  toggleDnd(): void;
   setVolume(v: number): void;
   setAutoClose(seconds: number): void;
   openSettingsWindow(): void;
@@ -125,6 +127,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
   });
   const gearBtn = h("button", { title: tr("設定", "Settings"), onclick: () => go("settings") }, svg(ICONS.gear, 14));
   const soundBtn = h("button", { title: tr("靜音", "Mute"), onclick: () => actions.toggleSound() }, svg(ICONS.speakerOn, 14));
+  const dndBtn = h("button", { class: "dnd", title: tr("勿擾模式", "Do not disturb"), onclick: () => actions.toggleDnd() }, svg(ICONS.moon, 13));
   // Always there, on every view: the island must never have to be waited out.
   const closeBtn = h("button", { title: tr("關閉", "Close"), onclick: () => actions.collapse() }, svg(ICONS.xmark, 12));
 
@@ -138,7 +141,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
     { id: "header" },
     h("div", { class: "tabs" }, tabHome, tabChat, tabDrop),
     teamBtn,
-    h("div", { class: "header-actions" }, gearBtn, soundBtn, closeBtn),
+    h("div", { class: "header-actions" }, gearBtn, dndBtn, soundBtn, closeBtn),
   );
 
   return {
@@ -153,6 +156,8 @@ export function buildHeader(actions: ViewActions): ViewHost {
       gearBtn.append(svg(v === "settings" ? ICONS.gearFill : ICONS.gear, 14));
       clear(soundBtn);
       soundBtn.append(svg(State.settings.soundEnabled ? ICONS.speakerOn : ICONS.speakerOff, 14));
+      dndBtn.classList.toggle("on", State.settings.doNotDisturb);
+      dndBtn.title = State.settings.doNotDisturb ? tr("勿擾模式:開(不會自動跳出、不出聲;按一下關掉)", "Do not disturb: on (no popping up, no sound; click to turn off)") : tr("勿擾模式:關(開會時打開,就不會自動跳出)", "Do not disturb: off (turn it on in a meeting so nothing pops up)");
       el.style.opacity = v === "confused" ? "0" : "1";
     },
   };

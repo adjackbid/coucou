@@ -349,6 +349,8 @@ export interface Settings {
   maxSessionCards: number;
   /** Never hide: the island stays at least compact at the top of the screen. */
   alwaysVisible: boolean;
+  /** 勿擾: no popping up and no sound on its own; a request waits until the island is opened. */
+  doNotDisturb: boolean;
   /** Seconds the compact bar stays after the mouse leaves before hiding. */
   hideAfter: number;
   /** Coding agents the island can start and talk to over ACP. */
@@ -402,6 +404,7 @@ export const DEFAULT_SETTINGS: Settings = {
   activeProvider: "anthropic",
   maxSessionCards: 2,
   alwaysVisible: false,
+  doNotDisturb: false,
   hideAfter: 60,
   agents: [DEFAULT_AGENT],
   sessionNames: {},
