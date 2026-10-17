@@ -653,7 +653,7 @@ export class Office {
     return h("div", { class: "bt-mode", role: "group", "aria-label": tr("畫面模式", "View mode") },
       opt("office", "Office", tr("一般辦公室畫面", "The usual office view")), // i18n-ok: the view's name, the same in both languages
       this.battleAllowed ? opt("battle", tr("戰鬥模式", "Battle mode"), tr("同一份工作,看成團隊討伐需求魔王:只改變畫面,不影響工作", "The same work, told as your team's raid on the Requirements Overlord: only the picture changes, never the work")) : null,
-      opt("orbit", tr("星域", "Orbit mode"), tr("同一份工作,看成 Agent 在同一個宇宙裡的光環與協作連線:只改變畫面,不影響工作", "The same work, told as your agents' light rings and the lines between them, all in one universe: only the picture changes, never the work")),
+      opt("orbit", "Space", tr("同一份工作,看成 Agent 在同一個宇宙裡的光環與協作連線:只改變畫面,不影響工作", "The same work, told as your agents' light rings and the lines between them, all in one universe: only the picture changes, never the work")), // i18n-ok: Space is the view's name in both languages
       opt("space", tr("無邊界", "Boundless"), tr("每個團隊的辦公室漂在同一片星空裡,圍著 Agent Center;只改變畫面,不影響工作", "Every team's office floats in one sky around Agent Center: only the picture changes, never the work")));
   }
 
