@@ -209,6 +209,9 @@ pub struct Office {
     pub hidden_skills: Vec<String>,
     /// Fast mode forced from Agent Center's ⚙: every team it proposes is a fast one.
     pub fast: bool,
+    /// The person's root folder for new teams (its ⚙ → 根目錄): a team the person
+    /// gave no folder works in a new subfolder of it. Empty: the folder is asked for.
+    pub root: String,
 }
 
 impl Office {
@@ -227,6 +230,7 @@ impl Office {
             skills: Vec::new(),
             hidden_skills: Vec::new(),
             fast: false,
+            root: String::new(),
         }
     }
 
@@ -555,11 +559,7 @@ impl Secretary {
     fn propose_team(&self, a: &Value, office: &Office) -> Result<Proposal, String> {
         let name = need(a, "name")?;
         let goal = need(a, "goal")?;
-        let work_dir = need(a, "work_dir")?;
-        if !std::path::Path::new(&work_dir).is_absolute() {
-            // i18n: model-facing
-            return Err("work_dir must be a full path such as D:\\Code\\my-site. Ask the user where the team should work if you do not know.".into());
-        }
+        let work_dir = work_dir_of(a, &name, &office.root)?;
         // i18n: model-facing
         let members = a.get("members").and_then(Value::as_array).filter(|m| !m.is_empty()).ok_or("members is required: at least one member.")?;
         if members.len() > 12 {
@@ -1033,6 +1033,31 @@ fn civil(z: i64) -> (i64, i64, i64) {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     (yoe + era * 400 + i64::from(m <= 2), m, d)
+}
+
+/// Where a proposed team works: `work_dir` as given when it is a full path; otherwise,
+/// with a root folder set, a subfolder of the root (the given name, or the team's).
+/// Without a root, a full path is required and the user is to be asked for it.
+// i18n: model-facing
+fn work_dir_of(a: &Value, team_name: &str, root: &str) -> Result<String, String> {
+    let given = text(a, "work_dir").unwrap_or_default();
+    if std::path::Path::new(&given).is_absolute() {
+        return Ok(given);
+    }
+    let root = root.trim();
+    if root.is_empty() || !std::path::Path::new(root).is_absolute() {
+        return Err("work_dir must be a full path such as D:\\Code\\my-site (no root folder is set in your settings). Ask the user where the team should work if you do not know.".into());
+    }
+    let sub = folder_name(if given.is_empty() { team_name } else { &given });
+    Ok(std::path::Path::new(root).join(sub).to_string_lossy().to_string())
+}
+
+/// A folder name Windows takes, from a team's name: no `<>:"/\|?*`, no control
+/// characters, no trailing dots or spaces; `team` when nothing is left.
+fn folder_name(name: &str) -> String {
+    let cleaned: String = name.trim().chars().filter(|c| !"<>:\"/\\|?*".contains(*c) && !c.is_control()).collect();
+    let cleaned = cleaned.trim_end_matches(['.', ' ']).trim().to_string();
+    if cleaned.is_empty() { "team".into() } else { cleaned.chars().take(60).collect() }
 }
 
 /// A team card's member lines: one per member, the leader marked.
@@ -1618,7 +1643,7 @@ fn system_prompt(office: &Office) -> String {
 How you work:\n\
 - Look things up with your tools before you answer; never guess a team's state. Quote names, numbers and times as the tools give them.\n\
 - You cannot change anything yourself. To get something done (a new team, an instruction to a team, starting, pausing, resuming, stopping or archiving a team) you prepare it with a propose_* tool: it appears on the user's screen as a card, and it happens only if they click it. Never say something was done unless a [Agent Center] note says the user confirmed it. Never say a card or a button is ready unless a propose_* tool told you in this answer that it is on the user's screen: when the user wants a team, call propose_team; describing the team in words is not enough.\n\
-- Prefer one proposal that does what was asked. Ask a short question first only when something essential is missing, such as the work folder for a new team.\n\
+- Prefer one proposal that does what was asked. Ask a short question first only when something essential is missing, such as the work folder for a new team when no root folder is set.{}\n\
 - When you ask the user to choose between options, call offer_choices with them so they can click one, instead of listing them as text.\n\
 - For a new team: pick agents from list_agents; each runs the model the user set on it (shown in list_agents), so leave `model` empty unless the agent has none (then agent_models lists what it offers) or the user asked for another. Independent review means a different agent, never the same agent on another model. Give the leader the agent with the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
 - Size the request before you shape the team (quick: the leader alone; medium: one does, one on another model reviews once; large: split by scope), and say which size in `kickoff`; your skills below, when you have them, say how in detail. Every coding CLI agent (Claude Code, Codex, Gemini CLI, Copilot, Antigravity) browses the web and runs code through its own tools, and its `can:` line says so; only an n8n workflow cannot. Never tell the user the agents cannot go online unless no agent's `can:` line says it browses. Pick an agent for images only when its `can:` line says it makes them.\n\
@@ -1633,6 +1658,7 @@ Now: {} (the user's local time).\n\
             "" | "秘書" | "Secretary" | "Agent Center" => String::new(),
             name => format!("Your name is {name}; the user calls you that, and you may call yourself that. "),
         },
+        root_line(&office.root),
         " The user builds teams from their own team agents only: list_agents lists them with what each is good for, whether it is a Cloud Agent or a Local Agent, and what it costs; choose members by those descriptions, and never name an agent that is not listed. When the user wants it cheap, on a budget, or asks which costs less (or wants the best whatever it costs), compare the agents by the prices and recent spend list_agents gives, not only by what their descriptions say, and tell the user the prices you compared; a description is the user's own note, the price is the fact, so when they disagree say so. An agent on a subscription plan costs nothing extra per token. When you talk to the user, call a team agent by its name, never by its id (ta-…).",
         library_line(office),
         fast_line(office.fast),
@@ -1640,6 +1666,15 @@ Now: {} (the user's local time).\n\
         format!("{}{}", center_skills(&office.skills), own_instructions(&office.instructions)),
         crate::i18n::reply_language(),
     )
+}
+
+/// The root folder from Agent Center's ⚙, for the prompt: where a team goes when the user names no folder.
+// i18n: model-facing
+fn root_line(root: &str) -> String {
+    if root.trim().is_empty() {
+        return String::new();
+    }
+    format!(" The user's root folder for teams is {}: when they name no folder for a new team, do not ask; leave `work_dir` empty (the team gets a new subfolder named after it) or pass a short folder name to use under the root. A full path they name is used as it is.", root.trim())
 }
 
 /// Agent Center's skill library, for the prompt: what a member may be given with `skills`.
@@ -1740,7 +1775,7 @@ fn describe() -> Vec<Tool> {
                 "name": { "type": "string" },
                 "goal": { "type": "string", "description": "What the team must achieve and deliver, in the user's words and enough detail." },
                 "scope": { "type": "array", "items": { "type": "string" } },
-                "work_dir": { "type": "string", "description": "Full path of the folder the team works in. If it does not exist, the user is asked whether to create it when they confirm." },
+                "work_dir": { "type": "string", "description": "Full path of the folder the team works in. If it does not exist, the user is asked whether to create it when they confirm. When a root folder is set (see your instructions) it may be left out (a subfolder named after the team) or be a folder name under the root." },
                 "members": { "type": "array", "items": { "type": "object", "properties": {
                     "name": { "type": "string" }, "role": { "type": "string" }, "duty": { "type": "string" },
                     "agent": { "type": "string", "description": "An agent id from list_agents." },
@@ -1756,7 +1791,7 @@ fn describe() -> Vec<Tool> {
                 "knowledge": knowledge.clone(),
                 "knowledge_from": { "type": "string", "description": "Another team (id or name) whose knowledge base the new team starts with, each document as it was shared." },
             }),
-            &["name", "goal", "work_dir", "members"],
+            &["name", "goal", "members"],
         ),
         tool(
             "propose_knowledge",
@@ -1895,6 +1930,18 @@ mod tests {
         assert!(revised.lines[0].contains("g") && revised.lines.iter().any(|l| l.starts_with("工程師")) && revised.lines.last().unwrap().contains("go"), "{:?}", revised.lines);
         assert!(sec.notes.lock().unwrap().last().unwrap().contains("by hand"));
         assert!(sec.revise_team(&p.id, &[], &office).is_err());
+    }
+
+    #[test]
+    fn a_team_without_a_folder_goes_under_the_root_folder() {
+        let none = json!({});
+        assert!(work_dir_of(&none, "TXC 調查", "").unwrap_err().contains("full path"));
+        assert_eq!(work_dir_of(&json!({ "work_dir": "D:\\x" }), "t", "").unwrap(), "D:\\x");
+        assert_eq!(work_dir_of(&none, "TXC 調查: 下跌?", "D:\\ai").unwrap(), "D:\\ai\\TXC 調查 下跌");
+        assert_eq!(work_dir_of(&json!({ "work_dir": "site" }), "t", "D:\\ai").unwrap(), "D:\\ai\\site");
+        assert_eq!(work_dir_of(&json!({ "work_dir": "D:\\x" }), "t", "D:\\ai").unwrap(), "D:\\x");
+        assert_eq!(folder_name(" ... "), "team");
+        assert!(root_line("").is_empty() && root_line("D:\\ai").contains("D:\\ai"));
     }
 
     #[test]

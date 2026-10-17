@@ -23,7 +23,7 @@ import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
 import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCompanyFps, type Tempo } from "./office/battle/session";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
-import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, pickShowOn, previewPickShow, fastModeOn, setFastModeOn, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setCenterReads, setMembersGet, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
+import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, pickShowOn, previewPickShow, fastModeOn, secretaryRoot, setSecretaryRoot, setFastModeOn, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setCenterReads, setMembersGet, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
 import { agentLabel, agentsPage, baseOf, loadTeamAgents, memberChoices, poolForShow, teamAgentCounts, teamAgents, teamProfiles, type AgentsHost } from "./agents";
@@ -590,6 +590,18 @@ function sidebar(): HTMLElement {
                 count,
               ])(h("span", { class: "side-pop-count", text: `${secretaryInstructions().length} / ${MAX_INSTRUCTIONS}` })),
               h("p", { class: "hint", text: tr("每次問 Agent Center 都會接在它的系統提示後面,下一個問題就生效。可以調它的做法、口吻和偏好;它還是不會不經你按確認就做事。", "Added after Agent Center's own system prompt each time you ask; it applies from your next question. Shape how it works, its tone and what it prefers; it still never acts without your click.") }),
+              h("label", { text: tr("根目錄", "Root folder") }),
+              h("input", {
+                value: secretaryRoot(), placeholder: "D:\\ai", spellcheck: "false",
+                onChange: (e: Event) => { setSecretaryRoot((e.target as HTMLInputElement).value); render(); },
+              }),
+              h("div", { class: "side-pop-row" },
+                h("button", { class: "btn plain", type: "button", onClick: () => void (async () => {
+                  const picked = await Bridge.pickFolder(secretaryRoot(), tr("Agent Center 的根目錄", "Agent Center's root folder")).catch(() => null);
+                  if (picked) { setSecretaryRoot(picked); render(); }
+                })() }, tr("選擇資料夾…", "Choose a folder…")),
+                h("button", { class: "btn plain", type: "button", disabled: !secretaryRoot(), onClick: () => void Bridge.openFolder(secretaryRoot()).catch((err) => alert(String(err))) }, tr("開啟", "Open"))),
+              h("p", { class: "hint", text: tr("你沒指定工作資料夾時,Agent Center 不會再問,直接在這底下開一個以團隊為名的資料夾;你指定的完整路徑照舊。", "When you name no work folder, Agent Center no longer asks: it opens a folder named after the team under this one. A full path you name is used as it is.") }),
               h("label", { text: tr("快速模式", "Fast mode") }),
               h("label", { class: "side-pop-check" },
                 h("input", { type: "checkbox", checked: fastModeOn(), onChange: (e: Event) => { setFastModeOn((e.target as HTMLInputElement).checked); render(); } }),
@@ -1553,15 +1565,16 @@ function deliverables(snap: Snapshot): HTMLElement {
   for (const d of [...snap.deliverables].reverse()) {
     const task = snap.tasks.find((t) => t.id === d.task);
     const picture = isImage(d.locator);
+    const document = !picture && !d.locator.startsWith("http") && /\.(html?|pdf|md|txt|docx|xlsx|pptx|csv|json|svg|mp4|mp3|wav)$/i.test(d.locator.trim());
     row.append(
       h(
         "button",
         {
           class: `deliverable${picture ? " picture" : ""}`,
           type: "button",
-          title: picture ? trf("看 {path}", "View {path}", { path: d.locator }) : trf("開啟 {path}", "Open {path}", { path: d.locator }),
-          // A picture opens large in the window; anything else in Explorer.
-          onClick: () => (picture ? openImage(snap.id, pictures, pictures.indexOf(d.locator)) : void act(() => Bridge.teamOpen(snap.id, d.locator))),
+          title: picture ? trf("看 {path}", "View {path}", { path: d.locator }) : document ? trf("用系統的程式打開 {path}", "Open {path} with its program", { path: d.locator }) : trf("開啟 {path}", "Open {path}", { path: d.locator }),
+          // A picture opens large in the window; a document in its program (a page in the browser); anything else in Explorer.
+          onClick: () => (picture ? openImage(snap.id, pictures, pictures.indexOf(d.locator)) : void act(() => (document ? Bridge.teamOpenFile(snap.id, d.locator) : Bridge.teamOpen(snap.id, d.locator)))),
         },
         h("span", { class: "deliverable-icon", text: icon(d) }, picture ? thumbImg(snap.id, d.locator) : null),
         h(
@@ -1571,6 +1584,9 @@ function deliverables(snap: Snapshot): HTMLElement {
           h("span", { class: "dim mono", text: d.locator }),
           h("span", { class: "dim", text: `${nameOf(snap, d.by)} · ${clock(d.at)} · ${d.summary}` }),
         ),
+        document
+          ? h("span", { class: "deliverable-reveal", role: "button", tabindex: "0", title: tr("在檔案總管中顯示", "Show in Explorer"), onClick: (e: Event) => { e.stopPropagation(); void act(() => Bridge.teamOpen(snap.id, d.locator)); } }, "📂")
+          : null,
         h("span", {
           class: `chip ${d.accepted === true ? "ok" : d.accepted === false ? "warn" : "pending"}`,
           text: d.accepted === true ? tr("已驗收", "Accepted") : d.accepted === false ? tr("已退回", "Sent back") : tr("待驗收", "Awaiting review"),
@@ -1733,6 +1749,12 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
   const goal = (snap?.goal ?? editing?.goal ?? "").split("\n")[0];
   const count = snap?.members.length ?? editing?.members.length ?? 0;
   const actions = h("div", { class: "row" });
+  const workDir = snap?.workDir ?? editing?.workDir ?? file.config?.workDir ?? "";
+  if (workDir) {
+    actions.append(
+      h("button", { class: "btn plain folder", type: "button", title: trf("在檔案總管打開工作資料夾\n{dir}", "Open the work folder in Explorer\n{dir}", { dir: workDir }), onClick: () => void Bridge.openFolder(workDir).catch((err) => alert(String(err))) }, tr("📂 資料夾", "📂 Folder")),
+    );
+  }
   if (snap?.status === "running") {
     actions.append(
       h("button", { class: "btn plain", type: "button", title: tr("不再開始新的回合;正在做的這一輪會做完", "No new turns start; the turns under way finish"), onClick: () => void act(() => Bridge.teamPause(snap.id)) }, tr("暫停", "Pause")),

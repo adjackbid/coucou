@@ -3148,6 +3148,20 @@ h2 {
   font-size: 12px;
   white-space: nowrap;
 }
+/* 📂 on a deliverable: show it in Explorer, next to opening it with its program. */
+.deliverable-reveal {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.deliverable-reveal:hover {
+  opacity: 1;
+  background: var(--hairline);
+}
+
 .side-pop-row {
   display: flex;
   gap: 8px;

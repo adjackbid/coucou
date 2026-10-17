@@ -339,6 +339,18 @@ let pickShowing = stored("coucou.secretary.pickShow") === "1";
 /** Fast mode forced from Agent Center's ⚙: every team it proposes is a fast one. */
 let fastForced = stored("coucou.secretary.fast") === "1";
 
+/** The root folder for new teams (its ⚙ → 根目錄): a team the person gave no folder gets a subfolder of it. */
+let rootFolder = stored("coucou.secretary.root") ?? "";
+
+export function secretaryRoot(): string {
+  return rootFolder;
+}
+
+export function setSecretaryRoot(v: string) {
+  rootFolder = v.trim();
+  store("coucou.secretary.root", rootFolder);
+}
+
 export function fastModeOn(): boolean {
   return fastForced;
 }
@@ -565,7 +577,7 @@ async function ask(host: SecretaryHost, text: string, withFiles = true) {
   host.render();
   try {
     const reply: SecretaryReply = IS_TAURI
-      ? await Bridge.secretaryAsk(words, provider || null, tz(), name, files.map((f) => f.id), instructions.trim(), skillChoices().skills, skillChoices().hidden, fastForced)
+      ? await Bridge.secretaryAsk(words, provider || null, tz(), name, files.map((f) => f.id), instructions.trim(), skillChoices().skills, skillChoices().hidden, fastForced, rootFolder)
       : await (await import("./demo")).demoSecretary(words, (step) => onStep(step, host));
     const unused = unusedUploads(files, reply.proposals);
     entries.push({ who: "secretary", text: reply.text, steps: reply.steps, proposals: reply.proposals, unused: unused.length ? unused : undefined, choices: reply.choices ?? guessChoices(reply.text) });

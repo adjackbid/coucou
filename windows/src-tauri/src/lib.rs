@@ -839,6 +839,29 @@ fn team_open(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<
     cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// A document a member made (a web page, a PDF, an Office file, text), in the program
+/// the system has for it, as a double-click would. Only those kinds: a locator comes
+/// from an agent, and never a program, a script or a shortcut.
+#[tauri::command]
+fn team_open_file(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<(), String> {
+    if !is_document(&locator) {
+        return Err(tr!("這種檔案只會在檔案總管中顯示。", "This kind of file is only shown in Explorer."));
+    }
+    let work_dir = teams.get(&team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or_else(no_such_team)?;
+    let path = std::path::Path::new(locator.trim());
+    let full = if path.is_absolute() { path.to_path_buf() } else { std::path::Path::new(&work_dir).join(path) };
+    if !full.is_file() {
+        return Err(tr!(format!("{} 已經不在了。", full.display()), format!("{} is no longer there.", full.display())));
+    }
+    Command::new("explorer").arg(&full).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// A deliverable the system can show with a viewer: a page, a PDF, an Office file, text or data.
+fn is_document(locator: &str) -> bool {
+    let lower = locator.trim().to_ascii_lowercase();
+    ["html", "htm", "pdf", "md", "txt", "docx", "xlsx", "pptx", "csv", "json", "svg", "mp4", "mp3", "wav"].iter().any(|ext| lower.ends_with(&format!(".{ext}")))
+}
+
 /// A picture a member made, in the system's own viewer. Only pictures:
 /// a locator comes from an agent, and opening it starts whatever is
 /// registered for its kind of file.
@@ -1204,6 +1227,17 @@ fn team_window(app: AppHandle, action: String) {
     };
 }
 
+/// Opens a folder of the person's choosing in Explorer (Agent Center's root folder, a
+/// team's work folder): a full path to a folder that exists, and nothing else.
+#[tauri::command]
+fn open_folder(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(path.trim());
+    if !p.is_absolute() || !p.is_dir() {
+        return Err(tr!(format!("{} 不是現有的資料夾。", path.trim()), format!("{} is not an existing folder.", path.trim())));
+    }
+    Command::new("explorer").arg(p).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 /// Opens the folder the team files live in.
 #[tauri::command]
 fn team_open_configs() {
@@ -1356,6 +1390,7 @@ async fn secretary_ask(
     skills: Option<Vec<String>>,
     hidden_skills: Option<Vec<String>>,
     fast: Option<bool>,
+    root: Option<String>,
 ) -> Result<secretary::Reply, String> {
     let (provider, profiles) = {
         let settings = shared.settings.lock().unwrap();
@@ -1375,6 +1410,7 @@ async fn secretary_ask(
     office.skills = skills.unwrap_or_default();
     office.hidden_skills = hidden_skills.unwrap_or_default();
     office.fast = fast.unwrap_or(false);
+    office.root = root.unwrap_or_default();
     let window = app.clone();
     secretary
         .ask(&provider, &office, &text, &uploads.unwrap_or_default(), &move |step| {
@@ -2129,6 +2165,8 @@ pub fn run() {
             cli_run_install,
             secretary_decline,
             secretary_revise_team,
+            open_folder,
+            team_open_file,
             secretary_upload_path,
             secretary_upload_bytes,
             secretary_upload_force,
