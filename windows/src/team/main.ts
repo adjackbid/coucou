@@ -23,12 +23,12 @@ import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
 import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCompanyFps, type Tempo } from "./office/battle/session";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
-import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, pickShowOn, previewPickShow, fastModeOn, secretaryRoot, setSecretaryRoot, setFastModeOn, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setCenterReads, setMembersGet, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
+import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, pickShowOn, previewPickShow, secretaryRoot, setSecretaryRoot, secretarySpeed, speedName, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setCenterReads, setMembersGet, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
 import { agentLabel, agentsPage, baseOf, loadTeamAgents, memberChoices, poolForShow, teamAgentCounts, teamAgents, teamProfiles, type AgentsHost } from "./agents";
 import { addFiles as addKnowledgeFiles, dropTarget, knowledgeChanged, knowledgePanel, setDragging, type KnowledgeHost } from "./knowledge";
-import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
+import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, Permission, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
 
@@ -602,11 +602,8 @@ function sidebar(): HTMLElement {
                 })() }, tr("選擇資料夾…", "Choose a folder…")),
                 h("button", { class: "btn plain", type: "button", disabled: !secretaryRoot(), onClick: () => void Bridge.openFolder(secretaryRoot()).catch((err) => alert(String(err))) }, tr("開啟", "Open"))),
               h("p", { class: "hint", text: tr("你沒指定工作資料夾時,Agent Center 不會再問,直接在這底下開一個以團隊為名的資料夾;你指定的完整路徑照舊。", "When you name no work folder, Agent Center no longer asks: it opens a folder named after the team under this one. A full path you name is used as it is.") }),
-              h("label", { text: tr("快速模式", "Fast mode") }),
-              h("label", { class: "side-pop-check" },
-                h("input", { type: "checkbox", checked: fastModeOn(), onChange: (e: Event) => { setFastModeOn((e.target as HTMLInputElement).checked); render(); } }),
-                h("span", { text: tr("強制快速模式:擬的每個團隊都走最小規模、一次審查、不來回", "Force fast mode: every team it proposes takes the smallest size, one review, no second round") })),
-              h("p", { class: "hint", text: tr("關掉時 Agent Center 自己判斷題目大小;開了就一律以最快為先,精準度靠一次獨立審查。每個團隊的設定頁也能單獨開關。", "Off, Agent Center sizes each request itself; on, speed comes first and accuracy rests on one independent review. Each team's settings page has its own switch too.") }),
+              h("label", { text: tr("任務完成速度", "Speed of the work") }),
+              h("p", { class: "hint", text: trf("現在是「{level}」。用聊天框旁的 ⚡ 拉桿調整:愈左愈仔細(多一層審查、可以來回),愈右愈快(最小團隊、一次審查、不來回);拉到「快」以上就是強制快速模式。每個團隊的設定頁也能單獨開關快速模式。", "Now \"{level}\". Set it with the ⚡ slider by the chat box: left is thorough (an extra review, work may go back), right is fast (the smallest team, one review, no second round); \"Fast\" and beyond force fast mode. Each team's settings page has its own fast-mode switch too.", { level: speedName(secretarySpeed()) }) }),
               h("label", { text: "Skills" }),
               skillRows(),
               h("div", { class: "side-pop-row" },
@@ -1397,10 +1394,26 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
  * What a member waits on the person for — a permission card, a question —
  * answered right there: on its desk, in the Office's drawer, on the company map.
  */
+/** 解讀 on a permission card: Agent Center's model explains the waiting request (explain.rs), by its key. */
+const explained = new Map<string, string>();
+
+function explainAsk(snap: Snapshot, m: MemberView, p: Permission) {
+  const key = `team:${snap.id}:${m.id}:${JSON.stringify(p.requestId)}`;
+  if (explained.has(key)) return;
+  explained.set(key, "");
+  render();
+  Bridge.explainRequest(key)
+    .then((text) => explained.set(key, text || tr("(沒有說明)", "(no explanation)")))
+    .catch((err) => explained.set(key, trf("解讀不了:{why}", "Could not explain: {why}", { why: String(err instanceof Error ? err.message : err) })))
+    .finally(() => render());
+}
+
 function asks(snap: Snapshot, m: MemberView): HTMLElement[] {
   const out: HTMLElement[] = [];
   if (m.permission) {
     const p = m.permission;
+    const explainKey = `team:${snap.id}:${m.id}:${JSON.stringify(p.requestId)}`;
+    const explanation = explained.get(explainKey);
     const input = p.rawInput && typeof p.rawInput === "object" ? (p.rawInput as Record<string, unknown>) : {};
     const command = typeof input.command === "string" ? input.command : "";
     const allow = p.options.find((o) => o.kind === "allow_once") ?? p.options.find((o) => o.kind === "allow_always");
@@ -1433,9 +1446,13 @@ function asks(snap: Snapshot, m: MemberView): HTMLElement[] {
               ...more.map((x) => h("div", { class: "ask-what mono", text: commandOf(x) })),
             )
           : null,
+        explanation !== undefined
+          ? h("div", { class: `ask-explain${explanation ? "" : " loading"}`, text: explanation || tr("Agent Center 正在解讀這個請求…", "Agent Center is reading this request…") })
+          : null,
         h(
           "div",
           { class: "row" },
+          button(tr("解讀", "Explain"), "plain", () => explainAsk(snap, m, p), explanation !== undefined),
           button(tr("允許這一次", "Allow once"), "primary", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null)), !allow),
           button(tr("拒絕", "Deny"), "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null))),
           p.ruleId && allow ? button(tr("這個團隊都允許", "Allow for this team"), "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow.optionId, false, true))) : null,

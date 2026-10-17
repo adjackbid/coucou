@@ -211,6 +211,9 @@ pub struct Office {
     pub hidden_skills: Vec<String>,
     /// Fast mode forced from Agent Center's ⚙: every team it proposes is a fast one.
     pub fast: bool,
+    /// How fast the person wants the work done, from the slider by the chat box:
+    /// 1 most thorough … 3 balanced (Agent Center judges) … 5 fastest. 4 and 5 are fast mode.
+    pub speed: u8,
     /// The person's root folder for new teams (its ⚙ → 根目錄): a team the person
     /// gave no folder works in a new subfolder of it. Empty: the folder is asked for.
     pub root: String,
@@ -232,6 +235,7 @@ impl Office {
             skills: Vec::new(),
             hidden_skills: Vec::new(),
             fast: false,
+            speed: 3,
             root: String::new(),
         }
     }
@@ -760,7 +764,7 @@ impl Secretary {
             }
             None => None,
         };
-        let fast = office.fast || a.get("fast").and_then(Value::as_bool).unwrap_or(false);
+        let fast = office.fast || office.speed >= 4 || a.get("fast").and_then(Value::as_bool).unwrap_or(false);
         let config = json!({
             "id": "draft",
             "name": name,
@@ -1793,7 +1797,7 @@ Now: {} (the user's local time).\n\
         root_line(&office.root),
         " The user builds teams from their own team agents only: list_agents lists them with what each is good for, whether it is a Cloud Agent or a Local Agent, and what it costs; choose members by those descriptions, and never name an agent that is not listed. When the user wants it cheap, on a budget, or asks which costs less (or wants the best whatever it costs), compare the agents by the prices and recent spend list_agents gives, not only by what their descriptions say, and tell the user the prices you compared; a description is the user's own note, the price is the fact, so when they disagree say so. An agent on a subscription plan costs nothing extra per token. When you talk to the user, call a team agent by its name, never by its id (ta-…).",
         library_line(office),
-        fast_line(office.fast),
+        speed_line(office.speed, office.fast),
         when(crate::team::store::now_ms(), office.tz_minutes),
         format!("{}{}", center_skills(&office.skills), own_instructions(&office.instructions)),
         crate::i18n::reply_language(),
@@ -1818,6 +1822,19 @@ fn library_line(office: &Office) -> String {
     }
     let items: Vec<String> = lib.iter().map(|s| if s.description.is_empty() { s.name.clone() } else { format!("{} ({})", s.name, s.description) }).collect();
     format!(" Skills in Agent Center's library, which you may give a member with `skills` (they get the skill's text with their role): {}.", items.join("; "))
+}
+
+/// The speed slider by the chat box, for the prompt: how to size and staff a team and
+/// what to tell the leader. 3 (balanced) adds nothing; 4 and 5 are fast mode.
+// i18n: model-facing
+fn speed_line(speed: u8, fast: bool) -> String {
+    match speed {
+        5 => format!("{}- FASTEST (speed 5 of 5): one member, who is the leader, does the whole job and delivers in one go; a second member only when the goal plainly has independent parts, never more than 3. Prefer the agent that answers fastest when the descriptions make that clear. Tell the leader to skip anything not asked for and to deliver a first usable result before polishing.\n", fast_line(true)),
+        s if s >= 4 || fast => fast_line(true),
+        1 => "- MOST THOROUGH (speed 1 of 5, the user set it on the speed slider): accuracy and completeness come before time. Give every deliverable an independent reviewer on a different agent, and a second reviewer for the final deliverable; let reviews send work back as often as needed. Split large goals so each member has one clear piece. In `kickoff` say that the team runs thorough: sources checked, every number verified, no step skipped, a second round when the reviewer asks.\n".to_string(),
+        2 => "- THOROUGH (speed 2 of 5, the user set it on the speed slider): prefer accuracy over time. Every deliverable gets one independent review on a different agent, and work may go back once more if the reviewer asks. In `kickoff` say that the team checks sources and numbers before delivering.\n".to_string(),
+        _ => String::new(),
+    }
 }
 
 /// Fast mode forced from Agent Center's ⚙: one more rule for the prompt, or nothing.
@@ -2115,6 +2132,17 @@ mod tests {
     fn fast_mode_from_the_settings_marks_every_proposed_team() {
         assert_eq!(fast_line(false), "");
         assert!(fast_line(true).contains("FAST MODE") && fast_line(true).contains("smallest team"));
+    }
+
+    #[test]
+    fn the_speed_slider_shapes_the_prompt() {
+        assert_eq!(speed_line(3, false), "");
+        assert!(speed_line(3, true).contains("FAST MODE"), "the ⚙ switch still forces fast mode");
+        assert!(speed_line(4, false).contains("FAST MODE"));
+        let fastest = speed_line(5, false);
+        assert!(fastest.contains("FAST MODE") && fastest.contains("FASTEST"));
+        assert!(speed_line(2, false).contains("THOROUGH") && !speed_line(2, false).contains("MOST"));
+        assert!(speed_line(1, false).contains("MOST THOROUGH") && speed_line(1, false).contains("second reviewer"));
     }
 
     #[test]

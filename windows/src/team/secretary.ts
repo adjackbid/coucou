@@ -336,8 +336,52 @@ if (IS_TAURI) loadSkillLibrary(() => {});
 /** Agent Center's picking shown as it proposes a team (pick-show.ts): off unless the person turns it on. */
 let pickShowing = stored("coucou.secretary.pickShow") === "1";
 
-/** Fast mode forced from Agent Center's ⚙: every team it proposes is a fast one. */
-let fastForced = stored("coucou.secretary.fast") === "1";
+/** Fast mode: the speed slider at 快 or 極速 (the earlier ⚙ switch is folded into it). */
+
+/**
+ * The speed slider by the chat box: 1 most thorough … 3 balanced … 5 fastest. It shapes
+ * how Agent Center sizes and staffs a team and what it tells the leader; 4 and 5 are fast mode.
+ */
+let speed = Math.min(5, Math.max(1, Number(stored("coucou.secretary.speed") ?? (stored("coucou.secretary.fast") === "1" ? "4" : "3")) || 3));
+
+export function secretarySpeed(): number {
+  return speed;
+}
+
+export function setSecretarySpeed(v: number) {
+  speed = Math.min(5, Math.max(1, Math.round(v) || 3));
+  store("coucou.secretary.speed", String(speed));
+}
+
+/** The slider's levels, in the person's words. */
+export function speedName(v: number): string {
+  return [tr("最仔細", "Most thorough"), tr("仔細", "Thorough"), tr("平衡", "Balanced"), tr("快", "Fast"), tr("極速", "Fastest")][Math.min(5, Math.max(1, v)) - 1];
+}
+
+function speedHint(v: number): string {
+  return [
+    tr("準確第一:每份成果都有獨立審查,最終成果兩人審,可以來回修到好。", "Accuracy first: every deliverable gets an independent review, the final one two; work goes back until right."),
+    tr("偏仔細:每份成果一次獨立審查,必要時再退回一次。", "Leaning thorough: one independent review per deliverable, one more round if needed."),
+    tr("平衡:Agent Center 自己判斷題目大小、人數與審查方式。", "Balanced: Agent Center sizes the team and the reviewing itself."),
+    tr("快:最小團隊、每個任務一次審查、不來回(快速模式)。", "Fast: the smallest team, one review per task, no second round (fast mode)."),
+    tr("極速:一個人從頭做到尾,先交出可用版本再說;精細度最低。", "Fastest: one member does it all and delivers a usable first version; least polish."),
+  ][Math.min(5, Math.max(1, v)) - 1];
+}
+
+/** The slider by the model picker. */
+function speedBar(host: SecretaryHost): HTMLElement {
+  const label = h("span", { class: "sec-speed-name", text: speedName(speed) });
+  const input = h("input", { type: "range", min: "1", max: "5", step: "1", value: String(speed), "aria-label": tr("任務完成速度", "Speed of the work") }) as HTMLInputElement;
+  input.addEventListener("input", () => {
+    setSecretarySpeed(Number(input.value));
+    label.textContent = speedName(speed);
+    box.title = speedHint(speed);
+    box.dataset.level = String(speed);
+  });
+  input.addEventListener("change", () => host.render());
+  const box = h("label", { class: "sec-speed", "data-level": String(speed), title: speedHint(speed) }, h("span", { class: "sec-speed-icon", "aria-hidden": "true", text: "⚡" }), input, label);
+  return box;
+}
 
 /** The root folder for new teams (its ⚙ → 根目錄): a team the person gave no folder gets a subfolder of it. */
 let rootFolder = stored("coucou.secretary.root") ?? "";
@@ -352,12 +396,11 @@ export function setSecretaryRoot(v: string) {
 }
 
 export function fastModeOn(): boolean {
-  return fastForced;
+  return speed >= 4;
 }
 
 export function setFastModeOn(v: boolean) {
-  fastForced = v;
-  store("coucou.secretary.fast", v ? "1" : "0");
+  setSecretarySpeed(v ? 4 : 3);
 }
 
 export function pickShowOn(): boolean {
@@ -577,7 +620,7 @@ async function ask(host: SecretaryHost, text: string, withFiles = true) {
   host.render();
   try {
     const reply: SecretaryReply = IS_TAURI
-      ? await Bridge.secretaryAsk(words, provider || null, tz(), name, files.map((f) => f.id), instructions.trim(), skillChoices().skills, skillChoices().hidden, fastForced, rootFolder)
+      ? await Bridge.secretaryAsk(words, provider || null, tz(), name, files.map((f) => f.id), instructions.trim(), skillChoices().skills, skillChoices().hidden, speed >= 4, rootFolder, speed)
       : await (await import("./demo")).demoSecretary(words, (step) => onStep(step, host));
     const unused = unusedUploads(files, reply.proposals);
     entries.push({ who: "secretary", text: reply.text, steps: reply.steps, proposals: reply.proposals, unused: unused.length ? unused : undefined, choices: reply.choices ?? guessChoices(reply.text) });
@@ -1135,6 +1178,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
           : providers
             ? h("button", { class: "link hint", type: "button", onClick: () => void Bridge.openSettingsPage("chat") }, tr("還沒有聊天模型：到「設定 → 聊天模型」新增一個", "No chat model yet: add one in Settings → Chat models"))
             : h("span", { class: "hint", text: "" }),
+        speedBar(host),
         instructions.trim() ? h("span", { class: "chip sec-own", title: trf("自訂指示(在側欄 Agent Center 的 ⚙ 裡改):\n{text}", "Your instructions (change them under Agent Center's ⚙ in the sidebar):\n{text}", { text: instructions.trim() }), text: tr("已套用自訂指示", "Your instructions on") }) : null,
         h("button", { class: "link sec-attach", type: "button", title: tr("附加檔案(也可以拖進視窗或貼上圖片):要放進團隊知識庫的設計稿、規格、圖片…", "Attach files (or drag them onto the window, or paste a picture): designs, specs, pictures for a team's knowledge base…"), disabled: waiting, onClick: () => pickFiles(host) }, tr("📎 附加檔案", "📎 Attach files")),
         h("span", { class: "grow" }),

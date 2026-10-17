@@ -1699,6 +1699,23 @@ h2 {
   color: var(--red-text);
 }
 
+/* 解讀: Agent Center's explanation of the request, in sections. */
+.ask-explain {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--solid);
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  user-select: text;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.ask-explain.loading {
+  color: var(--dim);
+}
+
 .ask-what {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
