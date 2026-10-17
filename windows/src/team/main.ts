@@ -940,6 +940,9 @@ function setup(file: TeamFile): HTMLElement {
     h("label", { text: tr("任務範圍(以逗號分隔)", "Scope (comma-separated)") }),
     // Read back with any of the separators, whichever language wrote it.
     bound("input", "scope", joinNames(config.scope), (v) => (config.scope = v.split(/[,,、]/).map((x) => x.trim()).filter(Boolean)), { placeholder: tr("商品目錄、購物車、會員登入", "Product catalog, cart, member login") }),
+    h("label", { text: tr("給組長的開局指示", "Kickoff for the leader") }),
+    // Agent Center writes this when it proposes the team; the person may change it.
+    bound("textarea", "kickoff", config.kickoff ?? "", (v) => (config.kickoff = v.trim() || undefined), { rows: "4", placeholder: tr("題目大小、怎麼切、誰驗收什麼、第一批交什麼、工作規則;留空就讓組長自己規劃", "How big the goal is, how to split it, who reviews what, the first batch, the rules; empty lets the leader plan alone") }),
     h("label", { text: tr("工作資料夾", "Work folder") }),
     h(
       "div",

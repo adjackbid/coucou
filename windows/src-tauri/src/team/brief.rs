@@ -61,6 +61,17 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
     if !member.duty.trim().is_empty() {
         out.push_str(&format!("\nYour duty: {}\n", member.duty.trim()));
     }
+    // What Agent Center gave this member when the team was proposed.
+    if !member.brief.trim().is_empty() || !member.skills.is_empty() {
+        out.push_str("\nFrom Agent Center, to keep throughout your work:\n");
+        if !member.brief.trim().is_empty() {
+            out.push_str(member.brief.trim());
+            out.push('\n');
+        }
+        if !member.skills.is_empty() {
+            out.push_str(&crate::team_agents::skill_text(&member.skills));
+        }
+    }
 
     out.push_str(&format!("\nYour teammates:\n{}\n", roster(config, me)));
     let from: Vec<String> = config.links.iter().filter(|l| l.kind == LinkKind::Delivery && l.to == me).map(|l| format!("{} from {}", if l.what.is_empty() { "work" } else { &l.what }, who(config, &l.from))).collect();
@@ -139,8 +150,13 @@ pub fn unread(n: usize) -> String {
 /// The leader's first message.
 // i18n: model-facing
 pub fn kickoff(config: &TeamConfig) -> String {
+    let plan = if config.kickoff.trim().is_empty() {
+        String::new()
+    } else {
+        format!("\n\nAgent Center's plan for this team, from the user's request. Follow it unless the board shows it is wrong; then say what you changed and why:\n{}", config.kickoff.trim())
+    };
     format!(
-        "The team has started. Plan the work for this goal and create the tasks now:\n{}\nUse `team_status` to see your teammates and `task_create` for each task.",
+        "The team has started. Plan the work for this goal and create the tasks now:\n{}\nUse `team_status` to see your teammates and `task_create` for each task.{plan}",
         config.goal.trim()
     )
 }

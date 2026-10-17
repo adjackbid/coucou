@@ -13,6 +13,10 @@ export interface MemberConfig {
   maxTokens?: number;
   /** At most this estimated cost in a run, US dollars; absent for no limit. */
   maxCostUsd?: number;
+  /** What Agent Center told this member to keep throughout its work. */
+  brief?: string;
+  /** Skills from Agent Center's library this member gets the text of, by name. */
+  skills?: string[];
 }
 
 export interface TeamConfig {
@@ -37,6 +41,8 @@ export interface TeamConfig {
   agentFolders?: boolean;
   /** More folders trusted like the work folder, for steps approved by themselves. */
   trustedDirs?: string[];
+  /** Agent Center's plan for the leader, read with its first message. */
+  kickoff?: string;
 }
 
 export interface TeamFile {

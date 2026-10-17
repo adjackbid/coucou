@@ -563,6 +563,7 @@ impl Secretary {
             // i18n: model-facing
             return Err("A team has at most 12 members.".into());
         }
+        let library = crate::team_agents::library();
         let mut list = Vec::new();
         for (i, m) in members.iter().enumerate() {
             let agent_given = need(m, "agent")?;
@@ -572,6 +573,11 @@ impl Secretary {
                 .find(|p| p.id.eq_ignore_ascii_case(&agent_given) || p.name.eq_ignore_ascii_case(&agent_given))
                 // i18n: model-facing
                 .ok_or_else(|| format!("Member {}: there is no agent '{agent_given}'. Agents: {}.", i + 1, office.choices.iter().map(|p| p.id.as_str()).collect::<Vec<_>>().join(", ")))?;
+            let skills: Vec<String> = m.get("skills").and_then(Value::as_array).map(|s| s.iter().filter_map(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(str::to_string).collect()).unwrap_or_default();
+            if let Some(unknown) = skills.iter().find(|s| !library.iter().any(|l| l.name.eq_ignore_ascii_case(s))) {
+                // i18n: model-facing
+                return Err(format!("Member {}: there is no skill '{unknown}' in Agent Center's library. Skills: {}.", i + 1, if library.is_empty() { "none".to_string() } else { library.iter().map(|l| l.name.as_str()).collect::<Vec<_>>().join(", ") }));
+            }
             list.push(json!({
                 "id": format!("ai{}", i + 1),
                 "name": text(m, "name").unwrap_or_else(|| format!("AI {}", i + 1)),
@@ -580,8 +586,11 @@ impl Secretary {
                 "agent": agent.id,
                 "model": text(m, "model").unwrap_or_default(),
                 "color": COLORS[i % COLORS.len()],
+                "brief": text(m, "brief").unwrap_or_default(),
+                "skills": skills,
             }));
         }
+        let kickoff = text(a, "kickoff").unwrap_or_default();
         let leader_given = text(a, "leader").unwrap_or_default();
         let leader = list
             .iter()
@@ -615,6 +624,7 @@ impl Secretary {
             "leader": leader,
             "autoApprove": true,
             "members": list,
+            "kickoff": kickoff,
         });
         let draft: TeamConfig = serde_json::from_value(config.clone()).map_err(|e| e.to_string())?;
         let mut lines: Vec<String> = vec![tr!(format!("目標:{goal}"), format!("Goal: {goal}"))];
@@ -631,7 +641,11 @@ impl Secretary {
         for m in &draft.members {
             let model: String = if m.model.trim().is_empty() { tr!("代理預設", "agent default") } else { m.model.clone() };
             let lead: &str = if m.id == draft.leader { tr!("(Leader)", " (Leader)") } else { "" };
-            lines.push(format!("{}{lead} · {} · {} / {}{}", m.name, if m.role.is_empty() { "—" } else { &m.role }, m.agent, model, if m.duty.is_empty() { String::new() } else { format!(" — {}", m.duty) }));
+            let skills: String = if m.skills.is_empty() { String::new() } else { tr!(format!(" · skill:{}", m.skills.join("、")), format!(" · skills: {}", m.skills.join(", "))) };
+            lines.push(format!("{}{lead} · {} · {} / {}{}{skills}", m.name, if m.role.is_empty() { "—" } else { &m.role }, m.agent, model, if m.duty.is_empty() { String::new() } else { format!(" — {}", m.duty) }));
+        }
+        if !draft.kickoff.trim().is_empty() {
+            lines.push(tr!(format!("開局指示:{}", cut(draft.kickoff.trim(), 240)), format!("Kickoff: {}", cut(draft.kickoff.trim(), 240))));
         }
         let confirm: &str = if start { tr!("建立並啟動", "Create and start") } else { tr!("建立團隊", "Create team") };
         let knowledge = serde_json::to_value(&items).map_err(|e| e.to_string())?;
@@ -1488,6 +1502,8 @@ How you work:\n\
 - Prefer one proposal that does what was asked. Ask a short question first only when something essential is missing, such as the work folder for a new team.\n\
 - When you ask the user to choose between options, call offer_choices with them so they can click one, instead of listing them as text.\n\
 - For a new team: pick agents and models from list_agents (agent_models lists what an agent offers); give the leader the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
+- Size the request before you shape the team, and say which size in `kickoff`. Quick (a fact, a short answer, one small file): one member, who is the leader, does it alone and reports. Medium (one document that needs research or checking, no natural split): one member does it and a second member on a different model reviews it once. Large (several independent parts): split by scope (themes, chapters, product lines), each member from start to finish, hand-off chains of at most two links; when the user fixed the roles (who draws, who checks), split by batch instead and have each member deliver batch by batch. Never put the cheapest or least reliable agent at the head of a chain others wait on; use cheap agents on leaf work the leader spot-checks. Only pick an agent for work its `can:` line covers (browsing, running code, images).\n\
+- In `kickoff` tell the leader: the size, the split, who reviews what (so reviews are not all on the leader), the first batch each member delivers, and the rules of the work (sources, formats, what counts as done). Give a member its own rules in `brief`. Members read messages only when a turn starts, so rules belong in the tasks and briefs, not in later messages.{}\n\
 - A team has a knowledge base: documents (design notes, specs, pictures, any file) its members work from. When the user attaches files or mentions design documents, specs or reference material for a team, put them in `knowledge` (propose_team for a new team, propose_knowledge for one that exists): attached files by their id (u…), or full paths the user wrote — never a path you guessed. Each is for the leader only unless the user says the whole team should see it (then visibility \"shared\"). You only see the files' names, never what is in them.\n\
 - Answer in the language named on the last line of this prompt, short and concrete: a few lines or a short list. Point out anything waiting for the user (permission cards, questions) first.\n\
 \n\
@@ -1499,10 +1515,22 @@ Now: {} (the user's local time).\n\
             name => format!("Your name is {name}; the user calls you that, and you may call yourself that. "),
         },
         " The user builds teams from their own team agents only: list_agents lists them with what each is good for, whether it is a Cloud Agent or a Local Agent, and what it costs; choose members by those descriptions, and never name an agent that is not listed. When the user wants it cheap, on a budget, or asks which costs less (or wants the best whatever it costs), compare the agents by the prices and recent spend list_agents gives, not only by what their descriptions say, and tell the user the prices you compared; a description is the user's own note, the price is the fact, so when they disagree say so. An agent on a subscription plan costs nothing extra per token. When you talk to the user, call a team agent by its name, never by its id (ta-…).",
+        library_line(),
         when(crate::team::store::now_ms(), office.tz_minutes),
         own_instructions(&office.instructions),
         crate::i18n::reply_language(),
     )
+}
+
+/// Agent Center's skill library, for the prompt: what a member may be given with `skills`.
+// i18n: model-facing
+fn library_line() -> String {
+    let lib = crate::team_agents::library();
+    if lib.is_empty() {
+        return String::new();
+    }
+    let items: Vec<String> = lib.iter().map(|s| if s.description.is_empty() { s.name.clone() } else { format!("{} ({})", s.name, s.description) }).collect();
+    format!(" Skills in Agent Center's library, which you may give a member with `skills` (they get the skill's text with their role): {}.", items.join("; "))
 }
 
 /// How long the person's own instructions may be: a few paragraphs, not a second prompt.
@@ -1574,8 +1602,11 @@ fn describe() -> Vec<Tool> {
                     "name": { "type": "string" }, "role": { "type": "string" }, "duty": { "type": "string" },
                     "agent": { "type": "string", "description": "An agent id from list_agents." },
                     "model": { "type": "string", "description": "Empty for the agent's default." },
+                    "brief": { "type": "string", "description": "Rules this member keeps throughout its work (sources, formats, what not to do). Read with its role." },
+                    "skills": { "type": "array", "items": { "type": "string" }, "description": "Names of skills from Agent Center's library (listed in your instructions) this member gets the text of." },
                 }, "required": ["name", "role", "agent"] } },
                 "leader": { "type": "string", "description": "The leader's name; the first member if empty." },
+                "kickoff": { "type": "string", "description": "Your plan for the leader, read with its first message: how big the goal is (quick / medium / large), how to split it (by scope, by batch, or one member plus one reviewer), who reviews what, what to deliver first, and the rules of the work. A few lines." },
                 "start": { "type": "boolean", "description": "Start it as soon as it is created (default true)." },
                 "knowledge": knowledge.clone(),
                 "knowledge_from": { "type": "string", "description": "Another team (id or name) whose knowledge base the new team starts with, each document as it was shared." },
