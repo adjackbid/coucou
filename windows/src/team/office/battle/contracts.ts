@@ -11,7 +11,7 @@
 import type { Id, RunStatus, TaskStatus, WorkStatus } from "../contracts";
 
 /** How the same work is shown: rooms, a raid, or the 星域 (one universe of light rings; see ../orbit). */
-export type PresentationMode = "office" | "battle" | "orbit";
+export type PresentationMode = "office" | "battle" | "orbit" | "space";
 export type HeroClass = "captain" | "mage" | "guardian" | "warrior" | "support";
 
 export interface BattleScope {

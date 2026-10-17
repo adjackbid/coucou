@@ -9,7 +9,7 @@
 import "./office.css";
 import { h } from "../../views/dom";
 import { onLangChange, tr, trf } from "../../core/i18n";
-import type { Artifact, CommandRecord, MemberSnapshot, Message, Team, TeamRun, Capabilities } from "./contracts";
+import type { Artifact, CommandRecord, MemberSnapshot, Message, Team, TeamRun, Capabilities, WorkStatus } from "./contracts";
 import { OfficeStore } from "./store";
 import { floorColumns } from "./floor";
 import { RealAdapter, fileFromSnapshot } from "./adapter-real";
@@ -44,6 +44,8 @@ export interface OfficeHost {
   openArtifact(teamId: string, ref: string): void;
   /** Jump to 團隊設定 (to raise a fallen member's limits). */
   openSetup?(teamId: string): void;
+  /** Agent Center: the hub of the 無邊界 map. */
+  openSecretary?(): void;
   /** A deliverable that is a picture, as bytes; rejects when it is not one or cannot be read. */
   preview?(teamId: string, ref: string): Promise<ArrayBuffer>;
   /** A team's earlier runs, newest first, and one of them as it ended. */
@@ -651,7 +653,8 @@ export class Office {
     return h("div", { class: "bt-mode", role: "group", "aria-label": tr("畫面模式", "View mode") },
       opt("office", "Office", tr("一般辦公室畫面", "The usual office view")), // i18n-ok: the view's name, the same in both languages
       this.battleAllowed ? opt("battle", tr("戰鬥模式", "Battle mode"), tr("同一份工作,看成團隊討伐需求魔王:只改變畫面,不影響工作", "The same work, told as your team's raid on the Requirements Overlord: only the picture changes, never the work")) : null,
-      opt("orbit", tr("星域", "Orbit mode"), tr("同一份工作,看成 Agent 在同一個宇宙裡的光環與協作連線:只改變畫面,不影響工作", "The same work, told as your agents' light rings and the lines between them, all in one universe: only the picture changes, never the work")));
+      opt("orbit", tr("星域", "Orbit mode"), tr("同一份工作,看成 Agent 在同一個宇宙裡的光環與協作連線:只改變畫面,不影響工作", "The same work, told as your agents' light rings and the lines between them, all in one universe: only the picture changes, never the work")),
+      opt("space", tr("無邊界", "Boundless"), tr("每個團隊的辦公室漂在同一片星空裡,圍著 Agent Center;只改變畫面,不影響工作", "Every team's office floats in one sky around Agent Center: only the picture changes, never the work")));
   }
 
   /** 團隊設定 picked another battlefield: the old one's moves stop where they are. */
@@ -954,6 +957,7 @@ export class Office {
     const count = this.store.headcount();
     if (!teams.length) return h("div", { class: "office-empty" }, h("p", { text: away ? trf("{n} 個團隊都已封存。到側欄下方的「已封存」可以取出。", "All {n} teams are archived. You can bring them back from Archived at the bottom of the sidebar.", { n: away }) : tr("還沒有團隊。按左下角的「新增團隊」開始。", "No teams yet. Click New team at the bottom left to start.") }));
     if (this.mode === "orbit") return this.orbitCompany(teams, away, count);
+    if (this.mode === "space") return this.spaceCompany(teams, away, count);
     // The room picked, if any: a click on the floor where there is no room lets it go.
     const pick = teams.find((t) => t.teamId === this.companyPick) ?? null;
     // Rooms laid out as a floor: as many columns as rows. A large office takes 2 × 2 cells.
@@ -1038,6 +1042,181 @@ export class Office {
       this.connection(),
       this.trouble(),
       h("div", { class: "office-body" }, this.mapViewport(grid), side),
+    );
+  }
+
+  // ── 無邊界 ────────────────────────────────────────────────────────────────────
+
+  /** The tone of each office on the 無邊界 map, by its place in the list: neighbours never share one. */
+  private static SPACE_TONES = ["#6F93FF", "#34D399", "#F5A524", "#A78BFA", "#F472B6", "#22D3EE", "#84CC16", "#FB7185"];
+
+  /** A fixed sprinkle of stars, as one box-shadow: the same sky every time. */
+  private static stars(w: number, h: number): string {
+    let seed = 7;
+    const next = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const out: string[] = [];
+    for (let i = 0; i < 160; i++) {
+      const x = Math.round(next() * w), y = Math.round(next() * h), a = (0.25 + next() * 0.6).toFixed(2);
+      out.push(`${x}px ${y}px 0 ${next() < 0.15 ? 1 : 0}px rgba(255, 255, 255, ${a})`);
+    }
+    return out.join(",");
+  }
+
+  /**
+   * Every office floating in one sky around Agent Center, each on a lit path
+   * to it: a ring of rooms (two rings past eight), the same tiles as the map,
+   * with a small chart of the whole in the corner.
+   */
+  private spaceCompany(teams: Team[], away: number, count: { seats: number }): HTMLElement {
+    const pick = teams.find((t) => t.teamId === this.companyPick) ?? null;
+    const n = teams.length;
+    const TILE = 330;
+    // Rooms sit on a ring wide enough that none touch; past eight, a second ring outside.
+    const inner = Math.min(n, 8);
+    const outer = n - inner;
+    const r1 = Math.max(400, Math.round((inner * (TILE + 120)) / (2 * Math.PI)));
+    const r2 = outer ? Math.max(r1 + TILE + 140, Math.round((outer * (TILE + 120)) / (2 * Math.PI))) : 0;
+    const R = Math.max(r1, r2);
+    const W = 2 * R + TILE + 240, H = 2 * R + TILE + 240;
+    const cx = W / 2, cy = H / 2;
+    const spots = teams.map((t, i) => {
+      const ring = i < inner ? { r: r1, k: i, of: inner } : { r: r2, k: i - inner, of: outer };
+      const a = -Math.PI / 2 + (ring.k / ring.of) * 2 * Math.PI + (i >= inner ? Math.PI / outer : 0);
+      return { t, i, x: cx + ring.r * Math.cos(a), y: cy + ring.r * Math.sin(a), tone: Office.SPACE_TONES[i % Office.SPACE_TONES.length] };
+    });
+    const live = (run: TeamRun | undefined) => !!run && (run.status === "running" || run.status === "needs_attention" || run.status === "pausing");
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("class", "office-space-paths");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("width", String(W));
+    svg.setAttribute("height", String(H));
+    svg.setAttribute("aria-hidden", "true");
+    for (const s of spots) {
+      const run = this.store.run(s.t.currentRunId);
+      // A gentle curve from the room to the hub, bent a little to one side so paths read as roads.
+      const mx = (s.x + cx) / 2 + (s.y - cy) * 0.12, my = (s.y + cy) / 2 - (s.x - cx) * 0.12;
+      const path = document.createElementNS(ns, "path");
+      path.setAttribute("d", `M ${s.x} ${s.y} Q ${mx} ${my} ${cx} ${cy}`);
+      path.setAttribute("class", `office-space-path${live(run) ? " live" : ""}`);
+      path.setAttribute("style", `--tone:${s.tone}`);
+      svg.append(path);
+      const glow = path.cloneNode() as SVGPathElement;
+      glow.setAttribute("class", "office-space-path-glow");
+      svg.prepend(glow);
+    }
+    const board = h("div", { class: "office-space", style: `${this.mapTransform()}width:${W}px;height:${H}px;` },
+      h("i", { class: "office-space-stars", "aria-hidden": "true", style: `box-shadow:${Office.stars(W, H)}` }),
+      svg);
+    const working = new Set<WorkStatus>(["working", "planning", "reviewing"]);
+    const agents = new Map<string, number>();
+    for (const s of spots) {
+      const { t } = s;
+      const run = this.store.run(t.currentRunId);
+      const alerts = this.alerts(t.teamId).length;
+      const p = this.store.progress(t.teamId);
+      const members = this.store.members(t.teamId);
+      const busy = members.filter((m) => working.has(m.workStatus)).length;
+      for (const m of members) {
+        const name = this.store.agent(m.agentId)?.name ?? m.agentId;
+        agents.set(name, (agents.get(name) ?? 0) + 1);
+      }
+      const faces = members.slice(0, 6).map((m) =>
+        h("i", { class: `office-space-face${working.has(m.workStatus) ? " busy" : ""}`, title: `${m.displayName ?? m.memberId} · ${STATUS[m.workStatus]?.label ?? m.workStatus}`, style: `--c:${m.color ?? s.tone}` }));
+      const tile = h(
+        "div",
+        { class: `office-room-tile space${t.teamId === pick?.teamId ? " on" : ""}${live(run) ? " live" : ""}`, role: "listitem", style: `left:${s.x}px;top:${s.y}px;--tone:${s.tone}` },
+        h(
+          "div",
+          { class: "office-space-plate" },
+          h("i", { class: "office-space-dot", "aria-hidden": "true" }),
+          h("b", { title: t.name, text: t.name }),
+          h("span", { class: "dim", text: trf("{n} 位 · {busy} 工作中", `${members.length === 1 ? "{n} agent" : "{n} agents"} · {busy} running`, { n: members.length, busy }) }),
+          h("span", { class: "office-space-faces" }, ...faces),
+          alerts ? h("span", { class: "office-count", title: trf("{n} 項需要你", alerts === 1 ? "{n} needs you" : "{n} need you", { n: alerts }), text: String(alerts) }) : null,
+        ),
+        h(
+          "button",
+          {
+            class: "office-room-pick", type: "button",
+            "aria-label": [t.name, p.percent === null ? tr("尚未派工", "No tasks yet") : `${p.percent}%`, alerts ? trf("{n} 項需要你", alerts === 1 ? "{n} needs you" : "{n} need you", { n: alerts }) : ""].filter(Boolean).join(tr(",", ", ")),
+            onClick: () => {
+              if (this.dragged) return;
+              this.companyPick = t.teamId;
+              this.host.render();
+            },
+            onKeydown: ((e: KeyboardEvent) => { if (e.key === "Enter" && e.shiftKey) this.host.openTeam(t.teamId); }) as EventListener,
+            onDblclick: () => this.host.openTeam(t.teamId),
+          },
+          this.scene(t.teamId, true).el,
+        ),
+        h(
+          "div",
+          { class: "office-room-plate" },
+          live(run) ? h("span", { class: "office-live", title: tr("團隊正在工作,畫面即時更新", "The team is at work, updating live"), text: "LIVE" }) : null, // i18n-ok: LIVE is the same in both languages
+          this.runLabel(run),
+          h("span", { class: "dim", text: p.percent === null ? tr("尚未派工", "No tasks yet") : `${p.percent}%` }),
+        ),
+        this.figures(t.teamId, "office-figures room"),
+      );
+      board.append(tile);
+    }
+    const busyTeams = spots.filter((s) => live(this.store.run(s.t.currentRunId))).length;
+    const hub = h(
+      "button",
+      {
+        class: "office-hub", type: "button", style: `left:${cx}px;top:${cy}px`,
+        title: this.host.openSecretary ? tr("打開 Agent Center", "Open Agent Center") : "",
+        onClick: () => { if (!this.dragged) this.host.openSecretary?.(); },
+      },
+      h("i", { class: "office-hub-ring r3", "aria-hidden": "true" }),
+      h("i", { class: "office-hub-ring r2", "aria-hidden": "true" }),
+      h("i", { class: "office-hub-ring r1", "aria-hidden": "true" }),
+      h("i", { class: "office-hub-beam", "aria-hidden": "true" }),
+      h("i", { class: "office-hub-core", "aria-hidden": "true" }),
+      h("span", { class: "office-hub-label" },
+        h("b", { text: "Agent Center" }), // i18n-ok: the same in both
+        h("small", { text: trf("{n} 個團隊 · {busy} 個進行中 · {seats} 位 Agents", `${n === 1 ? "{n} team" : "{n} teams"} · {busy} running · ${count.seats === 1 ? "{seats} agent" : "{seats} agents"}`, { n, busy: busyTeams, seats: count.seats }) })),
+    );
+    board.append(hub);
+    // The small chart in the corner: where every office is, and the hub.
+    const chart = h(
+      "div",
+      { class: "office-minimap", "aria-hidden": "true" },
+      h("span", { class: "office-minimap-title", text: tr("地圖", "Map") }),
+      h("div", { class: "office-minimap-sky" },
+        h("i", { class: "office-minimap-hub", style: `left:${((cx / W) * 100).toFixed(1)}%;top:${((cy / H) * 100).toFixed(1)}%` }),
+        ...spots.map((s) => h("i", { class: `office-minimap-dot${s.t.teamId === pick?.teamId ? " on" : ""}`, style: `left:${((s.x / W) * 100).toFixed(1)}%;top:${((s.y / H) * 100).toFixed(1)}%;background:${s.tone}` }))),
+    );
+    const runsOn = agents.size
+      ? h("div", { class: "office-runs-on", title: tr("成員們跑在哪些 Agent Provider 上", "The agent providers the members run on") },
+          h("small", { text: tr("跑在", "Runs on") }),
+          ...[...agents.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, k]) => h("span", { text: k > 1 ? `${name} ×${k}` : name })))
+      : null;
+    const side = h(
+      "aside",
+      { class: "office-side" },
+      ...(pick ? this.roomSummary(pick) : [this.companySummary(teams)]),
+      this.attentionCard(teams),
+    );
+    return h(
+      "div",
+      { class: "office office-company space" },
+      h("div", { class: "office-head" },
+        h("div", {}, editableText("company", companyName(), {
+          tag: "h1",
+          label: tr("公司名稱", "Company name"),
+          fallback: tr("我的公司", "My Company"),
+          onSave: (v) => setCompanyName(v),
+          render: () => this.host.render(),
+        }), h("p", { class: "dim", text: `${trf("{n} 間辦公室 · {seats} 位員工", "{n} offices · {seats} staff", { n: teams.length, seats: count.seats })}${away ? trf(" · 另有 {n} 個團隊已封存", " · {n} more archived", { n: away }) : ""}` })),
+        this.demoTag(),
+        this.demo ? h("button", { class: "btn plain", type: "button", title: tr("播放規格附帶的下一個事件", "Plays the next event that comes with the spec"), onClick: () => { if (!this.step()) this.tell(() => tr("示範事件已全部播放。", "Every demo event has played.")); this.host.render(); } }, tr("下一個示範事件", "Next demo event")) : null,
+        h("span", { style: "flex:1" }),
+        this.modeSwitch()),
+      this.connection(),
+      this.trouble(),
+      h("div", { class: "office-body" }, this.mapViewport(board, { cls: "space", over: [chart, runsOn] }), side),
     );
   }
 
@@ -1187,8 +1366,8 @@ export class Office {
     this.host.render();
   }
 
-  private mapViewport(grid: HTMLElement): HTMLElement {
-    const vp = h("div", { class: "office-map-viewport", "aria-label": tr("辦公室地圖,拖曳可移動", "Office map, drag to move it") }, grid);
+  private mapViewport(grid: HTMLElement, extra: { cls?: string; over?: (HTMLElement | null)[] } = {}): HTMLElement {
+    const vp = h("div", { class: `office-map-viewport${extra.cls ? ` ${extra.cls}` : ""}`, "aria-label": tr("辦公室地圖,拖曳可移動", "Office map, drag to move it") }, grid, ...(extra.over ?? []));
     let start: { x: number; y: number; vx: number; vy: number; id: number } | null = null;
     vp.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;

@@ -1252,3 +1252,322 @@
   font-weight: 600;
   color: var(--dim-glass);
 }
+
+/* ── 無邊界: every office floating in one sky around Agent Center ───────────── */
+
+.office-map-viewport.space {
+  background: radial-gradient(ellipse at 50% 45%, #182642 0, #0b1226 50%, #050a18 100%);
+  color: #e8ecf5;
+}
+
+.office-space {
+  position: relative;
+  transform-origin: 0 0;
+}
+
+.office-space-stars {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  border-radius: 50%;
+  background: transparent;
+  pointer-events: none;
+}
+
+.office-space-paths {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.office-space-path-glow {
+  fill: none;
+  stroke: rgba(120, 160, 255, 0.12);
+  stroke-width: 14;
+  stroke-linecap: round;
+}
+
+.office-space-path {
+  fill: none;
+  stroke: var(--tone, #6f93ff);
+  stroke-opacity: 0.45;
+  stroke-width: 2.5;
+  stroke-dasharray: 6 10;
+  stroke-linecap: round;
+}
+
+.office-space-path.live {
+  stroke-opacity: 0.9;
+  animation: office-space-flow 1.4s linear infinite;
+}
+
+@keyframes office-space-flow {
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+/* The tile: the map's room, lifted onto the sky and centred on its spot. */
+.office-room-tile.space {
+  position: absolute;
+  width: 330px;
+  transform: translate(-50%, -50%);
+  background: rgba(16, 22, 40, 0.78);
+  box-shadow: var(--edge), 0 18px 40px rgba(0, 0, 0, 0.45);
+  color: #e8ecf5;
+  transition: box-shadow 0.15s ease-out;
+}
+
+.office-room-tile.space:hover {
+  box-shadow: var(--edge), 0 0 0 1px color-mix(in srgb, var(--tone) 55%, transparent), 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+
+.office-room-tile.space.on {
+  box-shadow: var(--edge), 0 0 0 2px var(--tone), 0 0 36px color-mix(in srgb, var(--tone) 40%, transparent);
+}
+
+.office-room-tile.space.live .office-room-pick {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--tone) 45%, transparent);
+}
+
+.office-room-tile.space .dim {
+  color: #a5adbf;
+}
+
+.office-room-tile.space .office-figures.room b {
+  color: #f1f3f8;
+}
+
+/* The name plate floating above the room, like a sign over a door. */
+.office-space-plate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.office-space-plate b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.office-space-plate .dim {
+  white-space: nowrap;
+}
+
+.office-space-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 8px var(--tone);
+}
+
+.office-space-faces {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: auto;
+}
+
+.office-space-face {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--c);
+  opacity: 0.45;
+}
+
+.office-space-face.busy {
+  opacity: 1;
+  box-shadow: 0 0 6px var(--c);
+}
+
+/* Agent Center at the centre: rings that breathe, a beam up, a bright core. */
+.office-hub {
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.office-hub-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(140, 180, 255, 0.35);
+  box-shadow: 0 0 30px rgba(90, 140, 255, 0.15) inset;
+  animation: office-hub-breathe 4s ease-in-out infinite;
+}
+
+.office-hub-ring.r2 {
+  inset: 34px;
+  animation-delay: -1.3s;
+}
+
+.office-hub-ring.r1 {
+  inset: 68px;
+  border-color: rgba(170, 200, 255, 0.6);
+  animation-delay: -2.6s;
+}
+
+@keyframes office-hub-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+.office-hub-beam {
+  position: absolute;
+  left: 50%;
+  bottom: 50%;
+  width: 6px;
+  height: 160px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: linear-gradient(to top, rgba(200, 220, 255, 0.9), rgba(200, 220, 255, 0));
+  filter: blur(1px);
+}
+
+.office-hub-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ffffff, #bcd0ff 55%, #5a86ff);
+  box-shadow: 0 0 24px rgba(150, 190, 255, 0.9), 0 0 70px rgba(90, 140, 255, 0.5);
+}
+
+.office-hub-label {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 30px);
+  transform: translateX(-50%);
+  display: grid;
+  gap: 2px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(10, 16, 32, 0.85);
+  box-shadow: 0 0 0 1px rgba(140, 180, 255, 0.3);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.office-hub-label b {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.office-hub-label small {
+  font-size: 11px;
+  color: #a5adbf;
+}
+
+.office-hub:hover .office-hub-label {
+  box-shadow: 0 0 0 1px rgba(170, 200, 255, 0.7);
+}
+
+.office-hub:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 4px;
+}
+
+/* The chart in the corner, and the providers the members run on. */
+.office-minimap {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(10, 16, 32, 0.8);
+  box-shadow: 0 0 0 1px rgba(140, 180, 255, 0.25);
+  pointer-events: none;
+}
+
+.office-minimap-title {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: #a5adbf;
+  text-transform: uppercase;
+}
+
+.office-minimap-sky {
+  position: relative;
+  width: 120px;
+  height: 90px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.office-minimap-dot,
+.office-minimap-hub {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  transform: translate(-50%, -50%);
+}
+
+.office-minimap-dot.on {
+  box-shadow: 0 0 0 2px white;
+}
+
+.office-minimap-hub {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #dbe6ff;
+  box-shadow: 0 0 6px #9cbcff;
+}
+
+.office-runs-on {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.office-runs-on small {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: #a5adbf;
+  text-transform: uppercase;
+}
+
+.office-runs-on span {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  background: rgba(10, 16, 32, 0.8);
+  box-shadow: 0 0 0 1px rgba(140, 180, 255, 0.25);
+}
+
+.bt-mode button.on.bt-space {
+  background: linear-gradient(135deg, #3b6cff, #22d3ee);
+}

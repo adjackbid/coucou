@@ -2091,6 +2091,10 @@ const office = new Office(
       tab = "setup";
       render();
     },
+    openSecretary: () => {
+      place = "secretary";
+      render();
+    },
     pause: (teamId) => Bridge.teamPause(teamId),
     resume: (teamId) => Bridge.teamResume(teamId),
     instruct: (teamId, text, request) => Bridge.teamInstruct(teamId, "", text, request),
