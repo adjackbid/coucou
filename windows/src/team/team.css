@@ -3117,22 +3117,36 @@ h2 {
   margin: 4px 0;
 }
 .side-pop-skill {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 4px 10px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 9px;
+  background: var(--lift);
+  box-shadow: var(--edge);
   font-size: 12px;
 }
 .side-pop-skill-name {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  color: var(--ink);
 }
 .side-pop-skill-name .hint {
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.side-pop-skill-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+.side-pop-body .side-pop-skill .side-pop-check {
+  margin-top: 0;
+  font-size: 12px;
+  white-space: nowrap;
 }
 .side-pop-row {
   display: flex;

@@ -505,13 +505,14 @@ function sidebar(): HTMLElement {
     if (!lib.length) return h("p", { class: "hint", text: tr("資料夾裡還沒有 skill。", "No skills in the folder yet.") });
     return h("div", { class: "side-pop-skills" }, ...lib.map((skill) =>
       h("div", { class: "side-pop-skill", title: skill.path },
-        h("div", { class: "side-pop-skill-name" }, h("b", { text: skill.name }), skill.description ? h("span", { class: "hint", text: skill.description }) : null),
+        h("div", { class: "side-pop-skill-name" }, h("b", { text: skill.name }), skill.description ? h("span", { class: "hint", title: skill.description, text: skill.description }) : null),
+        h("div", { class: "side-pop-skill-checks" },
         h("label", { class: "side-pop-check" },
           h("input", { type: "checkbox", checked: centerReads(skill), onChange: (e: Event) => { setCenterReads(skill, (e.target as HTMLInputElement).checked); } }),
           h("span", { text: tr("Agent Center 讀", "Agent Center reads it") })),
         h("label", { class: "side-pop-check", title: skill.forCenter ? tr("front matter 寫了 for: agent-center,是 Agent Center 自己的", "Its front matter says for: agent-center: Agent Center's own") : "" },
           h("input", { type: "checkbox", checked: membersGet(skill), disabled: skill.forCenter, onChange: (e: Event) => { setMembersGet(skill, (e.target as HTMLInputElement).checked); } }),
-          h("span", { text: tr("可派給組長／成員", "Members may get it") })))));
+          h("span", { text: tr("可派給組長／成員", "Members may get it") }))))));
   };
 
   // A small gear on the row: the panel beside it holds the quieter settings.
