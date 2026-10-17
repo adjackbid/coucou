@@ -35,26 +35,30 @@ function llmShare(name: string, model: string): AgentProfile {
   };
 }
 
-/** Starting points for "Add". */
-function presets(): { label: string; make: () => AgentProfile }[] {
+/** Starting points for "Add": a name, one line on what it is, and the profile it makes. */
+function presets(): { title: string; hint: string; make: () => AgentProfile }[] {
   return [
-    { label: tr("Copilot CLI（GitHub 登入）", "Copilot CLI (GitHub login)"), make: () => ({ ...DEFAULT_AGENT, id: "", env: {} }) },
-    { label: tr("cg · llm-share 上的 Copilot CLI，glm-5.3-flash", "cg · Copilot CLI on llm-share, glm-5.3-flash"), make: () => llmShare("cg", "glm-5.3-flash") },
-    { label: tr("cg2 · llm-share 上的 Copilot CLI，deepseek-v4.1-flash", "cg2 · Copilot CLI on llm-share, deepseek-v4.1-flash"), make: () => llmShare("cg2", "deepseek-v4.1-flash") },
+    { title: "Copilot CLI", hint: tr("用你的 GitHub 登入", "With your GitHub login"), make: () => ({ ...DEFAULT_AGENT, id: "", env: {} }) }, // i18n-ok: a product name
+    { title: "cg", hint: tr("llm-share 上的 Copilot CLI,glm-5.3-flash", "Copilot CLI on llm-share, glm-5.3-flash"), make: () => llmShare("cg", "glm-5.3-flash") }, // i18n-ok: a preset's name
+    { title: "cg2", hint: tr("llm-share 上的 Copilot CLI,deepseek-v4.1-flash", "Copilot CLI on llm-share, deepseek-v4.1-flash"), make: () => llmShare("cg2", "deepseek-v4.1-flash") }, // i18n-ok: a preset's name
     {
-      label: tr("Codex（codex app-server，ChatGPT 登入）", "Codex (codex app-server, ChatGPT login)"),
+      title: "Codex", // i18n-ok: a product name
+      hint: tr("codex app-server,用你的 ChatGPT 登入", "codex app-server, with your ChatGPT login"),
       make: () => ({ id: "", name: "Codex", command: "codex", args: ["app-server"], env: {}, cwd: "", protocol: "codex" }),
     },
     {
-      label: tr("Antigravity（agy，你的 Google 登入）", "Antigravity (agy, your Google login)"),
+      title: "Antigravity", // i18n-ok: a product name
+      hint: tr("agy,用你的 Google 登入", "agy, with your Google login"),
       make: () => ({ id: "", name: "Antigravity", command: "agy", args: [], env: {}, cwd: "", protocol: "agy" }),
     },
     {
-      label: tr("Claude Code（你的 Claude 登入）", "Claude Code (your Claude login)"),
+      title: "Claude Code", // i18n-ok: a product name
+      hint: tr("用你的 Claude 登入", "With your Claude login"),
       make: () => ({ id: "", name: "Claude Code", command: "claude", args: [], env: {}, cwd: "", protocol: "claude" }),
     },
     {
-      label: tr("Copilot CLI 用你自己的端點（BYOK）", "Copilot CLI with your own endpoint (BYOK)"),
+      title: tr("Copilot CLI(BYOK)", "Copilot CLI (BYOK)"),
+      hint: tr("接你自己的 OpenAI 相容端點與金鑰", "On your own OpenAI-compatible endpoint and key"),
       make: () => ({
         ...DEFAULT_AGENT, id: "", name: "Copilot (BYOK)",
         env: {
@@ -67,7 +71,8 @@ function presets(): { label: string; make: () => AgentProfile }[] {
       }),
     },
     {
-      label: tr("Local · Copilot CLI 用本機模型（Ollama / LM Studio）", "Local · Copilot CLI on a model of your own machine (Ollama / LM Studio)"),
+      title: tr("本機模型", "Local model"),
+      hint: tr("Copilot CLI 接這台電腦上的 Ollama / LM Studio", "Copilot CLI on this PC's Ollama / LM Studio"),
       make: () => ({
         ...DEFAULT_AGENT, id: "", name: tr("本機模型", "Local model"), location: "local",
         env: {
@@ -78,11 +83,69 @@ function presets(): { label: string; make: () => AgentProfile }[] {
       }),
     },
     {
-      label: tr("Local · n8n 節點（Webhook）", "Local · n8n node (webhook)"),
+      title: tr("n8n 節點", "n8n node"),
+      hint: tr("用 Webhook 呼叫一條 n8n 工作流程", "Calls an n8n workflow through its webhook"),
       make: () => ({ id: "", name: "n8n", command: "", args: [], env: {}, cwd: "", protocol: "n8n", location: "local", url: "", headerName: "", timeoutSecs: 0 }),
     },
-    { label: tr("其他 ACP agent（自訂）", "Other ACP agent (custom)"), make: () => ({ id: "", name: "Agent", command: "", args: [], env: {}, cwd: "" }) },
+    { title: tr("其他 ACP agent", "Other ACP agent"), hint: tr("自訂指令與參數", "Your own command and arguments"), make: () => ({ id: "", name: "Agent", command: "", args: [], env: {}, cwd: "" }) },
   ];
+}
+
+/**
+ * The picker that "新增 Agent Provider" opens: every kind as a card, Cloud
+ * first and Local after, one picked at a time; 新增 (or Enter, or a double
+ * click) makes it, Esc or the backdrop closes.
+ */
+function pickPreset(onPick: (make: () => AgentProfile) => void) {
+  const all = presets().map((p) => ({ ...p, where: locationOf(p.make()) }));
+  let picked = -1;
+  const cards: HTMLButtonElement[] = [];
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const confirm = () => {
+    if (picked < 0) return;
+    const make = all[picked].make;
+    close();
+    onPick(make);
+  };
+  const add = h("button", { type: "button", class: "primary", disabled: true, onclick: confirm, text: tr("新增", "Add") }) as HTMLButtonElement;
+  const choose = (i: number) => {
+    picked = i;
+    cards.forEach((c, k) => {
+      c.classList.toggle("on", k === i);
+      c.setAttribute("aria-checked", String(k === i));
+    });
+    add.disabled = false;
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") close();
+    else if (e.key === "Enter" && picked >= 0 && !(e.target as HTMLElement).closest("button:not(.preset-card)")) confirm();
+  };
+  const group = (where: AgentLocation) =>
+    h("div", { class: "preset-group" },
+      h("div", { class: `preset-group-head ${where}` }, kindIcon(where, 18), h("b", { text: markName(where) }), h("span", { class: "hint", text: markHint(where) })),
+      h("div", { class: "preset-grid", role: "radiogroup", "aria-label": markName(where) },
+        ...all.map((p, i) => (p.where === where ? (() => {
+          const c = h("button", { type: "button", class: "preset-card", role: "radio", "aria-checked": "false", onclick: () => choose(i), ondblclick: confirm },
+            h("i", { class: "preset-mark", "aria-hidden": "true" }),
+            h("span", { class: "preset-text" }, h("b", { text: p.title }), h("small", { text: p.hint }))) as HTMLButtonElement;
+          cards.push(c);
+          return c;
+        })() : null))));
+  const overlay = h("div", { class: "guide preset-pick", role: "dialog", "aria-modal": "true", "aria-label": tr("新增 Agent Provider", "Add an Agent Provider"), onclick: (e: Event) => { if (e.target === overlay) close(); } },
+    h("div", { class: "guide-panel preset-panel" },
+      h("div", { class: "preset-head" },
+        h("div", {}, h("h1", { text: tr("新增 Agent Provider", "Add an Agent Provider") }), h("p", { class: "hint", text: tr("選一種開始;新增後還能改名稱、模型與指令。", "Pick one to start from; name, model and command can be changed after.") })),
+        h("button", { type: "button", class: "preset-close", "aria-label": tr("關閉", "Close"), onclick: close, text: "×" })),
+      h("div", { class: "preset-body" }, group("cloud"), group("local")),
+      h("div", { class: "preset-foot" },
+        h("button", { type: "button", onclick: close, text: tr("取消", "Cancel") }),
+        add)));
+  document.body.append(overlay);
+  document.addEventListener("keydown", onKey);
+  requestAnimationFrame(() => cards[0]?.focus());
 }
 
 function uniqueAgentId(name: string): string {
@@ -185,23 +248,21 @@ export const agentsPage: Page = {
     function redraw() {
       clear(list);
       // Adding comes first: it is what a person opening this page most often came for.
-      const all = presets();
-      const preset = h("select", { title: tr("從哪一種開始", "Start from") }) as HTMLSelectElement;
-      all.forEach((pr, i) => preset.append(h("option", { value: String(i), text: pr.label })));
-      const add = h("button", { type: "button", text: tr("新增", "Add") });
-      add.addEventListener("click", () => {
-        const a = all[Number(preset.value)].make();
-        a.id = uniqueAgentId(a.name);
-        settings.agents = [...settings.agents, a];
-        void save();
-        redraw();
-        requestAnimationFrame(() => list.querySelector(`[data-anchor="agent-profile-${a.id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
-      });
-      list.append(h("div", { class: "add-row", "data-anchor": "agent-add" }, h("span", { class: "add-label", text: tr("新增 Agent Provider", "Add an Agent Provider") }), preset, add));
-      // Agent Pool's "新增 Provider" lands here with the list of kinds ready to pick.
+      const openPicker = () =>
+        pickPreset((make) => {
+          const a = make();
+          a.id = uniqueAgentId(a.name);
+          settings.agents = [...settings.agents, a];
+          void save();
+          redraw();
+          requestAnimationFrame(() => list.querySelector(`[data-anchor="agent-profile-${a.id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
+        });
+      const add = h("button", { type: "button", class: "primary add-provider", onclick: openPicker, text: tr("＋ 新增 Agent Provider", "+ Add an Agent Provider") });
+      list.append(h("div", { class: "add-row", "data-anchor": "agent-add" }, add, h("span", { class: "hint", text: tr("Copilot CLI、Codex、Claude Code、Antigravity、本機模型、n8n 節點…", "Copilot CLI, Codex, Claude Code, Antigravity, a local model, an n8n node…") })));
+      // Agent Pool's "新增 Provider" lands here with the picker already open.
       if (addAsked) {
         addAsked = false;
-        requestAnimationFrame(() => preset.focus());
+        requestAnimationFrame(openPicker);
       }
       for (const where of ["cloud", "local"] as const) {
         const mine = settings.agents.filter((a) => locationOf(a) === where);
