@@ -1304,3 +1304,19 @@ input.short {
   margin-left: 12px;
   color: var(--ink);
 }
+
+/* 上網 / Code on a provider: a name and a three-way 自動 / 開 / 關. */
+.ability-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
+}
+.ability-switch .ability-name {
+  font-size: 13px;
+  opacity: 0.85;
+}
+.ability-switch .segmented button {
+  padding: 2px 10px;
+  font-size: 12px;
+}

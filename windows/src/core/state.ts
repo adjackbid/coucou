@@ -170,6 +170,9 @@ export interface AgentProfile {
   timeoutSecs?: number;
   /** The person says it makes images (it has a tool for it): nothing reports that on its own. */
   imageGen?: boolean;
+  /** Browses the web / runs code, as the person set it; absent or null: told from its kind. */
+  web?: boolean | null;
+  code?: boolean | null;
 }
 
 /** What an agent can do (caps.rs): absent where nothing says. */

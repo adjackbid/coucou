@@ -32,9 +32,11 @@ pub struct Caps {
     pub image: bool,
     /// Reads web pages and searches the web: every coding CLI does through its
     /// own tools (Claude Code's WebFetch/WebSearch, Codex's web search, Gemini
-    /// CLI's and Copilot's fetch, Antigravity's browser); an n8n workflow does not.
+    /// CLI's and Copilot's fetch, Antigravity's browser); an n8n workflow does
+    /// not. The person can set it either way on the provider.
     pub web: bool,
-    /// Runs commands and code on the machine: every coding CLI does; n8n does not.
+    /// Runs commands and code on the machine: every coding CLI does; n8n does
+    /// not. The person can set it either way on the provider.
     pub code: bool,
     /// Some of it is told from the model's name, not said by a list.
     pub guessed: bool,
@@ -105,8 +107,8 @@ pub fn of(profile: &AgentProfile, choices: &Choices, table: &Table, offered: Opt
         context: can.context.or_else(|| (claude && model.contains("[1m]")).then_some(1_000_000)),
         tier: found.as_ref().map(|f| tier(&f.price)),
         image: profile.image_gen,
-        web: profile.protocol != Protocol::N8n,
-        code: profile.protocol != Protocol::N8n,
+        web: profile.web.unwrap_or(profile.protocol != Protocol::N8n),
+        code: profile.code.unwrap_or(profile.protocol != Protocol::N8n),
         guessed: (said_vision.is_none() && guess_vision.is_some()) || (said_thinking.is_none() && guess_thinking.is_some()),
         model,
     }
@@ -174,6 +176,10 @@ mod tests {
         flow.protocol = Protocol::N8n;
         let f = of(&flow, &Choices::default(), &table(), None);
         assert!((f.web, f.code) == (false, false) && !describe(&f).contains("web"));
+        // The person's own setting wins over what the kind says, either way.
+        cg.web = Some(false);
+        flow.code = Some(true);
+        assert!(!of(&cg, &Choices::default(), &table(), None).web && of(&flow, &Choices::default(), &table(), None).code);
 
         let mut claude = AgentProfile::copilot();
         claude.protocol = Protocol::Claude;
@@ -182,6 +188,7 @@ mod tests {
         let c = of(&claude, &Choices::default(), &table(), None);
         assert_eq!((c.vision, c.thinking, c.tier, c.image), (Some(true), Some(true), Some(4), false));
 
+        flow.code = None;
         let unknown = of(&flow, &Choices::default(), &table(), None);
         assert_eq!(describe(&unknown), "abilities unknown");
     }

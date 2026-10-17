@@ -124,6 +124,33 @@ function sectionHead(where: AgentLocation, count: number): HTMLElement {
 }
 
 /** Cloud Agent / Local Agent as two buttons; an n8n node is local and says so. */
+/** One ability the person may leave to Coucou or set either way: 自動 / 開 / 關. */
+function abilitySwitch(name: string, set: boolean | null | undefined, auto: boolean, onChange: (v: boolean | null) => void): HTMLElement {
+  const now: boolean | null = set ?? null;
+  const item = (v: boolean | null, text: string, title: string) =>
+    h(
+      "button",
+      {
+        type: "button",
+        class: now === v ? "on" : "",
+        "aria-pressed": String(now === v),
+        title,
+        onclick: () => {
+          if (now !== v) onChange(v);
+        },
+      },
+      h("span", { text }),
+    );
+  return h("div", { class: "ability-switch" },
+    h("span", { class: "ability-name", text: name }),
+    h("div", { class: "segmented", role: "group", "aria-label": name },
+      item(null, tr("自動", "Auto"), auto ? tr("依種類判斷:會", "Told from its kind: yes") : tr("依種類判斷:不會", "Told from its kind: no")),
+      item(true, tr("開", "On"), tr("Agent Center 會當它有這個能力", "Agent Center treats it as able")),
+      item(false, tr("關", "Off"), tr("Agent Center 不會為這種工作挑它", "Agent Center will not pick it for this")),
+    ),
+  );
+}
+
 function locationSwitch(a: AgentProfile, set: (v: AgentLocation) => void): HTMLElement {
   const now = locationOf(a);
   const fixed = a.protocol === "n8n";
@@ -272,22 +299,33 @@ export const agentsPage: Page = {
 
       // What it can do: read from the price lists, but making images only the person can say.
       let capsSlot = capsView(a);
+      // Only this row changes: drawing the page again would take the person back to its top.
+      const refreshCaps = () => {
+        void save();
+        const next = capsView(live());
+        capsSlot.replaceWith(next);
+        capsSlot = next;
+      };
       const abilities = field(
         tr("能力", "Abilities"),
         [
           capsSlot,
           h("label", { class: "inline-check" },
-            // Only this row changes: drawing the page again would take the person back to its top.
             toggle(!!a.imageGen, (v) => {
               live().imageGen = v;
-              void save();
-              const next = capsView(live());
-              capsSlot.replaceWith(next);
-              capsSlot = next;
+              refreshCaps();
             }, tr("可以生圖", "Makes images")),
             h("span", { text: tr("可以生圖", "Makes images") })),
+          abilitySwitch(tr("上網", "Web"), a.web, a.protocol !== "n8n", (v) => {
+            live().web = v;
+            refreshCaps();
+          }),
+          abilitySwitch("Code", a.code, a.protocol !== "n8n", (v) => {
+            live().code = v;
+            refreshCaps();
+          }),
         ],
-        tr("看圖、思考、上下文和價位依價目表自動判斷;能不能生圖沒有清單會說,它有產生圖片的工具時(例如 Antigravity)請打開,Agent Center 要做圖時才會挑它。", "Vision, thinking, context and price come from the price list; whether it makes images no list says, so turn this on when it has a tool for it (Antigravity, say): Agent Center picks it for pictures only then."),
+        tr("看圖、思考、上下文和價位依價目表自動判斷;能不能生圖沒有清單會說,它有產生圖片的工具時(例如 Antigravity)請打開,Agent Center 要做圖時才會挑它。上網和 Code 預設依種類判斷(coding CLI 都會,n8n 不會),判斷錯了可以在這裡改,Agent Center 會照你設的挑人。", "Vision, thinking, context and price come from the price list; whether it makes images no list says, so turn this on when it has a tool for it (Antigravity, say): Agent Center picks it for pictures only then. Web and Code are told from its kind (every coding CLI has them, n8n does not); override here when that is wrong, and Agent Center picks by what you set."),
       );
       const usedBy = (teamAgents?.doc.agents ?? []).filter((t) => t.base === a.id).map((t) => t.name);
       const title = h("div", { class: "title-icon" }, kindIcon(markOf(a), 18), h("h2", { text: a.name }));

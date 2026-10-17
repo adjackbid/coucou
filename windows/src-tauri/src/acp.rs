@@ -121,6 +121,12 @@ pub struct AgentProfile {
     /// The person says it can make pictures (it has a tool for it): nothing reports that on its own.
     #[serde(default)]
     pub image_gen: bool,
+    /// Browses the web, as the person set it; None: told from its kind (caps.rs).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub web: Option<bool>,
+    /// Runs code and commands, as the person set it; None: told from its kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<bool>,
 }
 
 /// What a team agent (Teamwork → Agent Pool) adds to the native agent it is
@@ -166,6 +172,8 @@ impl AgentProfile {
             key_of: None,
             extras: None,
             image_gen: false,
+            web: None,
+            code: None,
         }
     }
 

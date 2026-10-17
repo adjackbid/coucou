@@ -15,7 +15,7 @@ let queued = false;
 
 /** What decides an agent's abilities: its kind, its model, the person's tick. */
 function keyOf(p: AgentProfile): string {
-  return [p.id, p.protocol ?? "acp", p.command, p.model ?? "", p.env?.COPILOT_MODEL ?? "", p.imageGen ? 1 : 0].join("|");
+  return [p.id, p.protocol ?? "acp", p.command, p.model ?? "", p.env?.COPILOT_MODEL ?? "", p.imageGen ? 1 : 0, p.web ?? "", p.code ?? ""].join("|");
 }
 
 /** In a plain browser: a guess from the model's name, to see the row. */
@@ -30,8 +30,8 @@ function guess(p: AgentProfile): AgentCaps {
     context: m.includes("deepseek") || m.includes("gemini") ? 1_000_000 : claude ? 200_000 : undefined,
     tier: m ? (big ? 4 : /flash|luna|haiku|mini/.test(m) ? 1 : 2) : undefined,
     image: !!p.imageGen,
-    web: p.protocol !== "n8n",
-    code: p.protocol !== "n8n",
+    web: p.web ?? p.protocol !== "n8n",
+    code: p.code ?? p.protocol !== "n8n",
   };
 }
 
