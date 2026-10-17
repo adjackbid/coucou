@@ -23,7 +23,7 @@ import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
 import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCompanyFps, type Tempo } from "./office/battle/session";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
-import { MAX_INSTRUCTIONS, onStep as secretaryStep, pickShowOn, previewPickShow, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, type SecretaryHost } from "./secretary";
+import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, pickShowOn, previewPickShow, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setCenterReads, setMembersGet, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
 import { agentLabel, agentsPage, baseOf, loadTeamAgents, memberChoices, poolForShow, teamAgentCounts, teamAgents, teamProfiles, type AgentsHost } from "./agents";
@@ -68,6 +68,8 @@ let dir = "";
 let files: TeamFile[] = [];
 /** The agents of Settings → Agent Provider: what a member can run as. */
 let agents: AgentProfile[] = [];
+/** The app's version (Cargo.toml), shown at the foot of the sidebar so a build is told from another. */
+let appVersion = "";
 /** The latest snapshot of each team, by team id. */
 const runs = new Map<string, Snapshot>();
 /** The team file being looked at, and which of its screens. */
@@ -493,6 +495,25 @@ function sidebar(): HTMLElement {
     if (showArchived) for (const file of away) list.append(row(file, true));
   }
 
+  // Agent Center's skill library, one row each: who gets it.
+  const skillRows = (): HTMLElement => {
+    const lib = skillLibrary();
+    if (!lib) {
+      loadSkillLibrary(render);
+      return h("p", { class: "hint", text: tr("讀取中…", "Loading…") });
+    }
+    if (!lib.length) return h("p", { class: "hint", text: tr("資料夾裡還沒有 skill。", "No skills in the folder yet.") });
+    return h("div", { class: "side-pop-skills" }, ...lib.map((skill) =>
+      h("div", { class: "side-pop-skill", title: skill.path },
+        h("div", { class: "side-pop-skill-name" }, h("b", { text: skill.name }), skill.description ? h("span", { class: "hint", text: skill.description }) : null),
+        h("label", { class: "side-pop-check" },
+          h("input", { type: "checkbox", checked: centerReads(skill), onChange: (e: Event) => { setCenterReads(skill, (e.target as HTMLInputElement).checked); } }),
+          h("span", { text: tr("Agent Center 讀", "Agent Center reads it") })),
+        h("label", { class: "side-pop-check", title: skill.forCenter ? tr("front matter 寫了 for: agent-center,是 Agent Center 自己的", "Its front matter says for: agent-center: Agent Center's own") : "" },
+          h("input", { type: "checkbox", checked: membersGet(skill), disabled: skill.forCenter, onChange: (e: Event) => { setMembersGet(skill, (e.target as HTMLInputElement).checked); } }),
+          h("span", { text: tr("可派給組長／成員", "Members may get it") })))));
+  };
+
   // A small gear on the row: the panel beside it holds the quieter settings.
   const gear = (which: "secretary" | "company", label: string) =>
     h("span", {
@@ -542,6 +563,12 @@ function sidebar(): HTMLElement {
                 count,
               ])(h("span", { class: "side-pop-count", text: `${secretaryInstructions().length} / ${MAX_INSTRUCTIONS}` })),
               h("p", { class: "hint", text: tr("每次問 Agent Center 都會接在它的系統提示後面,下一個問題就生效。可以調它的做法、口吻和偏好;它還是不會不經你按確認就做事。", "Added after Agent Center's own system prompt each time you ask; it applies from your next question. Shape how it works, its tone and what it prefers; it still never acts without your click.") }),
+              h("label", { text: "Skills" }),
+              skillRows(),
+              h("div", { class: "side-pop-row" },
+                h("button", { class: "btn plain", type: "button", onClick: () => void Bridge.teamOpenSkills() }, tr("開啟 skill 資料夾", "Open the skills folder")),
+                h("button", { class: "btn plain", type: "button", onClick: () => loadSkillLibrary(render) }, tr("重新整理", "Refresh"))),
+              h("p", { class: "hint", text: tr("每份 skill 是資料夾裡的 <名稱>\\SKILL.md 或 <名稱>.md。「Agent Center 讀」的會接在它的系統提示後面,讓它知道這類題目怎麼分大小、挑人、切工;「可派給成員」的它擬團隊時可以指定給組長或成員,成員開工時會拿到全文。front matter 寫 for: agent-center 的是它自己的,不會派給成員。", "Each skill is <name>\\SKILL.md or <name>.md in the folder. One Agent Center reads goes after its system prompt, so it knows how to size, staff and split that kind of request; one members may get it can give to the leader or a member when it proposes a team, and they get its text as they start. A skill whose front matter says for: agent-center is its own and is never handed out.") }),
               h("label", { text: tr("組隊動畫", "Team-picking animation") }),
               h("label", { class: "side-pop-check" },
                 h("input", { type: "checkbox", checked: pickShowOn(), onChange: (e: Event) => { setPickShowOn((e.target as HTMLInputElement).checked); render(); } }),
@@ -687,6 +714,7 @@ function sidebar(): HTMLElement {
         }),
       ),
       h("button", { class: "link", type: "button", title: dir, onClick: () => void Bridge.teamOpenConfigs() }, tr("開啟團隊檔案的資料夾", "Open the team files folder")),
+      appVersion ? h("span", { class: "side-version", title: tr("App 版本", "App version"), text: `v${appVersion}` }) : null,
     ),
   );
 }
@@ -2000,6 +2028,7 @@ async function load() {
     files = listed?.files ?? [];
     const boot = await Bridge.boot();
     agents = boot?.settings.agents ?? [];
+    appVersion = boot?.version ?? "";
     setLang(boot?.lang);
     applyTheme(boot?.settings.theme);
     // 中二模式 is off unless 設定 → 團隊與 Agent Center turned it on; a raid saved as

@@ -203,6 +203,10 @@ pub struct Office {
     pub name: String,
     /// The person's own instructions for Agent Center (its ⚙ → 自訂指示); empty for none.
     pub instructions: String,
+    /// Library skills Agent Center reads itself (its ⚙ → Skills), by name.
+    pub skills: Vec<String>,
+    /// Library skills the person took away from members (its ⚙ → Skills), by name.
+    pub hidden_skills: Vec<String>,
 }
 
 impl Office {
@@ -218,7 +222,14 @@ impl Office {
             tz_minutes,
             name,
             instructions: String::new(),
+            skills: Vec::new(),
+            hidden_skills: Vec::new(),
         }
+    }
+
+    /// The skills Agent Center may hand a member: the member library less what the person hid.
+    pub fn member_skills(&self) -> Vec<crate::team_agents::LibrarySkill> {
+        crate::team_agents::member_library().into_iter().filter(|s| !self.hidden_skills.iter().any(|h| h.eq_ignore_ascii_case(&s.name))).collect()
     }
 }
 
@@ -563,7 +574,7 @@ impl Secretary {
             // i18n: model-facing
             return Err("A team has at most 12 members.".into());
         }
-        let library = crate::team_agents::library();
+        let library = office.member_skills();
         let mut list = Vec::new();
         for (i, m) in members.iter().enumerate() {
             let agent_given = need(m, "agent")?;
@@ -1502,7 +1513,7 @@ How you work:\n\
 - Prefer one proposal that does what was asked. Ask a short question first only when something essential is missing, such as the work folder for a new team.\n\
 - When you ask the user to choose between options, call offer_choices with them so they can click one, instead of listing them as text.\n\
 - For a new team: pick agents and models from list_agents (agent_models lists what an agent offers); give the leader the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
-- Size the request before you shape the team, and say which size in `kickoff`. Quick (a fact, a short answer, one small file): one member, who is the leader, does it alone and reports. Medium (one document that needs research or checking, no natural split): one member does it and a second member on a different model reviews it once. Large (several independent parts): split by scope (themes, chapters, product lines), each member from start to finish, hand-off chains of at most two links; when the user fixed the roles (who draws, who checks), split by batch instead and have each member deliver batch by batch. Never put the cheapest or least reliable agent at the head of a chain others wait on; use cheap agents on leaf work the leader spot-checks. Every coding CLI agent (Claude Code, Codex, Gemini CLI, Copilot, Antigravity) browses the web and runs code through its own tools, and its `can:` line says so; only an n8n workflow cannot. Never tell the user the agents cannot go online unless no agent's `can:` line says it browses. Pick an agent for images only when its `can:` line says it makes them.\n\
+- Size the request before you shape the team (quick: the leader alone; medium: one does, one on another model reviews once; large: split by scope), and say which size in `kickoff`; your skills below, when you have them, say how in detail. Every coding CLI agent (Claude Code, Codex, Gemini CLI, Copilot, Antigravity) browses the web and runs code through its own tools, and its `can:` line says so; only an n8n workflow cannot. Never tell the user the agents cannot go online unless no agent's `can:` line says it browses. Pick an agent for images only when its `can:` line says it makes them.\n\
 - In `kickoff` tell the leader: the size, the split, who reviews what (so reviews are not all on the leader), the first batch each member delivers, and the rules of the work (sources, formats, what counts as done). Give a member its own rules in `brief`. Members read messages only when a turn starts, so rules belong in the tasks and briefs, not in later messages.{}\n\
 - A team has a knowledge base: documents (design notes, specs, pictures, any file) its members work from. When the user attaches files or mentions design documents, specs or reference material for a team, put them in `knowledge` (propose_team for a new team, propose_knowledge for one that exists): attached files by their id (u…), or full paths the user wrote — never a path you guessed. Each is for the leader only unless the user says the whole team should see it (then visibility \"shared\"). You only see the files' names, never what is in them.\n\
 - Answer in the language named on the last line of this prompt, short and concrete: a few lines or a short list. Point out anything waiting for the user (permission cards, questions) first.\n\
@@ -1515,22 +1526,36 @@ Now: {} (the user's local time).\n\
             name => format!("Your name is {name}; the user calls you that, and you may call yourself that. "),
         },
         " The user builds teams from their own team agents only: list_agents lists them with what each is good for, whether it is a Cloud Agent or a Local Agent, and what it costs; choose members by those descriptions, and never name an agent that is not listed. When the user wants it cheap, on a budget, or asks which costs less (or wants the best whatever it costs), compare the agents by the prices and recent spend list_agents gives, not only by what their descriptions say, and tell the user the prices you compared; a description is the user's own note, the price is the fact, so when they disagree say so. An agent on a subscription plan costs nothing extra per token. When you talk to the user, call a team agent by its name, never by its id (ta-…).",
-        library_line(),
+        library_line(office),
         when(crate::team::store::now_ms(), office.tz_minutes),
-        own_instructions(&office.instructions),
+        format!("{}{}", center_skills(&office.skills), own_instructions(&office.instructions)),
         crate::i18n::reply_language(),
     )
 }
 
 /// Agent Center's skill library, for the prompt: what a member may be given with `skills`.
 // i18n: model-facing
-fn library_line() -> String {
-    let lib = crate::team_agents::library();
+fn library_line(office: &Office) -> String {
+    let lib = office.member_skills();
     if lib.is_empty() {
         return String::new();
     }
     let items: Vec<String> = lib.iter().map(|s| if s.description.is_empty() { s.name.clone() } else { format!("{} ({})", s.name, s.description) }).collect();
     format!(" Skills in Agent Center's library, which you may give a member with `skills` (they get the skill's text with their role): {}.", items.join("; "))
+}
+
+/// The skills Agent Center reads itself (its ⚙ → Skills): their text, after the rules and
+/// before the person's instructions, so the person can give it know-how for kinds of request.
+// i18n: model-facing
+fn center_skills(names: &[String]) -> String {
+    if names.is_empty() {
+        return String::new();
+    }
+    let text = crate::team_agents::skill_text(names);
+    if text.trim().is_empty() {
+        return String::new();
+    }
+    format!("Your skills (the user put them in Agent Center's library and turned them on for you). Use whichever fits the request when you judge its size, pick members, split the work and write `kickoff`; they never let you act without the user's click.\n{text}\n")
 }
 
 /// How long the person's own instructions may be: a few paragraphs, not a second prompt.
@@ -1692,6 +1717,17 @@ mod tests {
         let said = own_instructions("開團隊預設 3 人,預算優先。");
         assert!(said.contains("<user_instructions>\n開團隊預設 3 人,預算優先。\n</user_instructions>") && said.contains("nothing happens without the user's click"), "{said}");
         assert!(own_instructions(&"字".repeat(MAX_INSTRUCTIONS + 500)).chars().count() < MAX_INSTRUCTIONS + 400);
+    }
+
+    #[test]
+    fn agent_center_s_own_skills_go_in_its_prompt_as_their_text() {
+        assert_eq!(center_skills(&[]), "");
+        let dir = std::env::temp_dir().join(format!("coucou-center-skill-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("SKILL.md"), "---\nname: x\nfor: agent-center\n---\nFor a stock question, one member who browses.").unwrap();
+        let said = center_skills(&[dir.to_string_lossy().to_string()]);
+        assert!(said.starts_with("Your skills") && said.contains("For a stock question") && !said.contains("for: agent-center"), "{said}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

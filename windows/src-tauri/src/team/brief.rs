@@ -102,7 +102,7 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
              - Review against the criteria you wrote. Send back once with every fix listed; accepted is final, no follow-up checks by message. If a task comes back a second time, move it with `task_assign` or do it yourself. Spot-check two or three items rather than redoing a member's work.\n\
              - A member out of quota, missing a tool, or blocked for more than a turn: move its remaining work with `task_assign` at once.\n",
         );
-        let library = crate::team_agents::library();
+        let library = crate::team_agents::member_library();
         if !library.is_empty() {
             out.push_str("\nSkills in Agent Center's library. Hand one to a teammate with `brief_member` (skills: [name]) when it fits their task; they get its text with their role:\n");
             for s in &library {

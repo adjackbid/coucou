@@ -416,6 +416,15 @@ export interface SecretaryUpload {
   force: boolean;
 }
 
+/** A skill in Agent Center's library (team_agents.rs `LibrarySkill`). */
+export interface LibrarySkill {
+  name: string;
+  description: string;
+  path: string;
+  /** `for: agent-center` in its front matter: Agent Center's own, never handed to a member. */
+  forCenter: boolean;
+}
+
 export interface SecretaryReply {
   text: string;
   steps: SecretaryStep[];

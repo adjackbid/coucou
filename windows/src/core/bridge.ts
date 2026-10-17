@@ -8,7 +8,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentCheck, AgentProfile, ModelChoice, Provider, Settings, AgentCaps } from "./state";
 import type { Dock } from "./dock";
 import { tr } from "./i18n";
-import type { Constitution, ConstitutionLevel, Found, KnowledgeAdded, KnowledgeDoc, KnowledgeView, KnowledgeVisibility, SecretaryUpload, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
+import type { Constitution, ConstitutionLevel, Found, KnowledgeAdded, KnowledgeDoc, KnowledgeView, KnowledgeVisibility, LibrarySkill, SecretaryUpload, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -232,8 +232,11 @@ export const Bridge = {
   /** The chat providers Agent Center can think with: (id, name, model). */
   secretaryProviders: () => call<[string, string, string][]>("secretary_providers"),
   /** The person asks Agent Center; its steps arrive as `secretary-step` while it works. */
-  secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string, uploads: string[] = [], instructions = "") =>
-    callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name, uploads, instructions }),
+  secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string, uploads: string[] = [], instructions = "", skills: string[] = [], hiddenSkills: string[] = []) =>
+    callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name, uploads, instructions, skills, hiddenSkills }),
+  /** Agent Center's skill library (%APPDATA%\\Coucou\\skills), made with its first skill when empty. */
+  teamSkillLibrary: () => call<LibrarySkill[]>("team_skill_library"),
+  teamOpenSkills: () => call<void>("team_open_skills"),
   /** A file attached in Agent Center's conversation, by its path (picked or dropped). */
   secretaryUploadPath: (path: string) => callOrThrow<SecretaryUpload>("secretary_upload_path", { path }),
   /** The same from its bytes (a paste). */

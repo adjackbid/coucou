@@ -14,7 +14,7 @@ import { tr, trf } from "../core/i18n";
 import { h } from "../views/dom";
 import { dropdown, editableText } from "./ui";
 import { kbSaid, sizeText } from "./knowledge";
-import type { SecretaryChoices, SecretaryProposal, SecretaryReply, SecretaryStep, SecretaryUpload } from "./types";
+import type { LibrarySkill, SecretaryChoices, SecretaryProposal, SecretaryReply, SecretaryStep, SecretaryUpload } from "./types";
 
 export interface SecretaryHost {
   render(): void;
@@ -258,6 +258,75 @@ export function setSecretaryInstructions(v: string) {
   store("coucou.secretary.instructions", instructions);
 }
 
+/** Agent Center's skill library as Rust last listed it (its ⚙ → Skills); null before the first look. */
+let library: LibrarySkill[] | null = null;
+
+/** Skills Agent Center reads itself, by name; null: never set, so every `for: agent-center` skill. */
+let centerSkills: string[] | null = storedNames("coucou.secretary.skills");
+/** Skills the person took away from members, by name. */
+let hiddenSkills: string[] = storedNames("coucou.secretary.skillsHidden") ?? [];
+
+function storedNames(key: string): string[] | null {
+  try {
+    const got: unknown = JSON.parse(stored(key) ?? "null");
+    return Array.isArray(got) ? got.filter((x): x is string => typeof x === "string") : null;
+  } catch {
+    return null;
+  }
+}
+
+export function skillLibrary(): LibrarySkill[] | null {
+  return library;
+}
+
+/** Asks Rust for the library again; `then` runs when it answers. */
+export function loadSkillLibrary(then: () => void) {
+  if (!IS_TAURI) {
+    library = [];
+    then();
+    return;
+  }
+  void Bridge.teamSkillLibrary().then((got) => {
+    library = got ?? [];
+    then();
+  });
+}
+
+/** Whether Agent Center reads this skill itself. */
+export function centerReads(skill: LibrarySkill): boolean {
+  return centerSkills ? centerSkills.includes(skill.name) : skill.forCenter;
+}
+
+export function setCenterReads(skill: LibrarySkill, on: boolean) {
+  const now = new Set(centerSkills ?? (library ?? []).filter((s) => s.forCenter).map((s) => s.name));
+  if (on) now.add(skill.name);
+  else now.delete(skill.name);
+  centerSkills = [...now];
+  store("coucou.secretary.skills", JSON.stringify(centerSkills));
+}
+
+/** Whether Agent Center may hand this skill to a leader or member. */
+export function membersGet(skill: LibrarySkill): boolean {
+  return !skill.forCenter && !hiddenSkills.includes(skill.name);
+}
+
+export function setMembersGet(skill: LibrarySkill, on: boolean) {
+  hiddenSkills = on ? hiddenSkills.filter((n) => n !== skill.name) : [...new Set([...hiddenSkills, skill.name])];
+  store("coucou.secretary.skillsHidden", JSON.stringify(hiddenSkills));
+}
+
+/** What goes with each question: the names Agent Center reads, and the names members may not get. */
+function skillChoices(): { skills: string[]; hidden: string[] } {
+  // Not listed yet (asked before the library answered): Rust skips a name it cannot find.
+  const listed = library;
+  if (!listed) return { skills: centerSkills ?? ["agent-center-planning"], hidden: hiddenSkills };
+  const skills = centerSkills ? centerSkills.filter((n) => listed.some((s) => s.name === n)) : listed.filter((s) => s.forCenter).map((s) => s.name);
+  return { skills, hidden: hiddenSkills };
+}
+
+// The library is listed once at start, so the first question already carries Agent Center's skills.
+if (IS_TAURI) loadSkillLibrary(() => {});
+
 /** Agent Center's picking shown as it proposes a team (pick-show.ts): off unless the person turns it on. */
 let pickShowing = stored("coucou.secretary.pickShow") === "1";
 
@@ -478,7 +547,7 @@ async function ask(host: SecretaryHost, text: string, withFiles = true) {
   host.render();
   try {
     const reply: SecretaryReply = IS_TAURI
-      ? await Bridge.secretaryAsk(words, provider || null, tz(), name, files.map((f) => f.id), instructions.trim())
+      ? await Bridge.secretaryAsk(words, provider || null, tz(), name, files.map((f) => f.id), instructions.trim(), skillChoices().skills, skillChoices().hidden)
       : await (await import("./demo")).demoSecretary(words, (step) => onStep(step, host));
     const unused = unusedUploads(files, reply.proposals);
     entries.push({ who: "secretary", text: reply.text, steps: reply.steps, proposals: reply.proposals, unused: unused.length ? unused : undefined, choices: reply.choices ?? guessChoices(reply.text) });

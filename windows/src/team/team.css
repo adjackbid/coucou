@@ -3106,3 +3106,45 @@ h2 {
 :root[data-theme="light"] :is(svg.kind-mark, svg.icon) [stroke="#fff"] {
   stroke: var(--a);
 }
+
+/* Agent Center's ⚙ → Skills: one row per skill, its name and who gets it. */
+.side-pop-skills {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+  margin: 4px 0;
+}
+.side-pop-skill {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 4px 10px;
+  align-items: center;
+  font-size: 12px;
+}
+.side-pop-skill-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.side-pop-skill-name .hint {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.side-pop-row {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+/* The app's version at the foot of the sidebar. */
+.side-version {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.55;
+  user-select: text;
+}

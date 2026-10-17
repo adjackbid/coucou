@@ -1206,6 +1206,20 @@ fn team_open_configs() {
     let _ = Command::new("explorer").arg(dir).spawn();
 }
 
+/// Agent Center's skill library (settings::team_skills_dir), made with its first skill when empty.
+#[tauri::command]
+fn team_skill_library() -> Vec<team_agents::LibrarySkill> {
+    team_agents::ensure_library();
+    team_agents::library()
+}
+
+/// Opens the skill library folder in Explorer.
+#[tauri::command]
+fn team_open_skills() {
+    let dir = team_agents::ensure_library();
+    let _ = Command::new("explorer").arg(dir).spawn();
+}
+
 /// Usage and its estimated cost between two moments (ms), across every team log.
 #[tauri::command]
 async fn usage_report(from: u64, to: u64) -> Result<cost::Report, String> {
@@ -1333,6 +1347,8 @@ async fn secretary_ask(
     name: Option<String>,
     uploads: Option<Vec<String>>,
     instructions: Option<String>,
+    skills: Option<Vec<String>>,
+    hidden_skills: Option<Vec<String>>,
 ) -> Result<secretary::Reply, String> {
     let (provider, profiles) = {
         let settings = shared.settings.lock().unwrap();
@@ -1349,6 +1365,8 @@ async fn secretary_ask(
     let provider = provider.ok_or_else(needs_chat_model)?;
     let mut office = secretary::Office::new(teams.inner().clone(), &profiles, agents.inner().clone(), tz_minutes, name.unwrap_or_default());
     office.instructions = instructions.unwrap_or_default();
+    office.skills = skills.unwrap_or_default();
+    office.hidden_skills = hidden_skills.unwrap_or_default();
     let window = app.clone();
     secretary
         .ask(&provider, &office, &text, &uploads.unwrap_or_default(), &move |step| {
@@ -2095,6 +2113,8 @@ pub fn run() {
             history_clear,
             team_past,
             team_open_configs,
+            team_skill_library,
+            team_open_skills,
             team_save,
             team_new,
             pick_folder,

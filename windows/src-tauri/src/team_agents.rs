@@ -260,12 +260,42 @@ fn find_skill(name: &str) -> Option<PathBuf> {
 }
 
 /// A skill in Agent Center's library (settings::team_skills_dir).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LibrarySkill {
     pub name: String,
     /// The `description:` of its front matter, or nothing.
     pub description: String,
     pub path: PathBuf,
+    /// `for: agent-center` in its front matter: Agent Center's own know-how
+    /// (how to size a request, pick members, split work), never handed to a
+    /// member. Any other skill is for members, and Agent Center may read it too.
+    pub for_center: bool,
+}
+
+/// The skill Agent Center starts with, written into an empty library so the
+/// person can read, change or switch off how it sizes a request and shapes a team.
+pub const DEFAULT_CENTER_SKILL: &str = "agent-center-planning";
+
+// i18n: model-facing
+const DEFAULT_CENTER_SKILL_MD: &str = "---\nname: agent-center-planning\ndescription: How Agent Center sizes a request, picks members and splits the work before a team starts. Agent Center reads this itself.\nfor: agent-center\n---\n\n# Sizing a request and shaping the team\n\nDecide how big the request is before you shape the team, and say which size in `kickoff`.\n\n| Size | Signs | Team |\n|---|---|---|\n| Quick | One fact, one short answer, one small file; a single agent finishes in minutes. | One member, who is the leader, does it alone and reports. |\n| Medium | One deliverable that needs research or checking, with no natural split. | One member does the whole thing; a second member on a different model reviews it once. |\n| Large | Several independent parts (themes, chapters, product lines, modules). | Split by scope: each member takes a slice from start to finish. Hand-off chains of at most two links. |\n\nWhen in doubt choose the smaller size: a team that runs twenty minutes on a quick question is the failure to avoid.\n\n## Splitting\n\n- Split by scope, not by stage. A gather → verify → write pipeline keeps one member working at a time; one agent doing every stage itself is faster.\n- When the user fixed the roles (who draws, who checks), split by batch instead: one task per theme or chapter for each role, and have each member deliver batch by batch so the next role starts on the first batch.\n- Every member has work in the leader's first turn. No member owns more than its share: tasks on one member run one after the other.\n- Never put the cheapest or least reliable agent at the head of a chain others wait on; use cheap agents on leaf work the leader spot-checks.\n\n## Picking members\n\n- A reviewer on a different model than the author catches what the author's model repeats. Pair them that way.\n- Match the task to what the agent can do (its `can:` line): browsing, running code, making images. Every coding CLI browses and runs code; only an n8n workflow cannot.\n- Give the strongest model the decisions (the leader); give volume to fast or cheap models.\n- Reviews should not all land on the leader: name a reviewer per task in `kickoff`.\n\n## What goes in `kickoff`\n\nThe size, the split, who reviews what, the first batch each member delivers, and the rules of the work (sources, formats, what counts as done). A member's own rules go in its `brief`. Members read messages only when a turn starts, so rules belong in tasks and briefs, not in later messages.\n";
+
+/// Makes the library folder when it is not there yet, with the skill Agent
+/// Center starts with. A person who deletes that skill later keeps it deleted.
+pub fn ensure_library() -> PathBuf {
+    let dir = crate::settings::team_skills_dir();
+    if !dir.is_dir() {
+        let skill = dir.join(DEFAULT_CENTER_SKILL);
+        if std::fs::create_dir_all(&skill).is_ok() {
+            let _ = std::fs::write(skill.join("SKILL.md"), DEFAULT_CENTER_SKILL_MD);
+        }
+    }
+    dir
+}
+
+/// The skills Agent Center may hand a member: the library without Agent Center's own.
+pub fn member_library() -> Vec<LibrarySkill> {
+    library().into_iter().filter(|s| !s.for_center).collect()
 }
 
 /// The library, by name: `<name>/SKILL.md` folders and `<name>.md` files.
@@ -284,7 +314,8 @@ pub fn library() -> Vec<LibrarySkill> {
         if name.is_empty() {
             continue;
         }
-        out.push(LibrarySkill { description: skill_description(&md).unwrap_or_default(), name, path: md });
+        let for_center = skill_front(&md, "for").is_some_and(|f| f.eq_ignore_ascii_case("agent-center"));
+        out.push(LibrarySkill { description: skill_front(&md, "description").unwrap_or_default(), name, path: md, for_center });
     }
     out.sort_by(|a, b| a.name.cmp(&b.name));
     out
@@ -329,10 +360,16 @@ pub fn skill_text(names: &[String]) -> String {
 
 /// The `description:` of a SKILL.md's front matter.
 fn skill_description(skill_md: &std::path::Path) -> Option<String> {
+    skill_front(skill_md, "description")
+}
+
+/// One key of a SKILL.md's front matter (`description:`, `for:`), or nothing.
+fn skill_front(skill_md: &std::path::Path, key: &str) -> Option<String> {
     let text = std::fs::read_to_string(skill_md).ok()?;
     let body = text.trim_start_matches('\u{feff}').strip_prefix("---")?;
     let head = &body[..body.find("\n---")?];
-    head.lines().find_map(|l| l.trim().strip_prefix("description:").map(|d| d.trim().trim_matches(['"', '\'']).to_string())).filter(|d| !d.is_empty())
+    let prefix = format!("{key}:");
+    head.lines().find_map(|l| l.trim().strip_prefix(prefix.as_str()).map(|d| d.trim().trim_matches(['"', '\'']).to_string())).filter(|d| !d.is_empty())
 }
 
 /// What a member running as a team agent is told with its role, besides
@@ -397,6 +434,22 @@ pub fn describe(profile: &AgentProfile) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_skill_s_front_matter_says_who_it_is_for() {
+        let dir = std::env::temp_dir().join(format!("coucou-skill-front-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let md = dir.join("SKILL.md");
+        std::fs::write(&md, "---\nname: plan\ndescription: \"How to size a request\"\nfor: agent-center\n---\n# Body\n").unwrap();
+        assert_eq!(super::skill_front(&md, "description").as_deref(), Some("How to size a request"));
+        assert_eq!(super::skill_front(&md, "for").as_deref(), Some("agent-center"));
+        assert_eq!(super::skill_front(&md, "name").as_deref(), Some("plan"));
+        std::fs::write(&md, "no front matter").unwrap();
+        assert_eq!(super::skill_front(&md, "for"), None);
+        // The default skill Agent Center starts with is its own, with a description.
+        assert!(super::DEFAULT_CENTER_SKILL_MD.contains("for: agent-center") && super::DEFAULT_CENTER_SKILL_MD.contains("description:"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     use super::*;
 
     fn natives() -> Vec<AgentProfile> {
