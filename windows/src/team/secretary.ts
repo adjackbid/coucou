@@ -18,7 +18,7 @@ import { FACES, teamAgents } from "./agents";
 import { capsView } from "../views/caps";
 import { kindIcon, markOf } from "../views/agent-kind";
 import type { AgentProfile } from "../core/state";
-import type { LibrarySkill, SecretaryChoices, SecretaryProposal, SecretaryReply, SecretaryStep, SecretaryUpload } from "./types";
+import type { LibrarySkill, SecretaryChat, SecretaryChoices, SecretaryProposal, SecretaryReply, SecretaryStep, SecretaryUpload } from "./types";
 
 export interface SecretaryHost {
   render(): void;
@@ -583,6 +583,7 @@ async function ask(host: SecretaryHost, text: string, withFiles = true) {
     entries.push({ who: "secretary", text: reply.text, steps: reply.steps, proposals: reply.proposals, unused: unused.length ? unused : undefined, choices: reply.choices ?? guessChoices(reply.text) });
     ticked = [];
     answered(reply, host);
+    void persist();
   } catch (err) {
     entries.push({ who: "error", text: String(err instanceof Error ? err.message : err) });
     dropShow();
@@ -591,6 +592,96 @@ async function ask(host: SecretaryHost, text: string, withFiles = true) {
   live = [];
   stick = true;
   host.render();
+}
+
+/**
+ * 對話紀錄: every conversation is saved as it goes (Agent Center's side in Rust, the
+ * entries here), and 新對話 starts another; the list brings an earlier one back.
+ */
+let chats: SecretaryChat[] | null = null;
+let chatsOpen = false;
+
+function chatTitle(): string {
+  return entries.find((e) => e.who === "you")?.text.trim().split("\n")[0].slice(0, 60) ?? "";
+}
+
+/** Saves the conversation on screen; nothing before anything was said. */
+async function persist() {
+  if (!IS_TAURI || !entries.length) return;
+  try {
+    await Bridge.secretaryChatSave(chatTitle(), JSON.stringify(entries));
+    chats = null;
+  } catch {
+    // Not saved this time: it is saved again after the next answer.
+  }
+}
+
+async function toggleChats(host: SecretaryHost) {
+  chatsOpen = !chatsOpen;
+  if (chatsOpen) {
+    await persist();
+    chats = IS_TAURI ? ((await Bridge.secretaryChats()) ?? []) : [];
+  }
+  host.render();
+}
+
+async function openChat(host: SecretaryHost, id: string) {
+  if (waiting) return;
+  await persist();
+  try {
+    const json = await Bridge.secretaryChatOpen(id);
+    const back = JSON.parse(json) as Entry[];
+    entries = Array.isArray(back) ? back : [];
+    pending = [];
+    heldKey = [];
+    uploadProblems = [];
+    ticked = [];
+    dropShow();
+    chatsOpen = false;
+    chats = null;
+    stick = true;
+  } catch (err) {
+    entries.push({ who: "error", text: String(err instanceof Error ? err.message : err) });
+  }
+  host.render();
+}
+
+async function deleteChat(host: SecretaryHost, c: SecretaryChat) {
+  if (!confirmDelete(c)) return;
+  try {
+    await Bridge.secretaryChatDelete(c.id);
+    chats = (chats ?? []).filter((x) => x.id !== c.id);
+  } catch (err) {
+    entries.push({ who: "error", text: String(err instanceof Error ? err.message : err) });
+  }
+  host.render();
+}
+
+function confirmDelete(c: SecretaryChat): boolean {
+  return typeof window !== "undefined" && typeof window.confirm === "function" ? window.confirm(trf("刪除對話「{title}」?", "Delete the conversation \"{title}\"?", { title: c.title })) : true;
+}
+
+function chatList(host: SecretaryHost): HTMLElement {
+  const list = chats ?? [];
+  return h(
+    "div",
+    { class: "sec-chats" },
+    h("div", { class: "sec-chats-head" }, h("b", { text: tr("對話紀錄", "Conversations") }), h("button", { class: "link", type: "button", onClick: () => { chatsOpen = false; host.render(); } }, tr("關閉", "Close"))),
+    list.length
+      ? h(
+          "div",
+          { class: "sec-chats-list" },
+          ...list.map((c) =>
+            h(
+              "div",
+              { class: `sec-chat${c.current ? " on" : ""}` },
+              h("button", { class: "sec-chat-open", type: "button", disabled: waiting || c.current, onClick: () => void openChat(host, c.id) }, h("span", { class: "sec-chat-title", text: c.title }), h("span", { class: "dim", text: `${new Date(c.updatedMs).toLocaleString()}${c.current ? tr(" · 現在這段", " · on screen") : ""}` })),
+              h("button", { class: "sec-chat-del", type: "button", title: tr("刪除", "Delete"), "aria-label": tr("刪除這段對話", "Delete this conversation"), onClick: () => void deleteChat(host, c) }, "✕"),
+            ),
+          ),
+        )
+      : h("p", { class: "dim", text: tr("還沒有存下來的對話。每段對話在 Agent Center 回答後會自動保存。", "No saved conversations yet. Each one is saved as Agent Center answers.") }),
+  );
 }
 
 function replace(updated: SecretaryProposal) {
@@ -625,6 +716,7 @@ async function confirm(host: SecretaryHost, p: SecretaryProposal, createFolder =
   }
   doing.delete(p.id);
   host.render();
+  void persist();
 }
 
 /** 取消 on "create the folder?": nothing is created, the team is not opened, and the card is cancelled. */
@@ -677,6 +769,7 @@ async function applyPick(host: SecretaryHost, p: SecretaryProposal) {
   }
   doing.delete(p.id);
   host.render();
+  void persist();
 }
 
 function pickCard(host: SecretaryHost, p: SecretaryProposal, d: PickDraft, at: number): HTMLElement {
@@ -760,6 +853,7 @@ async function decline(host: SecretaryHost, p: SecretaryProposal, why = "") {
   const done = IS_TAURI ? await Bridge.secretaryDecline(p.id) : { ...p, state: "declined" as const };
   replace({ ...(done ?? { ...p, state: "declined" as const }), outcome: why });
   host.render();
+  void persist();
 }
 
 /** Agent Center's words: line breaks, **bold**, `code` and "- " lists, nothing else. */
@@ -1031,6 +1125,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
         ),
       ),
       pending.length ? h("div", { class: "attachments sec-files" }, ...pending.map((f) => fileChip(f, () => (dropUpload(f.id), host.render())))) : null,
+      chatsOpen ? chatList(host) : null,
       input,
       h(
         "div",
@@ -1043,6 +1138,7 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
         instructions.trim() ? h("span", { class: "chip sec-own", title: trf("自訂指示(在側欄 Agent Center 的 ⚙ 裡改):\n{text}", "Your instructions (change them under Agent Center's ⚙ in the sidebar):\n{text}", { text: instructions.trim() }), text: tr("已套用自訂指示", "Your instructions on") }) : null,
         h("button", { class: "link sec-attach", type: "button", title: tr("附加檔案(也可以拖進視窗或貼上圖片):要放進團隊知識庫的設計稿、規格、圖片…", "Attach files (or drag them onto the window, or paste a picture): designs, specs, pictures for a team's knowledge base…"), disabled: waiting, onClick: () => pickFiles(host) }, tr("📎 附加檔案", "📎 Attach files")),
         h("span", { class: "grow" }),
+        IS_TAURI ? h("button", { class: `link${chatsOpen ? " on" : ""}`, type: "button", disabled: waiting, title: tr("切回之前的對話", "Go back to an earlier conversation"), onClick: () => void toggleChats(host) }, tr("對話紀錄", "Conversations")) : null,
         entries.length
           ? h(
               "button",
@@ -1051,12 +1147,17 @@ export function secretaryPage(host: SecretaryHost): HTMLElement {
                 type: "button",
                 disabled: waiting,
                 onClick: () => {
-                  entries = [];
-                  pending = [];
-                  heldKey = [];
-                  uploadProblems = [];
-                  void Bridge.secretaryReset();
-                  host.render();
+                  void (async () => {
+                    // The one on screen is kept: 對話紀錄 brings it back.
+                    await persist();
+                    entries = [];
+                    pending = [];
+                    heldKey = [];
+                    uploadProblems = [];
+                    chatsOpen = false;
+                    await Bridge.secretaryReset();
+                    host.render();
+                  })();
                 },
               },
               tr("新對話", "New conversation"),

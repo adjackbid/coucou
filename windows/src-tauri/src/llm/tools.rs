@@ -18,7 +18,7 @@ pub struct Tool {
     pub parameters: Value,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Call {
     pub id: String,
     pub name: String,
@@ -26,7 +26,7 @@ pub struct Call {
 }
 
 /// One step of the conversation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Turn {
     User(String),
     /// What the model said, and the calls it made with it.

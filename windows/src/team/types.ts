@@ -410,6 +410,15 @@ export interface SecretaryProposal {
   picks?: { agent: string; name: string; role: string; leader: boolean }[];
 }
 
+/** A saved Agent Center conversation (secretary.rs ChatInfo). */
+export interface SecretaryChat {
+  id: string;
+  title: string;
+  updatedMs: number;
+  /** The one on screen now. */
+  current: boolean;
+}
+
 /** A file attached in Agent Center's conversation (secretary.rs UploadView). */
 export interface SecretaryUpload {
   id: string;

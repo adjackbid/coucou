@@ -46,7 +46,7 @@ const KEEP_TURNS: usize = 60;
 const COLORS: [&str; 8] = ["#5b8def", "#34c7a0", "#a06cf0", "#f5b63d", "#f472b6", "#22d3ee", "#84cc16", "#f97316"];
 
 /// Something Agent Center prepared, waiting for the person's click.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Proposal {
     pub id: String,
@@ -61,16 +61,18 @@ pub struct Proposal {
     pub state: String,
     pub outcome: String,
     /// The attached files it would put in a knowledge base.
+    #[serde(default)]
     pub uses: Vec<String>,
     /// A new team's members as picked from Agent Pool, for the window's picking animation.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub picks: Vec<Pick>,
+    /// What confirming it does; kept out of what the window sees, saved with the conversation.
     #[serde(skip)]
     payload: Value,
 }
 
 /// One member of a proposed team: the team agent it runs as, and who it is.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pick {
     pub agent: String,
@@ -240,6 +242,35 @@ impl Office {
     }
 }
 
+/// A saved conversation, in its file (`secretary-chats/<id>.json`).
+#[derive(Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SavedChat {
+    id: String,
+    title: String,
+    updated_ms: u64,
+    turns: Vec<Turn>,
+    /// Each proposal as the window sees it, with its `payload` put back in.
+    proposals: Vec<Value>,
+    notes: Vec<String>,
+    /// The conversation as the window drew it (its entries), kept as it gave it.
+    entries: String,
+}
+
+/// A saved conversation, in the window's list.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatInfo {
+    pub id: String,
+    pub title: String,
+    pub updated_ms: u64,
+    /// The one on screen now.
+    pub current: bool,
+}
+
+/// How many conversations are kept; the oldest go first.
+const CHATS_MAX: usize = 60;
+
 pub struct Secretary {
     turns: Mutex<Vec<Turn>>,
     proposals: Mutex<Vec<Proposal>>,
@@ -249,6 +280,14 @@ pub struct Secretary {
     /// Files attached in this conversation, by id.
     uploads: Mutex<BTreeMap<String, Upload>>,
     uploads_dir: PathBuf,
+    /// The conversation on screen, by the id its file has.
+    chat: Mutex<String>,
+    /// Where conversations are saved.
+    chats_dir: PathBuf,
+}
+
+fn chat_id() -> String {
+    format!("c{}", crate::team::store::now_ms())
 }
 
 impl Default for Secretary {
@@ -260,7 +299,8 @@ impl Default for Secretary {
 impl Secretary {
     /// A secretary keeping attached files in `dir`.
     pub fn at(dir: PathBuf) -> Self {
-        Self { turns: Default::default(), proposals: Default::default(), notes: Default::default(), busy: AtomicBool::new(false), uploads: Default::default(), uploads_dir: dir }
+        let chats_dir = dir.parent().map(|p| p.join("secretary-chats")).unwrap_or_else(|| dir.join("chats"));
+        Self { turns: Default::default(), proposals: Default::default(), notes: Default::default(), busy: AtomicBool::new(false), uploads: Default::default(), uploads_dir: dir, chat: Mutex::new(chat_id()), chats_dir }
     }
 
     /// The one the app runs: files attached in an earlier run belong to a
@@ -277,6 +317,97 @@ impl Secretary {
         self.notes.lock().unwrap().clear();
         self.uploads.lock().unwrap().clear();
         let _ = std::fs::remove_dir_all(&self.uploads_dir);
+        *self.chat.lock().unwrap() = chat_id();
+    }
+
+    /// Saves the conversation on screen: Agent Center's side (its turns, proposals and
+    /// notes) with the window's own drawing of it (`entries`), so it can be brought back
+    /// with 對話紀錄. Nothing is saved before anything was said.
+    pub fn chat_save(&self, title: &str, entries: &str) -> Result<Option<ChatInfo>, String> {
+        let turns = self.turns.lock().unwrap().clone();
+        if turns.is_empty() {
+            return Ok(None);
+        }
+        let proposals: Vec<Value> = self
+            .proposals
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|p| {
+                let mut v = serde_json::to_value(p).unwrap_or(Value::Null);
+                v["payload"] = p.payload.clone();
+                v
+            })
+            .collect();
+        let id = self.chat.lock().unwrap().clone();
+        let title: String = title.trim().chars().take(60).collect();
+        let title: String = if title.is_empty() { tr!("(沒有標題)", "(untitled)") } else { title };
+        let saved = SavedChat { id: id.clone(), title, updated_ms: crate::team::store::now_ms(), turns, proposals, notes: self.notes.lock().unwrap().clone(), entries: entries.to_string() };
+        std::fs::create_dir_all(&self.chats_dir).map_err(|e| e.to_string())?;
+        let json = serde_json::to_vec(&saved).map_err(|e| e.to_string())?;
+        std::fs::write(self.chats_dir.join(format!("{id}.json")), json).map_err(|e| -> String { tr!(format!("無法儲存對話:{e}"), format!("Could not save the conversation: {e}")) })?;
+        // The oldest go once there are too many.
+        let mut all = self.chats();
+        all.sort_by_key(|c| std::cmp::Reverse(c.updated_ms));
+        for old in all.iter().skip(CHATS_MAX) {
+            let _ = std::fs::remove_file(self.chats_dir.join(format!("{}.json", old.id)));
+        }
+        Ok(Some(ChatInfo { id: saved.id, title: saved.title, updated_ms: saved.updated_ms, current: true }))
+    }
+
+    /// The saved conversations, newest first.
+    pub fn chats(&self) -> Vec<ChatInfo> {
+        let current = self.chat.lock().unwrap().clone();
+        let mut out: Vec<ChatInfo> = std::fs::read_dir(&self.chats_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+            .filter_map(|e| {
+                let saved: SavedChat = serde_json::from_slice(&std::fs::read(e.path()).ok()?).ok()?;
+                Some(ChatInfo { current: saved.id == current, id: saved.id, title: saved.title, updated_ms: saved.updated_ms })
+            })
+            .collect();
+        out.sort_by_key(|c| std::cmp::Reverse(c.updated_ms));
+        out
+    }
+
+    /// Brings a saved conversation back: Agent Center goes on from its turns, its open
+    /// cards can still be confirmed, and the window gets its entries to draw. Files
+    /// attached to the conversation on screen until now are let go.
+    pub fn chat_open(&self, id: &str) -> Result<String, String> {
+        if self.busy.load(Ordering::SeqCst) {
+            return Err(tr!("Agent Center 還在處理上一個請求。", "Agent Center is still on the last request."));
+        }
+        let path = self.chats_dir.join(format!("{}.json", id.trim()));
+        let bytes = std::fs::read(&path).map_err(|_| -> String { tr!("這段對話已經不在了。", "That conversation is no longer there.") })?;
+        let saved: SavedChat = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+        let proposals: Vec<Proposal> = saved
+            .proposals
+            .into_iter()
+            .filter_map(|mut v| {
+                let payload = v.as_object_mut().and_then(|o| o.remove("payload")).unwrap_or(Value::Null);
+                let mut p: Proposal = serde_json::from_value(v).ok()?;
+                p.payload = payload;
+                Some(p)
+            })
+            .collect();
+        *self.turns.lock().unwrap() = saved.turns;
+        *self.proposals.lock().unwrap() = proposals;
+        *self.notes.lock().unwrap() = saved.notes;
+        self.uploads.lock().unwrap().clear();
+        let _ = std::fs::remove_dir_all(&self.uploads_dir);
+        *self.chat.lock().unwrap() = saved.id;
+        Ok(saved.entries)
+    }
+
+    /// Forgets a saved conversation. The one on screen stays on screen.
+    pub fn chat_delete(&self, id: &str) -> Result<(), String> {
+        let path = self.chats_dir.join(format!("{}.json", id.trim()));
+        if path.is_file() {
+            std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+        }
+        Ok(())
     }
 
     /// A file the person attached: kept aside, checked as the knowledge base
@@ -1943,6 +2074,41 @@ mod tests {
         assert_eq!(work_dir_of(&json!({ "work_dir": "D:\\x" }), "t", "D:\\ai").unwrap(), "D:\\x");
         assert_eq!(folder_name(" ... "), "team");
         assert!(root_line("").is_empty() && root_line("D:\\ai").contains("D:\\ai"));
+    }
+
+    #[test]
+    fn a_conversation_is_saved_and_comes_back_with_its_cards() {
+        let dir = std::env::temp_dir().join(format!("coucou-secretary-chats-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let sec = Secretary::at(dir.join("uploads"));
+        assert!(sec.chat_save("x", "[]").unwrap().is_none(), "nothing said, nothing saved");
+        let mut planner = crate::acp::AgentProfile::copilot();
+        planner.id = "ta-plan".into();
+        planner.protocol = crate::acp::Protocol::Claude;
+        let driver = Arc::new(crate::acp::Agents::default());
+        let teams = Arc::new(crate::team::orchestrator::Teams::new(Arc::new(crate::team::orchestrator::AcpDrive(driver.clone())), Arc::new(|_| {}), Some(dir.join("teams")), settings::team_mcp_exe_path()));
+        let mut office = Office::new(teams, &[], driver, 480, String::new());
+        office.choices = vec![planner];
+        sec.turns.lock().unwrap().push(Turn::User("開個團隊".into()));
+        let p = sec.propose_team(&json!({ "name": "t", "goal": "g", "work_dir": "D:\\x", "members": [{ "name": "規劃", "role": "規劃", "agent": "ta-plan" }] }), &office).unwrap();
+        let first = sec.chat_save("開個團隊", "[{\"who\":\"you\"}]").unwrap().unwrap();
+        assert!(first.current && first.title == "開個團隊");
+        sec.reset();
+        sec.turns.lock().unwrap().push(Turn::User("第二段".into()));
+        sec.chat_save("第二段", "[]").unwrap();
+        let list = sec.chats();
+        assert_eq!(list.len(), 2);
+        assert!(list[0].current && list[0].title == "第二段" && !list[1].current);
+        let entries = sec.chat_open(&first.id).unwrap();
+        assert_eq!(entries, "[{\"who\":\"you\"}]");
+        assert!(matches!(sec.turns.lock().unwrap().first(), Some(Turn::User(t)) if t == "開個團隊"));
+        let back = sec.proposal(&p.id).unwrap();
+        assert_eq!(back.state, "open");
+        assert_eq!(back.payload["config"]["name"], "t", "the card can still be confirmed: its payload came back");
+        assert!(sec.chats().iter().find(|c| c.id == first.id).unwrap().current);
+        sec.chat_delete(&first.id).unwrap();
+        assert_eq!(sec.chats().len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -8,7 +8,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentCheck, AgentProfile, ModelChoice, Provider, Settings, AgentCaps } from "./state";
 import type { Dock } from "./dock";
 import { tr } from "./i18n";
-import type { Constitution, ConstitutionLevel, Found, KnowledgeAdded, KnowledgeDoc, KnowledgeView, KnowledgeVisibility, LibrarySkill, SecretaryUpload, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
+import type { Constitution, ConstitutionLevel, Found, KnowledgeAdded, KnowledgeDoc, KnowledgeView, KnowledgeVisibility, LibrarySkill, SecretaryChat, SecretaryUpload, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -255,6 +255,12 @@ export const Bridge = {
   /** The person changed a proposed team's members on its card: `{agent, name, role, leader}` in their order. */
   secretaryReviseTeam: (id: string, members: { agent: string; name: string; role: string; leader: boolean }[], tzMinutes: number) => callOrThrow<SecretaryProposal>("secretary_revise_team", { id, members, tzMinutes }),
   secretaryReset: () => call<void>("secretary_reset"),
+  /** 對話紀錄: the conversation on screen saved with the window's entries; null before anything was said. */
+  secretaryChatSave: (title: string, entries: string) => callOrThrow<SecretaryChat | null>("secretary_chat_save", { title, entries }),
+  secretaryChats: () => call<SecretaryChat[]>("secretary_chats"),
+  /** Brings a saved conversation back; the window's entries, as JSON. */
+  secretaryChatOpen: (id: string) => callOrThrow<string>("secretary_chat_open", { id }),
+  secretaryChatDelete: (id: string) => callOrThrow<void>("secretary_chat_delete", { id }),
   /** What 清除歷史紀錄 would clear (null outside the app). */
   historyStats: () => call<HistoryStats>("history_stats"),
   /** Moves the teams' runs and costs — and with `all` the teams themselves — to the Recycle Bin; refused while a team is at work. */

@@ -1527,6 +1527,29 @@ fn secretary_reset(secretary: State<Arc<secretary::Secretary>>) {
     secretary.reset();
 }
 
+/// Saves the conversation on screen (對話紀錄), with the window's drawing of it.
+#[tauri::command]
+fn secretary_chat_save(secretary: State<Arc<secretary::Secretary>>, title: String, entries: String) -> Result<Option<secretary::ChatInfo>, String> {
+    secretary.chat_save(&title, &entries)
+}
+
+/// The saved conversations, newest first.
+#[tauri::command]
+fn secretary_chats(secretary: State<Arc<secretary::Secretary>>) -> Vec<secretary::ChatInfo> {
+    secretary.chats()
+}
+
+/// Brings a saved conversation back; returns the window's entries to draw.
+#[tauri::command]
+fn secretary_chat_open(secretary: State<Arc<secretary::Secretary>>, id: String) -> Result<String, String> {
+    secretary.chat_open(&id)
+}
+
+#[tauri::command]
+fn secretary_chat_delete(secretary: State<Arc<secretary::Secretary>>, id: String) -> Result<(), String> {
+    secretary.chat_delete(&id)
+}
+
 /// What there is to clear in Settings → 團隊與 Agent Center → 清除歷史紀錄.
 #[tauri::command]
 fn history_stats() -> history::Stats {
@@ -2174,6 +2197,10 @@ pub fn run() {
             secretary_upload_force,
             secretary_upload_remove,
             secretary_reset,
+            secretary_chat_save,
+            secretary_chats,
+            secretary_chat_open,
+            secretary_chat_delete,
             agent_caps,
             history_stats,
             history_clear,
