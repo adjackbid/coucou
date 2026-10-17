@@ -107,6 +107,10 @@ pub enum Event {
     FinishReminded,
     /// Tokens a member's model used since the last report.
     Usage { member: String, usage: crate::usage::Usage },
+    /// The time limit's reserve began: the leader was told to assemble and deliver.
+    TimeWarned,
+    /// The time limit ran out: the leader was told to deliver now.
+    TimeUp,
     /// The person changed the team's turn limit while it ran (or paused on it).
     TurnsLimit { max: u32 },
     /// The person ended the team before its work was done: it closes now,
@@ -249,6 +253,9 @@ pub struct State {
     pub finish_asked: bool,
     /// …or was reminded to, once.
     pub finish_reminded: bool,
+    /// The time limit's warning (reserve) and its end have been sent.
+    pub time_warned: bool,
+    pub time_up: bool,
     pub feed: Vec<FeedItem>,
     pub total_turns: u32,
     /// What the leader told each member to keep (`brief_member`), in order.
@@ -616,12 +623,24 @@ impl State {
                 total.add(usage);
             }
             Event::Usage { .. } => {}
+            Event::TimeWarned => {
+                self.time_warned = true;
+                self.say(at, "time", SYSTEM, YOU, "reserve", None);
+            }
+            Event::TimeUp => {
+                self.time_up = true;
+                self.say(at, "time", SYSTEM, YOU, "up", None);
+            }
             Event::Reopened => {
                 self.status = TeamStatus::Running;
                 self.finished_at = 0;
                 self.ended = false;
                 self.finish_asked = false;
                 self.finish_reminded = false;
+                // The clock starts again with the new ask.
+                self.started_at = at;
+                self.time_warned = false;
+                self.time_up = false;
                 self.paused_why.clear();
                 self.say(at, "reopened", YOU, "", "", None);
             }
@@ -754,6 +773,11 @@ pub struct Snapshot {
     pub max_turns: u32,
     pub started_at: u64,
     pub finished_at: u64,
+    /// The time limit in minutes (0 for none), its reserve, and where it stands.
+    pub time_limit_min: u32,
+    pub time_reserve_min: u32,
+    pub time_warned: bool,
+    pub time_up: bool,
     pub members: Vec<MemberView>,
     pub tasks: Vec<Task>,
     pub deliverables: Vec<Deliverable>,
@@ -879,6 +903,10 @@ impl State {
             max_turns: config.max_turns,
             started_at: self.started_at,
             finished_at: self.finished_at,
+            time_limit_min: config.time_limit_min,
+            time_reserve_min: config.time_reserve_min(),
+            time_warned: self.time_warned,
+            time_up: self.time_up,
             members,
             tasks: self.tasks.clone(),
             deliverables: self.deliverables.clone(),

@@ -710,8 +710,52 @@ impl Team {
     }
 
     /// The scheduler: one loop per team, asleep until something changes.
+    /// The time limit, checked by the scheduler: at the reserve the leader is told
+    /// to assemble, at the limit to deliver now. Each is said once per run.
+    fn check_time(&self) {
+        let mut store = self.store.lock().unwrap();
+        let state = store.state();
+        let Some(config) = state.config.as_ref() else { return };
+        if state.status != TeamStatus::Running || config.time_limit_min == 0 || state.time_up {
+            return;
+        }
+        let elapsed = super::store::now_ms().saturating_sub(state.started_at);
+        let limit = u64::from(config.time_limit_min) * 60_000;
+        let warn_at = limit.saturating_sub(u64::from(config.time_reserve_min()) * 60_000);
+        let leader = state.leader().to_string();
+        // One word at a time: at the limit the "time is up" word is the one that counts.
+        let events = if elapsed >= limit {
+            log::line(format!("team {}: time limit reached", self.id));
+            vec![Event::TimeUp, Event::Message { id: state.next_message_id(), from: SYSTEM.into(), to: leader, text: brief::time_up(config), task: None }]
+        } else if !state.time_warned && elapsed >= warn_at {
+            log::line(format!("team {}: time limit reserve", self.id));
+            let left = limit.saturating_sub(elapsed).div_ceil(60_000);
+            vec![Event::TimeWarned, Event::Message { id: state.next_message_id(), from: SYSTEM.into(), to: leader, text: brief::time_reserve(config, left), task: None }]
+        } else {
+            return;
+        };
+        store.append_all(events);
+        settle(&mut store);
+    }
+
+    /// How long the scheduler may sleep before the time limit needs a look: None without one.
+    fn time_nap(&self) -> Option<std::time::Duration> {
+        self.with_state(|s| {
+            let config = s.config.as_ref()?;
+            if s.status != TeamStatus::Running || config.time_limit_min == 0 || s.time_up {
+                return None;
+            }
+            let elapsed = super::store::now_ms().saturating_sub(s.started_at);
+            let limit = u64::from(config.time_limit_min) * 60_000;
+            let warn_at = limit.saturating_sub(u64::from(config.time_reserve_min()) * 60_000);
+            let next = if s.time_warned { limit } else { warn_at };
+            Some(std::time::Duration::from_millis(next.saturating_sub(elapsed).max(1_000)))
+        })
+    }
+
     async fn run(self: Arc<Self>) {
         loop {
+            self.check_time();
             let turns = self.next_turns();
             if !turns.is_empty() {
                 if let Some(snapshot) = self.snapshot() {
@@ -729,7 +773,15 @@ impl Team {
                 log::line(format!("team {}: finished", self.id));
                 break;
             }
-            self.wake.notified().await;
+            match self.time_nap() {
+                Some(nap) => {
+                    tokio::select! {
+                        _ = self.wake.notified() => {}
+                        _ = tokio::time::sleep(nap) => {}
+                    }
+                }
+                None => self.wake.notified().await,
+            }
         }
     }
 }
@@ -1988,6 +2040,49 @@ mod tests {
             bench.teams.answer("shop", "Q-1", "要").unwrap();
             bench.until("the leader plans", |s| s.tasks.len() == 1).await;
             assert!(bench.teams.answer("shop", "Q-1", "again").is_err());
+        });
+    }
+
+    /// A team with a time limit: at the reserve the leader is told to assemble,
+    /// at the limit to deliver now, each once; a team without one hears nothing.
+    #[test]
+    fn a_time_limit_tells_the_leader_to_assemble_and_then_to_deliver() {
+        run(async {
+            let bench = bench(diligent());
+            bench.drive.held.lock().unwrap().push("ai1".into());
+            let mut config = shop(&work_dir());
+            config.time_limit_min = 4;
+            assert_eq!(config.time_reserve_min(), 2);
+            bench.start(config);
+            bench.until("the leader is working", |s| s.members[0].status == MemberStatus::Working).await;
+            let team = bench.teams.get("shop").unwrap();
+            // Nothing yet: the limit is far.
+            team.check_time();
+            assert!(!bench.snap().time_warned);
+            // Two minutes in: the reserve begins.
+            {
+                let mut store = team.store.lock().unwrap();
+                let at = store.state().started_at;
+                store.state_mut_started_at(at.saturating_sub(2 * 60_000 + 1));
+            }
+            team.check_time();
+            let snap = bench.snap();
+            assert!(snap.time_warned && !snap.time_up);
+            assert_eq!(snap.messages.iter().filter(|m| m.text.starts_with("TIME CHECK")).count(), 1);
+            team.check_time();
+            assert_eq!(bench.snap().messages.iter().filter(|m| m.text.starts_with("TIME CHECK")).count(), 1, "said once");
+            // Four minutes in: time is up.
+            {
+                let mut store = team.store.lock().unwrap();
+                let at = store.state().started_at;
+                store.state_mut_started_at(at.saturating_sub(2 * 60_000 + 1));
+            }
+            team.check_time();
+            let snap = bench.snap();
+            assert!(snap.time_up);
+            assert_eq!(snap.messages.iter().filter(|m| m.text.starts_with("TIME IS UP")).count(), 1);
+            assert!(snap.feed.iter().filter(|f| f.kind == "time").count() == 2);
+            assert!(team.time_nap().is_none());
         });
     }
 

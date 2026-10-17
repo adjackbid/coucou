@@ -178,6 +178,10 @@ export function demoSnapshot(): Snapshot {
     maxTurns: 60,
     startedAt: ago(18),
     finishedAt: 0,
+    timeLimitMin: 0,
+    timeReserveMin: 0,
+    timeWarned: false,
+    timeUp: false,
     members: [
       { ...seat(0), isLeader: true, status: "working", task: "TASK-05", waiting: null, activity: "Reading docs/spec.md", turns: 4, permission: null, lostWhy: "", usage: [used("claude-sonnet-5-5", 41_200, 9_800, 612_000, 38_000)] },
       {

@@ -45,6 +45,8 @@ export interface TeamConfig {
   kickoff?: string;
   /** Fast mode: the smallest team that does the job, one review per task, no second round. */
   fast?: boolean;
+  /** A time limit in minutes from the start (0 or absent for none); the leader keeps the end of it for assembling. */
+  timeLimitMin?: number;
 }
 
 export interface TeamFile {
@@ -242,6 +244,11 @@ export interface Snapshot {
   maxTurns: number;
   startedAt: number;
   finishedAt: number;
+  /** The time limit in minutes (0 for none), its reserve, and where it stands. */
+  timeLimitMin: number;
+  timeReserveMin: number;
+  timeWarned: boolean;
+  timeUp: boolean;
   members: MemberView[];
   tasks: Task[];
   deliverables: Deliverable[];

@@ -65,6 +65,12 @@ impl Store {
         Ok(store)
     }
 
+    /// Tests move the clock: the team started earlier than it did.
+    #[cfg(test)]
+    pub fn state_mut_started_at(&mut self, at: u64) {
+        self.state.started_at = at;
+    }
+
     pub fn state(&self) -> &State {
         &self.state
     }

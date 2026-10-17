@@ -764,7 +764,9 @@ impl Secretary {
             }
             None => None,
         };
-        let fast = office.fast || office.speed >= 4 || a.get("fast").and_then(Value::as_bool).unwrap_or(false);
+        let time_limit = a.get("time_limit_minutes").and_then(Value::as_u64).unwrap_or(0).min(24 * 60) as u32;
+        // A short limit is a fast team by nature.
+        let fast = office.fast || office.speed >= 4 || a.get("fast").and_then(Value::as_bool).unwrap_or(false) || (1..=15).contains(&time_limit);
         let config = json!({
             "id": "draft",
             "name": name,
@@ -776,6 +778,7 @@ impl Secretary {
             "members": list,
             "kickoff": kickoff,
             "fast": fast,
+            "timeLimitMin": time_limit,
         });
         let draft: TeamConfig = serde_json::from_value(config.clone()).map_err(|e| e.to_string())?;
         let mut lines: Vec<String> = vec![tr!(format!("目標:{goal}"), format!("Goal: {goal}"))];
@@ -797,6 +800,12 @@ impl Secretary {
         }
         if draft.fast {
             tail.push(tr!("快速模式:最小團隊、一次審查、不來回", "Fast mode: the smallest team, one review, no second round"));
+        }
+        if draft.time_limit_min > 0 {
+            tail.push(tr!(
+                format!("時限:{} 分鐘(最後 {} 分鐘留給組長彙整交付,沒做完也交)", draft.time_limit_min, draft.time_reserve_min()),
+                format!("Time limit: {} minutes (the last {} are for the leader to assemble and deliver, done or not)", draft.time_limit_min, draft.time_reserve_min())
+            ));
         }
         lines.extend(tail.iter().cloned());
         let confirm: &str = if start { tr!("建立並啟動", "Create and start") } else { tr!("建立團隊", "Create team") };
@@ -1783,6 +1792,7 @@ How you work:\n\
 - When you ask the user to choose between options, call offer_choices with them so they can click one, instead of listing them as text.\n\
 - For a new team: pick agents from list_agents; each runs the model the user set on it (shown in list_agents), so leave `model` empty unless the agent has none (then agent_models lists what it offers) or the user asked for another. Independent review means a different agent, never the same agent on another model. Give the leader the agent with the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
 - Size the request before you shape the team (quick: the leader alone; medium: one does, one on another model reviews once; large: split by scope), and say which size in `kickoff`; your skills below, when you have them, say how in detail. Every coding CLI agent (Claude Code, Codex, Gemini CLI, Copilot, Antigravity) browses the web and runs code through its own tools, and its `can:` line says so; only an n8n workflow cannot. Never tell the user the agents cannot go online unless no agent's `can:` line says it browses. Pick an agent for images only when its `can:` line says it makes them.\n\
+- When the user names a time (\"within 10 minutes\", \"I need it in an hour\"), pass `time_limit_minutes`: the leader then reserves the end of it for assembling and delivers on time, complete or not; plan the kickoff around early, assemblable batches.\n\
 - In `kickoff` tell the leader: the size, the split, who reviews what (so reviews are not all on the leader), the first batch each member delivers, and the rules of the work (sources, formats, what counts as done). Give a member its own rules in `brief`. Members read messages only when a turn starts, so rules belong in the tasks and briefs, not in later messages.{}\n\
 {}- A team has a knowledge base: documents (design notes, specs, pictures, any file) its members work from. When the user attaches files or mentions design documents, specs or reference material for a team, put them in `knowledge` (propose_team for a new team, propose_knowledge for one that exists): attached files by their id (u…), or full paths the user wrote — never a path you guessed. Each is for the leader only unless the user says the whole team should see it (then visibility \"shared\"). You only see the files' names, never what is in them.\n\
 - Answer in the language named on the last line of this prompt, short and concrete: a few lines or a short list. Point out anything waiting for the user (permission cards, questions) first.\n\
@@ -1936,6 +1946,7 @@ fn describe() -> Vec<Tool> {
                 "kickoff": { "type": "string", "description": "Your plan for the leader, read with its first message: how big the goal is (quick / medium / large), how to split it (by scope, by batch, or one member plus one reviewer), who reviews what, what to deliver first, and the rules of the work. A few lines." },
                 "model_change_asked": { "type": "boolean", "description": "True only when the user themselves asked for a member to run a model other than the one set on its agent." },
                 "fast": { "type": "boolean", "description": "Fast mode: the leader takes the smallest team that does the job, one review per task, no second round. Set it when the user asks for speed or a quick answer." },
+                "time_limit_minutes": { "type": "integer", "description": "A time limit in minutes when the user names one (\"in 10 minutes\", \"by the hour\"): the leader keeps the last part of it to assemble what is in and deliver, done or not. 0 or absent for none." },
                 "start": { "type": "boolean", "description": "Start it as soon as it is created (default true)." },
                 "knowledge": knowledge.clone(),
                 "knowledge_from": { "type": "string", "description": "Another team (id or name) whose knowledge base the new team starts with, each document as it was shared." },
@@ -2132,6 +2143,27 @@ mod tests {
     fn fast_mode_from_the_settings_marks_every_proposed_team() {
         assert_eq!(fast_line(false), "");
         assert!(fast_line(true).contains("FAST MODE") && fast_line(true).contains("smallest team"));
+    }
+
+    #[test]
+    fn a_time_limit_goes_on_the_card_and_makes_a_short_team_fast() {
+        let mut planner = crate::acp::AgentProfile::copilot();
+        planner.id = "ta-plan".into();
+        planner.protocol = crate::acp::Protocol::Claude;
+        let driver = Arc::new(crate::acp::Agents::default());
+        let teams = Arc::new(crate::team::orchestrator::Teams::new(Arc::new(crate::team::orchestrator::AcpDrive(driver.clone())), Arc::new(|_| {}), Some(std::env::temp_dir().join(format!("coucou-secretary-timed-{}", std::process::id()))), settings::team_mcp_exe_path()));
+        let mut office = Office::new(teams, &[], driver, 480, String::new());
+        office.choices = vec![planner];
+        let sec = Secretary::default();
+        let ask = |limit: u64| json!({ "name": "t", "goal": "g", "work_dir": "D:\\x", "time_limit_minutes": limit, "members": [{ "name": "規劃", "role": "規劃", "agent": "ta-plan" }] });
+        let p = sec.propose_team(&ask(10), &office).unwrap();
+        assert_eq!(p.payload["config"]["timeLimitMin"], 10);
+        assert_eq!(p.payload["config"]["fast"], true, "ten minutes is a fast team");
+        assert!(p.lines.iter().any(|l| l.contains("10") && (l.contains("時限") || l.contains("Time limit"))), "{:?}", p.lines);
+        let p = sec.propose_team(&ask(120), &office).unwrap();
+        assert_eq!(p.payload["config"]["fast"], false);
+        let p = sec.propose_team(&ask(0), &office).unwrap();
+        assert!(!p.lines.iter().any(|l| l.contains("時限") || l.contains("Time limit")));
     }
 
     #[test]

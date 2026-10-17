@@ -92,6 +92,26 @@ pub struct TeamConfig {
     /// is moved rather than sent back again (brief.rs, tools.rs).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub fast: bool,
+    /// A time limit in minutes from the start (0 for none): the leader is told
+    /// to keep the last part of it for assembling what is in and delivering,
+    /// done or not (brief.rs time_rules, orchestrator.rs check_time).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub time_limit_min: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
+impl TeamConfig {
+    /// How much of a time limit is kept for assembling: a quarter, at least 2
+    /// minutes and at most 15, never the whole limit.
+    pub fn time_reserve_min(&self) -> u32 {
+        if self.time_limit_min == 0 {
+            return 0;
+        }
+        (self.time_limit_min / 4).clamp(2, 15).min(self.time_limit_min.saturating_sub(1)).max(1)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -323,6 +343,7 @@ pub(crate) mod fixtures {
             trusted_dirs: vec![],
             kickoff: String::new(),
             fast: false,
+            time_limit_min: 0,
         }
     }
 }

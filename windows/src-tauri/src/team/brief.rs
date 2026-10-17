@@ -105,6 +105,9 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
         if config.fast {
             out.push_str(&format!("\n{}\n", fast_rules()));
         }
+        if config.time_limit_min > 0 {
+            out.push_str(&format!("\n{}\n", time_rules(config)));
+        }
         let library = crate::team_agents::member_library();
         if !library.is_empty() {
             out.push_str("\nSkills in Agent Center's library. Hand one to a teammate with `brief_member` (skills: [name]) when it fits their task; they get its text with their role:\n");
@@ -159,8 +162,9 @@ pub fn kickoff(config: &TeamConfig) -> String {
         format!("\n\nAgent Center's plan for this team, from the user's request. Follow it unless the board shows it is wrong; then say what you changed and why:\n{}", config.kickoff.trim())
     };
     let fast = if config.fast { format!("\n\n{}", fast_rules()) } else { String::new() };
+    let timed = if config.time_limit_min > 0 { format!("\n\n{}", time_rules(config)) } else { String::new() };
     format!(
-        "The team has started. Plan the work for this goal and create the tasks now:\n{}\nUse `team_status` to see your teammates and `task_create` for each task.{plan}{fast}",
+        "The team has started. Plan the work for this goal and create the tasks now:\n{}\nUse `team_status` to see your teammates and `task_create` for each task.{plan}{fast}{timed}",
         config.goal.trim()
     )
 }
@@ -178,6 +182,40 @@ pub fn fast_rules() -> String {
      5. Spot-check two or three items; never redo a member's work. Keep your own messages short.\n\
      6. A member blocked, out of quota or silent for a turn: move its work at once."
         .to_string()
+}
+
+/// What a time limit asks of the leader (TeamConfig::time_limit_min): the last part
+/// is for assembling, and the deliverable goes out at the limit, done or not.
+// i18n: model-facing
+pub fn time_rules(config: &TeamConfig) -> String {
+    let total = config.time_limit_min;
+    let reserve = config.time_reserve_min();
+    format!(
+        "TIME LIMIT: the user wants the deliverable within {total} minutes of the start, done or not. The last {reserve} minutes are reserved for assembling, so the work itself has {} minutes. Rules:\n\
+         1. Plan for the time: small first batches that can be assembled on their own, delivered early; nothing that only pays off at the end.\n\
+         2. You will get a message when the reserve begins. From then on hand out no new work, collect what has been handed in (accept it as it is), write the deliverable from it yourself, mark plainly what is missing or unverified, `deliver`, report to the user with `message_send` (to \"you\"), and `team_finish`.\n\
+         3. When the limit is reached you will be told again: deliver within your next turn with whatever you have, even a partial one, and close the team.\n\
+         4. A partial deliverable on time beats a complete one late.",
+        total.saturating_sub(reserve)
+    )
+}
+
+/// The reserve of the time limit has begun.
+// i18n: model-facing
+pub fn time_reserve(config: &TeamConfig, left_min: u64) -> String {
+    format!(
+        "TIME CHECK: {left_min} of the {} minutes are left: the assembling reserve has begun. Hand out no new work. Collect what has been handed in (accept it as it is), write the deliverable from it yourself now, mark what is missing or unverified, `deliver`, report to the user with `message_send` (to \"you\"), then `team_finish`. Teammates still working: tell them with `message_send` to hand in what they have within this turn.",
+        config.time_limit_min
+    )
+}
+
+/// The time limit is reached.
+// i18n: model-facing
+pub fn time_up(config: &TeamConfig) -> String {
+    format!(
+        "TIME IS UP: the {} minutes are over. Deliver now, in this turn, with whatever you have: write the deliverable from what is in, mark the gaps, `deliver`, report to the user with `message_send` (to \"you\"), and `team_finish`. Do not wait for anyone.",
+        config.time_limit_min
+    )
 }
 
 /// A task handed to its owner.

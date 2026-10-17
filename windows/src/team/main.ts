@@ -1019,6 +1019,9 @@ function setup(file: TeamFile): HTMLElement {
     h("label", { class: "trusted-check" },
       h("input", { type: "checkbox", checked: !!config.fast, onChange: (e: Event) => { config.fast = (e.target as HTMLInputElement).checked || undefined; unsaved = true; render(); } }),
       h("span", { text: tr("組長走快速規則:最小團隊、每個任務一次審查、退件一次後改派或自己做、驗收後不追加", "The leader runs fast: the smallest team, one review per task, a task sent back once is moved or done by the leader, nothing added after acceptance") })),
+    h("label", { text: tr("時限(分鐘)", "Time limit (minutes)") }),
+    bound("input", "timeLimitMin", config.timeLimitMin ? String(config.timeLimitMin) : "", (v) => (config.timeLimitMin = Math.max(0, Math.min(1440, Math.floor(Number(v) || 0))) || undefined), { type: "number", min: "0", max: "1440", placeholder: tr("留空就不限時", "Empty for no limit") }),
+    h("p", { class: "hint", text: tr("有時限時,組長會把最後一段(四分之一,至少 2 分鐘)留著彙整:時間一到就把手上有的整理成成果交出,沒做完也交。例如 10 分鐘:做 8 分鐘、留 2 分鐘彙整。", "With a limit, the leader keeps the last part (a quarter, at least 2 minutes) for assembling: when it comes, what is in is written up and delivered, done or not. For 10 minutes: 8 of work, 2 to assemble.") }),
     h("label", { text: tr("工作資料夾", "Work folder") }),
     h(
       "div",
@@ -1745,6 +1748,32 @@ function composer(snap: Snapshot): HTMLElement {
   );
 }
 
+/** The time limit's countdown on the progress row; nothing without a limit. */
+function timeLeft(snap: Snapshot): HTMLElement | null {
+  if (!snap.timeLimitMin) return null;
+  if (snap.status === "finished") return h("span", { class: "chip", text: trf("時限 {n} 分", "Limit {n} min", { n: snap.timeLimitMin }) });
+  const left = snap.startedAt + snap.timeLimitMin * 60_000 - Date.now();
+  const tone = snap.timeUp || left <= 0 ? "warn" : snap.timeWarned ? "pending" : "ok";
+  return h("span", { class: `chip ${tone} time-left`, title: snap.timeUp ? tr("時間到:組長已被要求立刻交付", "Time is up: the leader was told to deliver now") : snap.timeWarned ? tr("彙整時段:組長已被要求停止派工、整理交付", "Assembling: the leader was told to stop handing out work and deliver") : trf("最後 {r} 分鐘留給組長彙整", "The last {r} minutes are for the leader to assemble", { r: snap.timeReserveMin }), text: timeLeftText(snap) });
+}
+
+function timeLeftText(snap: Snapshot): string {
+  const left = snap.startedAt + snap.timeLimitMin * 60_000 - Date.now();
+  const mm = Math.floor(Math.abs(left) / 60_000);
+  const ss = Math.floor((Math.abs(left) % 60_000) / 1000).toString().padStart(2, "0");
+  return left <= 0 ? trf("時限 {n} 分 · 已超時 {m}:{s}", "Limit {n} min · over by {m}:{s}", { n: snap.timeLimitMin, m: mm, s: ss }) : trf("時限 {n} 分 · 剩 {m}:{s}", "Limit {n} min · {m}:{s} left", { n: snap.timeLimitMin, m: mm, s: ss });
+}
+
+// The countdown moves between snapshots: the chip alone is refreshed each second, not the page.
+window.setInterval(() => {
+  const snap = selected ? runs.get(files.find((f) => f.file === selected)?.config?.id ?? "") : undefined;
+  if (!snap || !snap.timeLimitMin || snap.status !== "running") return;
+  for (const el of document.querySelectorAll<HTMLElement>(".time-left")) {
+    el.textContent = timeLeftText(snap);
+    if (snap.startedAt + snap.timeLimitMin * 60_000 - Date.now() <= 0) el.classList.replace("ok", "warn"), el.classList.replace("pending", "warn");
+  }
+}, 1000);
+
 function monitor(snap: Snapshot): HTMLElement {
   // The board and the Office read progress from the same calculation.
   const shared = office.main.progress(snap.id);
@@ -1763,6 +1792,7 @@ function monitor(snap: Snapshot): HTMLElement {
       h("span", { class: "dim", text: trf("已驗收 {done} / {total} 項任務", "{done} / {total} tasks accepted", { done: snap.done, total: snap.total }) }),
       h("span", { class: "dim", text: trf("{used} / {max} 回合", "{used} / {max} turns", { used: snap.totalTurns, max: snap.maxTurns }) }),
       h("span", { class: "dim", text: trf("已執行 {n} 分鐘", "Running for {n} min", { n: minutes }) }),
+      timeLeft(snap),
       spend(snap.members.flatMap((m) => m.usage ?? []), tr("全隊這一輪用掉的 token", "Tokens the whole team used this run")),
     ),
     stage(snap),
