@@ -1205,7 +1205,9 @@ impl Teams {
     /// per member again — the old ones were stopped when it finished — and
     /// the leader is told the person has come back with more. Returns the
     /// message's id; a `request` already sent comes back as it was.
-    pub fn reopen(&self, id: &str, to: &str, text: &str, request: Option<&str>, profiles: &[AgentProfile]) -> Result<String, String> {
+    /// `wanted` is the team file as it stands: members added to it since the team
+    /// finished join now, as `join` lets them while it runs, and the leader is told.
+    pub fn reopen(&self, id: &str, to: &str, text: &str, request: Option<&str>, profiles: &[AgentProfile], wanted: Option<&TeamConfig>) -> Result<String, String> {
         let runtime = runtime()?;
         let old = self.team(id)?;
         if let Some(sent) = request.and_then(|r| old.requests.lock().unwrap().get(r).cloned()) {
@@ -1218,7 +1220,17 @@ impl Teams {
         if !old.with_state(|s| s.status == TeamStatus::Finished) {
             return Err(tr!("團隊還沒完成:照平常那樣寫給它就好。", "The team has not finished: write to it as usual."));
         }
-        let config = old.config().ok_or("The team's record has no setup to pick up.")?; // i18n-ok: said() in team/main.ts translates it
+        let mut config = old.config().ok_or("The team's record has no setup to pick up.")?; // i18n-ok: said() in team/main.ts translates it
+        let newcomers: Vec<super::MemberConfig> = wanted.map(|w| w.members.iter().filter(|m| !config.has_member(&m.id)).cloned().collect()).unwrap_or_default();
+        for m in &newcomers {
+            if !super::is_plain_id(&m.id) || m.id == SYSTEM || m.id == YOU {
+                return Err(format!("'{}' cannot be a member id.", m.id)); // i18n-ok: said() in team/main.ts translates it
+            }
+            if !profiles.iter().any(|p| p.id == m.agent) {
+                return Err(super::no_agent(&m.name, &m.agent));
+            }
+        }
+        config.members.extend(newcomers.iter().cloned());
         let to = if to.is_empty() || to == "leader" { config.leader.clone() } else { to.to_string() };
         if !config.has_member(&to) {
             return Err("That is not a member of the team.".into()); // i18n-ok: said() in team/main.ts translates it
@@ -1257,6 +1269,11 @@ impl Teams {
             store.append_all(lost.into_iter().map(|member| Event::Recovered { member }).collect());
             let id = store.state().next_message_id();
             store.append(Event::Message { id, from: SYSTEM.into(), to: config.leader.clone(), text: brief::reopened(), task: None });
+            for m in &newcomers {
+                store.append(Event::Joined { member: m.clone() });
+                let id = store.state().next_message_id();
+                store.append(Event::Message { id, from: SYSTEM.into(), to: config.leader.clone(), text: brief::joined(&config, &m.id), task: None });
+            }
             let id = store.state().next_message_id();
             store.append(Event::Message { id: id.clone(), from: YOU.into(), to, text: text.to_string(), task: None });
             settle(&mut store);
@@ -1266,7 +1283,7 @@ impl Teams {
             team.requests.lock().unwrap().insert(r.to_string(), message.clone());
         }
         self.teams.lock().unwrap().insert(id.to_string(), team.clone());
-        log::line(format!("team {id}: reopened with {} member(s)", team.seat_keys().len()));
+        log::line(format!("team {id}: reopened with {} member(s), {} new", team.seat_keys().len(), newcomers.len()));
         runtime.spawn(team.clone().run());
         team.changed();
         Ok(message)
@@ -1974,6 +1991,35 @@ mod tests {
         });
     }
 
+    /// A member added to the team file after the team finished joins when the
+    /// person writes to the leader again, with the leader told, and keeps the record.
+    #[test]
+    fn a_member_added_after_the_team_finished_joins_when_it_is_reopened() {
+        run(async {
+            let bench = bench(diligent());
+            bench.drive.held.lock().unwrap().push("ai1".into());
+            bench.start(shop(&work_dir()));
+            bench.until("the leader is working", |s| s.members[0].status == MemberStatus::Working).await;
+            bench.teams.end("shop").await.unwrap();
+            bench.until("the agents stop", |_| bench.drive.stopped.lock().unwrap().len() == 4).await;
+            bench.drive.held.lock().unwrap().clear();
+            bench.drive.hold.notify_one();
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            let mut wanted = shop(&work_dir());
+            let mut extra = wanted.members[0].clone();
+            extra.id = "ai5".into();
+            extra.name = "網站開發".into();
+            extra.role = "開發網頁".into();
+            wanted.members.push(extra);
+            bench.teams.reopen("shop", "", "再加一個頁面", None, &[AgentProfile::copilot()], Some(&wanted)).unwrap();
+            let snap = bench.snap();
+            assert!(snap.members.iter().any(|m| m.id == "ai5" && m.name == "網站開發"), "{:?}", snap.members.iter().map(|m| m.id.as_str()).collect::<Vec<_>>());
+            assert!(snap.feed.iter().any(|f| f.kind == "joined" && f.text.contains("網站開發")));
+            assert!(snap.messages.iter().any(|m| m.to == "ai1" && m.text.contains("A new teammate has joined") && m.text.contains("ai5")));
+            assert_eq!(bench.teams.get("shop").unwrap().seat_keys().len(), 5);
+        });
+    }
+
     #[test]
     fn the_person_can_end_a_team_mid_work_and_every_agent_stops() {
         run(async {
@@ -1998,7 +2044,7 @@ mod tests {
             // Once is enough; and writing to it starts it again.
             bench.teams.end("shop").await.unwrap();
             assert_eq!(bench.snap().feed.iter().filter(|f| f.kind == "ended").count(), 1);
-            bench.teams.reopen("shop", "", "還是做完吧", None, &[AgentProfile::copilot()]).unwrap();
+            bench.teams.reopen("shop", "", "還是做完吧", None, &[AgentProfile::copilot()], None).unwrap();
             assert!(!bench.snap().ended);
         });
     }
@@ -2051,9 +2097,9 @@ mod tests {
             assert_eq!(reports(&bench.snap()), 1);
             assert!(bench.teams.is_finished("shop"));
 
-            let sent = bench.teams.reopen("shop", "", "再加優惠券功能", Some("more-1"), &[AgentProfile::copilot()]).unwrap();
+            let sent = bench.teams.reopen("shop", "", "再加優惠券功能", Some("more-1"), &[AgentProfile::copilot()], None).unwrap();
             // A retry of the same request sends nothing more.
-            assert_eq!(bench.teams.reopen("shop", "", "再加優惠券功能", Some("more-1"), &[AgentProfile::copilot()]).unwrap(), sent);
+            assert_eq!(bench.teams.reopen("shop", "", "再加優惠券功能", Some("more-1"), &[AgentProfile::copilot()], None).unwrap(), sent);
             let again = bench.until("the team runs again", |s| s.status == TeamStatus::Running || s.tasks.len() == 4).await;
             assert_eq!(again.finished_at, 0);
             assert!(again.feed.iter().any(|f| f.kind == "reopened"));
@@ -2105,7 +2151,7 @@ mod tests {
 
             // AI 2 takes its time to answer: the leader's turn ends first.
             bench.drive.held.lock().unwrap().push("ai2".into());
-            bench.teams.reopen("shop", "", "大家各自用什麼模型?", None, &[AgentProfile::copilot()]).unwrap();
+            bench.teams.reopen("shop", "", "大家各自用什麼模型?", None, &[AgentProfile::copilot()], None).unwrap();
             bench.until("the leader has answered for now", |s| s.messages.iter().any(|m| m.text.starts_with("我已請大家回報")) && s.members[0].status != MemberStatus::Working).await;
             tokio::time::sleep(Duration::from_millis(50)).await;
             assert_eq!(bench.snap().status, TeamStatus::Running, "closed while AI 2 was still answering");

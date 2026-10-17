@@ -685,7 +685,9 @@ async fn team_instruct(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, 
     // A finished team is not closed: the person's next words start it again.
     if teams.is_finished(&team) {
         let profiles = runnable(&shared);
-        return teams.reopen(&team, &to, &text, request.as_deref(), &profiles);
+        // Members added to the team file since it finished join as it starts again.
+        let wanted = read_team_file(&format!("{team}.json")).ok();
+        return teams.reopen(&team, &to, &text, request.as_deref(), &profiles, wanted.as_ref());
     }
     teams.instruct(&team, &to, &text, request.as_deref())
 }

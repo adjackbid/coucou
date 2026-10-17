@@ -1599,7 +1599,8 @@ fn instruct(payload: &Value, office: &Office) -> Result<String, String> {
     let to = s(payload, "to");
     let words = s(payload, "text");
     if office.teams.is_finished(team) {
-        office.teams.reopen(team, to, words, None, &office.agents)?;
+        let wanted = crate::read_team_file(&format!("{team}.json")).ok();
+        office.teams.reopen(team, to, words, None, &office.agents, wanted.as_ref())?;
         return Ok(tr!("指令已送出,已完成的團隊重新開始工作", "the instruction was sent and the finished team started again"));
     }
     office.teams.instruct(team, to, words, None).map(|_| tr!("指令已送出", "the instruction was sent"))

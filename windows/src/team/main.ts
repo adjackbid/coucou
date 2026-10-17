@@ -998,6 +998,9 @@ function setup(file: TeamFile): HTMLElement {
   const again = !!run && !running;
   // Members added to the form while the team runs: they can join it now.
   const newcomers = running && run ? config.members.filter((m) => !run.members.some((x) => x.id === m.id)) : [];
+  // Added after the team finished: they join as the person writes to the leader again.
+  const finished = run?.status === "finished" && !run.detached;
+  const latecomers = finished && run ? config.members.filter((m) => !run.members.some((x) => x.id === m.id)) : [];
 
   // ── Left: what the team is for ──
   const folder = bound("input", "workDir", config.workDir, (v) => (config.workDir = v), { placeholder: tr("選擇所有成員一起工作的資料夾", "Choose the folder every member works in") });
@@ -1273,7 +1276,24 @@ function setup(file: TeamFile): HTMLElement {
             }),
           )
         : null,
-      again ? h("span", { class: "hint", text: tr("重新開始會從頭跑一次;上一次的紀錄會保留在團隊紀錄資料夾。", "Starting again runs it from the top; the last run's record stays in the team's records folder.") }) : null,
+      latecomers.length
+        ? button(latecomers.length === 1 ? tr("讓 1 位新成員加入並繼續 →", "Let the new member join and carry on →") : trf("讓 {n} 位新成員加入並繼續 →", "Let {n} new members join and carry on →", { n: latecomers.length }), "primary", () =>
+            void act(async () => {
+              if (!(await save())) return;
+              const again = files.find((f) => f.file === selected);
+              const theirs = again?.problems.filter((p) => latecomers.some((m) => p.startsWith(`${m.name} `))) ?? [];
+              if (theirs.length) throw new Error(theirs.join("\n"));
+              // The leader is told who joined; the person says what they are for.
+              drafts.set(`instruct:${config.id}`, trf("新成員 {names} 加入了,請安排工作給他們:", "{names} joined; give them work:", { names: joinNames(latecomers.map((m) => m.name)) }));
+              tab = "monitor";
+            }),
+          )
+        : null,
+      latecomers.length
+        ? h("span", { class: "hint", text: tr("團隊已完成:新成員會在你下次寫給 Leader 時一起加入,進度保留;「重新開始」則從頭跑。", "The team is done: new members join when you next write to the Leader, keeping the progress; Start again runs from the top.") })
+        : again
+          ? h("span", { class: "hint", text: tr("重新開始會從頭跑一次;上一次的紀錄會保留在團隊紀錄資料夾。", "Starting again runs it from the top; the last run's record stays in the team's records folder.") })
+          : null,
       h("button", { class: `btn plain save${unsaved ? " due" : ""}`, type: "button", onClick: () => void act(save) }, tr("儲存", "Save")), // i18n-ok: CSS classes
       button(
         again ? tr("重新開始 →", "Start again →") : tr("啟動 Teamwork →", "Start Teamwork →"),
