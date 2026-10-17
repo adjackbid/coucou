@@ -592,13 +592,24 @@ impl Secretary {
                 // i18n: model-facing
                 return Err(format!("Member {}: there is no skill '{unknown}' in Agent Center's library. Skills: {}.", i + 1, if library.is_empty() { "none".to_string() } else { library.iter().map(|l| l.name.as_str()).collect::<Vec<_>>().join(", ") }));
             }
+            // The agent's model is the user's setting (Agent Pool): a member keeps it. Another
+            // model is only for an agent the user left without one, or when the user asked.
+            let model = text(m, "model").map(|s| s.trim().to_string()).unwrap_or_default();
+            let set = crate::acp::running_model(agent, &crate::acp::Launch::default());
+            if !model.is_empty() && !set.is_empty() && !model.eq_ignore_ascii_case(&set) && !a.get("model_change_asked").and_then(Value::as_bool).unwrap_or(false) {
+                // i18n: model-facing
+                return Err(format!(
+                    "Member {}: '{}' runs {set}, as the user set it in Agent Pool; leave `model` empty to keep it. For an independent review pick a different agent, not this agent on another model. If the user themselves asked for {model} on this member, call again with model_change_asked: true.",
+                    i + 1, agent.name
+                ));
+            }
             list.push(json!({
                 "id": format!("ai{}", i + 1),
                 "name": text(m, "name").unwrap_or_else(|| format!("AI {}", i + 1)),
                 "role": text(m, "role").unwrap_or_default(),
                 "duty": text(m, "duty").unwrap_or_default(),
                 "agent": agent.id,
-                "model": text(m, "model").unwrap_or_default(),
+                "model": model,
                 "color": COLORS[i % COLORS.len()],
                 "brief": text(m, "brief").unwrap_or_default(),
                 "skills": skills,
@@ -1520,7 +1531,7 @@ How you work:\n\
 - You cannot change anything yourself. To get something done (a new team, an instruction to a team, starting, pausing, resuming, stopping or archiving a team) you prepare it with a propose_* tool: it appears on the user's screen as a card, and it happens only if they click it. Never say something was done unless a [Agent Center] note says the user confirmed it. Never say a card or a button is ready unless a propose_* tool told you in this answer that it is on the user's screen: when the user wants a team, call propose_team; describing the team in words is not enough.\n\
 - Prefer one proposal that does what was asked. Ask a short question first only when something essential is missing, such as the work folder for a new team.\n\
 - When you ask the user to choose between options, call offer_choices with them so they can click one, instead of listing them as text.\n\
-- For a new team: pick agents and models from list_agents (agent_models lists what an agent offers); give the leader the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
+- For a new team: pick agents from list_agents; each runs the model the user set on it (shown in list_agents), so leave `model` empty unless the agent has none (then agent_models lists what it offers) or the user asked for another. Independent review means a different agent, never the same agent on another model. Give the leader the agent with the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
 - Size the request before you shape the team (quick: the leader alone; medium: one does, one on another model reviews once; large: split by scope), and say which size in `kickoff`; your skills below, when you have them, say how in detail. Every coding CLI agent (Claude Code, Codex, Gemini CLI, Copilot, Antigravity) browses the web and runs code through its own tools, and its `can:` line says so; only an n8n workflow cannot. Never tell the user the agents cannot go online unless no agent's `can:` line says it browses. Pick an agent for images only when its `can:` line says it makes them.\n\
 - In `kickoff` tell the leader: the size, the split, who reviews what (so reviews are not all on the leader), the first batch each member delivers, and the rules of the work (sources, formats, what counts as done). Give a member its own rules in `brief`. Members read messages only when a turn starts, so rules belong in the tasks and briefs, not in later messages.{}\n\
 {}- A team has a knowledge base: documents (design notes, specs, pictures, any file) its members work from. When the user attaches files or mentions design documents, specs or reference material for a team, put them in `knowledge` (propose_team for a new team, propose_knowledge for one that exists): attached files by their id (u…), or full paths the user wrote — never a path you guessed. Each is for the leader only unless the user says the whole team should see it (then visibility \"shared\"). You only see the files' names, never what is in them.\n\
@@ -1644,12 +1655,13 @@ fn describe() -> Vec<Tool> {
                 "members": { "type": "array", "items": { "type": "object", "properties": {
                     "name": { "type": "string" }, "role": { "type": "string" }, "duty": { "type": "string" },
                     "agent": { "type": "string", "description": "An agent id from list_agents." },
-                    "model": { "type": "string", "description": "Empty for the agent's default." },
+                    "model": { "type": "string", "description": "Empty keeps the model the user set on the agent (the usual case). Another model only for an agent with no model set, or when the user asked for it (then also pass model_change_asked)." },
                     "brief": { "type": "string", "description": "Rules this member keeps throughout its work (sources, formats, what not to do). Read with its role." },
                     "skills": { "type": "array", "items": { "type": "string" }, "description": "Names of skills from Agent Center's library (listed in your instructions) this member gets the text of." },
                 }, "required": ["name", "role", "agent"] } },
                 "leader": { "type": "string", "description": "The leader's name; the first member if empty." },
                 "kickoff": { "type": "string", "description": "Your plan for the leader, read with its first message: how big the goal is (quick / medium / large), how to split it (by scope, by batch, or one member plus one reviewer), who reviews what, what to deliver first, and the rules of the work. A few lines." },
+                "model_change_asked": { "type": "boolean", "description": "True only when the user themselves asked for a member to run a model other than the one set on its agent." },
                 "fast": { "type": "boolean", "description": "Fast mode: the leader takes the smallest team that does the job, one review per task, no second round. Set it when the user asks for speed or a quick answer." },
                 "start": { "type": "boolean", "description": "Start it as soon as it is created (default true)." },
                 "knowledge": knowledge.clone(),
@@ -1736,6 +1748,31 @@ mod tests {
         let said = own_instructions("開團隊預設 3 人,預算優先。");
         assert!(said.contains("<user_instructions>\n開團隊預設 3 人,預算優先。\n</user_instructions>") && said.contains("nothing happens without the user's click"), "{said}");
         assert!(own_instructions(&"字".repeat(MAX_INSTRUCTIONS + 500)).chars().count() < MAX_INSTRUCTIONS + 400);
+    }
+
+    #[test]
+    fn a_member_keeps_the_model_the_user_set_on_its_agent() {
+        let mut planner = crate::acp::AgentProfile::copilot();
+        planner.id = "ta-plan".into();
+        planner.name = "規劃大師".into();
+        planner.protocol = crate::acp::Protocol::Claude;
+        planner.model = "claude-opus-5".into();
+        let driver = Arc::new(crate::acp::Agents::default());
+        let teams = Arc::new(crate::team::orchestrator::Teams::new(Arc::new(crate::team::orchestrator::AcpDrive(driver.clone())), Arc::new(|_| {}), Some(std::env::temp_dir().join(format!("coucou-secretary-model-{}", std::process::id()))), settings::team_mcp_exe_path()));
+        let mut office = Office::new(teams, &[], driver, 480, String::new());
+        office.choices = vec![planner];
+        let sec = Secretary::default();
+        let member = |model: &str| json!({ "name": "查證員", "role": "查證", "agent": "ta-plan", "model": model });
+        let ask = |m: Value, extra: Value| {
+            let mut a = json!({ "name": "t", "goal": "g", "work_dir": "D:\\x", "members": [m] });
+            if let Some(o) = extra.as_object() { for (k, v) in o { a[k] = v.clone(); } }
+            a
+        };
+        let err = sec.propose_team(&ask(member("claude-sonnet-5"), json!({})), &office).unwrap_err();
+        assert!(err.contains("claude-opus-5") && err.contains("different agent"), "{err}");
+        assert!(sec.propose_team(&ask(member(""), json!({})), &office).is_ok());
+        assert!(sec.propose_team(&ask(member("claude-opus-5"), json!({})), &office).is_ok());
+        assert!(sec.propose_team(&ask(member("claude-sonnet-5"), json!({ "model_change_asked": true })), &office).is_ok());
     }
 
     #[test]
