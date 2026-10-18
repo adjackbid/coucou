@@ -322,6 +322,36 @@
   resize: vertical;
 }
 
+/* 測試: the button and its line, and the answer under them. */
+.ta-test {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ta-test .row .hint {
+  min-width: 0;
+}
+
+.ta-notice {
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.ta-notice.ok {
+  color: var(--green-2);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.ta-notice.err {
+  color: var(--red-text);
+  background: rgba(244, 80, 94, 0.13);
+}
+
 .ta-support {
   display: inline-block;
   margin-left: 4px;

@@ -571,11 +571,37 @@ async fn acp_reset(agents: State<'_, Arc<Agents>>, agent_id: String) -> Result<(
     Ok(())
 }
 
+/// Where an agent test is: "sentence" once the handshake is done and the one
+/// real sentence is on its way. `id` is the agent's (or team agent's) id.
+#[derive(Serialize, Clone)]
+struct TestStage {
+    id: String,
+    stage: String,
+}
+
 /// The settings window's "Test": start the agent as the form describes it,
-/// shake hands, open a session, stop it.
+/// shake hands, open a session, then send one real sentence, and stop it.
 #[tauri::command]
-async fn acp_test(agents: State<'_, Arc<Agents>>, profile: AgentProfile) -> Result<String, String> {
-    agents.test(&profile).await
+async fn acp_test(app: AppHandle, agents: State<'_, Arc<Agents>>, profile: AgentProfile) -> Result<String, String> {
+    let id = profile.id.clone();
+    agents.test(&profile, &move |stage| {
+        let _ = app.emit("agent-test-stage", TestStage { id: id.clone(), stage: stage.to_string() });
+    }).await
+}
+
+/// Agent Pool's "Test": the team agent as its editor has it now, saved or
+/// not, run on its base the way a team member would be, for one sentence.
+#[tauri::command]
+async fn team_agent_test(app: AppHandle, shared: State<'_, Shared>, agents: State<'_, Arc<Agents>>, agent: team_agents::TeamAgent) -> Result<String, String> {
+    let natives = shared.settings.lock().unwrap().agents.clone();
+    let profile = team_agents::profile_of(&agent, &natives).ok_or_else(|| -> String {
+        let base = &agent.base;
+        tr!(format!("「設定 → Agent Provider」裡沒有「{base}」這個 Provider。"), format!("There is no Provider '{base}' in Settings → Agent Provider."))
+    })?;
+    let id = agent.id.clone();
+    agents.test(&profile, &move |stage| {
+        let _ = app.emit("agent-test-stage", TestStage { id: id.clone(), stage: stage.to_string() });
+    }).await
 }
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
@@ -2179,6 +2205,7 @@ pub fn run() {
             acp_cancel,
             acp_reset,
             acp_test,
+            team_agent_test,
             agent_models,
             agents_doctor,
             team_files,

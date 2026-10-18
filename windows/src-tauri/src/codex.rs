@@ -736,7 +736,7 @@ mod tests {
     #[ignore]
     fn the_real_codex_shakes_hands_and_opens_a_thread() {
         let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
-        let said = runtime.block_on(Agents::default().test(&codex_profile()));
+        let said = runtime.block_on(Agents::default().test(&codex_profile(), &|_| {}));
         assert!(said.is_ok(), "{said:?}");
     }
 }

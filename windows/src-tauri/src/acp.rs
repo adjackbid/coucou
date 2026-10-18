@@ -278,6 +278,28 @@ pub fn running_model(profile: &AgentProfile, launch: &Launch) -> String {
     model_of(profile, launch).or_else(|| env_model(profile)).unwrap_or_default()
 }
 
+/// What a session adds for an agent the way a team runs it, on top of
+/// `launch`: the member's model (empty: the agent's own), the team agent's
+/// MCP servers after the ones already there, and for Copilot on an endpoint
+/// of its own, Coucou's meter in front of that endpoint under the seat `key`
+/// (meter.rs), which reads each call's tokens and the model it really asked
+/// for. True when it is metered. A team member and an agent test are dressed
+/// alike, so a test exercises what a team run would.
+pub fn dress(profile: &AgentProfile, launch: &mut Launch, model: &str, key: &str) -> bool {
+    launch.model = Some(model.trim().to_string()).filter(|m| !m.is_empty());
+    if let Some(x) = &profile.extras {
+        launch.mcp_servers.extend(x.mcp_servers.iter().cloned());
+    }
+    let base = profile.env.get("COPILOT_PROVIDER_BASE_URL").map(|b| b.trim()).filter(|b| b.starts_with("http") && !b.contains('…'));
+    match (crate::meter::global(), profile.protocol, base) {
+        (Some(meter), Protocol::Acp, Some(base)) => {
+            launch.env.insert("COPILOT_PROVIDER_BASE_URL".into(), meter.route(base, key));
+            true
+        }
+        _ => false,
+    }
+}
+
 /// A Copilot profile's COPILOT_MODEL, the stand-in for an empty model field.
 fn env_model(profile: &AgentProfile) -> Option<String> {
     (profile.protocol == Protocol::Acp)
@@ -1170,6 +1192,51 @@ fn not_running() -> String {
     tr!("這個 agent 沒有在執行。", "that agent is not running")
 }
 
+/// The one sentence an agent test sends: a real turn, the smallest there is.
+// i18n: model-facing
+const TEST_SENTENCE: &str = "Reply with the single word OK. Do not use any tools.";
+/// How long that sentence may take, starting the agent included.
+const TEST_TIMEOUT: Duration = Duration::from_secs(3 * 60);
+
+/// What a passed test says: who answered, with which model, its words (the
+/// start of them, on one line) and, when anyone counted them, its tokens.
+fn test_passed(name: &str, model: &str, reply: &str, used: Option<&crate::usage::Usage>) -> String {
+    let line = reply.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut words: String = line.chars().take(40).collect();
+    if line.chars().count() > 40 {
+        words.push('…');
+    }
+    let model = if model.trim().is_empty() { tr!("它預設的模型", "its default model") } else { model.trim().to_string() };
+    let tokens = used.filter(|u| !u.is_empty()).map(|u| -> String {
+        let (input, output) = (u.input + u.cache_read + u.cache_write, u.output);
+        tr!(format!("，用了 {input} 個輸入、{output} 個輸出 token"), format!(", using {input} input and {output} output tokens"))
+    });
+    let tokens = tokens.unwrap_or_default();
+    tr!(format!("{name} 真的回答了：{model} 回覆「{words}」{tokens}。"), format!("{name} really answered: {model} replied \"{words}\"{tokens}."))
+}
+
+/// What a failed test says: the agent's own error and, when the meter saw
+/// the endpoint refuse, its status, the path asked and its words — with the
+/// fix for the usual one, a server without the Responses API.
+fn test_failed(name: &str, error: &str, refusal: Option<&crate::meter::Refused>) -> String {
+    let error = error.trim();
+    let mut out: String = tr!(format!("{name} 沒有回答這一句：{error}"), format!("{name} did not answer the sentence: {error}"));
+    if let Some(r) = refusal {
+        let (status, path) = (r.status, &r.path);
+        let words = if r.words.is_empty() { tr!("（沒有說明）", "(nothing)") } else { r.words.clone() };
+        let refused: String = tr!(format!(" 端點拒絕了：HTTP {status}，要求的路徑是 {path}，端點說：{words}"), format!(" The endpoint refused: HTTP {status} for {path}, saying: {words}"));
+        out.push_str(&refused);
+        if status == 404 && path.trim_end_matches('/').ends_with("/responses") {
+            let fix: String = tr!(
+                " 這個端點可能只支援 Chat Completions（沒有 /responses）：在這個 Provider 的環境變數加上 COPILOT_PROVIDER_WIRE_API=completions 就能解決。",
+                " This endpoint may only speak Chat Completions (it has no /responses): add COPILOT_PROVIDER_WIRE_API=completions to this Provider's environment variables to fix it."
+            );
+            out.push_str(&fix);
+        }
+    }
+    out
+}
+
 // ── Entry points (the Tauri commands and the team orchestrator call these) ────
 
 impl Agents {
@@ -1370,8 +1437,13 @@ impl Agents {
         listed
     }
 
-    /// The settings window's "Test": start, handshake, report, stop.
-    pub async fn test(&self, profile: &AgentProfile) -> Result<String, String> {
+    /// The "Test" of Settings → Agent Provider and of Agent Pool: start,
+    /// handshake and (for Copilot on its own endpoint) the model list, as
+    /// before; then one real sentence through the same path a team member
+    /// takes (`dress`: its model, its MCP servers, the meter), and stop.
+    /// `stage` hears "sentence" once the handshake is done. The sentence costs
+    /// one tiny call; the person clicked for it.
+    pub async fn test(&self, profile: &AgentProfile, stage: &(dyn Fn(&str) + Send + Sync)) -> Result<String, String> {
         if profile.protocol == Protocol::N8n {
             return crate::n8n::test(profile).await;
         }
@@ -1381,9 +1453,8 @@ impl Agents {
         if running.claude.signed_out.load(Ordering::SeqCst) {
             return Err(crate::claude::signed_out());
         }
-        // A handshake spends nothing and says nothing about the model. On an
-        // endpoint of its own, the model Copilot will ask for has to be one
-        // the endpoint lets this key use: its list says so, still for free.
+        // On an endpoint of its own, the model Copilot will ask for has to be
+        // one the endpoint lets this key use: its list says so, for free.
         if profile.protocol == Protocol::Acp && profile.env.contains_key("COPILOT_PROVIDER_BASE_URL") {
             let model = running_model(profile, &Launch::default());
             if let Ok(offered) = copilot_models(profile).await {
@@ -1392,8 +1463,68 @@ impl Agents {
                 }
             }
         }
+
+        // A handshake says nothing of the model: one sentence does.
+        stage("sentence");
+        let key = format!("{}{}", crate::meter::TEST, profile.id);
+        let meter = crate::meter::global();
+        if let Some(m) = &meter {
+            m.forget(&key);
+        }
+        let mut launch = Launch::default();
+        let metered = dress(profile, &mut launch, "", &key);
+        let model = running_model(profile, &launch);
+        let said = Arc::new(Mutex::new(String::new()));
+        let own = Arc::new(Mutex::new(None::<crate::usage::Usage>));
+        let asked = Arc::new(Mutex::new(None::<String>));
+        let wait = Arc::new(tokio::sync::Notify::new());
+        let sink: Sink = {
+            let (said, own, asked, wait) = (said.clone(), own.clone(), asked.clone(), wait.clone());
+            Arc::new(move |e: Event| match e {
+                Event::Update(u) if u.update["sessionUpdate"] == "agent_message_chunk" => {
+                    if let Some(t) = u.update["content"]["text"].as_str() {
+                        said.lock().unwrap().push_str(t);
+                    }
+                }
+                Event::Usage(u) => {
+                    let mut own = own.lock().unwrap();
+                    match own.as_mut() {
+                        Some(sum) => sum.add(&u),
+                        None => *own = Some(u),
+                    }
+                }
+                // Nobody is there to answer a card: the test stops at it.
+                Event::Permission(p) => {
+                    *asked.lock().unwrap() = Some(p.title);
+                    wait.notify_one();
+                }
+                _ => {}
+            })
+        };
+        let text = format!("{}{TEST_SENTENCE}", crate::team_agents::brief_text(profile));
+        let outcome = tokio::select! {
+            r = tokio::time::timeout(TEST_TIMEOUT, self.prompt(&sink, &key, profile, &launch, text)) => {
+                r.unwrap_or_else(|_| Err(tr!("等了三分鐘都沒有回答。", "No answer came in three minutes.")))
+            }
+            _ = wait.notified() => {
+                let what = asked.lock().unwrap().clone().unwrap_or_default();
+                Err(tr!(format!("它沒有回答，而是要求權限：「{what}」。"), format!("Instead of answering it asked for a permission: '{what}'.")))
+            }
+        };
+        self.reset(&key).await;
+
+        let refusal = meter.as_ref().filter(|_| metered).and_then(|m| m.last_refusal(&key));
+        let used = meter.as_ref().filter(|_| metered).and_then(|m| m.used(&key)).or_else(|| own.lock().unwrap().clone());
+        let reply = said.lock().unwrap().clone();
         let name = &profile.name;
-        Ok(tr!(format!("{name} 回應了連線，也開好了工作階段。"), format!("{name} answered the handshake and opened a session.")))
+        match outcome {
+            Ok(_) if !reply.trim().is_empty() => Ok(test_passed(name, &model, &reply, used.as_ref())),
+            Ok(o) => {
+                let error: String = tr!(format!("這一輪結束了（{}），但它一個字都沒說。", o.stop_reason), format!("The turn ended ({}) without a word.", o.stop_reason));
+                Err(test_failed(name, &error, refusal.as_ref()))
+            }
+            Err(e) => Err(test_failed(name, &e, refusal.as_ref())),
+        }
     }
 
     /// Every session goes, all at once: each gets its moment to close
@@ -1453,6 +1584,45 @@ mod tests {
         // Nothing to judge by: no complaint.
         assert!(unoffered("", &offered).is_none());
         assert!(unoffered("glm-5.3-flash", &[]).is_none());
+    }
+
+    #[test]
+    fn a_passed_test_names_the_model_its_words_and_its_tokens() {
+        let used = crate::usage::Usage { model: "m".into(), input: 120, cache_read: 30, output: 2, ..Default::default() };
+        let said = test_passed("cg", "deepseek-ai/DeepSeek-V4.1-Flash", "  OK\n", Some(&used));
+        assert!(said.contains("cg") && said.contains("deepseek-ai/DeepSeek-V4.1-Flash") && said.contains("OK") && said.contains("150") && said.contains(" 2 "), "{said}");
+        // A long reply is cut, on one line; nothing counted, no tokens.
+        let long = test_passed("cg", "m", &"word\n".repeat(30), None);
+        assert!(long.contains('…') && !long.contains('\n') && !long.contains("token"), "{long}");
+    }
+
+    #[test]
+    fn a_failed_test_carries_the_agent_s_error_and_what_the_endpoint_said() {
+        let refused = crate::meter::Refused { status: 404, path: "/v1/responses".into(), words: "{\"detail\":\"Not Found\"}".into() };
+        let said = test_failed("cg", "Model 'x' not found on provider (HTTP 404)", Some(&refused));
+        assert!(said.contains("Model 'x' not found") && said.contains("404") && said.contains("/v1/responses") && said.contains("Not Found"), "{said}");
+        assert!(said.contains("COPILOT_PROVIDER_WIRE_API=completions"), "{said}");
+        // Another refusal gets no such hint, and no refusal adds nothing.
+        let key = crate::meter::Refused { status: 401, path: "/v1/responses".into(), words: String::new() };
+        let said = test_failed("cg", "bad key", Some(&key));
+        assert!(said.contains("401") && !said.contains("COPILOT_PROVIDER_WIRE_API"), "{said}");
+        let chat = crate::meter::Refused { status: 404, path: "/v1/chat/completions".into(), words: String::new() };
+        assert!(!test_failed("cg", "gone", Some(&chat)).contains("COPILOT_PROVIDER_WIRE_API"));
+        assert!(!test_failed("cg", "gone", None).contains("HTTP"));
+    }
+
+    #[test]
+    fn a_session_is_dressed_as_a_team_runs_it() {
+        let mut claude = AgentProfile { protocol: Protocol::Claude, ..AgentProfile::copilot() };
+        claude.extras = Some(Extras { mcp_servers: vec![McpServer { name: "docs".into(), url: "https://docs.example/mcp".into(), ..Default::default() }], ..Default::default() });
+        let mut launch = Launch { mcp_servers: vec![McpServer { name: TEAM_SERVER.into(), command: "team.exe".into(), ..Default::default() }], ..Launch::default() };
+        let metered = dress(&claude, &mut launch, " opus ", "test:claude");
+        assert!(!metered);
+        assert_eq!(launch.model.as_deref(), Some("opus"));
+        assert_eq!(launch.mcp_servers.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), [TEAM_SERVER, "docs"]);
+        let mut plain = Launch::default();
+        dress(&AgentProfile::copilot(), &mut plain, "", "test:copilot");
+        assert_eq!(plain, Launch::default());
     }
 
     #[test]

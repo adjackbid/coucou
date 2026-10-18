@@ -214,7 +214,9 @@ impl TeamAgents {
     }
 }
 
-fn profile_of(a: &TeamAgent, natives: &[AgentProfile]) -> Option<AgentProfile> {
+/// The profile a team agent runs as: its base's, with what it adds. None
+/// when its base is gone from Settings.
+pub fn profile_of(a: &TeamAgent, natives: &[AgentProfile]) -> Option<AgentProfile> {
     let base = natives.iter().find(|n| n.id == a.base)?;
     let mut p = base.clone();
     p.id = a.id.clone();

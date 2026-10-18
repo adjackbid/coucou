@@ -10,7 +10,7 @@
 // their bases are (views/agent-kind.ts).
 
 import "./agents.css";
-import { Bridge, IS_TAURI } from "../core/bridge";
+import { Bridge, IS_TAURI, onEvent, type AgentTestStage } from "../core/bridge";
 import { tr, trf } from "../core/i18n";
 import { locationOf, type AgentLocation, type AgentProfile, type ModelChoice } from "../core/state";
 import { kindIcon, markColor, markHint, markName, markOf, type KindMark } from "../views/agent-kind";
@@ -492,6 +492,54 @@ function closeDraft(host: AgentsHost) {
   host.render();
 }
 
+/** Agent Pool's 測試: which team agent, how far it got and what it said. Kept here so a redraw keeps it. */
+let testing: { id: string; stage: "start" | "sentence" | "done"; ok?: boolean; text?: string } | null = null;
+
+/** One real sentence to `a` as it is now (the editor's unsaved values, or a card's saved ones), on its Provider the way a team member runs. */
+async function testAgent(host: AgentsHost, a: TeamAgent) {
+  if (testing && testing.stage !== "done") return;
+  const id = a.id;
+  testing = { id, stage: "start" };
+  host.render();
+  const unlisten = await onEvent<AgentTestStage>("agent-test-stage", (s) => {
+    if (s.id === id && s.stage === "sentence" && testing?.id === id && testing.stage === "start") {
+      testing = { id, stage: "sentence" };
+      host.render();
+    }
+  });
+  const live: TeamAgent = { ...a, name: a.name.trim() || a.id, category: a.category.trim(), mcp: a.mcp.filter((m) => m.name || m.command || m.url) };
+  try {
+    testing = { id, stage: "done", ok: true, text: await Bridge.teamAgentTest(live) };
+  } catch (err) {
+    testing = { id, stage: "done", ok: false, text: String(err instanceof Error ? err.message : err).replace(/^Error:\s*/, "") };
+  } finally {
+    unlisten();
+    host.render();
+  }
+}
+
+/** How far the test of `a` got, or what it said; null when it was not tested. */
+function testStatus(a: TeamAgent): HTMLElement | null {
+  if (testing?.id !== a.id) return null;
+  if (testing.stage === "start") return h("p", { class: "hint", text: tr("1/2 正在啟動 agent 並握手…", "1/2 Starting the agent and shaking hands…") });
+  if (testing.stage === "sentence") return h("p", { class: "hint", text: tr("2/2 握手完成，正在真的送一句話給它…", "2/2 Handshake done; sending it one real sentence…") });
+  return h("div", { class: `ta-notice ${testing.ok ? "ok" : "err"}`, role: testing.ok ? "status" : "alert", text: testing.text ?? "" }); // i18n-ok: CSS classes
+}
+
+/** The editor's 測試 row, placed like Settings → Agent Provider's: the button, one line on what it does, and its answer under them. */
+function testRow(host: AgentsHost, a: TeamAgent, base: AgentProfile | undefined): HTMLElement[] {
+  const busy = !!testing && testing.stage !== "done";
+  const node = base?.protocol === "n8n";
+  const button = h("button", { type: "button", class: "btn plain", disabled: !base || busy, title: base ? "" : tr("先選一個 Provider", "Pick a provider first"), onClick: () => void testAgent(host, a) }, tr("測試", "Test"));
+  const hint = node
+    ? tr("送一個 kind: test 的請求給 Webhook", "sends the webhook a request with kind: test")
+    : tr("用這裡的 Provider、模型和 Effort（還沒儲存的也算）真的送它一句話，花一次很小的呼叫", "really sends it one sentence with this Provider, model and Effort (unsaved ones too); one tiny call");
+  return [
+    h("label", { text: tr("測試", "Test") }),
+    h("div", { class: "ta-test" }, h("div", { class: "row nowrap" }, button, h("span", { class: "hint", text: hint })), testStatus(a)),
+  ];
+}
+
 /** The form; `pinned`: its 取消 / 儲存 in its head, which stays put while the form scrolls (the ring's drawer). */
 function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
   const natives = host.natives();
@@ -571,6 +619,7 @@ function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
       effortField(host, a, can?.effort === "no"),
       h("label", { text: tr("說明", "Description") }),
       field("ta-desc", a.description, (v) => (a.description = v), { rows: "2", placeholder: tr("適合做什麼、擅長什麼。", "What it is good at.") }, "textarea"),
+      ...testRow(host, a, base),
     ),
     // The rarely-touched parts wait behind 進階, so a new member is name, kind, provider and model.
     h(
@@ -614,10 +663,12 @@ function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
 export const FACES = ["#6F93FF", "#34D399", "#A78BFA", "#F5A524", "#F472B6", "#22D3EE", "#84CC16", "#FB7185"];
 
 const ICON_EDIT = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>';
+const ICON_TEST = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5v14l11-7L7 5Z"/></svg>';
 const ICON_DELETE = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
 
 /** Opens the form for `a`, slid in from the right. */
 function edit(host: AgentsHost, a: TeamAgent) {
+  if (testing?.stage === "done") testing = null;
   draft = structuredClone(a);
   drawerScroll = 0;
   drawerAt = performance.now();
@@ -685,6 +736,7 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
       h(
         "div",
         { class: "ta-card-actions" },
+        h("button", { type: "button", class: "ta-icon", title: tr("測試:用儲存的設定真的送它一句話,花一次很小的呼叫", "Test: really send it one sentence with the saved settings; one tiny call"), "aria-label": trf("測試 {name}", "Test {name}", { name: a.name }), html: ICON_TEST, disabled: !base || (!!testing && testing.stage !== "done"), onClick: () => void testAgent(host, a) }),
         h("button", { type: "button", class: "ta-icon", title: tr("編輯", "Edit"), "aria-label": trf("編輯 {name}", "Edit {name}", { name: a.name }), html: ICON_EDIT, onClick: () => edit(host, a) }),
         deleteButton(host, a),
       ),
@@ -698,6 +750,8 @@ function card(host: AgentsHost, a: TeamAgent, at: number): HTMLElement {
     ),
     base ? capsView({ ...base, id: a.id, model: a.model || base.model }) : null,
     h("p", { class: `ta-desc${a.description ? "" : " empty"}`, text: a.description || tr("還沒有說明:Agent Center 不知道它適合做什麼", "No description yet: Agent Center doesn't know what it is good for") }),
+    // The card's own test shows here; the open form shows its own.
+    draft?.id === a.id ? null : testStatus(a),
     h(
       "footer",
       { class: "ta-card-foot" },

@@ -924,7 +924,6 @@ impl Teams {
                     }
                     Scope::new(&config.work_dir).with_also(also).with_waived(waived.clone())
                 }),
-                model: Some(member.model.trim().to_string()).filter(|m| !m.is_empty()),
                 // No team's knowledge base is anybody's to read but for its
                 // own part: the leader's whole team folder, the shared
                 // documents for everyone else (team::knowledge).
@@ -932,23 +931,13 @@ impl Teams {
                     dirs: vec![self.knowledge.clone()],
                     except: vec![if member.id == config.leader { self.kb(&config.id).dir().to_path_buf() } else { self.kb(&config.id).shared_dir() }],
                 },
+                model: None,
             };
             let mut launch = launch;
-            // A team agent's own MCP servers, after the team's (which stays first).
-            if let Some(x) = &profile.extras {
-                launch.mcp_servers.extend(x.mcp_servers.iter().cloned());
-            }
-            let mut metered = false;
-            // Copilot on an endpoint of its own: its calls go through
-            // Coucou's meter, which reads each one's tokens and the model it
-            // really asked for (meter.rs).
-            if let Some(meter) = crate::meter::global() {
-                let base = profile.env.get("COPILOT_PROVIDER_BASE_URL").map(|b| b.trim()).filter(|b| b.starts_with("http") && !b.contains('…'));
-                if let (crate::acp::Protocol::Acp, Some(base)) = (&profile.protocol, base) {
-                    launch.env.insert("COPILOT_PROVIDER_BASE_URL".into(), meter.route(base, &seat_key(&config.id, &member.id)));
-                    metered = true;
-                }
-            }
+            // The member's model, the team agent's own MCP servers after the
+            // team's (which stays first), and for Copilot on an endpoint of
+            // its own, Coucou's meter (acp::dress, which an agent test shares).
+            let metered = crate::acp::dress(&profile, &mut launch, &member.model, &seat_key(&config.id, &member.id));
             seats.insert(member.id.clone(), Seat { key: seat_key(&config.id, &member.id), profile, launch, metered });
             tokens.insert(member.id.clone(), secret);
         }

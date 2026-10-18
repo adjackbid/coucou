@@ -3,7 +3,7 @@
 // the chat bar, or built on by Teamwork's team agents. Each is a Cloud Agent
 // or a Local Agent, and the page lists them that way (views/agent-kind.ts).
 
-import { Bridge } from "../../core/bridge";
+import { Bridge, onEvent, type AgentTestStage } from "../../core/bridge";
 import { tr, trf } from "../../core/i18n";
 import { DEFAULT_AGENT, locationOf, type AgentLocation, type AgentProfile } from "../../core/state";
 import { capsView, forgetCaps } from "../../views/caps";
@@ -351,7 +351,12 @@ export const agentsPage: Page = {
       test.addEventListener("click", async () => {
         test.disabled = true;
         clear(feedback);
-        feedback.append(h("p", { class: "hint", text: isNode ? tr("正在呼叫 Webhook…", "Calling the webhook…") : tr("正在啟動 agent 並握手…", "Starting the agent and shaking hands…") }));
+        const stage = h("p", { class: "hint", text: isNode ? tr("正在呼叫 Webhook…", "Calling the webhook…") : tr("1/2 正在啟動 agent 並握手…", "1/2 Starting the agent and shaking hands…") });
+        feedback.append(stage);
+        const id = live().id;
+        const unlisten = await onEvent<AgentTestStage>("agent-test-stage", (s) => {
+          if (s.id === id && s.stage === "sentence") stage.textContent = tr("2/2 握手完成，正在真的送一句話給它…", "2/2 Handshake done; sending it one real sentence…");
+        });
         try {
           const reply = await Bridge.acpTest(live());
           clear(feedback);
@@ -360,6 +365,7 @@ export const agentsPage: Page = {
           clear(feedback);
           feedback.append(notice("err", errText(err)));
         } finally {
+          unlisten();
           test.disabled = false;
         }
       });
@@ -402,7 +408,7 @@ export const agentsPage: Page = {
       const meta = isNode ? `${protocolName(a)} · ${hostOf(a.url) || tr("還沒填網址", "no URL yet")}` : `${protocolName(a)} · ${a.model?.trim() || envModel(a) || tr("它自己的預設模型", "its own default model")}`;
       const body = isNode
         ? [kind, field(tr("說話方式", "Speaks"), protocol), ...nodeFields(a, live, keyRow, syncBadge), keyRow, row(test, h("span", { class: "hint", text: tr("送一個 kind: test 的請求給 Webhook;在聊天列選它,就能跟它說話", "sends the webhook a request with kind: test; pick it in the chat bar to talk to it") })), feedback]
-        : [kind, field(tr("說話方式", "Speaks"), protocol), modelField(a, live, feedback), abilities, keyRow, row(test, h("span", { class: "hint", text: tr("在聊天列選它，就能跟它說話", "pick it in the chat bar to talk to it") })), feedback];
+        : [kind, field(tr("說話方式", "Speaks"), protocol), modelField(a, live, feedback), abilities, keyRow, row(test, h("span", { class: "hint", text: tr("測試會真的送它一句話（花一次很小的呼叫）；在聊天列選它，就能跟它說話", "the test really sends it one sentence (one tiny call); pick it in the chat bar to talk to it") })), feedback];
       return card({
         anchor: `agent-profile-${a.id}`,
         title,

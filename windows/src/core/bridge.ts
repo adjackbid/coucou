@@ -8,7 +8,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { AgentCheck, AgentProfile, ModelChoice, Provider, Settings, AgentCaps } from "./state";
 import type { Dock } from "./dock";
 import { tr } from "./i18n";
-import type { Constitution, ConstitutionLevel, Found, KnowledgeAdded, KnowledgeDoc, KnowledgeView, KnowledgeVisibility, LibrarySkill, SecretaryChat, SecretaryUpload, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
+import type { Constitution, ConstitutionLevel, Found, KnowledgeAdded, KnowledgeDoc, KnowledgeView, KnowledgeVisibility, LibrarySkill, SecretaryChat, SecretaryUpload, TeamAgent, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -188,8 +188,10 @@ export const Bridge = {
   acpCancel: (agentId: string) => call<void>("acp_cancel", { agentId }),
   /** The next prompt starts a fresh session. */
   acpReset: (agentId: string) => call<void>("acp_reset", { agentId }),
-  /** Starts the agent as the form describes it, shakes hands, stops it. */
+  /** Starts the agent as the form describes it, shakes hands, sends it one real sentence (one tiny call), stops it. */
   acpTest: (profile: AgentProfile) => callOrThrow<string>("acp_test", { profile }),
+  /** Agent Pool's test: the team agent as the editor has it (saved or not), run on its Provider the way a team member would be, for one real sentence. */
+  teamAgentTest: (agent: TeamAgent) => callOrThrow<string>("team_agent_test", { agent }),
   /** The models an agent offers (a handshake, no prompt: nothing is spent). */
   agentModels: (profile: AgentProfile) => callOrThrow<ModelChoice[]>("agent_models", { profile }),
   /** What each agent can do, by the id it was sent with (caps.rs). */
@@ -456,6 +458,12 @@ export async function onDragDrop(handler: (e: DragDropPayload) => void) {
   return getCurrentWebview().onDragDropEvent((event) => {
     handler(event.payload as DragDropPayload);
   });
+}
+
+/** Where an agent test is: `stage` "sentence" once the handshake is done and the one sentence is on its way. */
+export interface AgentTestStage {
+  id: string;
+  stage: string;
 }
 
 export async function onEvent<T>(name: string, handler: (payload: T) => void) {
