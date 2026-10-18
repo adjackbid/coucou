@@ -138,7 +138,7 @@ dialog::backdrop{background:#142e4070}
 @media(min-width:1600px){.stage{height:min(860px,calc(100svh - 150px))}}
 @media(max-width:760px){.figs{grid-template-columns:1fr 1fr}.topbar{padding:15px 6%;font-size:12px}.edition{letter-spacing:0}.stage{height:auto;min-height:calc(100svh - 150px)}.slide{min-height:calc(100svh - 150px);height:auto;padding:28px 6%}.cover-layout{grid-template-columns:1fr;gap:0}.cover-mark{display:none}h1{font-size:clamp(40px,9vw,64px)}h2{font-size:clamp(28px,6vw,40px)}.lead{font-size:20px}.cover-path{font-size:16px;gap:16px;margin:30px 0}.process,.grid2,.scale,.hitl,.two-column,.shot-layout,.shot-layout.tall,.site .cards,.factory{grid-template-columns:1fr}.shot,.shot-wide{height:auto}.shot img,.shot-wide img{max-height:none}.controls{padding:12px 6%;gap:8px}.keyboard-hint{display:none}.control{padding:10px}.factory .panel{border-left:0;border-top:1px solid var(--line)}}
 @media(prefers-reduced-motion:no-preference){.slide:not([hidden]){animation:appear .18s ease-out}@keyframes appear{from{opacity:.6;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}}
-@media print{@page{size:A4 landscape;margin:10mm}body{background:white}.topbar,.progress,.controls,dialog,.no-js{display:none!important}.stage{height:auto;max-width:none;min-height:0}.slide,.slide[hidden]{display:flex!important;page-break-after:always;break-after:page;height:188mm;min-height:0;padding:6mm 5mm;overflow:hidden;animation:none!important;break-inside:avoid}.slide:last-child{break-after:auto}.slide h1{font-size:50pt}.slide h2{font-size:28pt;margin-bottom:12px}.slide h3{font-size:18pt}.eyebrow{font-size:10pt;margin-bottom:8px}.lead{font-size:18pt;line-height:1.5}.source-line{font-size:8pt;padding-top:8px;margin-bottom:0}.shot img,.shot-wide img{box-shadow:none;max-height:120mm}.takeaway{font-size:15pt;margin-bottom:6px}.compare{font-size:14pt}.compare th,.compare td{padding:8px 10px}.step p,.pain p,.scale p,.column p,.column ul,.row-list li{font-size:15pt}.cover-mark{display:grid}.mock{box-shadow:none}}
+@media print{@page{size:1600px 900px;margin:0}html,body{width:1600px;background:var(--paper);-webkit-print-color-adjust:exact;print-color-adjust:exact}.topbar,.progress,.controls,dialog,.no-js,.flow-next,.export-row,.slide-notes{display:none!important}.stage{height:auto;max-width:none;min-height:0;margin:0}.slide,.slide[hidden]{display:flex!important;width:1600px;height:900px;min-height:0;padding:44px 62px;overflow:hidden;animation:none!important;break-after:page;page-break-after:always;break-inside:avoid}.slide:last-child{break-after:auto;page-break-after:auto}.shot img,.shot-wide img,.mock{box-shadow:none}.flow-stage{display:grid!important;grid-template-columns:1fr 1fr;gap:10px;align-items:start;cursor:default}.flow-stage>[data-step],.flow-stage>[data-step][hidden]{display:block!important;height:auto;max-height:none;aspect-ratio:16/9}.flow-stage>img[data-step]{width:100%;height:auto}.flow-stage video{display:none!important}.print-only{display:block!important;width:100%;height:100%;object-fit:contain;border:1px solid var(--line);background:#131419}.flow-pop>img:not(.print-only){display:none!important}.pop-print{position:static}.flow-step{opacity:1}}
 
 /* 實際畫面縮圖 */
 .fig.shotfig{padding:8px 8px 10px;gap:8px}
@@ -161,46 +161,15 @@ dialog.wide{max-width:min(1500px,calc(100% - 32px));width:100%}
 .flow-stage img[hidden]{display:none}
 .figs.illus .fig svg{height:clamp(78px,11vh,130px)}
 /* ── animated mock windows for flow steps 3 & 4 ── */
-.flow-anim{height:100%;max-height:100%;aspect-ratio:16/9;max-width:100%;position:relative;overflow:hidden;border:1px solid var(--line);background:#131419;color:#e8e9ee;display:grid;grid-template-columns:19% 1fr;container-type:size;line-height:1.45;font-family:"Segoe UI","Noto Sans TC","PingFang TC",system-ui,sans-serif;text-align:left;cursor:pointer;box-shadow:0 14px 34px -22px #142e4080}
-.flow-anim[hidden]{display:none}
-.flow-anim>*{font-size:1.15cqw}
-#anim3>*{font-size:1.32cqw}
-.mw-side{background:#1a1b21;border-right:1px solid #ffffff12;padding:1.1em .9em;display:flex;flex-direction:column;gap:.55em}
-.mw-logo{font-weight:700;font-size:1.2em;display:flex;align-items:center;gap:.4em;margin-bottom:.6em}.mw-logo i{width:2.2em;height:1.1em;border-radius:1em;background:linear-gradient(90deg,#4ade80,#a78bfa,#f472b6)}
-.mw-nav{font-weight:600;padding:.5em .7em;border-radius:.5em;line-height:1.3}.mw-nav small{display:block;font-weight:400;font-size:.78em;color:#9a9ca8}.mw-nav.on{background:#2b2c35}.mw-nav.sec{color:#9a9ca8;font-size:.85em;margin-top:.6em;padding-bottom:0}.mw-nav.dim{color:#9a9ca8;font-weight:400;font-size:.9em}.mw-nav small.run,.pill.run{color:#4ade80}
-.mw-main{padding:.9em 1.3em;display:flex;flex-direction:column;min-height:0}
-.mw-title{font-weight:700;font-size:1.25em;display:flex;align-items:center;gap:.6em;margin-bottom:.5em}.mw-sub{font-weight:400;font-size:.75em;color:#9a9ca8}.pill{font-size:.6em;padding:.15em .6em;border-radius:1em;background:#1f3a2a;border:1px solid #2f6b44}
-.mw-chat{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:.7em}
-.mw-user{align-self:flex-end;max-width:78%;background:#2b2c35;padding:.6em .9em;border-radius:.8em .8em .2em .8em}
-.mw-bot{max-width:92%}
-.a3-l{opacity:0;transform:translateY(.4em);transition:opacity .45s,transform .45s}.a3-l.show{opacity:1;transform:none}
-.mw-members{display:flex;gap:.6em;flex-wrap:wrap}.mw-m{display:flex;align-items:center;gap:.5em;background:#1f2027;border:1px solid #ffffff14;border-radius:.6em;padding:.4em .7em;font-weight:600}.mw-m i{font-style:normal;font-weight:400;color:#9a9ca8;font-size:.85em}.mw-m b{width:1.3em;height:1.3em;border-radius:50%;display:inline-block}
-.c1 b,.c1 .av{background:#5b8def}.c2 b,.c2 .av{background:#2fbf8f}.c3 b,.c3 .av{background:#f2b135}.c4 b,.c4 .av{background:#a78bfa}
-.mw-card{border:1px solid #2f6b44;background:#15201a;border-radius:.7em;padding:.7em .9em}.mw-card-h{font-weight:700;margin-bottom:.4em;display:flex;align-items:center;gap:.5em}.mw-card .tag{font-size:.7em;background:#f2b135;color:#1a1300;padding:.1em .5em;border-radius:.3em}
-.mw-card ul{margin:0 0 .5em;padding-left:1.1em;color:#d6d7de}.mw-card li{margin:.15em 0}.mw-card li b{color:#fff;margin-right:.5em}
-.mw-opts{display:flex;align-items:center;gap:.5em;flex-wrap:wrap;margin-top:.4em}.mw-btn{font:inherit;font-weight:600;color:#e8e9ee;background:#2b2c35;border:1px solid #ffffff22;border-radius:.5em;padding:.35em .9em;cursor:default;transition:transform .15s,background .15s}.mw-btn.pri{background:#2f6b44;border-color:#4ade80}.mw-btn.press{transform:scale(.94);background:#4ade80;color:#06240f}.mw-opts.chosen .mw-btn:not(.pri){opacity:.35}.mw-hint{color:#9a9ca8;font-size:.85em}
-.mw-done{color:#4ade80;margin-top:.5em;font-weight:600}.mw-done u{color:#9a9ca8;font-weight:400;text-decoration:none}
-.mw-input{margin-top:.6em;border:1px solid #ffffff1f;border-radius:.6em;padding:.55em .8em;color:#6f717c;background:#0e0f13}
-.mw-cursor{position:absolute;width:1.6em;height:1.6em;left:70%;top:85%;opacity:0;transition:left .9s cubic-bezier(.4,0,.2,1),top .9s cubic-bezier(.4,0,.2,1),opacity .3s;pointer-events:none;filter:drop-shadow(0 2px 3px #0009);z-index:3}.mw-cursor.show{opacity:1}
-.mw-prog{display:flex;align-items:center;gap:.9em;font-size:.85em;color:#9a9ca8;margin-bottom:.6em}.mw-prog b{color:#5b8def;font-size:1.5em}.mw-prog .bar{flex:1;height:.5em;border-radius:1em;background:#2b2c35;overflow:hidden}.mw-prog .bar i{display:block;height:100%;width:0;background:#5b8def;transition:width .6s}
-.mw-team{display:grid;grid-template-columns:repeat(4,1fr);gap:.6em;margin-bottom:.6em}
-.mw-mc{position:relative;background:#1a1b21;border:1px solid #ffffff14;border-radius:.7em;padding:.6em .7em;display:grid;grid-template-columns:auto 1fr auto;gap:.2em .5em;align-items:center;transition:border-color .3s,box-shadow .3s}.mw-mc.busy{border-color:#5b8def;box-shadow:0 0 0 1px #5b8def55 inset}.mw-mc.done{border-color:#2f6b44}
-.mw-mc .av{width:2.1em;height:2.1em;border-radius:50%;grid-row:span 1;position:relative}.mw-mc .av em{position:absolute;top:-.9em;left:-.3em;font-style:normal;font-size:.9em}
-.mw-mc .nm{font-weight:700;line-height:1.2}.mw-mc .nm i{display:block;font-style:normal;font-weight:400;color:#9a9ca8;font-size:.8em}
-.mw-mc .st{font-size:.7em;padding:.1em .55em;border-radius:1em;background:#2b2c35;color:#9a9ca8;white-space:nowrap}.mw-mc.busy .st{background:#1d2b4a;color:#8fb0ff}.mw-mc.done .st{background:#1f3a2a;color:#4ade80}
-.mw-mc .cur{grid-column:1/-1;font-size:.8em;color:#d6d7de;background:#111216;border-radius:.4em;padding:.3em .5em;min-height:1.6em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mw-mc .tk{grid-column:1/-1;font-size:.72em;color:#9a9ca8}
-.mw-bottom{flex:1;min-height:0;display:grid;grid-template-columns:1.5fr 1fr;gap:.6em}
-.mw-board{display:grid;grid-template-columns:repeat(3,1fr);gap:.5em;min-height:0}.mw-board .col{background:#1a1b21;border:1px solid #ffffff14;border-radius:.6em;padding:.5em .55em;min-height:0;overflow:hidden}.mw-board h5,.mw-feed h5{margin:0 0 .4em;font-size:.85em;font-weight:700;color:#d6d7de;display:flex;justify-content:space-between}.mw-board h5 em{font-style:normal;background:#2b2c35;border-radius:1em;padding:0 .5em;font-size:.85em;color:#9a9ca8}
-.mw-task{font-size:.74em;background:#2b2c35;border-radius:.4em;padding:.3em .5em;margin-bottom:.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .3s}.mw-task.pending{opacity:.6}.mw-task.working{background:#1d2b4a;color:#c7d6ff}.mw-task.finished{background:#1f3a2a;color:#9fe8b8}
-.mw-feed{background:#1a1b21;border:1px solid #ffffff14;border-radius:.6em;padding:.5em .6em;min-height:0;overflow:hidden}.mw-line{font-size:.74em;padding:.3em 0;border-bottom:1px solid #ffffff0d;animation:mwIn .35s ease-out}.mw-line b{color:#fff}.mw-line small{color:#9a9ca8;margin-left:.4em}
-@keyframes mwIn{from{opacity:0;transform:translateY(-.4em)}to{opacity:1;transform:none}}
-.mw-fly{position:absolute;z-index:4;font-size:.74em;background:#5b8def;color:#fff;border-radius:.4em;padding:.3em .6em;white-space:nowrap;box-shadow:0 6px 16px -4px #000a;transition:left .7s cubic-bezier(.4,0,.2,1),top .7s cubic-bezier(.4,0,.2,1),opacity .25s;pointer-events:none}.mw-fly[hidden]{display:none}
-@media(prefers-reduced-motion:reduce){.a3-l,.mw-cursor,.mw-fly,.mw-prog .bar i{transition:none}.mw-line{animation:none}}
+.flow-vid{height:100%;max-height:100%;aspect-ratio:16/9;max-width:100%;position:relative}.flow-vid[hidden]{display:none}
+.flow-vid>video{width:100%;height:100%;object-fit:contain;border:1px solid var(--line);background:#131419;display:block;box-shadow:0 14px 34px -22px #142e4080}
+.print-only{display:none}
 .flow-pop{position:relative;height:100%;max-height:100%;display:flex;justify-content:center}.flow-pop[hidden]{display:none}.flow-pop>img{width:auto;max-width:100%;height:100%;object-fit:contain;border:1px solid var(--line);background:#131419;display:block;filter:brightness(.55)}.flow-pop>video{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64%;max-height:84%;border:1px solid #ffffff2e;border-radius:10px;background:#0b0c10;box-shadow:0 36px 90px -24px #000d}
 .flow-next{position:absolute;right:14px;bottom:14px;background:var(--accent);color:#fff;border:0;border-radius:999px;padding:9px 16px;font-size:14px;font-weight:700;box-shadow:0 8px 20px -8px #0008}
 .flow-next.end{background:var(--ink)}
 .flow-cap{font-size:14px;color:var(--muted);line-height:1.5;min-height:2.6em}
 .flow-cap b{color:var(--ink)}
+.export-row{margin-top:auto;padding-top:14px;display:flex;align-items:center;gap:14px;font-size:13px;color:var(--muted)}.export-pdf{background:var(--ink);color:var(--white);border-color:var(--ink);padding:10px 18px}
 </style>
 </head>
 <body>
@@ -314,49 +283,14 @@ dialog.wide{max-width:min(1500px,calc(100% - 32px));width:100%}
     <div class="flow-steps"><span class="flow-step on" data-step="0"><b>1</b>說需求</span><span class="flow-step" data-step="1"><b>2</b>從 Agent Pool 挑人</span><span class="flow-step" data-step="2"><b>3</b>提出方案，你來決定</span><span class="flow-step" data-step="3"><b>4</b>建立團隊、開工</span></div>
     <div class="flow-stage" id="flowStage" title="點一下看下一步">
       <img src="shots/04a-center-input.png" alt="Agent Center：輸入需求" data-step="0">
-      <div class="flow-pop" data-step="1" hidden><img src="shots/04a-center-input.png" alt="" loading="lazy"><video src="shots/04b-picking.mp4" poster="shots/04b-picking.png" muted loop playsinline preload="metadata" aria-label="Agent Center 挑人動畫"></video></div>
-      <div class="flow-anim mockwin" data-step="2" id="anim3" hidden aria-label="Agent Center 提出方案與選項，人按確認後建立團隊">
-        <div class="mw-side"><div class="mw-logo"><i></i>Teamwork</div><div class="mw-nav on">Agent Center<small>需要時叫我：查現況、開團隊</small></div><div class="mw-nav">公司總覽<small>所有團隊的辦公室</small></div><div class="mw-nav">成本與用量<small>Token 用量與預估費用</small></div><div class="mw-nav">憲法<small>所有成員都要遵守的規則</small></div><div class="mw-nav">Agent Pool<small>Cloud 6 · Local 3</small></div><div class="mw-nav sec">團隊</div><div class="mw-nav dim" id="a3team">還沒有團隊。</div></div>
-        <div class="mw-main">
-          <div class="mw-title">Agent Center</div>
-          <div class="mw-chat">
-            <div class="mw-user">你幫我做一份「生成式 AI 介紹」的網頁，要有圖片、三個章節，可以直接放到公司官網。</div>
-            <div class="mw-bot a3-l">我看了一下：這是一份交付物（單頁網站），規模中型。從 Agent Pool 裡挑了 4 位，分工如下。先給你看方案，你確認我才建立。</div>
-            <div class="mw-members a3-l"><span class="mw-m c1"><b></b>Claude Fable<i>組長 · 驗收</i></span><span class="mw-m c2"><b></b>Codex Sol<i>前端</i></span><span class="mw-m c3"><b></b>Gemini<i>生圖</i></span><span class="mw-m c4"><b></b>LocalLLM<i>審查（不同模型）</i></span></div>
-            <div class="mw-card a3-l">
-              <div class="mw-card-h"><span class="tag">新團隊</span>生成式 AI 介紹網頁</div>
-              <ul><li><b>目標</b>一頁式網站：三個章節、主視覺與插圖，可直接放上官網</li><li><b>工作資料夾</b>D:\ai\genai-site</li><li><b>分工</b>Codex Sol 寫頁面，Gemini 出圖，LocalLLM 審一次，Claude Fable 驗收</li><li><b>預估</b>約 4.4M tokens · NT$270 · 1 小時出頭</li></ul>
-              <div class="mw-opts"><button class="mw-btn pri" id="a3ok" type="button" tabindex="-1">確認建立</button><button class="mw-btn" type="button" tabindex="-1">改人選</button><button class="mw-btn" type="button" tabindex="-1">先補指示</button><span class="mw-hint">沒有確認之前不會動工、不花錢</span></div>
-              <div class="mw-done a3-l">✓ 已建立並啟動團隊「生成式 AI 介紹網頁」(id team-5)　<u>打開這個團隊 →</u></div>
-            </div>
-          </div>
-          <div class="mw-input">例如：各團隊現在怎麼樣？／幫我開一個做官網的團隊…</div>
-        </div>
-        <svg class="mw-cursor" id="a3cur" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2 L20 12 L12 13.5 L8.5 21 Z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/></svg>
-      </div>
-      <div class="flow-anim mockwin" data-step="3" id="anim4" hidden aria-label="團隊看板：組長派工、成員交付、進度往上">
-        <div class="mw-side"><div class="mw-logo"><i></i>Teamwork</div><div class="mw-nav">Agent Center<small>需要時叫我：查現況、開團隊</small></div><div class="mw-nav">公司總覽<small>所有團隊的辦公室</small></div><div class="mw-nav">成本與用量<small>Token 用量與預估費用</small></div><div class="mw-nav">Agent Pool<small>Cloud 6 · Local 3</small></div><div class="mw-nav sec">團隊</div><div class="mw-nav on">生成式 AI 介紹網頁<small class="run">執行中</small></div></div>
-        <div class="mw-main">
-          <div class="mw-title">生成式 AI 介紹網頁 <span class="pill run">執行中</span><span class="mw-sub">做一個介紹生成式 AI 的單頁網站 · 4 位 AI 成員</span></div>
-          <div class="mw-prog"><span>整體進度</span><b id="a4pct">0%</b><div class="bar"><i id="a4bar"></i></div><span id="a4tasks">已驗收 0 / 7 項任務</span><span id="a4tok">0 tokens · NT$0</span><span id="a4time">已執行 0 分鐘</span></div>
-          <div class="mw-team">
-            <div class="mw-mc c1"><div class="av"><em>👑</em></div><div class="nm">Claude Fable<i>Leader · 組長</i></div><span class="st">待命</span><div class="cur">　</div><div class="tk">0 tokens</div></div>
-            <div class="mw-mc c2"><div class="av"></div><div class="nm">Codex Sol<i>前端</i></div><span class="st">待命</span><div class="cur">　</div><div class="tk">0 tokens</div></div>
-            <div class="mw-mc c3"><div class="av"></div><div class="nm">Gemini<i>生圖</i></div><span class="st">待命</span><div class="cur">　</div><div class="tk">0 tokens</div></div>
-            <div class="mw-mc c4"><div class="av"></div><div class="nm">LocalLLM<i>審查</i></div><span class="st">待命</span><div class="cur">　</div><div class="tk">0 tokens</div></div>
-          </div>
-          <div class="mw-bottom">
-            <div class="mw-board"><div class="col"><h5>待處理 <em id="a4n0">0</em></h5><div class="cl" id="a4c0"></div></div><div class="col"><h5>進行中 <em id="a4n1">0</em></h5><div class="cl" id="a4c1"></div></div><div class="col"><h5>已完成 <em id="a4n2">0</em></h5><div class="cl" id="a4c2"></div></div></div>
-            <div class="mw-feed"><h5>最新協作</h5><div id="a4feed"></div></div>
-          </div>
-        </div>
-        <div class="mw-fly" id="a4fly" hidden></div>
-      </div>
+      <div class="flow-pop" data-step="1" hidden><img src="shots/04a-center-input.png" alt="" loading="lazy"><video src="shots/04b-picking.mp4" poster="shots/04b-picking.png" muted loop playsinline preload="metadata" aria-label="Agent Center 挑人動畫"></video><img class="print-only pop-print" src="shots/04b-picking.png" alt="挑人畫面"></div>
+      <div class="flow-vid" data-step="2" hidden><video src="shots/04c-proposal.mp4" poster="shots/04c-proposal.png" muted loop playsinline preload="metadata" aria-label="Agent Center：提出方案卡與選項，按下建立並啟動"></video><img class="print-only" src="shots/04c-proposal.png" alt="Agent Center 方案卡"></div>
+      <div class="flow-vid" data-step="3" hidden><video src="shots/04d-run.mp4" poster="shots/04d-run.png" muted loop playsinline preload="metadata" aria-label="團隊看板：組長同時派工三人，進度往上"></video><img class="print-only" src="shots/04d-run.png" alt="團隊看板"></div>
       <button class="flow-next" id="flowNext" type="button">下一步 →</button>
     </div>
     <p class="flow-cap" id="flowCap"></p>
   </div>
-  <aside class="slide-notes"><h3>講法</h3><p>前兩步是真的操作畫面：打一段需求送出，Agent Center 跳出挑人畫面。第三、四步是依實際流程做的動畫：方案卡與三個選項，人按確認才建立；接著看板上組長派工、成員交付、進度往上。點畫面或「下一步」切換。</p></aside>
+  <aside class="slide-notes"><h3>講法</h3><p>四步都是 Teamwork 的畫面：前兩步是實際操作錄下的；第三、四步用 App 本身的介面以示範團隊錄製，方案卡、按鈕、看板都和正式版一樣。重點在第四步：組長一次派三件工作、三個人同時動起來，這是多工的好處。點畫面或「下一步」切換。</p></aside>
 </section>
 
 
@@ -456,6 +390,7 @@ dialog.wide{max-width:min(1500px,calc(100% - 32px));width:100%}
     <li><span><strong>掌控</strong>　進度、交付、token、費用、工時即時可見；人隨時加人、改任務、下指示、暫停；成本有上限。</span></li>
   </ol>
   <p class="closing-line">AI Agent 越多，越需要一個組隊與管理的地方。</p>
+  <p class="export-row"><button class="control export-pdf" id="exportPdf" type="button">匯出 PDF</button><span>一頁投影片一頁 PDF。按下後在列印視窗選「另存為 PDF」，其他設定維持預設即可。</span></p>
   <aside class="slide-notes"><h3>結尾</h3><p>回到開頭的四個痛點，每一個都有對應的畫面。接著開現場 demo：打開 Teamwork，走一次 Agent Center 組隊。</p></aside>
 </section>
 
@@ -530,48 +465,20 @@ if(flow){
  const frames=Array.from(flow.querySelectorAll('.flow-stage > [data-step]')),steps=Array.from(flow.querySelectorAll('.flow-step')),cap=document.getElementById('flowCap'),nextBtn=document.getElementById('flowNext');
  const caps=['<b>1 · 說需求。</b>打開 Agent Center，像對人說話一樣打一段需求：「你幫我做一份『生成式 AI 介紹』的網頁，要有圖片、三個章節，可以直接放到公司官網。」按送出。',
   '<b>2 · 從 Agent Pool 挑人。</b>送出後跳出挑人畫面：Agent Pool 的成員繞著 Agent Center 排開，它依分類、能力、價位與最近花費掃過一遍，選中的亮起、名單列在右邊。這裡從 6 位裡挑出 4 位。',
-  '<b>3 · 提出方案，你來決定。</b>Agent Center 先回覆規模、成員與分工，附上「新團隊」方案卡和三個選項：確認建立、改人選、先補指示。沒有確認之前不會動工、不花錢；按下確認，團隊才建立。',
-  '<b>4 · 建立團隊、開工。</b>進到團隊看板：組長把工作拆成任務一張張派給成員，成員交付、審查者審、組長驗收，整體進度與 token、費用一路往上；人隨時可以從底下下指示。'];
+  '<b>3 · 提出方案，你來決定。</b>Agent Center 看完 Agent Pool 後回覆建議的規模與分工，附上「新團隊」方案卡：目標、資料夾、四位成員各自的角色與模型，底下三個選項：建立並啟動、調整人選、不用了。沒按之前不動工、不花錢；按下「建立並啟動」，團隊才建立，畫面直接進到看板。',
+  '<b>4 · 建立團隊、開工。</b>組長先拆任務，再把三件互不相依的工作<b>同時</b>派給 Gemini、Codex Sol、LocalLLM，三個人平行開工；成果一回來就驗收，立刻派下一批。整體進度、token、費用一路往上，直到 7 項全部驗收、團隊完成。人隨時可以從底下下指示。'];
  let k=0;
- // step 3: the proposal, its options, then the person's confirmation
- const anim3={timers:[],start(){this.stop();const box=document.getElementById('anim3'),lines=Array.from(box.querySelectorAll('.a3-l')),ok=document.getElementById('a3ok'),cur=document.getElementById('a3cur'),opts=box.querySelector('.mw-opts'),team=document.getElementById('a3team');
-   lines.forEach(l=>l.classList.remove('show'));ok.classList.remove('press');opts.classList.remove('chosen');cur.classList.remove('show');cur.style.left='70%';cur.style.top='85%';team.textContent='還沒有團隊。';team.className='mw-nav dim';
-   const at=(ms,f)=>this.timers.push(setTimeout(f,ms));
-   at(400,()=>lines[0].classList.add('show'));at(1500,()=>lines[1].classList.add('show'));at(2500,()=>lines[2].classList.add('show'));
-   at(4200,()=>{cur.classList.add('show');const b=box.getBoundingClientRect(),r=ok.getBoundingClientRect();cur.style.left=((r.left+r.width*.55-b.left)/b.width*100)+'%';cur.style.top=((r.top+r.height*.55-b.top)/b.height*100)+'%';});
-   at(5400,()=>ok.classList.add('press'));at(5700,()=>{opts.classList.add('chosen');lines[3].classList.add('show');team.textContent='生成式 AI 介紹網頁';team.className='mw-nav on';team.insertAdjacentHTML('beforeend','<small class="run">執行中</small>');});
-   at(6400,()=>cur.classList.remove('show'));},
-  stop(){this.timers.forEach(clearTimeout);this.timers=[];}};
- // step 4: the leader hands out tasks, members deliver, the progress climbs
- const anim4={timers:[],start(){this.stop();const box=document.getElementById('anim4'),mc=Array.from(box.querySelectorAll('.mw-mc')),fly=document.getElementById('a4fly'),feed=document.getElementById('a4feed'),cols=[0,1,2].map(i=>document.getElementById('a4c'+i)),ns=[0,1,2].map(i=>document.getElementById('a4n'+i)),pct=document.getElementById('a4pct'),bar=document.getElementById('a4bar'),tasksEl=document.getElementById('a4tasks'),tokEl=document.getElementById('a4tok'),timeEl=document.getElementById('a4time');
-   const tasks=[['TASK-01','網站架構與大綱',1,0.42],['TASK-02','主視覺與插圖',2,0.11],['TASK-03','首頁與導覽',1,0.55],['TASK-04','章節頁：模型種類與應用',1,0.61],['TASK-05','內容正確性審查',3,0.21],['TASK-06','響應式與無障礙檢查',3,0.19],['TASK-07','最終驗收與交付',0,0.26]];
-   const say=(who,what,txt)=>{feed.insertAdjacentHTML('afterbegin','<div class="mw-line"><b>'+who+'</b>'+(what?' → <b>'+what+'</b>':'')+'<small>'+clock()+'</small><br>'+txt+'</div>');while(feed.children.length>5)feed.lastElementChild.remove();};
-   let minutes=0;const clock=()=>{const m=19*60+38+minutes;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');};
-   let done=0,tok=0;const tokOf=[0,0,0,0];const names=['Claude Fable','Codex Sol','Gemini','LocalLLM'];
-   const set=(i,cls,st,cur)=>{mc[i].className='mw-mc c'+(i+1)+(cls?' '+cls:'');mc[i].querySelector('.st').textContent=st;mc[i].querySelector('.cur').textContent=cur||'　';};
-   const spend=(i,m)=>{tokOf[i]+=m;tok+=m;mc[i].querySelector('.tk').textContent=tokOf[i].toFixed(2)+'M tokens';tokEl.textContent=tok.toFixed(2)+'M tokens · NT$'+Math.round(tok/4.43*270);};
-   const counts=()=>{[0,1,2].forEach(i=>ns[i].textContent=cols[i].children.length);};
-   feed.innerHTML='';cols.forEach(c=>c.innerHTML='');fly.hidden=true;mc.forEach((_,i)=>set(i,'','待命',''));pct.textContent='0%';bar.style.width='0';tasksEl.textContent='已驗收 0 / 7 項任務';tokEl.textContent='0 tokens · NT$0';timeEl.textContent='已執行 0 分鐘';
-   const at=(ms,f)=>this.timers.push(setTimeout(f,ms));let t=300;
-   at(t,()=>{set(0,'busy','工作中','讀需求，拆成 7 項任務');say('Claude Fable','','把案子拆成 7 項任務：架構、主視覺、首頁、章節頁、審查兩輪、驗收。');spend(0,0.31);tasks.forEach(k=>cols[0].insertAdjacentHTML('beforeend','<div class="mw-task pending" id="a4t'+k[0]+'">'+k[0]+' · '+k[1]+'</div>'));counts();});
-   t+=1500;
-   tasks.forEach((k,idx)=>{const [id,name,who,m]=k;const chip=()=>document.getElementById('a4t'+id);
-    at(t,()=>{if(who===0){set(0,'busy','工作中',name);say('Claude Fable','',name+'：逐項對照目標驗收。');chip().className='mw-task working';cols[1].appendChild(chip());counts();return;}
-      const b=box.getBoundingClientRect(),from=mc[0].getBoundingClientRect(),to=mc[who].getBoundingClientRect();fly.textContent=id+' · '+name;fly.hidden=false;fly.style.opacity='1';fly.style.left=((from.left+from.width*.3-b.left)/b.width*100)+'%';fly.style.top=((from.bottom-b.top)/b.height*100-2)+'%';
-      requestAnimationFrame(()=>requestAnimationFrame(()=>{fly.style.left=((to.left+to.width*.25-b.left)/b.width*100)+'%';fly.style.top=((to.top+to.height*.55-b.top)/b.height*100)+'%';}));
-      say('Claude Fable',names[who],'請做「'+name+'」'+(who===3?'，對照原稿審一次':'，做完交付給我'));});
-    at(t+750,()=>{if(who===0)return;fly.style.opacity='0';set(who,'busy','工作中',name);chip().className='mw-task working';cols[1].appendChild(chip());counts();set(0,'','等交付','');});
-    at(t+1900,()=>{spend(who,m);minutes+=who===0?6:9;timeEl.textContent='已執行 '+minutes+' 分鐘';say(names[who],who===0?'':'Claude Fable',who===0?'驗收完成，成品已交付。':who===3?'審查完成：兩處用語修正、一張流程圖建議補上。':'「'+name+'」交付了。');chip().className='mw-task finished';cols[2].appendChild(chip());counts();done++;const p=Math.round(done/7*100);pct.textContent=p+'%';bar.style.width=p+'%';tasksEl.textContent='已驗收 '+done+' / 7 項任務';set(who,'done',who===0?'已完成':'已交付','');if(who!==0)set(0,'busy','工作中','驗收 '+id);});
-    t+=2500;});
-   at(t,()=>{mc.forEach((_,i)=>set(i,'done',i===0?'已完成':'已交付',''));say('Claude Fable','你','7 項任務都驗收了，成品在 D:\\ai\\genai-site\\index.html，等你確認。');});
-   at(t+3500,()=>this.start());},
-  stop(){this.timers.forEach(clearTimeout);this.timers=[];}};
- function setStep(n){k=(n+frames.length)%frames.length;frames.forEach((f,i)=>{f.hidden=i!==k;const v=f.querySelector&&f.querySelector('video');if(v){if(i===k){try{v.currentTime=0;}catch(e){}v.play().catch(()=>{});}else{v.pause();}}});if(k===2)anim3.start();else anim3.stop();if(k===3)anim4.start();else anim4.stop();steps.forEach((s,i)=>{s.classList.toggle('on',i===k);s.classList.toggle('done',i<k);});cap.innerHTML=caps[k];nextBtn.textContent=k===frames.length-1?'↺ 從頭看':'下一步 →';nextBtn.classList.toggle('end',k===frames.length-1);}
+ function setStep(n){k=(n+frames.length)%frames.length;frames.forEach((f,i)=>{f.hidden=i!==k;const v=f.querySelector&&f.querySelector('video');if(v){if(i===k){try{v.currentTime=0;}catch(e){}v.play().catch(()=>{});}else{v.pause();}}});steps.forEach((s,i)=>{s.classList.toggle('on',i===k);s.classList.toggle('done',i<k);});cap.innerHTML=caps[k];nextBtn.textContent=k===frames.length-1?'↺ 從頭看':'下一步 →';nextBtn.classList.toggle('end',k===frames.length-1);}
  nextBtn.addEventListener('click',e=>{e.stopPropagation();setStep(k+1);});
  flow.querySelector('.flow-stage').addEventListener('click',()=>setStep(k+1));
  steps.forEach((s,i)=>s.addEventListener('click',()=>setStep(i)));
  setStep(0);
+ window.addEventListener('beforeprint',()=>{cap.innerHTML=caps.map(c=>'<span class="pcap">'+c+'</span>').join('　');});
+ window.addEventListener('afterprint',()=>{cap.innerHTML=caps[k];});
 }
+async function preloadAll(){const imgs=Array.from(document.images);imgs.forEach(i=>{i.loading='eager';});await Promise.all(imgs.map(i=>i.complete?Promise.resolve():new Promise(r=>{i.addEventListener('load',r,{once:true});i.addEventListener('error',r,{once:true});})));await Promise.all(imgs.map(i=>i.decode().catch(()=>{})));}
+window.preloadAll=preloadAll;
+const exportBtn=document.getElementById('exportPdf');if(exportBtn)exportBtn.addEventListener('click',async()=>{exportBtn.disabled=true;exportBtn.textContent='準備中…';try{await preloadAll();}finally{exportBtn.disabled=false;exportBtn.textContent='匯出 PDF';}window.print();});
 window.addEventListener('hashchange',()=>show(fromHash()));
 show(fromHash());
 })();
