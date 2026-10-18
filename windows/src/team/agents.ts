@@ -19,6 +19,7 @@ import { h } from "../views/dom";
 import { CHEVRON, dropdown, refreshSuggestions, suggest, type Choice } from "./ui";
 import type { PoolAgent } from "./pick-show";
 import { skillChips } from "./skill-lib";
+import { offeredCategories } from "./categories";
 import type { TeamAgent, TeamAgentMcp, TeamAgents, TeamAgentSupport, TeamAgentSupports } from "./types";
 
 export interface AgentsHost {
@@ -75,8 +76,8 @@ function setView(next: PoolView, render: () => void) {
   render();
 }
 
-/** The categories offered before any is typed; the person may write any other. */
-const presetCategories = () => [tr("程式開發", "Coding"), tr("文案製作", "Copywriting"), tr("圖片影音", "Images & video"), tr("研究分析", "Research"), tr("規劃審查", "Planning & review")];
+/** The categories offered before any is typed (categories.ts, shared with the Skill market); the person may write any other. */
+const presetCategories = offeredCategories;
 
 /** Every category in use: the offered ones first, in their order, then the rest by name. */
 function categoriesInUse(): string[] {
@@ -596,7 +597,7 @@ function editor(host: AgentsHost, a: TeamAgent, pinned = false): HTMLElement {
       h(
         "div",
         {},
-        skillsOff ? null : skillChips(a.skills, (next) => { a.skills = next; }, host.render),
+        skillsOff ? null : skillChips(a.skills, (next) => { a.skills = next; }, host.render, a.name),
         field("ta-skills", a.skills.join("\n"), (v) => (a.skills = v.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)), { rows: "3", placeholder: tr("市集以外的也可以:一行一個,含 SKILL.md 的資料夾完整路徑,或 skill 名稱(會到 ~/.claude/skills 等常見位置找)", "Beyond the market too: one per line, the full path of a folder with a SKILL.md, or a skill name (looked for in ~/.claude/skills and other usual places)"), class: "field mono", ...(skillsOff && !a.skills.length ? { disabled: "" } : {}) }, "textarea"),
         h("p", { class: "hint", text: skillsOff ? tr("n8n 節點不讀 skill;工作流程該做什麼,在 n8n 裡設定。", "An n8n node reads no skills: what the workflow does is set up in n8n.") : tr("成員開工時會被告知每個 skill 的 SKILL.md 在哪、適合做什麼,需要時自己讀。", "When a member starts it is told where each skill's SKILL.md is and what it is for, and reads it when it needs to.") }),
       ),
