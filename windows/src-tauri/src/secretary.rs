@@ -1448,7 +1448,7 @@ fn cost_analysis(office: &Office, given: &str, period: &str) -> Result<String, S
         lines.push((
             usd,
             format!(
-                "- {name} ({m}){}{}: model {}, {} ({:.0}% of the team), {tokens} tokens in {} records; {} turns ({} failed), {} hand-ins, {} sent back, {} accepted, {} reviews made; cost per turn {}; context per call {early} early vs {late} late.",
+                "- {name} ({m}){}{}: model {}, {} ({:.0}% of the team), {tokens} tokens in {} records; {} turns ({} failed) over {} min at work, {} hand-ins, {} sent back, {} accepted, {} reviews made; cost per turn {}; context per call {early} early vs {late} late.",
                 if did.leader { " leader" } else { "" },
                 if did.role.is_empty() { String::new() } else { format!(", role {}", did.role) },
                 models.join(" + "),
@@ -1457,6 +1457,7 @@ fn cost_analysis(office: &Office, given: &str, period: &str) -> Result<String, S
                 mine.len(),
                 did.turns,
                 did.failed_turns,
+                did.work_ms / 60_000,
                 did.delivered,
                 did.rejected,
                 did.accepted,

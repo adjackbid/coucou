@@ -18,7 +18,7 @@ import { loadArt, STATUS, TeamScene, themeName, THEME_LABELS, wake } from "./sce
 import { dropdown, editableText } from "../ui";
 import { thumbsFor } from "../images";
 import type { PastRun, Snapshot, TeamFile, Usage } from "../types";
-import { fmtMoney, fmtTokens, usageSummary } from "../cost";
+import { fmtMoney, fmtTokens, fmtWork, usageSummary } from "../cost";
 import { Battle, companyFps, companyLive, HERO_LABELS, heroOf, savedMode, saveCompanyLive, saveMode, setHero, setSkill, skillOf } from "./battle/session";
 import { savedWorld, WORLDS } from "./battle/worlds";
 import type { BossBlockCause } from "./battle/bossMoves";
@@ -576,17 +576,26 @@ export class Office {
     return { tokens: s.tokens, cost: s.usd == null ? "" : `${s.priced ? "" : "≥ "}${fmtMoney(s.usd)}` };
   }
 
-  /** "任務 2/4 · 1.2M tokens · NT$3.4" — the team's numbers, live. */
+  /** Time a team (or one member) has spent in its turns this run, ms. */
+  private worked(teamId: string, memberId?: string): number {
+    const snap = this.runs.get(teamId);
+    if (!snap) return 0;
+    return snap.members.filter((m) => !memberId || m.id === memberId).reduce((a, m) => a + (m.workMs ?? 0), 0);
+  }
+
+  /** "任務 2/4 · 1.2M tokens · NT$3.4 · 工時 12 分鐘" — the team's numbers, live. */
   private figures(teamId: string, cls = "office-figures"): HTMLElement | null {
     const snap = this.runs.get(teamId);
     if (!snap) return null;
     const s = this.spend(teamId);
+    const w = this.worked(teamId);
     return h(
       "div",
-      { class: cls, title: tr("本輪的任務、用掉的 token 與預估成本(依「成本與用量」的價格表),隨團隊工作即時更新", "This run's tasks, the tokens used and their estimated cost (from the price list in Cost & usage), updated live as the team works") },
+      { class: cls, title: tr("本輪的任務、用掉的 token、預估成本(依「成本與用量」的價格表)與成員在回合裡工作的時間加總,隨團隊工作即時更新", "This run's tasks, the tokens used, their estimated cost (from the price list in Cost & usage) and the members' time in their turns added up, updated live as the team works") },
       h("span", {}, h("small", { text: tr("任務", "Tasks") }), h("b", { text: `${snap.done}/${snap.total}` })),
       h("span", {}, h("small", { text: "Token" }), h("b", { text: s ? fmtTokens(s.tokens) : "0" })),
       h("span", {}, h("small", { text: tr("成本", "Cost") }), h("b", { text: s?.cost || "—" })),
+      h("span", {}, h("small", { text: tr("工時", "Time") }), h("b", { text: w ? fmtWork(w) : "—" })),
     );
   }
 
@@ -937,7 +946,8 @@ export class Office {
       h("div", { class: "office-figures" },
         h("span", {}, h("small", { text: tr("驗收任務", "Accepted") }), h("b", { text: trf("{n} 項", "{n}", { n: vm.progress.completed }) })),
         s ? h("span", {}, h("small", { text: "Token" }), h("b", { text: fmtTokens(s.tokens) })) : null,
-        s ? h("span", {}, h("small", { text: tr("成本", "Cost") }), h("b", { text: s.cost || "—" })) : null),
+        s ? h("span", {}, h("small", { text: tr("成本", "Cost") }), h("b", { text: s.cost || "—" })) : null,
+        !this.viewing && this.worked(teamId) ? h("span", {}, h("small", { text: tr("工時", "Time") }), h("b", { text: fmtWork(this.worked(teamId)) })) : null),
       h("ul", { class: "bt-result-tasks" }, ...tasks.map((t) =>
         h("li", {}, h("button", {
           type: "button", title: tr("看這個任務的對話與交付", "See this task's talk and deliverables"),
@@ -1300,10 +1310,11 @@ export class Office {
     const stat = (n: number, label: string, tone: string) => h("div", { class: `office-stat ${tone}` }, h("b", { text: String(n) }), h("span", { text: label }));
     // Every team's run: tasks, tokens and their cost, most expensive first.
     const rows = teams
-      .map((t) => ({ t, snap: this.runs.get(t.teamId), s: this.spend(t.teamId) }))
+      .map((t) => ({ t, snap: this.runs.get(t.teamId), s: this.spend(t.teamId), w: this.worked(t.teamId) }))
       .filter((r) => r.snap);
     const tasks = rows.reduce((a, r) => [a[0] + r.snap!.done, a[1] + r.snap!.total], [0, 0]);
     const tokens = rows.reduce((a, r) => a + (r.s?.tokens ?? 0), 0);
+    const worked = rows.reduce((a, r) => a + r.w, 0);
     const all = usageSummary(rows.flatMap((r) => r.snap!.members.flatMap((m) => m.usage ?? [])), () => this.host.render());
     rows.sort((a, b) => (b.s?.tokens ?? 0) - (a.s?.tokens ?? 0));
     // Everyone on the payroll, by what they are doing now.
@@ -1329,17 +1340,19 @@ export class Office {
         ? h("div", { class: "office-figures", title: tr("各團隊本輪的合計,隨團隊工作即時更新", "Every team's totals for this run, updated live as they work") },
             h("span", {}, h("small", { text: tr("任務", "Tasks") }), h("b", { text: `${tasks[0]}/${tasks[1]}` })),
             h("span", {}, h("small", { text: "Token" }), h("b", { text: fmtTokens(tokens) })),
-            h("span", {}, h("small", { text: tr("預估成本", "Est. cost") }), h("b", { text: all.usd == null ? "—" : `${all.priced ? "" : "≥ "}${fmtMoney(all.usd)}` })))
+            h("span", {}, h("small", { text: tr("預估成本", "Est. cost") }), h("b", { text: all.usd == null ? "—" : `${all.priced ? "" : "≥ "}${fmtMoney(all.usd)}` })),
+            h("span", {}, h("small", { text: tr("工時", "Time") }), h("b", { text: worked ? fmtWork(worked) : "—" })))
         : null,
       rows.length
         ? h("table", { class: "office-teams" },
-            h("thead", {}, h("tr", {}, h("th", { text: tr("團隊", "Team") }), h("th", { text: tr("任務", "Tasks") }), h("th", { text: "Token" }), h("th", { text: tr("成本", "Cost") }))),
-            h("tbody", {}, ...rows.map(({ t, snap, s }) =>
+            h("thead", {}, h("tr", {}, h("th", { text: tr("團隊", "Team") }), h("th", { text: tr("任務", "Tasks") }), h("th", { text: "Token" }), h("th", { text: tr("成本", "Cost") }), h("th", { text: tr("工時", "Time") }))),
+            h("tbody", {}, ...rows.map(({ t, snap, s, w }) =>
               h("tr", { onClick: () => { this.companyPick = t.teamId; this.host.render(); }, title: tr("看這間辦公室的摘要", "See this office's summary") },
                 h("td", {}, h("i", { class: `office-dot ${this.runTone(t)}` }), t.name),
                 h("td", { text: `${snap!.done}/${snap!.total}` }),
                 h("td", { text: s ? fmtTokens(s.tokens) : "0" }),
-                h("td", { text: s?.cost || "—" })))))
+                h("td", { text: s?.cost || "—" }),
+                h("td", { text: w ? fmtWork(w) : "—" })))))
         : null,
       h("p", { class: "dim", text: `${this.mode === "orbit" ? tr("點團隊名稱看它的摘要,再按「進入辦公室」進去。", "Click a team name for its summary, then Go into the office. ") : tr("點一間辦公室看它的摘要;雙擊直接進去。", "Click an office for its summary; double-click to go in. ")}${tr("成本依「成本與用量」的價格表估算。", "Costs are estimated from the price list in Cost & usage.")}` }),
     );
@@ -1509,7 +1522,9 @@ export class Office {
             h("span", { class: "office-roster-task", text: m.summary || (m.primaryTaskId ? this.store.task(m.primaryTaskId)?.title ?? "" : "") }),
             (() => {
               const s = past ? null : this.spend(teamId, m.memberId);
-              return s ? h("span", { class: "office-roster-spend", text: `${fmtTokens(s.tokens)} tokens${s.cost ? ` · ${s.cost}` : ""}` }) : null;
+              const w = past ? 0 : this.worked(teamId, m.memberId);
+              const parts = [s ? `${fmtTokens(s.tokens)} tokens${s.cost ? ` · ${s.cost}` : ""}` : "", w ? trf("工作 {t}", "at work {t}", { t: fmtWork(w) }) : ""].filter(Boolean);
+              return parts.length ? h("span", { class: "office-roster-spend", text: parts.join(" · ") }) : null;
             })(),
             (() => {
               if (!battle || past) return null;
@@ -1671,7 +1686,8 @@ export class Office {
             m.engineStatus === "offline" ? h("span", { class: "office-pill quiet", title: tr("沒有代理在執行;顯示的是紀錄裡最後的狀態", "No agent is running; this is the last state in the record"), text: tr("⌁ 未連線", "⌁ Offline") }) : null, this.demoTag()),
           h("small", { class: "dim", text: (() => {
             const s = this.viewing ? null : this.spend(teamId, m.memberId);
-            return `${trf("最後更新 {t}", "Last updated {t}", { t: clock(m.lastActivityAt) || "—" })}${s ? `${trf(" · 本輪 {tokens} tokens", " · {tokens} tokens this run", { tokens: fmtTokens(s.tokens) })}${s.cost ? ` · ${s.cost}` : ""}` : ""}`;
+            const w = this.viewing ? 0 : this.worked(teamId, m.memberId);
+            return `${trf("最後更新 {t}", "Last updated {t}", { t: clock(m.lastActivityAt) || "—" })}${s ? `${trf(" · 本輪 {tokens} tokens", " · {tokens} tokens this run", { tokens: fmtTokens(s.tokens) })}${s.cost ? ` · ${s.cost}` : ""}` : ""}${w ? trf(" · 工作 {t}", " · at work {t}", { t: fmtWork(w) }) : ""}`;
           })() })),
         h("button", { class: "icon-btn", type: "button", title: tr("關閉(Esc)", "Close (Esc)"), "aria-label": tr("關閉", "Close"), onClick: () => this.close(teamId) }, "✕")),
       this.back

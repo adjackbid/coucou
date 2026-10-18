@@ -243,6 +243,14 @@ export function fmtTokens(n: number): string {
   return String(Math.round(n));
 }
 
+/** Time at work: "45 秒" · "12 分鐘" · "1 小時 5 分". */
+export function fmtWork(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return trf("{n} 秒", "{n}s", { n: s });
+  const m = Math.floor(s / 60);
+  return m < 60 ? trf("{n} 分鐘", "{n} min", { n: m }) : trf("{h} 小時 {m} 分", "{h} h {m} min", { h: Math.floor(m / 60), m: m % 60 });
+}
+
 export function fmtUsd(v: number): string {
   if (v === 0) return "$0";
   if (v < 0.01) return `$${v.toFixed(4)}`;

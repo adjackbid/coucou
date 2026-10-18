@@ -183,7 +183,7 @@ export function demoSnapshot(): Snapshot {
     timeWarned: false,
     timeUp: false,
     members: [
-      { ...seat(0), isLeader: true, status: "working", task: "TASK-05", waiting: null, activity: "Reading docs/spec.md", turns: 4, permission: null, lostWhy: "", usage: [used("claude-sonnet-5-5", 41_200, 9_800, 612_000, 38_000)] },
+      { ...seat(0), isLeader: true, status: "working", task: "TASK-05", waiting: null, activity: "Reading docs/spec.md", turns: 4, workMs: 23 * 60_000, permission: null, lostWhy: "", usage: [used("claude-sonnet-5-5", 41_200, 9_800, 612_000, 38_000)] },
       {
         ...seat(1),
         isLeader: false,
@@ -192,13 +192,14 @@ export function demoSnapshot(): Snapshot {
         waiting: { on: "ai3", what: tr("購物車功能", "Cart"), task: "TASK-06" },
         activity: "",
         turns: 1,
+        workMs: 6 * 60_000,
         permission: null,
         lostWhy: "",
         usage: [used("gpt-6-mini", 150_000, 28_000, 42_000)],
       },
-      { ...seat(2), isLeader: false, status: "working", task: "TASK-04", waiting: null, activity: "Editing src/cart/CartPage.tsx", turns: 3, permission: null, lostWhy: "", usage: [used("glm-5.3-flash", 182_000, 21_400, 96_000)] },
-      { ...seat(3), isLeader: false, status: "done", task: null, waiting: null, activity: "", turns: 2, permission: null, lostWhy: "", usage: [used("gemini-3.8-flash", 23_000, 4_100)] },
-      ...config.members.slice(4).map((_, k) => ({ ...seat(4 + k), isLeader: false, status: (k % 2 ? "idle" : "working") as Snapshot["members"][number]["status"], task: null, waiting: null, activity: k % 2 ? "" : "Writing copy", turns: 1, permission: null, lostWhy: "" })), // i18n-ok: an agent's step title
+      { ...seat(2), isLeader: false, status: "working", task: "TASK-04", waiting: null, activity: "Editing src/cart/CartPage.tsx", turns: 3, workMs: 17 * 60_000 + 30_000, permission: null, lostWhy: "", usage: [used("glm-5.3-flash", 182_000, 21_400, 96_000)] },
+      { ...seat(3), isLeader: false, status: "done", task: null, waiting: null, activity: "", turns: 2, workMs: 9 * 60_000, permission: null, lostWhy: "", usage: [used("gemini-3.8-flash", 23_000, 4_100)] },
+      ...config.members.slice(4).map((_, k) => ({ ...seat(4 + k), isLeader: false, status: (k % 2 ? "idle" : "working") as Snapshot["members"][number]["status"], task: null, waiting: null, activity: k % 2 ? "" : "Writing copy", turns: 1, workMs: (k + 2) * 60_000, permission: null, lostWhy: "" })), // i18n-ok: an agent's step title
     ],
     tasks: [
       task(1, tr("需求拆解", "Break down the needs"), "ai1", "done", { note: tr("完成需求分析與任務分配", "Needs analysed and tasks assigned") }),
@@ -422,7 +423,7 @@ export function demoReport(from: number, to: number): UsageReport {
       const mine = inRange.filter((r) => r.team === t.id && r.member === id);
       if (!mine.length) continue;
       const delivered = Math.max(1, Math.round(mine.length / 6));
-      activity.push({ team: t.id, member: id, memberName: name, role: "", leader: id === t.members[0][0], turns: mine.length, failedTurns: mine.length > 20 ? 1 : 0, delivered, rejected: id === "ai3" ? 2 : 0, accepted: delivered, reviews: id === t.members[0][0] ? delivered * 2 : 0, messages: delivered * 2 });
+      activity.push({ team: t.id, member: id, memberName: name, role: "", leader: id === t.members[0][0], turns: mine.length, failedTurns: mine.length > 20 ? 1 : 0, workMs: mine.length * 4 * 60_000, delivered, rejected: id === "ai3" ? 2 : 0, accepted: delivered, reviews: id === t.members[0][0] ? delivered * 2 : 0, messages: delivered * 2 });
     }
   }
   return {

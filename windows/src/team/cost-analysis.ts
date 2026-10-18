@@ -7,6 +7,7 @@
 
 import { tr, trf } from "../core/i18n";
 import { h } from "../views/dom";
+import { fmtWork } from "./cost";
 import type { Activity, Found, UsageReport, UsageRow } from "./types";
 
 export interface AnalysisHost {
@@ -371,7 +372,7 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
         h(
           "table",
           {},
-          h("thead", {}, h("tr", {}, ...[tr("成員", "Member"), tr("模型", "Model"), tr("成本", "Cost"), tr("占比", "Share"), tr("回合", "Turns"), tr("每回合", "Per turn"), tr("交付", "Delivered"), tr("退回", "Sent back"), tr("驗收", "Accepted")].map((t, i) => h("th", { class: i > 1 ? "num" : "", text: t })))),
+          h("thead", {}, h("tr", {}, ...[tr("成員", "Member"), tr("模型", "Model"), tr("成本", "Cost"), tr("占比", "Share"), tr("回合", "Turns"), tr("每回合", "Per turn"), tr("工時", "Time"), tr("每小時", "Per hour"), tr("交付", "Delivered"), tr("退回", "Sent back"), tr("驗收", "Accepted")].map((t, i) => h("th", { class: i > 1 ? "num" : "", text: t })))),
           h(
             "tbody",
             {},
@@ -386,6 +387,8 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
                 h("td", { class: "num", text: `${usd ? Math.round((m.usd / usd) * 100) : 0}%` }),
                 h("td", { class: "num", text: String(m.did?.turns ?? 0) }),
                 h("td", { class: "num", text: m.did?.turns ? host.money(m.usd / m.did.turns) : "—" }),
+                h("td", { class: "num", text: m.did?.workMs ? fmtWork(m.did.workMs) : "—" }),
+                h("td", { class: "num", text: (m.did?.workMs ?? 0) >= 60_000 ? host.money(m.usd / (m.did!.workMs / 3_600_000)) : "—" }),
                 h("td", { class: "num", text: String(m.did?.delivered ?? 0) }),
                 h("td", { class: `num${(m.did?.rejected ?? 0) > 0 ? " warn-text" : ""}`, text: String(m.did?.rejected ?? 0) }),
                 h("td", { class: "num", text: String(m.did?.accepted ?? 0) }),

@@ -22,7 +22,7 @@ import { companyName, Office, setCompanyName } from "./office/office";
 import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
 import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCompanyFps, type Tempo } from "./office/battle/session";
-import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
+import { costPage, fmtMoney, fmtTokens, fmtWork, refreshSoon, usageSummary, type CostHost } from "./cost";
 import { skillChips } from "./skill-lib";
 import { openSkillModal, redrawSkillModal } from "./skill-modal";
 import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, pickShowOn, previewPickShow, refreshProviders, secretaryRoot, setSecretaryRoot, secretarySpeed, speedName, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
@@ -1406,6 +1406,7 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
       pulse,
       otherModel(m),
       spend(m.usage, trf("{name} 這一輪用掉的 token", "Tokens {name} used this run", { name: m.name })),
+      worked(m.workMs ?? 0, trf("{name} 這一輪在回合裡工作的時間(進行中的回合也算)", "Time {name} has spent in its turns this run, the one under way included", { name: m.name })),
       m.status === "working"
         ? h("button", { class: "btn plain stall", type: "button", title: tr("停掉它這一輪;它下一輪會被提醒手上的工作", "Stops its turn under way; on its next turn it's reminded of its open work"), onClick: () => void act(() => Bridge.teamInterruptMember(snap.id, m.id)) }, tr("打斷這一輪", "Interrupt this turn")) // i18n-ok: CSS classes
         : null,
@@ -1826,6 +1827,7 @@ function monitor(snap: Snapshot): HTMLElement {
       h("span", { class: "dim", text: trf("已執行 {n} 分鐘", "Running for {n} min", { n: minutes }) }),
       timeLeft(snap),
       spend(snap.members.flatMap((m) => m.usage ?? []), tr("全隊這一輪用掉的 token", "Tokens the whole team used this run")),
+      worked(snap.members.reduce((a, m) => a + (m.workMs ?? 0), 0), tr("全隊這一輪在回合裡工作的時間加總(成員同時工作時會比已執行的時間長)", "Every member's time in its turns this run, added up (longer than the run when members work at once)")),
     ),
     stage(snap),
     h("div", { class: "split" }, board(snap), feed(snap)),
@@ -2083,6 +2085,12 @@ function spend(usage: MemberView["usage"], title: string): HTMLElement | null {
   if (!s.tokens) return null;
   const text = `${fmtTokens(s.tokens)} tokens${s.usd != null ? ` · ${s.priced ? "" : "≥ "}${fmtMoney(s.usd)}` : ""}`;
   return h("span", { class: "chip spend", title: trf("{title}。預估成本依「成本與用量」的價格表計算。", "{title}. The estimated cost uses the price list in Cost & usage.", { title }), text });
+}
+
+/** Time a member (or the whole team) has spent in its turns: "工作 12 分鐘". */
+function worked(ms: number, title: string): HTMLElement | null {
+  if (ms < 1000) return null;
+  return h("span", { class: "chip spend", title, text: trf("工作 {t}", "At work {t}", { t: fmtWork(ms) }) });
 }
 
 /** The Office: the same record as the board, as rooms. `?office=mock` in a browser shows the spec's demo company. */

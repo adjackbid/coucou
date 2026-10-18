@@ -45,6 +45,8 @@ pub struct Activity {
     pub turns: u32,
     /// Turns that ended in an error.
     pub failed_turns: u32,
+    /// Time spent in those turns, ms.
+    pub work_ms: u64,
     /// Hand-ins, and how many of them were sent back.
     pub delivered: u32,
     pub rejected: u32,
@@ -87,6 +89,8 @@ fn read_log(file: &Path, team: &str, from: u64, to: u64, out: &mut Vec<Row>, did
     let mut owner: HashMap<String, String> = HashMap::new();
     let mut leader = String::new();
     let mut roles: HashMap<String, String> = HashMap::new();
+    // member id → when its turn under way began
+    let mut since: HashMap<String, u64> = HashMap::new();
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
         let Ok(record) = serde_json::from_str::<Record>(line) else { continue };
         let inside = record.at >= from && record.at < to;
@@ -111,12 +115,19 @@ fn read_log(file: &Path, team: &str, from: u64, to: u64, out: &mut Vec<Row>, did
             Event::TaskAssigned { id, owner: o, .. } => {
                 owner.insert(id.clone(), o.clone());
             }
-            Event::TurnEnded { member, ok, .. } => count(member, &|a| {
-                a.turns += 1;
-                if !ok {
-                    a.failed_turns += 1;
-                }
-            }),
+            Event::TurnStarted { member } => {
+                since.insert(member.clone(), record.at);
+            }
+            Event::TurnEnded { member, ok, .. } => {
+                let took = since.remove(member).map(|s| record.at.saturating_sub(s)).unwrap_or(0);
+                count(member, &|a| {
+                    a.turns += 1;
+                    a.work_ms += took;
+                    if !ok {
+                        a.failed_turns += 1;
+                    }
+                })
+            }
             Event::Delivered { by, .. } => count(by, &|a| a.delivered += 1),
             Event::Reviewed { task, accepted, by, .. } => {
                 count(by, &|a| a.reviews += 1);

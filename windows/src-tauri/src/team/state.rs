@@ -212,6 +212,27 @@ pub struct Turns {
     /// Turns in a row that ended without one.
     pub silent: u32,
     pub last_outcome: String,
+    /// Time spent in turns that have ended, ms.
+    pub work_ms: u64,
+    /// When the turn under way began (0 between turns).
+    pub since: u64,
+}
+
+impl Turns {
+    /// Time at work so far: the ended turns, plus the one under way when
+    /// `live` (an agent really stands behind it) measured to `now`.
+    pub fn worked(&self, now: u64, live: bool) -> u64 {
+        let open = if live && self.active && self.since > 0 { now.saturating_sub(self.since) } else { 0 };
+        self.work_ms + open
+    }
+
+    fn turn_closed(&mut self, at: u64) {
+        if self.active && self.since > 0 {
+            self.work_ms += at.saturating_sub(self.since);
+        }
+        self.active = false;
+        self.since = 0;
+    }
 }
 
 /// One line of the "latest collaboration" timeline.
@@ -579,19 +600,20 @@ impl State {
                 let t = self.turns.entry(member.clone()).or_default();
                 t.count += 1;
                 t.active = true;
+                t.since = at;
                 t.moves = 0;
                 self.total_turns += 1;
             }
             Event::TurnEnded { member, ok: _, outcome } => {
                 let t = self.turns.entry(member.clone()).or_default();
-                t.active = false;
+                t.turn_closed(at);
                 t.silent = if t.moves == 0 { t.silent + 1 } else { 0 };
                 t.last_outcome = outcome.clone();
             }
             Event::Lost { member, why } => {
                 self.lost.insert(member.clone(), why.clone());
                 if let Some(t) = self.turns.get_mut(member) {
-                    t.active = false;
+                    t.turn_closed(at);
                 }
                 self.say(at, "lost", member, YOU, why, None);
             }
@@ -741,6 +763,8 @@ pub struct MemberView {
     /// The tool it is using right now.
     pub activity: String,
     pub turns: u32,
+    /// Time it has spent in its turns this run, ms — the turn under way included.
+    pub work_ms: u64,
     /// The oldest request waiting for the person…
     pub permission: Option<PermissionView>,
     /// …and the ones behind it.
@@ -856,6 +880,7 @@ impl State {
 
     pub fn snapshot(&self, live: &BTreeMap<String, Live>) -> Option<Snapshot> {
         let config = self.config.as_ref()?;
+        let now = super::store::now_ms();
         let members = config
             .members
             .iter()
@@ -880,6 +905,7 @@ impl State {
                     waiting,
                     activity: l.map(|l| l.activity.clone()).unwrap_or_default(),
                     turns: self.turns.get(&m.id).map(|t| t.count).unwrap_or(0),
+                    work_ms: self.turns.get(&m.id).map(|t| t.worked(now, self.status == TeamStatus::Running)).unwrap_or(0),
                     permission: l.and_then(|l| l.permissions.first().cloned()),
                     more_permissions: l.map(|l| l.permissions.iter().skip(1).cloned().collect()).unwrap_or_default(),
                     lost_why: self.lost.get(&m.id).cloned().unwrap_or_default(),
@@ -915,5 +941,34 @@ impl State {
             feed: self.feed.clone(),
             waived: self.waived.iter().cloned().collect(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rec(seq: u64, at: u64, event: Event) -> Record {
+        Record { seq, at, event }
+    }
+
+    #[test]
+    fn a_members_time_at_work_is_the_sum_of_its_turns() {
+        let mut s = State::default();
+        s.status = TeamStatus::Running;
+        s.apply(&rec(1, 1_000, Event::TurnStarted { member: "ai1".into() }));
+        s.apply(&rec(2, 61_000, Event::TurnEnded { member: "ai1".into(), ok: true, outcome: "done".into() }));
+        assert_eq!(s.turns["ai1"].worked(99_000, true), 60_000, "one minute in the first turn");
+        s.apply(&rec(3, 100_000, Event::TurnStarted { member: "ai1".into() }));
+        assert_eq!(s.turns["ai1"].worked(130_000, true), 90_000, "the turn under way counts while it runs");
+        assert_eq!(s.turns["ai1"].worked(130_000, false), 60_000, "…but not for a run nobody stands behind");
+        // Lost in the middle of a turn: the time until then still counts.
+        s.apply(&rec(4, 160_000, Event::Lost { member: "ai1".into(), why: "crashed".into() }));
+        assert_eq!(s.turns["ai1"].worked(999_000, true), 120_000);
+        assert!(!s.turns["ai1"].active);
+        // An out-of-order clock never counts backwards.
+        s.apply(&rec(5, 200_000, Event::TurnStarted { member: "ai1".into() }));
+        s.apply(&rec(6, 150_000, Event::TurnEnded { member: "ai1".into(), ok: false, outcome: "error".into() }));
+        assert_eq!(s.turns["ai1"].worked(300_000, true), 120_000);
     }
 }

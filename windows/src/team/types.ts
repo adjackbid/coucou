@@ -102,6 +102,8 @@ export interface MemberView {
   /** The tool it is using right now. */
   activity: string;
   turns: number;
+  /** Time it has spent in its turns this run, ms — the turn under way included. */
+  workMs?: number;
   /** The oldest request waiting for the person… */
   permission: Permission | null;
   /** …and the ones behind it (an agent may ask for several steps at once). */
@@ -329,6 +331,8 @@ export interface Activity {
   leader: boolean;
   turns: number;
   failedTurns: number;
+  /** Time spent in those turns, ms. */
+  workMs: number;
   delivered: number;
   rejected: number;
   accepted: number;
