@@ -313,7 +313,10 @@ function skillChoices(): { skills: string[]; hidden: string[] } {
 }
 
 // The library is listed once at start, so the first question already carries Agent Center's skills.
-if (IS_TAURI) loadSkillLibrary(() => {});
+// Not while the modules are still loading: skill-lib → skill-modal → secretary
+// is a cycle, and depending on the bundle's order skill-lib's own variables may
+// not exist yet (a ReferenceError that left the Teamwork window blank).
+if (IS_TAURI) queueMicrotask(() => loadSkillLibrary(() => {}));
 
 /** Agent Center's picking shown as it proposes a team (pick-show.ts): off unless the person turns it on. */
 let pickShowing = stored("coucou.secretary.pickShow") === "1";
