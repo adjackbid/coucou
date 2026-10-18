@@ -271,6 +271,67 @@ pub struct LibrarySkill {
     /// (how to size a request, pick members, split work), never handed to a
     /// member. Any other skill is for members, and Agent Center may read it too.
     pub for_center: bool,
+    /// `source:` of its front matter: where it comes from (a GitHub URL), or nothing.
+    pub source: String,
+    /// `stars:` of its front matter: GitHub stars as written ("103.3k"), or nothing.
+    pub stars: String,
+    /// `stars-at:` of its front matter: the day the stars were counted, or nothing.
+    pub stars_at: String,
+    /// `role:` of its front matter: what the market calls it (開發總監), or nothing.
+    pub role: String,
+}
+
+/// A skill as the market lists it, from its SKILL.md front matter.
+fn library_skill(name: String, md: PathBuf) -> LibrarySkill {
+    let front = |k: &str| skill_front(&md, k).unwrap_or_default();
+    let (description, source, stars, stars_at, role) = (front("description"), front("source"), front("stars"), front("stars-at"), front("role"));
+    let for_center = skill_front(&md, "for").is_some_and(|f| f.eq_ignore_ascii_case("agent-center"));
+    LibrarySkill { name, description, path: md, for_center, source, stars, stars_at, role }
+}
+
+/// Skills the market starts with (src/skills/*.md): well-known skills from
+/// GitHub, each with its source, purpose and star count in the front matter
+/// and a summary of its rules for a member that cannot install the original.
+const PRESET_SKILLS: &[(&str, &str)] = &[
+    ("superpowers", include_str!("skills/superpowers.md")),
+    ("skill-creator", include_str!("skills/skill-creator.md")),
+    ("pptx", include_str!("skills/pptx.md")),
+    ("marketing-skills", include_str!("skills/marketing-skills.md")),
+    ("ui-ux-pro-max", include_str!("skills/ui-ux-pro-max.md")),
+    ("ponytail", include_str!("skills/ponytail.md")),
+    ("addy-osmani-skills", include_str!("skills/addy-osmani-skills.md")),
+    ("understand-anything", include_str!("skills/understand-anything.md")),
+    ("graphify", include_str!("skills/graphify.md")),
+    ("archify", include_str!("skills/archify.md")),
+    ("impeccable", include_str!("skills/impeccable.md")),
+    ("agent-browser", include_str!("skills/agent-browser.md")),
+    ("remotion-skills", include_str!("skills/remotion-skills.md")),
+    ("caveman", include_str!("skills/caveman.md")),
+    ("awesome-claude-skills", include_str!("skills/awesome-claude-skills.md")),
+];
+
+/// Written to `.presets` in the library once the presets went in. Raise it
+/// when presets are added, so a library seeded earlier gets the new ones.
+const PRESETS_VERSION: &str = "1";
+
+/// Puts in the presets the library does not have yet, once per
+/// PRESETS_VERSION. A preset the person deleted stays deleted (until the
+/// version is raised); one they edited is left as they made it.
+pub fn seed_presets(dir: &std::path::Path) {
+    let marker = dir.join(".presets");
+    if std::fs::read_to_string(&marker).is_ok_and(|v| v.trim() == PRESETS_VERSION) {
+        return;
+    }
+    for (name, md) in PRESET_SKILLS {
+        let folder = dir.join(name);
+        if folder.exists() || dir.join(format!("{name}.md")).exists() {
+            continue;
+        }
+        if std::fs::create_dir_all(&folder).is_ok() {
+            let _ = std::fs::write(folder.join("SKILL.md"), md);
+        }
+    }
+    let _ = std::fs::write(marker, PRESETS_VERSION);
 }
 
 /// The skill Agent Center starts with, written into an empty library so the
@@ -281,7 +342,8 @@ pub const DEFAULT_CENTER_SKILL: &str = "agent-center-planning";
 const DEFAULT_CENTER_SKILL_MD: &str = "---\nname: agent-center-planning\ndescription: How Agent Center sizes a request, picks members and splits the work before a team starts. Agent Center reads this itself.\nfor: agent-center\n---\n\n# Sizing a request and shaping the team\n\nDecide how big the request is before you shape the team, and say which size in `kickoff`.\n\n| Size | Signs | Team |\n|---|---|---|\n| Quick | One fact, one short answer, one small file; a single agent finishes in minutes. | One member, who is the leader, does it alone and reports. |\n| Medium | One deliverable that needs research or checking, with no natural split. | One member does the whole thing; a second member on a different model reviews it once. |\n| Large | Several independent parts (themes, chapters, product lines, modules). | Split by scope: each member takes a slice from start to finish. Hand-off chains of at most two links. |\n\nWhen in doubt choose the smaller size: a team that runs twenty minutes on a quick question is the failure to avoid.\n\n## Splitting\n\n- Split by scope, not by stage. A gather → verify → write pipeline keeps one member working at a time; one agent doing every stage itself is faster.\n- When the user fixed the roles (who draws, who checks), split by batch instead: one task per theme or chapter for each role, and have each member deliver batch by batch so the next role starts on the first batch.\n- Every member has work in the leader's first turn. No member owns more than its share: tasks on one member run one after the other.\n- Never put the cheapest or least reliable agent at the head of a chain others wait on; use cheap agents on leaf work the leader spot-checks.\n\n## Picking members\n\n- A reviewer on a different model than the author catches what the author's model repeats. Pair them that way.\n- Match the task to what the agent can do (its `can:` line): browsing, running code, making images. Every coding CLI browses and runs code; only an n8n workflow cannot.\n- Give the strongest model the decisions (the leader); give volume to fast or cheap models.\n- Reviews should not all land on the leader: name a reviewer per task in `kickoff`.\n\n## What goes in `kickoff`\n\nThe size, the split, who reviews what, the first batch each member delivers, and the rules of the work (sources, formats, what counts as done). A member's own rules go in its `brief`. Members read messages only when a turn starts, so rules belong in tasks and briefs, not in later messages.\n";
 
 /// Makes the library folder when it is not there yet, with the skill Agent
-/// Center starts with. A person who deletes that skill later keeps it deleted.
+/// Center starts with, and puts in the preset skills the market starts with.
+/// A person who deletes any of them later keeps it deleted.
 pub fn ensure_library() -> PathBuf {
     let dir = crate::settings::team_skills_dir();
     if !dir.is_dir() {
@@ -290,6 +352,7 @@ pub fn ensure_library() -> PathBuf {
             let _ = std::fs::write(skill.join("SKILL.md"), DEFAULT_CENTER_SKILL_MD);
         }
     }
+    seed_presets(&dir);
     dir
 }
 
@@ -314,8 +377,7 @@ pub fn library() -> Vec<LibrarySkill> {
         if name.is_empty() {
             continue;
         }
-        let for_center = skill_front(&md, "for").is_some_and(|f| f.eq_ignore_ascii_case("agent-center"));
-        out.push(LibrarySkill { description: skill_front(&md, "description").unwrap_or_default(), name, path: md, for_center });
+        out.push(library_skill(name, md));
     }
     out.sort_by(|a, b| a.name.cmp(&b.name));
     out
@@ -387,8 +449,7 @@ pub fn skills_elsewhere() -> Vec<LibrarySkill> {
             if name.is_empty() || have.contains(&name.to_ascii_lowercase()) || out.iter().any(|s| s.name.eq_ignore_ascii_case(&name)) {
                 continue;
             }
-            let for_center = skill_front(&md, "for").is_some_and(|f| f.eq_ignore_ascii_case("agent-center"));
-            out.push(LibrarySkill { description: skill_front(&md, "description").unwrap_or_default(), name, path: md, for_center });
+            out.push(library_skill(name, md));
         }
     }
     out.sort_by(|a, b| a.name.cmp(&b.name));
@@ -533,6 +594,33 @@ mod tests {
         assert!(!skill_name_ok("a/b"));
         assert!(!skill_name_ok(".hidden"));
         assert!(!skill_name_ok(" padded"));
+    }
+
+    #[test]
+    fn the_market_starts_with_the_preset_skills_once() {
+        let dir = std::env::temp_dir().join(format!("coucou-presets-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        super::seed_presets(&dir);
+        assert_eq!(super::PRESET_SKILLS.len(), 15);
+        for (name, md) in super::PRESET_SKILLS {
+            let p = dir.join(name).join("SKILL.md");
+            assert!(p.is_file(), "{name}");
+            assert_eq!(super::skill_front(&p, "name").as_deref(), Some(*name), "{name}");
+            assert!(super::skill_front(&p, "source").is_some_and(|u| u.starts_with("https://github.com/")), "{name}");
+            for key in ["description", "stars", "stars-at", "role"] {
+                assert!(super::skill_front(&p, key).is_some(), "{name} lacks {key}");
+            }
+            // Presets are for members: never Agent Center's own.
+            assert!(!md.contains("for: agent-center"), "{name}");
+            let got = super::library_skill(name.to_string(), p.clone());
+            assert!(!got.for_center && got.source.contains("github.com") && !got.stars.is_empty() && !got.role.is_empty(), "{name}");
+        }
+        // Deleted by the person: not put back on the next start.
+        std::fs::remove_dir_all(dir.join("caveman")).unwrap();
+        super::seed_presets(&dir);
+        assert!(!dir.join("caveman").exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -48,7 +48,7 @@ export function skillChips(current: readonly string[], set: (next: string[]) => 
   for (const s of lib ?? []) {
     const on = has(s.name);
     chips.push(h("button", {
-      type: "button", class: `skill-chip${on ? " on" : ""}`, "aria-pressed": String(on), title: s.description || s.path,
+      type: "button", class: `skill-chip${on ? " on" : ""}`, "aria-pressed": String(on), title: [s.role, s.description, s.source, s.stars ? `★ ${s.stars}` : ""].filter(Boolean).join("\n") || s.path,
       onClick: () => {
         set(on ? current.filter((c) => c.toLowerCase() !== s.name.toLowerCase()) : [...current, s.name]);
         then();

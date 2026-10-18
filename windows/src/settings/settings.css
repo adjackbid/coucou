@@ -1527,6 +1527,19 @@ input.short {
   background: #ff5a4e;
 }
 
+.skill-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.skill-stars {
+  color: var(--dim-2);
+}
+
 .skill-text {
   width: 100%;
   min-height: 320px;

@@ -124,6 +124,20 @@ export const skillsPage: Page = {
       draw();
     };
 
+    /** "owner/repo" of a GitHub URL, for the link's words. */
+    const repoName = (url: string) => url.replace(/^https?:\/\/(www\.)?github\.com\//i, "").replace(/\/+$/, "").replace(/\.git$/, "");
+    /** Where a skill comes from and how liked it is, when its front matter says. */
+    const provenance = (s: LibrarySkill): HTMLElement | null =>
+      s.source || s.stars
+        ? h("div", { class: "skill-source" },
+            s.source
+              ? h("button", { type: "button", class: "link", title: s.source, onclick: () => void Bridge.openUrl(s.source) }, trf("GitHub 來源:{repo} ↗", "Source: {repo} ↗", { repo: repoName(s.source) }))
+              : null,
+            s.stars
+              ? h("span", { class: "skill-stars", text: s.starsAt ? trf("★ {stars}(GitHub 星數,{date})", "★ {stars} (GitHub stars, {date})", { stars: s.stars, date: s.starsAt }) : trf("★ {stars}(GitHub 星數)", "★ {stars} (GitHub stars)", { stars: s.stars }) })
+              : null)
+        : null;
+
     const kindTag = (center: boolean) => h("span", { class: `skill-kind${center ? " center" : ""}`, text: center ? tr("Agent Center 自己讀", "Agent Center's own") : tr("可派給成員", "For members") });
 
     const editor = (): HTMLElement => {
@@ -149,9 +163,11 @@ export const skillsPage: Page = {
       card({
         anchor: `skill-${s.name}`,
         title: s.name,
+        meta: s.role || undefined,
         badge: kindTag(s.forCenter),
         lead: s.description || tr("(沒有說明:在 SKILL.md 的 front matter 加一行 description)", "(No description: add a description line to the SKILL.md front matter)"),
         body: [
+          provenance(s),
           editing && !editing.isNew && editing.name === s.name
             ? editor()
             : row(
@@ -169,7 +185,7 @@ export const skillsPage: Page = {
           "skills",
           tr("Skill 市集", "Skill market"),
           tr("Agent 的做事手冊,一份一個資料夾。Agent Center 擬團隊時從這裡挑給組長或成員;Agent Pool 和團隊設定也從這裡勾。", "The agents' how-to sheets, one folder each. Agent Center picks from here when it proposes a team; Agent Pool and the team setup tick from the same list."),
-          () => tr("每份 skill 是 %APPDATA%\\Coucou\\skills\\<名稱>\\SKILL.md。成員開工時會拿到被指定的 skill 全文;Agent Center 自己讀的(front matter 寫 for: agent-center)只影響它怎麼規劃,不會派給成員。你也可以直接在資料夾裡放檔案,按「重新整理」就看得到。", "Each skill is %APPDATA%\\Coucou\\skills\\<name>\\SKILL.md. A member gets the full text of the skills it was given as it starts; one Agent Center reads itself (front matter for: agent-center) only shapes its planning and is never handed out. Files put straight into the folder show up after Refresh."),
+          () => tr("市集一開始放了 15 份常用的 GitHub skill(每份都寫著來源、用途與星數;不需要的直接刪掉,不會再出現)。每份 skill 是 %APPDATA%\\Coucou\\skills\\<名稱>\\SKILL.md。成員開工時會拿到被指定的 skill 全文;Agent Center 自己讀的(front matter 寫 for: agent-center)只影響它怎麼規劃,不會派給成員。你也可以直接在資料夾裡放檔案,按「重新整理」就看得到。", "The market starts with 15 well-known GitHub skills (each says its source, purpose and stars; delete the ones you don't want and they stay gone). Each skill is %APPDATA%\\Coucou\\skills\\<name>\\SKILL.md. A member gets the full text of the skills it was given as it starts; one Agent Center reads itself (front matter for: agent-center) only shapes its planning and is never handed out. Files put straight into the folder show up after Refresh."),
         ),
         said ? notice(said.kind, said.text) : null,
         h("div", { class: "add-row", "data-anchor": "skill-add" },

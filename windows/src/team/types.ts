@@ -445,6 +445,14 @@ export interface LibrarySkill {
   path: string;
   /** `for: agent-center` in its front matter: Agent Center's own, never handed to a member. */
   forCenter: boolean;
+  /** `source:` of its front matter: where it comes from (a GitHub URL), or "". */
+  source: string;
+  /** `stars:` of its front matter, as written ("103.3k"), or "". */
+  stars: string;
+  /** `stars-at:` of its front matter: the day the stars were counted, or "". */
+  starsAt: string;
+  /** `role:` of its front matter: what the market calls it (開發總監), or "". */
+  role: string;
 }
 
 export interface SecretaryReply {
