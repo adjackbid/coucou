@@ -2271,6 +2271,9 @@ pub fn run() {
         .setup(move |app| {
             let handle = app.handle().clone();
             tray::build(&handle)?;
+            // The skill library, with Agent Center's own skill and the
+            // market's presets, is there from the first start.
+            team_agents::ensure_library();
             // Before the island: see create_settings_window.
             create_settings_window(&handle);
             create_team_window(&handle);

@@ -320,19 +320,27 @@ const PRESET_SKILLS: &[(&str, &str)] = &[
     ("awesome-claude-skills", include_str!("skills/awesome-claude-skills.md")),
 ];
 
+/// The skills Agent Center itself starts with (src/skills/*.md, `for: agent-center`):
+/// they shape how it plans and are never handed to a member.
+const CENTER_SKILLS: &[(&str, &str)] = &[(DEFAULT_CENTER_SKILL, DEFAULT_CENTER_SKILL_MD)];
+
 /// Written to `.presets` in the library once the presets went in. Raise it
 /// when presets are added, so a library seeded earlier gets the new ones.
-const PRESETS_VERSION: &str = "1";
+const PRESETS_VERSION: &str = "2";
 
-/// Puts in the presets the library does not have yet, once per
-/// PRESETS_VERSION. A preset the person deleted stays deleted (until the
-/// version is raised); one they edited is left as they made it.
+/// Puts in the presets the library does not have yet — Agent Center's own
+/// first, then the market's — once per PRESETS_VERSION. A preset the person
+/// deleted stays deleted (until the version is raised); one they edited is
+/// left as they made it.
 pub fn seed_presets(dir: &std::path::Path) {
     let marker = dir.join(".presets");
     if std::fs::read_to_string(&marker).is_ok_and(|v| v.trim() == PRESETS_VERSION) {
         return;
     }
-    for (name, md) in PRESET_SKILLS {
+    if std::fs::create_dir_all(dir).is_err() {
+        return;
+    }
+    for (name, md) in CENTER_SKILLS.iter().chain(PRESET_SKILLS) {
         let folder = dir.join(name);
         if folder.exists() || dir.join(format!("{name}.md")).exists() {
             continue;
@@ -349,19 +357,14 @@ pub fn seed_presets(dir: &std::path::Path) {
 pub const DEFAULT_CENTER_SKILL: &str = "agent-center-planning";
 
 // i18n: model-facing
-const DEFAULT_CENTER_SKILL_MD: &str = "---\nname: agent-center-planning\ndescription: How Agent Center sizes a request, picks members and splits the work before a team starts. Agent Center reads this itself.\nfor: agent-center\n---\n\n# Sizing a request and shaping the team\n\nDecide how big the request is before you shape the team, and say which size in `kickoff`.\n\n| Size | Signs | Team |\n|---|---|---|\n| Quick | One fact, one short answer, one small file; a single agent finishes in minutes. | One member, who is the leader, does it alone and reports. |\n| Medium | One deliverable that needs research or checking, with no natural split. | One member does the whole thing; a second member on a different model reviews it once. |\n| Large | Several independent parts (themes, chapters, product lines, modules). | Split by scope: each member takes a slice from start to finish. Hand-off chains of at most two links. |\n\nWhen in doubt choose the smaller size: a team that runs twenty minutes on a quick question is the failure to avoid.\n\n## Splitting\n\n- Split by scope, not by stage. A gather → verify → write pipeline keeps one member working at a time; one agent doing every stage itself is faster.\n- When the user fixed the roles (who draws, who checks), split by batch instead: one task per theme or chapter for each role, and have each member deliver batch by batch so the next role starts on the first batch.\n- Every member has work in the leader's first turn. No member owns more than its share: tasks on one member run one after the other.\n- Never put the cheapest or least reliable agent at the head of a chain others wait on; use cheap agents on leaf work the leader spot-checks.\n\n## Picking members\n\n- A reviewer on a different model than the author catches what the author's model repeats. Pair them that way.\n- Match the task to what the agent can do (its `can:` line): browsing, running code, making images. Every coding CLI browses and runs code; only an n8n workflow cannot.\n- Give the strongest model the decisions (the leader); give volume to fast or cheap models.\n- Reviews should not all land on the leader: name a reviewer per task in `kickoff`.\n\n## What goes in `kickoff`\n\nThe size, the split, who reviews what, the first batch each member delivers, and the rules of the work (sources, formats, what counts as done). A member's own rules go in its `brief`. Members read messages only when a turn starts, so rules belong in tasks and briefs, not in later messages.\n";
+const DEFAULT_CENTER_SKILL_MD: &str = include_str!("skills/agent-center-planning.md");
 
-/// Makes the library folder when it is not there yet, with the skill Agent
-/// Center starts with, and puts in the preset skills the market starts with.
+/// Makes the library folder when it is not there yet and puts in the skills
+/// it starts with: Agent Center's own and the market's presets. Called as the
+/// app starts, so a fresh install has them before anyone opens the market.
 /// A person who deletes any of them later keeps it deleted.
 pub fn ensure_library() -> PathBuf {
     let dir = crate::settings::team_skills_dir();
-    if !dir.is_dir() {
-        let skill = dir.join(DEFAULT_CENTER_SKILL);
-        if std::fs::create_dir_all(&skill).is_ok() {
-            let _ = std::fs::write(skill.join("SKILL.md"), DEFAULT_CENTER_SKILL_MD);
-        }
-    }
     seed_presets(&dir);
     dir
 }
@@ -617,6 +620,14 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         super::seed_presets(&dir);
         assert_eq!(super::PRESET_SKILLS.len(), 15);
+        // Agent Center's own skill goes in with them, marked as its own.
+        for (name, md) in super::CENTER_SKILLS {
+            let p = dir.join(name).join("SKILL.md");
+            assert!(p.is_file(), "{name}");
+            assert!(md.contains("for: agent-center") && md.contains("description:"), "{name}");
+            assert!(super::library_skill(name.to_string(), p).for_center, "{name}");
+        }
+        assert!(dir.join(super::DEFAULT_CENTER_SKILL).join("SKILL.md").is_file());
         for (name, md) in super::PRESET_SKILLS {
             let p = dir.join(name).join("SKILL.md");
             assert!(p.is_file(), "{name}");
@@ -638,8 +649,14 @@ mod tests {
         assert_eq!(super::library_skill("bare".into(), bare.join("SKILL.md")).category, "");
         // Deleted by the person: not put back on the next start.
         std::fs::remove_dir_all(dir.join("caveman")).unwrap();
+        std::fs::remove_dir_all(dir.join(super::DEFAULT_CENTER_SKILL)).unwrap();
         super::seed_presets(&dir);
         assert!(!dir.join("caveman").exists());
+        assert!(!dir.join(super::DEFAULT_CENTER_SKILL).exists());
+        // A library that is not there yet is made with everything in it.
+        let _ = std::fs::remove_dir_all(&dir);
+        super::seed_presets(&dir);
+        assert!(dir.join(super::DEFAULT_CENTER_SKILL).join("SKILL.md").is_file() && dir.join("caveman").join("SKILL.md").is_file());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
