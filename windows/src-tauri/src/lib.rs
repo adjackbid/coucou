@@ -1262,6 +1262,41 @@ fn team_open_skills() {
     let _ = Command::new("explorer").arg(dir).spawn();
 }
 
+/// A library skill's text, for the Skill market's editor.
+#[tauri::command]
+fn skill_read(name: String) -> Result<String, String> {
+    team_agents::skill_read(&name)
+}
+
+/// Writes a skill into the library (new or over the old); every window hears `skills-changed`.
+#[tauri::command]
+fn skill_write(app: AppHandle, name: String, text: String) -> Result<team_agents::LibrarySkill, String> {
+    let s = team_agents::skill_write(&name, &text)?;
+    let _ = app.emit("skills-changed", ());
+    Ok(s)
+}
+
+#[tauri::command]
+fn skill_delete(app: AppHandle, name: String) -> Result<(), String> {
+    team_agents::skill_delete(&name)?;
+    let _ = app.emit("skills-changed", ());
+    Ok(())
+}
+
+/// Skills in the usual places outside the library, not in it yet.
+#[tauri::command]
+fn skills_elsewhere() -> Vec<team_agents::LibrarySkill> {
+    team_agents::skills_elsewhere()
+}
+
+/// Copies a skill found elsewhere into the library.
+#[tauri::command]
+fn skill_import(app: AppHandle, path: String) -> Result<team_agents::LibrarySkill, String> {
+    let s = team_agents::skill_import(&path)?;
+    let _ = app.emit("skills-changed", ());
+    Ok(s)
+}
+
 /// Usage and its estimated cost between two moments (ms), across every team log.
 #[tauri::command]
 async fn usage_report(from: u64, to: u64) -> Result<cost::Report, String> {
@@ -2210,6 +2245,11 @@ pub fn run() {
             team_open_configs,
             team_skill_library,
             team_open_skills,
+            skill_read,
+            skill_write,
+            skill_delete,
+            skills_elsewhere,
+            skill_import,
             team_save,
             team_new,
             pick_folder,

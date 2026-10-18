@@ -321,6 +321,96 @@ pub fn library() -> Vec<LibrarySkill> {
     out
 }
 
+/// A skill's name as a folder name: letters, digits, '-', '_', '.', spaces; nothing that walks out of the library.
+pub fn skill_name_ok(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && name.trim() == name
+        && !name.starts_with('.')
+        && name.chars().all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | ' '))
+}
+
+/// Where a library skill's text is: `<name>/SKILL.md`, or `<name>.md`.
+fn library_md(name: &str) -> Option<PathBuf> {
+    library().into_iter().find(|s| s.name.eq_ignore_ascii_case(name)).map(|s| s.path)
+}
+
+/// A library skill's whole text, front matter included (the Skill market's editor).
+pub fn skill_read(name: &str) -> Result<String, String> {
+    let md = library_md(name).ok_or_else(|| -> String { tr!(format!("市集裡沒有叫「{name}」的 skill。"), format!("No skill named '{name}' in the market.")) })?;
+    std::fs::read_to_string(&md).map_err(|e| tr!(format!("讀不到 {}:{e}", md.display()), format!("Couldn't read {}: {e}", md.display())))
+}
+
+/// Writes a skill into the library: a new `<name>/SKILL.md`, or over the one of that name.
+pub fn skill_write(name: &str, text: &str) -> Result<LibrarySkill, String> {
+    if !skill_name_ok(name) {
+        return Err(tr!("skill 名稱只能用中英文、數字、'-'、'_'、'.' 和空格,最多 64 字。", "A skill's name may only use letters, digits, '-', '_', '.' and spaces, up to 64 characters."));
+    }
+    let dir = ensure_library();
+    let md = library_md(name).unwrap_or_else(|| dir.join(name).join("SKILL.md"));
+    if let Some(parent) = md.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| -> String { tr!(format!("無法建立 {}:{e}", parent.display()), format!("Couldn't create {}: {e}", parent.display())) })?;
+    }
+    std::fs::write(&md, text).map_err(|e| -> String { tr!(format!("無法儲存 {}:{e}", md.display()), format!("Couldn't save {}: {e}", md.display())) })?;
+    library().into_iter().find(|s| s.path == md).ok_or_else(|| -> String { tr!("存好了,但市集列不出它。", "Saved, but the market cannot list it.") })
+}
+
+/// Removes a skill from the library: its folder, or its single `.md` file. Nothing outside the library is touched.
+pub fn skill_delete(name: &str) -> Result<(), String> {
+    let dir = crate::settings::team_skills_dir();
+    let md = library_md(name).ok_or_else(|| -> String { tr!(format!("市集裡沒有叫「{name}」的 skill。"), format!("No skill named '{name}' in the market.")) })?;
+    if !md.starts_with(&dir) {
+        return Err(tr!("這份 skill 不在市集資料夾裡,不能從這裡刪。", "This skill is not in the market folder, so it cannot be removed from here."));
+    }
+    let folder = md.parent().filter(|p| *p != dir.as_path() && md.file_name().is_some_and(|f| f == "SKILL.md"));
+    let done = match folder {
+        Some(f) => std::fs::remove_dir_all(f),
+        None => std::fs::remove_file(&md),
+    };
+    done.map_err(|e| tr!(format!("無法刪除:{e}"), format!("Couldn't delete: {e}")))
+}
+
+/// Skills found in the usual places outside the library (~/.claude/skills and
+/// the like), not already in it by name: the market offers to copy them in.
+pub fn skills_elsewhere() -> Vec<LibrarySkill> {
+    let have: Vec<String> = library().into_iter().map(|s| s.name.to_ascii_lowercase()).collect();
+    let Some(home) = std::env::var_os("USERPROFILE").map(PathBuf::from) else { return Vec::new() };
+    let mut out: Vec<LibrarySkill> = Vec::new();
+    for dir in [home.join(".claude").join("skills"), home.join(".codex").join("skills"), home.join(".agents").join("skills"), home.join(".copilot").join("skills")] {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let md = entry.path().join("SKILL.md");
+            if !md.is_file() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.is_empty() || have.contains(&name.to_ascii_lowercase()) || out.iter().any(|s| s.name.eq_ignore_ascii_case(&name)) {
+                continue;
+            }
+            let for_center = skill_front(&md, "for").is_some_and(|f| f.eq_ignore_ascii_case("agent-center"));
+            out.push(LibrarySkill { description: skill_front(&md, "description").unwrap_or_default(), name, path: md, for_center });
+        }
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+/// Copies a SKILL.md found elsewhere (its folder, or the file) into the library under its folder's name.
+pub fn skill_import(path: &str) -> Result<LibrarySkill, String> {
+    let p = PathBuf::from(path);
+    let md = if p.is_dir() { p.join("SKILL.md") } else { p };
+    if !md.is_file() {
+        return Err(tr!(format!("找不到 {}", md.display()), format!("{} is not there", md.display())));
+    }
+    let name = if md.file_name().is_some_and(|f| f == "SKILL.md") {
+        md.parent().and_then(|d| d.file_name()).map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+    } else {
+        md.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+    };
+    let text = std::fs::read_to_string(&md).map_err(|e| -> String { tr!(format!("讀不到 {}:{e}", md.display()), format!("Couldn't read {}: {e}", md.display())) })?;
+    skill_write(&name, &text)
+}
+
 /// Characters of a skill a member is given in its brief.
 const SKILL_TEXT_MAX: usize = 16_000;
 
@@ -434,6 +524,17 @@ pub fn describe(profile: &AgentProfile) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_skill_s_name_stays_inside_the_library() {
+        assert!(skill_name_ok("web-research"));
+        assert!(skill_name_ok("寫報告 v2"));
+        assert!(!skill_name_ok(""));
+        assert!(!skill_name_ok("../etc"));
+        assert!(!skill_name_ok("a/b"));
+        assert!(!skill_name_ok(".hidden"));
+        assert!(!skill_name_ok(" padded"));
+    }
+
     #[test]
     fn a_skill_s_front_matter_says_who_it_is_for() {
         let dir = std::env::temp_dir().join(format!("coucou-skill-front-{}", std::process::id()));

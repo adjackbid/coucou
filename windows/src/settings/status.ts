@@ -92,7 +92,7 @@ export function agentNeedsKey(a: AgentProfile): boolean {
 // ── What is left ─────────────────────────────────────────────────────────────
 
 export type PageId =
-  | "overview" | "connect" | "install" | "chat" | "agents" | "integrations" | "island" | "team" | "general";
+  | "overview" | "connect" | "install" | "chat" | "agents" | "skills" | "integrations" | "island" | "team" | "general";
 
 export type TodoKind =
   | "relay"                 // name: —
@@ -193,7 +193,7 @@ export interface PageBadge {
 
 /** The sidebar badge of each page. */
 export function pageBadges(input: StatusInput, todos: Todo[] = todoList(input)): Record<PageId, PageBadge> {
-  const pages: PageId[] = ["overview", "connect", "install", "chat", "agents", "integrations", "island", "team", "general"];
+  const pages: PageId[] = ["overview", "connect", "install", "chat", "agents", "skills", "integrations", "island", "team", "general"];
   const out = {} as Record<PageId, PageBadge>;
   for (const p of pages) {
     const mine = p === "overview" ? todos : todos.filter((t) => t.page === p);

@@ -239,6 +239,12 @@ export const Bridge = {
   /** Agent Center's skill library (%APPDATA%\\Coucou\\skills), made with its first skill when empty. */
   teamSkillLibrary: () => call<LibrarySkill[]>("team_skill_library"),
   teamOpenSkills: () => call<void>("team_open_skills"),
+  /** The Skill market: a skill's text, writing one, removing one, and the ones found elsewhere. */
+  skillRead: (name: string) => callOrThrow<string>("skill_read", { name }),
+  skillWrite: (name: string, text: string) => callOrThrow<LibrarySkill>("skill_write", { name, text }),
+  skillDelete: (name: string) => callOrThrow<void>("skill_delete", { name }),
+  skillsElsewhere: () => call<LibrarySkill[]>("skills_elsewhere"),
+  skillImport: (path: string) => callOrThrow<LibrarySkill>("skill_import", { path }),
   /** A file attached in Agent Center's conversation, by its path (picked or dropped). */
   secretaryUploadPath: (path: string) => callOrThrow<SecretaryUpload>("secretary_upload_path", { path }),
   /** The same from its bytes (a paste). */

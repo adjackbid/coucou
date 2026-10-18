@@ -20,6 +20,7 @@ import { connectPage } from "./pages/connect";
 import { installPage } from "./pages/install";
 import { chatPage } from "./pages/chat";
 import { agentsPage } from "./pages/agents";
+import { skillsPage } from "./pages/skills";
 import { integrationsPage } from "./pages/integrations";
 import { islandPage } from "./pages/island";
 import { teamPage } from "./pages/team";
@@ -27,7 +28,7 @@ import { generalPage } from "./pages/general";
 
 const root = document.getElementById("settings-root")!;
 
-const PAGES = [overviewPage, connectPage, installPage, chatPage, agentsPage, integrationsPage, islandPage, teamPage, generalPage];
+const PAGES = [overviewPage, connectPage, installPage, chatPage, agentsPage, skillsPage, integrationsPage, islandPage, teamPage, generalPage];
 
 async function main() {
   applyTheme(settings.theme);

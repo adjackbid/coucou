@@ -23,6 +23,7 @@ import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
 import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCompanyFps, type Tempo } from "./office/battle/session";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
+import { skillChips } from "./skill-lib";
 import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, pickShowOn, previewPickShow, secretaryRoot, setSecretaryRoot, secretarySpeed, speedName, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setCenterReads, setMembersGet, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
@@ -622,7 +623,8 @@ function sidebar(): HTMLElement {
               h("label", { text: "Skills" }), // i18n-ok: the same in both
               skillRows(),
               h("div", { class: "side-pop-row" },
-                h("button", { class: "btn plain", type: "button", onClick: () => void Bridge.teamOpenSkills() }, tr("開啟 skill 資料夾", "Open the skills folder")),
+                h("button", { class: "btn primary", type: "button", onClick: () => void Bridge.openSettingsPage("skills") }, tr("管理 Skill 市集", "Manage the skill market")),
+                h("button", { class: "btn plain", type: "button", onClick: () => void Bridge.teamOpenSkills() }, tr("開啟資料夾", "Open the folder")),
                 h("button", { class: "btn plain", type: "button", onClick: () => loadSkillLibrary(render) }, tr("重新整理", "Refresh"))),
               h("p", { class: "hint", text: tr("每份 skill 是資料夾裡的 <名稱>\\SKILL.md 或 <名稱>.md。「Agent Center 讀」的會接在它的系統提示後面,讓它知道這類題目怎麼分大小、挑人、切工;「可派給成員」的它擬團隊時可以指定給組長或成員,成員開工時會拿到全文。front matter 寫 for: agent-center 的是它自己的,不會派給成員。", "Each skill is <name>\\SKILL.md or <name>.md in the folder. One Agent Center reads goes after its system prompt, so it knows how to size, staff and split that kind of request; one members may get it can give to the leader or a member when it proposes a team, and they get its text as they start. A skill whose front matter says for: agent-center is its own and is never handed out.") }),
               h("label", { text: tr("組隊動畫", "Team-picking animation") }),
@@ -1171,6 +1173,10 @@ function setup(file: TeamFile): HTMLElement {
             placeholder: tr("職責:這位成員負責什麼、交付什麼(只給它自己看)", "Duty: what this member is responsible for and hands in (only it sees this)"),
             title: tr("只寫給這位成員的工作說明", "Work notes for this member alone"),
           }),
+          // The skills this member starts with, from the market: Agent Center's picks lit, the rest a click away.
+          h("div", { class: "member-skills", title: tr("成員開工時會拿到這些 skill 的全文(SKILL.md);Agent Center 擬團隊時挑的會先亮著", "The member gets the full text of these skills (SKILL.md) as it starts; the ones Agent Center picked are lit already") },
+            h("span", { class: "member-skills-label", text: "Skill" }), // i18n-ok: the same in both
+            skillChips(m.skills ?? [], (next) => { m.skills = next.length ? next : undefined; unsaved = true; }, render)),
           advanced(config, m, at),
         ),
         h(
@@ -2341,6 +2347,8 @@ async function start() {
   // A team's documents changed: here, by its leader sharing one, or by Agent Center.
   await onEvent<{ team: string }>("team-knowledge-changed", ({ team }) => knowledgeChanged(team, knowledgeHost));
   // Team agents saved: what teams can start with may have changed.
+  // The Skill market (Settings) wrote or removed a skill: every chip row and Agent Center's list follow.
+  await onEvent("skills-changed", () => loadSkillLibrary(render));
   await onEvent("team-agents-changed", () => {
     void load().then(() => {
       if (!unsaved) render();

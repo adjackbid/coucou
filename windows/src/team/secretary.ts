@@ -15,6 +15,7 @@ import { h } from "../views/dom";
 import { dropdown, editableText } from "./ui";
 import { kbSaid, sizeText } from "./knowledge";
 import { FACES, HUB, svgEl, teamAgents } from "./agents";
+import { loadSkillLibrary, skillLibrary } from "./skill-lib";
 import { kindIcon, markColor, markHint, markOf } from "../views/agent-kind";
 import { locationOf, type AgentProfile } from "../core/state";
 import type { LibrarySkill, SecretaryChat, SecretaryChoices, SecretaryProposal, SecretaryReply, SecretaryStep, SecretaryUpload } from "./types";
@@ -263,8 +264,7 @@ export function setSecretaryInstructions(v: string) {
   store("coucou.secretary.instructions", instructions);
 }
 
-/** Agent Center's skill library as Rust last listed it (its ⚙ → Skills); null before the first look. */
-let library: LibrarySkill[] | null = null;
+export { skillLibrary, loadSkillLibrary } from "./skill-lib";
 
 /** Skills Agent Center reads itself, by name; null: never set, so every `for: agent-center` skill. */
 let centerSkills: string[] | null = storedNames("coucou.secretary.skills");
@@ -280,30 +280,13 @@ function storedNames(key: string): string[] | null {
   }
 }
 
-export function skillLibrary(): LibrarySkill[] | null {
-  return library;
-}
-
-/** Asks Rust for the library again; `then` runs when it answers. */
-export function loadSkillLibrary(then: () => void) {
-  if (!IS_TAURI) {
-    library = [];
-    then();
-    return;
-  }
-  void Bridge.teamSkillLibrary().then((got) => {
-    library = got ?? [];
-    then();
-  });
-}
-
 /** Whether Agent Center reads this skill itself. */
 export function centerReads(skill: LibrarySkill): boolean {
   return centerSkills ? centerSkills.includes(skill.name) : skill.forCenter;
 }
 
 export function setCenterReads(skill: LibrarySkill, on: boolean) {
-  const now = new Set(centerSkills ?? (library ?? []).filter((s) => s.forCenter).map((s) => s.name));
+  const now = new Set(centerSkills ?? (skillLibrary() ?? []).filter((s) => s.forCenter).map((s) => s.name));
   if (on) now.add(skill.name);
   else now.delete(skill.name);
   centerSkills = [...now];
@@ -323,7 +306,7 @@ export function setMembersGet(skill: LibrarySkill, on: boolean) {
 /** What goes with each question: the names Agent Center reads, and the names members may not get. */
 function skillChoices(): { skills: string[]; hidden: string[] } {
   // Not listed yet (asked before the library answered): Rust skips a name it cannot find.
-  const listed = library;
+  const listed = skillLibrary();
   if (!listed) return { skills: centerSkills ?? ["agent-center-planning"], hidden: hiddenSkills };
   const skills = centerSkills ? centerSkills.filter((n) => listed.some((s) => s.name === n)) : listed.filter((s) => s.forCenter).map((s) => s.name);
   return { skills, hidden: hiddenSkills };
