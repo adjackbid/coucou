@@ -1047,42 +1047,44 @@ export class Office {
 
   // ── 無邊界 ────────────────────────────────────────────────────────────────────
 
-  /** The tone of each office on the 無邊界 map, by its place in the list: neighbours never share one. */
-  private static SPACE_TONES = ["#6F93FF", "#34D399", "#F5A524", "#A78BFA", "#F472B6", "#22D3EE", "#84CC16", "#FB7185"];
+  /** The tone of each team on the 無邊界 map, by its place in the list: neighbours never share one. */
+  private static SPACE_TONES = ["#F5A524", "#FB7185", "#34D399", "#A78BFA", "#F472B6", "#38BDF8", "#2DD4BF", "#FBBF24"];
 
   /** A fixed sprinkle of stars, as one box-shadow: the same sky every time. */
   private static stars(w: number, h: number): string {
     let seed = 7;
     const next = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const out: string[] = [];
-    for (let i = 0; i < 160; i++) {
-      const x = Math.round(next() * w), y = Math.round(next() * h), a = (0.25 + next() * 0.6).toFixed(2);
+    for (let i = 0; i < 140; i++) {
+      const x = Math.round(next() * w), y = Math.round(next() * h), a = (0.2 + next() * 0.5).toFixed(2);
       out.push(`${x}px ${y}px 0 ${next() < 0.15 ? 1 : 0}px rgba(255, 255, 255, ${a})`);
     }
     return out.join(",");
   }
 
+  /** Agent Center's mark: a hexagon with a dot in it. */
+  private static HEX = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 2.5 20.2 7.25v9.5L12 21.5 3.8 16.75v-9.5Z"/><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="5.6" stroke-dasharray="2.2 3"/></svg>';
+
   /**
-   * Every office floating in one sky around Agent Center, each on a lit path
-   * to it: a ring of rooms (two rings past eight), the same tiles as the map,
-   * with a small chart of the whole in the corner.
+   * 無邊界: one team per card around Agent Center, inside one big dashed
+   * ring. Each card reads left to right the way the work flows: what was
+   * asked of Agent Center, Agent Center, then the agents it put on it; a bar
+   * under them is how far the team is. A dotted path ties every card to the
+   * hub, flowing while the team works. The corners carry the company's numbers.
    */
   private spaceCompany(teams: Team[], away: number, count: { seats: number }): HTMLElement {
     const pick = teams.find((t) => t.teamId === this.companyPick) ?? null;
     const n = teams.length;
-    const TILE = 330;
-    // Rooms sit on a ring wide enough that none touch; past eight, a second ring outside.
-    const inner = Math.min(n, 8);
-    const outer = n - inner;
-    const r1 = Math.max(400, Math.round((inner * (TILE + 120)) / (2 * Math.PI)));
-    const r2 = outer ? Math.max(r1 + TILE + 140, Math.round((outer * (TILE + 120)) / (2 * Math.PI))) : 0;
-    const R = Math.max(r1, r2);
-    const W = 2 * R + TILE + 240, H = 2 * R + TILE + 240;
+    const CW = 320, CH = 190;
+    // Cards on an ellipse wide enough that none touch: its rim is about 2π·0.83·rx long.
+    const rx = Math.max(560, Math.ceil((n * (CW + 70)) / (2 * Math.PI * 0.832)));
+    const ry = Math.round(rx * 0.62);
+    const W = 2 * rx + CW + 260, H = 2 * ry + CH + 220;
     const cx = W / 2, cy = H / 2;
     const spots = teams.map((t, i) => {
-      const ring = i < inner ? { r: r1, k: i, of: inner } : { r: r2, k: i - inner, of: outer };
-      const a = -Math.PI / 2 + (ring.k / ring.of) * 2 * Math.PI + (i >= inner ? Math.PI / outer : 0);
-      return { t, i, x: cx + ring.r * Math.cos(a), y: cy + ring.r * Math.sin(a), tone: Office.SPACE_TONES[i % Office.SPACE_TONES.length] };
+      // The first card sits top-left, the way a page is read; the rest follow clockwise.
+      const a = -Math.PI * 0.75 + (i / n) * 2 * Math.PI;
+      return { t, i, x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a), tone: Office.SPACE_TONES[i % Office.SPACE_TONES.length] };
     });
     const live = (run: TeamRun | undefined) => !!run && (run.status === "running" || run.status === "needs_attention" || run.status === "pausing");
     const ns = "http://www.w3.org/2000/svg";
@@ -1092,24 +1094,48 @@ export class Office {
     svg.setAttribute("width", String(W));
     svg.setAttribute("height", String(H));
     svg.setAttribute("aria-hidden", "true");
+    // The company's edge: one dashed ring around every card.
+    const rim = document.createElementNS(ns, "ellipse");
+    rim.setAttribute("cx", String(cx));
+    rim.setAttribute("cy", String(cy));
+    rim.setAttribute("rx", String(rx + CW / 2 + 70));
+    rim.setAttribute("ry", String(ry + CH / 2 + 70));
+    rim.setAttribute("class", "office-space-rim");
+    svg.append(rim);
     for (const s of spots) {
       const run = this.store.run(s.t.currentRunId);
-      // A gentle curve from the room to the hub, bent a little to one side so paths read as roads.
-      const mx = (s.x + cx) / 2 + (s.y - cy) * 0.12, my = (s.y + cy) / 2 - (s.x - cx) * 0.12;
       const path = document.createElementNS(ns, "path");
-      path.setAttribute("d", `M ${s.x} ${s.y} Q ${mx} ${my} ${cx} ${cy}`);
+      path.setAttribute("d", `M ${s.x} ${s.y} L ${cx} ${cy}`);
       path.setAttribute("class", `office-space-path${live(run) ? " live" : ""}`);
       path.setAttribute("style", `--tone:${s.tone}`);
       svg.append(path);
-      const glow = path.cloneNode() as SVGPathElement;
-      glow.setAttribute("class", "office-space-path-glow");
-      svg.prepend(glow);
+      // A bead on the path, a little out from the hub, in the team's tone.
+      const bead = document.createElementNS(ns, "circle");
+      const k = 0.62;
+      bead.setAttribute("cx", String(cx + (s.x - cx) * k));
+      bead.setAttribute("cy", String(cy + (s.y - cy) * k));
+      bead.setAttribute("r", "5");
+      bead.setAttribute("class", "office-space-bead");
+      bead.setAttribute("style", `--tone:${s.tone}`);
+      svg.append(bead);
     }
     const board = h("div", { class: "office-space", style: `${this.mapTransform()}width:${W}px;height:${H}px;` },
       h("i", { class: "office-space-stars", "aria-hidden": "true", style: `box-shadow:${Office.stars(W, H)}` }),
       svg);
     const working = new Set<WorkStatus>(["working", "planning", "reviewing"]);
-    const agents = new Map<string, number>();
+    let online = 0, done = 0, decisions = 0;
+    const badge = (run: TeamRun | undefined, alerts: number): [string, string] => {
+      if (alerts) return [tr("等你決定", "Needs you"), "alert"];
+      switch (run?.status) {
+        case "running": return [tr("進行中", "Running"), "work"];
+        case "pausing": case "paused": return [tr("暫停", "Paused"), "quiet"];
+        case "needs_attention": return [tr("等你決定", "Needs you"), "alert"];
+        case "completed": return [tr("完成", "Done"), "done"];
+        case "failed": return [tr("失敗", "Failed"), "alert"];
+        default: return [tr("待命", "Standing by"), "quiet"];
+      }
+    };
+    const face = (color: string, cls = "", title = "") => h("i", { class: `sp-face ${cls}`, style: `--c:${color}`, title, "aria-hidden": title ? undefined : "true" });
     for (const s of spots) {
       const { t } = s;
       const run = this.store.run(t.currentRunId);
@@ -1117,29 +1143,21 @@ export class Office {
       const p = this.store.progress(t.teamId);
       const members = this.store.members(t.teamId);
       const busy = members.filter((m) => working.has(m.workStatus)).length;
-      for (const m of members) {
-        const name = this.store.agent(m.agentId)?.name ?? m.agentId;
-        agents.set(name, (agents.get(name) ?? 0) + 1);
-      }
-      const faces = members.slice(0, 6).map((m) =>
-        h("i", { class: `office-space-face${working.has(m.workStatus) ? " busy" : ""}`, title: `${m.displayName ?? m.memberId} · ${STATUS[m.workStatus]?.label ?? m.workStatus}`, style: `--c:${m.color ?? s.tone}` }));
-      const tile = h(
+      online += busy;
+      done += p.completed;
+      decisions += alerts;
+      // What the team was asked: its goal, or failing that the last thing said in it.
+      const talk = t.goal.trim() || [...this.store.messages(t.teamId)].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)).at(-1)?.text?.trim() || tr("還沒有交代任務", "Nothing asked yet");
+      const [label, tone] = badge(run, alerts);
+      const shown = members.slice(0, 5);
+      const card = h(
         "div",
-        { class: `office-room-tile space${t.teamId === pick?.teamId ? " on" : ""}${live(run) ? " live" : ""}`, role: "listitem", style: `left:${s.x}px;top:${s.y}px;--tone:${s.tone}` },
-        h(
-          "div",
-          { class: "office-space-plate" },
-          h("i", { class: "office-space-dot", "aria-hidden": "true" }),
-          h("b", { title: t.name, text: t.name }),
-          h("span", { class: "dim", text: trf("{n} 位 · {busy} 工作中", `${members.length === 1 ? "{n} agent" : "{n} agents"} · {busy} running`, { n: members.length, busy }) }),
-          h("span", { class: "office-space-faces" }, ...faces),
-          alerts ? h("span", { class: "office-count", title: trf("{n} 項需要你", alerts === 1 ? "{n} needs you" : "{n} need you", { n: alerts }), text: String(alerts) }) : null,
-        ),
+        { class: `sp-card${t.teamId === pick?.teamId ? " on" : ""}${live(run) ? " live" : ""}`, role: "listitem", style: `left:${s.x}px;top:${s.y}px;--tone:${s.tone}` },
         h(
           "button",
           {
-            class: "office-room-pick", type: "button",
-            "aria-label": [t.name, p.percent === null ? tr("尚未派工", "No tasks yet") : `${p.percent}%`, alerts ? trf("{n} 項需要你", alerts === 1 ? "{n} needs you" : "{n} need you", { n: alerts }) : ""].filter(Boolean).join(tr(",", ", ")),
+            class: "sp-card-pick", type: "button",
+            "aria-label": [t.name, label, p.percent === null ? tr("尚未派工", "No tasks yet") : `${p.percent}%`].join(tr(",", ", ")),
             onClick: () => {
               if (this.dragged) return;
               this.companyPick = t.teamId;
@@ -1148,20 +1166,26 @@ export class Office {
             onKeydown: ((e: KeyboardEvent) => { if (e.key === "Enter" && e.shiftKey) this.host.openTeam(t.teamId); }) as EventListener,
             onDblclick: () => this.host.openTeam(t.teamId),
           },
-          this.scene(t.teamId, true).el,
+          h("div", { class: "sp-head" },
+            h("b", { title: t.name, text: t.name }),
+            h("span", { class: `sp-badge ${tone}`, text: label })),
+          h("div", { class: "sp-flow" },
+            h("div", { class: "sp-talk", title: talk },
+              face(s.tone, "you"),
+              h("p", { text: talk })),
+            h("i", { class: "sp-wire", "aria-hidden": "true" }),
+            h("span", { class: "sp-center", title: "Agent Center", html: Office.HEX }), // i18n-ok: the same in both
+            h("i", { class: "sp-wire fan", "aria-hidden": "true" }),
+            h("div", { class: "sp-agents", title: trf("{n} 位成員,{busy} 位工作中", "{n} members, {busy} working", { n: members.length, busy }) },
+              ...shown.map((m) => face(m.color ?? s.tone, working.has(m.workStatus) ? "busy" : "", `${m.displayName ?? m.memberId} · ${STATUS[m.workStatus]?.label ?? m.workStatus}`)),
+              members.length > shown.length ? h("small", { text: `+${members.length - shown.length}` }) : null,
+              members.length ? null : h("small", { class: "dim", text: tr("還沒有成員", "No members yet") }))),
+          h("div", { class: "sp-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(p.percent ?? 0), title: p.total ? trf("{done} / {all} 項任務", "{done} / {all} tasks", { done: p.completed, all: p.total }) : tr("尚未派工", "No tasks yet") },
+            h("i", { style: `width:${p.percent ?? 0}%` })),
         ),
-        h(
-          "div",
-          { class: "office-room-plate" },
-          live(run) ? h("span", { class: "office-live", title: tr("團隊正在工作,畫面即時更新", "The team is at work, updating live"), text: "LIVE" }) : null, // i18n-ok: LIVE is the same in both languages
-          this.runLabel(run),
-          h("span", { class: "dim", text: p.percent === null ? tr("尚未派工", "No tasks yet") : `${p.percent}%` }),
-        ),
-        this.figures(t.teamId, "office-figures room"),
       );
-      board.append(tile);
+      board.append(card);
     }
-    const busyTeams = spots.filter((s) => live(this.store.run(s.t.currentRunId))).length;
     const hub = h(
       "button",
       {
@@ -1171,28 +1195,28 @@ export class Office {
       },
       h("i", { class: "office-hub-ring r3", "aria-hidden": "true" }),
       h("i", { class: "office-hub-ring r2", "aria-hidden": "true" }),
-      h("i", { class: "office-hub-ring r1", "aria-hidden": "true" }),
-      h("i", { class: "office-hub-beam", "aria-hidden": "true" }),
-      h("i", { class: "office-hub-core", "aria-hidden": "true" }),
-      h("span", { class: "office-hub-label" },
-        h("b", { text: "Agent Center" }), // i18n-ok: the same in both
-        h("small", { text: trf("{n} 個團隊 · {busy} 個進行中 · {seats} 位 Agents", `${n === 1 ? "{n} team" : "{n} teams"} · {busy} running · ${count.seats === 1 ? "{seats} agent" : "{seats} agents"}`, { n, busy: busyTeams, seats: count.seats }) })),
+      h("span", { class: "office-hub-core", html: Office.HEX }),
+      h("span", { class: "office-hub-label", text: "Agent Center" }), // i18n-ok: the same in both
     );
     board.append(hub);
-    // The small chart in the corner: where every office is, and the hub.
+    // The company's numbers in the corners, over the sky and not scaled with it.
+    const stat = (where: string, big: string, small: string, tone = "") =>
+      h("div", { class: `sp-stat ${where} ${tone}` }, h("b", { text: big }), h("small", { text: small }));
+    const corners = [
+      h("div", { class: "sp-stat tl" },
+        h("span", { class: "sp-title", html: Office.HEX }, h("b", { text: companyName() || tr("我的公司", "My Company") })),
+        h("small", { text: `${tr("一個 Agent Center", "One Agent Center")} · ${trf("{n} 支團隊", n === 1 ? "{n} team" : "{n} teams", { n })} · ${trf("{n} 位 Agent", count.seats === 1 ? "{n} agent" : "{n} agents", { n: count.seats })}${away ? trf(" · {n} 個已封存", " · {n} archived", { n: away }) : ""}` })),
+      stat("tr", String(done), tr("個任務 · 已完成", "tasks · done"), "ok"),
+      stat("bl", String(online), tr("位 Agent · 同時在線", "agents · at work now"), "ok"),
+      stat("br", String(decisions), decisions === 1 ? tr("個決定等你", "decision waits for you") : tr("個決定等你", "decisions wait for you"), decisions ? "alert" : ""),
+    ];
     const chart = h(
       "div",
       { class: "office-minimap", "aria-hidden": "true" },
-      h("span", { class: "office-minimap-title", text: tr("地圖", "Map") }),
       h("div", { class: "office-minimap-sky" },
         h("i", { class: "office-minimap-hub", style: `left:${((cx / W) * 100).toFixed(1)}%;top:${((cy / H) * 100).toFixed(1)}%` }),
         ...spots.map((s) => h("i", { class: `office-minimap-dot${s.t.teamId === pick?.teamId ? " on" : ""}`, style: `left:${((s.x / W) * 100).toFixed(1)}%;top:${((s.y / H) * 100).toFixed(1)}%;background:${s.tone}` }))),
     );
-    const runsOn = agents.size
-      ? h("div", { class: "office-runs-on", title: tr("成員們跑在哪些 Agent Provider 上", "The agent providers the members run on") },
-          h("small", { text: tr("跑在", "Runs on") }),
-          ...[...agents.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, k]) => h("span", { text: k > 1 ? `${name} ×${k}` : name })))
-      : null;
     const side = h(
       "aside",
       { class: "office-side" },
@@ -1216,7 +1240,7 @@ export class Office {
         this.modeSwitch()),
       this.connection(),
       this.trouble(),
-      h("div", { class: "office-body" }, this.mapViewport(board, { cls: "space", over: [chart, runsOn] }), side),
+      h("div", { class: "office-body" }, this.mapViewport(board, { cls: "space", over: [...corners, chart] }), side),
     );
   }
 
