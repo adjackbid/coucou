@@ -1600,6 +1600,7 @@ fn cost_note(place: crate::acp::Location, model: &str, found: Option<&crate::pri
             let from = match f.source.as_str() {
                 "override" => "the user's own price",
                 "proxy" => "its endpoint's price",
+                "alias" | "family" => "about: the public list's newest price for this model family",
                 _ => "the public price list",
             };
             format!("price input ${} / output ${} / cache read ${} ({from})", f.price.input, f.price.output, f.price.cache_read)

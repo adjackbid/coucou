@@ -308,7 +308,7 @@ function levels(host: CostHost): Level[] {
   const model: Level = {
     key: (r) => r.usage.model,
     label: (r) => r.usage.model || tr("未知模型", "Unknown model"),
-    extra: (r) => [r.estimatedUsd == null ? h("span", { class: "chip warn", title: tr("找不到這個模型的價格;到下方「價格表」填上", "No price found for this model: fill it in under Prices below"), text: tr("無價格", "No price") }) : r.pricedBy === "reported" ? h("span", { class: "chip", title: tr("依代理自己回報的費用", "From the cost the agent reported"), text: tr("代理回報", "Agent reported") }) : null],
+    extra: (r) => [r.estimatedUsd == null ? h("span", { class: "chip warn", title: tr("找不到這個模型的價格;到下方「價格表」填上", "No price found for this model: fill it in under Prices below"), text: tr("無價格", "No price") }) : r.pricedBy === "reported" ? h("span", { class: "chip", title: tr("依代理自己回報的費用", "From the cost the agent reported"), text: tr("代理回報", "Agent reported") }) : r.pricedBy === "alias" || r.pricedBy === "family" ? h("span", { class: "chip", title: tr("價目表沒有這個版本,先用同系列最新版的價格;更新公開價目或自訂價格就會準確", "The list lacks this version, so the family's newest price is used; update the public list or set a price to make it exact"), text: tr("≈ 同系列價格", "≈ family price") }) : null],
   };
   if (group === "agent") return [agent, model, memberInTeam];
   if (group === "model") return [model, team, member];

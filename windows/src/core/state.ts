@@ -183,6 +183,9 @@ export interface AgentCaps {
   context?: number | null;
   /** 1 cheap … 4 dear. */
   tier?: number | null;
+  /** The price itself, US dollars per million tokens, and where it came from ("list", "alias", "family", "proxy", "override"). */
+  price?: { input: number; output: number; cacheRead: number; cacheWrite: number } | null;
+  priceFrom?: string;
   image: boolean;
   /** Browses the web / runs code through its own CLI tools (every coding CLI; not n8n). */
   web?: boolean;

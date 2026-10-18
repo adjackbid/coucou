@@ -304,6 +304,10 @@ pub fn save_table(t: &Table) -> Result<(), String> {
 #[serde(rename_all = "camelCase")]
 pub struct Found {
     pub price: Price,
+    /// "override" (the person's own), "proxy" (an agent's endpoint), "list"
+    /// (the public list), "alias" (a family name such as `opus`, priced as the
+    /// list's newest of that family) or "family" (a version the list lacks,
+    /// priced as the family's newest listed version: an approximation).
     pub source: String,
     pub listed_as: String,
     /// What the list says the model can do.
@@ -322,7 +326,44 @@ pub fn lookup(model: &str, choices: &Choices, table: &Table) -> Option<Found> {
         let can = if l.can.is_empty() { table.models.get(&key).map(|t| t.can).unwrap_or_default() } else { l.can };
         return Some(Found { price: l.price, source: "proxy".into(), listed_as: format!("{} ({})", l.listed_as, l.provider), can });
     }
-    table.models.get(&key).map(|l| Found { price: l.price, source: "list".into(), listed_as: format!("{} ({})", l.listed_as, l.provider), can: l.can })
+    let listed = |key: &str, source: &str| table.models.get(key).map(|l| Found { price: l.price, source: source.into(), listed_as: format!("{} ({})", l.listed_as, l.provider), can: l.can });
+    listed(&key, "list")
+        .or_else(|| alias(&key, table).and_then(|k| listed(&k, "alias")))
+        .or_else(|| family(&key, table).and_then(|k| listed(&k, "family")))
+}
+
+/// Claude Code's aliases name the newest of a family (`opus`, `sonnet`,
+/// `haiku`, `fable`): the list's newest entry for it. `key` is normalized.
+pub fn alias(key: &str, table: &Table) -> Option<String> {
+    if !["opus", "sonnet", "haiku", "fable"].contains(&key) {
+        return None;
+    }
+    newest(&format!("claude-{key}-"), table)
+}
+
+/// A version the list does not have (`claude-haiku-5-5` when it lists only
+/// 4.5): the family's newest listed version, as the nearest price there is.
+/// Only for names that end in a version, so `gemini-4-argon` never turns into
+/// another model. `key` is normalized.
+pub fn family(key: &str, table: &Table) -> Option<String> {
+    let parts: Vec<&str> = key.split('-').collect();
+    let name = parts.iter().take_while(|p| !p.chars().all(|c| c.is_ascii_digit())).count();
+    if name == 0 || name == parts.len() {
+        return None;
+    }
+    newest(&format!("{}-", parts[..name].join("-")), table)
+}
+
+/// The listed key under `prefix` whose remainder is the highest version.
+fn newest(prefix: &str, table: &Table) -> Option<String> {
+    let version = |k: &str| -> Option<Vec<u64>> { k[prefix.len()..].split('-').map(|p| p.parse::<u64>().ok()).collect() };
+    table
+        .models
+        .keys()
+        .filter(|k| k.starts_with(prefix))
+        .filter_map(|k| version(k).map(|v| (v, k.clone())))
+        .max()
+        .map(|(_, k)| k)
 }
 
 #[cfg(test)]
@@ -368,6 +409,37 @@ mod tests {
         c.overrides.insert("m".into(), Price { input: 3.0, ..Default::default() });
         assert_eq!(lookup("m", &c, &table).unwrap().source, "override");
         assert!(lookup("nothing-like-it", &c, &table).is_none());
+    }
+
+    #[test]
+    fn a_family_name_or_a_version_the_list_lacks_is_priced_as_the_family_s_newest() {
+        let listed = |input: f64| Listed { price: Price { input, ..Default::default() }, listed_as: "x".into(), provider: "anthropic".into(), can: Abilities::default() };
+        let table = Table {
+            models: [
+                ("claude-opus-4-8".to_string(), listed(15.0)),
+                ("claude-opus-4-8-think".to_string(), listed(99.0)),
+                ("claude-opus-5".to_string(), listed(20.0)),
+                ("claude-haiku-4-5".to_string(), listed(1.0)),
+                ("claude-haiku-4-5-20251001".to_string(), listed(1.0)),
+                ("claude-fable-5-1".to_string(), listed(30.0)),
+                ("gemini-3-8-flash".to_string(), listed(0.3)),
+            ]
+            .into(),
+            ..Default::default()
+        };
+        let c = Choices::default();
+        // Claude Code's aliases: the newest of the family, never the "-think" variant.
+        let opus = lookup("opus", &c, &table).unwrap();
+        assert_eq!((opus.price.input, opus.source.as_str()), (20.0, "alias"));
+        assert_eq!(lookup("fable[1m]", &c, &table).unwrap().price.input, 30.0);
+        // A version the list lacks: the family's newest, marked as such.
+        let haiku = lookup("claude-haiku-5-5", &c, &table).unwrap();
+        assert_eq!((haiku.price.input, haiku.source.as_str()), (1.0, "family"));
+        assert_eq!(lookup("anthropic/claude-opus-5.1", &c, &table).unwrap().source, "family");
+        // An exact listing still comes first, and a name that is not a version stays unknown.
+        assert_eq!(lookup("claude-opus-4.8", &c, &table).unwrap().source, "list");
+        assert!(lookup("gemini-4-argon-high", &c, &table).is_none());
+        assert!(lookup("mystery", &c, &table).is_none());
         let u = crate::usage::Usage { input: 1_000_000, output: 500_000, cache_read: 2_000_000, ..Default::default() };
         let p = Price { input: 2.0, output: 8.0, cache_read: 0.5, cache_write: 2.5 };
         assert!((p.cost(&u) - (2.0 + 4.0 + 1.0)).abs() < 1e-9);

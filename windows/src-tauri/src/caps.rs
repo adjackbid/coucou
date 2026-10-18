@@ -28,6 +28,10 @@ pub struct Caps {
     pub context: Option<u64>,
     /// 1 cheap … 4 dear, from its price per million tokens; None without a price.
     pub tier: Option<u8>,
+    /// The price itself, US dollars per million tokens, and where it came from
+    /// (pricing::Found::source: "list", "alias", "family", "proxy", "override").
+    pub price: Option<pricing::Price>,
+    pub price_from: String,
     /// Makes pictures, as the person ticked it on the provider.
     pub image: bool,
     /// Reads web pages and searches the web: every coding CLI does through its
@@ -40,17 +44,6 @@ pub struct Caps {
     pub code: bool,
     /// Some of it is told from the model's name, not said by a list.
     pub guessed: bool,
-}
-
-/// Claude Code's aliases name the newest of a family: the list's newest entry for it.
-fn claude_alias(model: &str, table: &Table) -> Option<String> {
-    let alias = model.trim().to_ascii_lowercase();
-    let alias = alias.split('[').next().unwrap_or("");
-    if !["opus", "sonnet", "haiku"].contains(&alias) {
-        return None;
-    }
-    let prefix = format!("claude-{alias}-");
-    table.models.keys().filter(|k| k.starts_with(&prefix)).max().cloned()
 }
 
 /// What a model's family name says, when nothing else does: (vision, thinking).
@@ -94,8 +87,8 @@ pub fn of(profile: &AgentProfile, choices: &Choices, table: &Table, offered: Opt
             model = m.id.clone();
         }
     }
-    let priced_as = claude_alias(&model, table).unwrap_or_else(|| model.clone());
-    let found = (!priced_as.is_empty()).then(|| pricing::lookup(&priced_as, choices, table)).flatten();
+    // Aliases (`opus`) and versions the list lacks are priced by pricing::lookup itself.
+    let found = (!model.is_empty()).then(|| pricing::lookup(&model, choices, table)).flatten();
     let can = found.as_ref().map(|f| f.can).unwrap_or_default();
     let claude = profile.protocol == Protocol::Claude;
     let said_vision = own.and_then(|m| m.vision).or(can.vision).or(claude.then_some(true));
@@ -106,6 +99,8 @@ pub fn of(profile: &AgentProfile, choices: &Choices, table: &Table, offered: Opt
         thinking: said_thinking.or(guess_thinking),
         context: can.context.or_else(|| (claude && model.contains("[1m]")).then_some(1_000_000)),
         tier: found.as_ref().map(|f| tier(&f.price)),
+        price: found.as_ref().map(|f| f.price),
+        price_from: found.as_ref().map(|f| f.source.clone()).unwrap_or_default(),
         image: profile.image_gen,
         web: profile.web.unwrap_or(profile.protocol != Protocol::N8n),
         code: profile.code.unwrap_or(profile.protocol != Protocol::N8n),
@@ -135,8 +130,12 @@ pub fn describe(c: &Caps) -> String {
     if let Some(n) = c.context {
         bits.push(format!("reads up to {n} tokens"));
     }
-    if let Some(t) = c.tier {
-        bits.push(format!("price tier {t} of 4"));
+    if let (Some(t), Some(p)) = (c.tier, c.price.as_ref()) {
+        let how = match c.price_from.as_str() {
+            "alias" | "family" => " (about: the family's newest listed price)",
+            _ => "",
+        };
+        bits.push(format!("price tier {t} of 4: ${} in / ${} out per million tokens{how}", p.input, p.output));
     }
     if bits.is_empty() {
         "abilities unknown".into()
@@ -187,6 +186,8 @@ mod tests {
         claude.model = "opus".into();
         let c = of(&claude, &Choices::default(), &table(), None);
         assert_eq!((c.vision, c.thinking, c.tier, c.image), (Some(true), Some(true), Some(4), false));
+        assert_eq!((c.price.map(|p| p.input), c.price_from.as_str()), (Some(15.0), "alias"));
+        assert!(describe(&c).contains("$15 in / $75 out"));
 
         flow.code = None;
         let unknown = of(&flow, &Choices::default(), &table(), None);

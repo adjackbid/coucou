@@ -1276,6 +1276,20 @@ input.short {
   opacity: 0.35;
 }
 
+.caps-price {
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.caps-price.about {
+  color: var(--dim);
+}
+
+.caps-pill.warn {
+  color: #ffb86b;
+  background: rgba(255, 184, 107, 0.16);
+}
+
 .caps-pill {
   padding: 1px 8px;
   border-radius: 999px;
