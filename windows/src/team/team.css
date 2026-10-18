@@ -3195,3 +3195,88 @@ h2 {
   opacity: 0.55;
   user-select: text;
 }
+
+/* The team's tools, top right: a row of icons with a small word under each. */
+.team-tools {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 14px;
+  background: rgba(var(--card), 0.5);
+  box-shadow: var(--edge);
+}
+
+.tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 58px;
+  padding: 6px 8px 5px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--dim-glass, var(--dim));
+  font: inherit;
+  cursor: default;
+  transition: background 0.12s ease-out, color 0.12s ease-out, transform 0.08s ease-out;
+}
+
+.tool:hover:not(:disabled) {
+  background: var(--lift);
+  color: var(--ink);
+}
+
+.tool:active {
+  transform: scale(0.95);
+}
+
+.tool:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.tool-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+}
+
+.tool-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.tool-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tool.primary {
+  color: #8fb4ff;
+}
+
+.tool.primary:hover:not(:disabled) {
+  background: rgba(111, 147, 255, 0.18);
+  color: #c7d7ff;
+}
+
+.tool.danger {
+  color: #ff7b72;
+}
+
+.tool.danger:hover:not(:disabled) {
+  background: rgba(255, 90, 78, 0.16);
+  color: #ffb3ad;
+}
+
+.tool.armed {
+  background: rgba(255, 90, 78, 0.22);
+  color: #ffd1cd;
+  animation: office-live 1s ease-in-out infinite;
+}

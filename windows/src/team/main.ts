@@ -182,13 +182,27 @@ function aiMembers(n: number): string {
 /** The team whose 結束團隊 has been pressed once, and until when it waits for the second press. */
 let ending: { team: string; until: number } | null = null;
 
+/** The icons of the team's tools, top right: a folder, pause, play, stop, power. */
+const TOOL_ICONS = {
+  folder: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.4l2 2h8.6A1.5 1.5 0 0 1 21 9.5V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18Z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 5v14M15 5v14"/></svg>',
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M7 5.5v13l11-6.5Z"/></svg>',
+  stop: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+  power: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.6 6.6a7.5 7.5 0 1 0 10.8 0"/></svg>',
+};
+
+/** One tool, top right: an icon over a small word. */
+function tool(label: string, icon: keyof typeof TOOL_ICONS, tone: "" | "primary" | "danger", title: string, onClick: () => void): HTMLElement {
+  return h("button", { class: `tool ${tone}`, type: "button", title, onClick: () => onClick() }, h("span", { class: "tool-icon", html: TOOL_ICONS[icon] }), h("span", { class: "tool-label", text: label }));
+}
+
 /** 結束團隊: pressed twice, since what is under way is cut short. */
 function endButton(snap: Snapshot): HTMLElement {
   const armed = ending?.team === snap.id && ending.until > Date.now();
   return h(
     "button",
     {
-      class: `btn ${armed ? "danger" : "plain"} end-team`,
+      class: `tool ${armed ? "danger armed" : ""}`,
       type: "button",
       title: tr(
         "結束這個團隊:正在做的這一輪會被打斷,所有成員的代理都會停掉,未完成的任務就停在現在的樣子。做好的檔案都留著;之後再傳指示,團隊會重新開工。",
@@ -210,7 +224,8 @@ function endButton(snap: Snapshot): HTMLElement {
         void act(() => Bridge.teamEnd(snap.id));
       },
     },
-    armed ? tr("確定結束?再按一次", "End it? Press again") : tr("結束團隊", "End team"),
+    h("span", { class: "tool-icon", html: TOOL_ICONS.power }),
+    h("span", { class: "tool-label", text: armed ? tr("再按一次結束", "Press again") : tr("結束團隊", "End team") }),
   );
 }
 
@@ -1815,28 +1830,27 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
   const name = snap?.name || editing?.name || file.config?.name || tr("未命名的團隊", "Untitled team");
   const goal = (snap?.goal ?? editing?.goal ?? "").split("\n")[0];
   const count = snap?.members.length ?? editing?.members.length ?? 0;
-  const actions = h("div", { class: "row" });
+  // The team's tools in one row: an icon over a small word each, never stacked.
+  const actions = h("div", { class: "team-tools", role: "toolbar", "aria-label": tr("團隊操作", "Team actions") });
   const workDir = snap?.workDir ?? editing?.workDir ?? file.config?.workDir ?? "";
   if (workDir) {
-    actions.append(
-      h("button", { class: "btn plain folder", type: "button", title: trf("在檔案總管打開工作資料夾\n{dir}", "Open the work folder in Explorer\n{dir}", { dir: workDir }), onClick: () => void Bridge.openFolder(workDir).catch((err) => alert(String(err))) }, tr("📂 資料夾", "📂 Folder")), // i18n-ok: CSS classes
-    );
+    actions.append(tool(tr("資料夾", "Folder"), "folder", "", trf("在檔案總管打開工作資料夾\n{dir}", "Open the work folder in Explorer\n{dir}", { dir: workDir }), () => void Bridge.openFolder(workDir).catch((err) => alert(String(err)))));
   }
   if (snap?.status === "running") {
     actions.append(
-      h("button", { class: "btn plain", type: "button", title: tr("不再開始新的回合;正在做的這一輪會做完", "No new turns start; the turns under way finish"), onClick: () => void act(() => Bridge.teamPause(snap.id)) }, tr("暫停", "Pause")),
-      button(tr("全部中斷", "Interrupt all"), "danger", () => void act(() => Bridge.teamInterrupt(snap.id))),
+      tool(tr("暫停", "Pause"), "pause", "", tr("不再開始新的回合;正在做的這一輪會做完", "No new turns start; the turns under way finish"), () => void act(() => Bridge.teamPause(snap.id))),
+      tool(tr("全部中斷", "Interrupt"), "stop", "danger", tr("馬上停下每一位成員正在做的事", "Stops what every member is doing right now"), () => void act(() => Bridge.teamInterrupt(snap.id))),
       endButton(snap),
     );
   } else if (snap?.status === "paused") {
     // A team from an earlier run gets its agents back, and its members
     // their work, where it stopped.
-    actions.append(button(snap.detached ? tr("從中斷處繼續", "Resume where it stopped") : tr("繼續", "Continue"), "primary", () => void act(() => Bridge.teamResume(snap.id))));
+    actions.append(tool(snap.detached ? tr("從中斷處繼續", "Resume") : tr("繼續", "Continue"), "play", "primary", snap.detached ? tr("把成員的代理叫回來,從停下的地方接著做", "Brings the members' agents back and carries on where it stopped") : tr("繼續派工", "Hand out turns again"), () => void act(() => Bridge.teamResume(snap.id))));
     // Pausing hands out no new turns; the ones under way run to their end.
     // Whoever is still at it can be stopped now.
     const busy = snap.members.filter((m) => m.status === "working").length;
     if (busy && !snap.detached) {
-      actions.append(button(trf("立刻停下({n} 位還在做)", "Stop now ({n} still working)", { n: busy }), "danger", () => void act(() => Bridge.teamInterrupt(snap.id))));
+      actions.append(tool(tr("立刻停下", "Stop now"), "stop", "danger", trf("{n} 位還在做這一輪,馬上停下", "{n} still on this turn: stop them now", { n: busy }), () => void act(() => Bridge.teamInterrupt(snap.id))));
     }
     actions.append(endButton(snap));
   }
