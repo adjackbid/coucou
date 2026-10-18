@@ -571,8 +571,30 @@ export function onStep(step: SecretaryStep, host: SecretaryHost) {
 async function ensureProviders(host: SecretaryHost) {
   if (providers) return;
   providers = IS_TAURI ? ((await Bridge.secretaryProviders()) ?? []) : [["custom", "Custom", "deepseek-v4-flash"]]; // i18n-ok: demo provider name, as Settings names it
-  if (!providers.some((p) => p[0] === provider)) provider = providers[0]?.[0] ?? "";
+  // Rust lists the provider Settings marks 使用中 first. The Settings page
+  // promises Agent Center uses that one, so when it changes (in Settings,
+  // while Teamwork is open or not) Agent Center follows; the dropdown here
+  // only switches away until the next change in Settings.
+  const active = providers[0]?.[0] ?? "";
+  const seen = stored("coucou.secretary.activeSeen");
+  if (!providers.some((p) => p[0] === provider) || (seen !== null && seen !== active)) {
+    provider = active;
+    store("coucou.secretary.provider", provider);
+  }
+  store("coucou.secretary.activeSeen", active);
   host.render();
+}
+
+/**
+ * Settings changed (a provider added or removed, renamed, its model edited,
+ * another marked 使用中): the list is read again so the dropdown says what
+ * Settings says, and a new 使用中 becomes Agent Center's model. Nothing to
+ * do before the list was first read: that read is fresh anyway.
+ */
+export async function refreshProviders(host: SecretaryHost) {
+  if (!providers) return;
+  providers = null;
+  await ensureProviders(host);
 }
 
 /**
