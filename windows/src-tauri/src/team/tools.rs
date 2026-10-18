@@ -69,6 +69,16 @@ fn member_id(config: &TeamConfig, given: &str) -> Option<String> {
         .map(|m| m.id.clone())
 }
 
+/// A reviewer named by the leader: a member other than the task's owner.
+// i18n: model-facing
+fn reviewer_id(config: &TeamConfig, given: &str, owner: &str) -> Result<String, String> {
+    let id = member_id(config, given).ok_or_else(|| format!("'{given}' in reviewer is not a member. Members: {}.", members_line(config)))?;
+    if id == owner {
+        return Err(format!("{} cannot review its own task. Name another member.", brief::who(config, &id)));
+    }
+    Ok(id)
+}
+
 fn members_line(config: &TeamConfig) -> String {
     config.members.iter().map(|m| m.id.as_str()).collect::<Vec<_>>().join(", ")
 }
@@ -120,8 +130,12 @@ pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Out
                 Some("low") => Priority::Low,
                 _ => Priority::Medium,
             };
+            let reviewer = match text(args, "reviewer") {
+                Some(r) => Some(reviewer_id(config, &r, &owner)?),
+                None => None,
+            };
             let id = state.next_task_id();
-            let events = vec![Event::TaskCreated {
+            let mut events = vec![Event::TaskCreated {
                 id: id.clone(),
                 title: title.clone(),
                 detail: text(args, "detail").unwrap_or_default(),
@@ -132,7 +146,62 @@ pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Out
                 deliver_to,
                 by: member.to_string(),
             }];
-            Ok(Outcome { text: format!("Created {id} \"{title}\" for {}.", brief::who(config, &owner)), events })
+            if let Some(r) = reviewer.clone() {
+                events.push(Event::ReviewerSet { id: id.clone(), reviewer: Some(r), by: member.to_string() });
+            }
+            let who_reviews = reviewer.map(|r| format!(" {} reviews it.", brief::who(config, &r))).unwrap_or_default();
+            Ok(Outcome { text: format!("Created {id} \"{title}\" for {}.{who_reviews}", brief::who(config, &owner)), events })
+        }
+
+        "set_reviewer" => {
+            if !is_leader {
+                return Err("Only the leader names reviewers.".into());
+            }
+            let task = find_task(state, args)?;
+            if task.status == TaskStatus::Done {
+                return Err(format!("{} is already accepted.", task.id));
+            }
+            let given = need(args, "reviewer")?;
+            let reviewer = if given.eq_ignore_ascii_case("none") || given.eq_ignore_ascii_case("default") { None } else { Some(reviewer_id(config, &given, &task.owner)?) };
+            let events = vec![Event::ReviewerSet { id: task.id.clone(), reviewer: reviewer.clone(), by: member.to_string() }];
+            let who = match &reviewer {
+                Some(r) => brief::who(config, r),
+                None => "the leader (default)".to_string(),
+            };
+            Ok(Outcome { text: format!("{} is now reviewed by {who}. They are told when it is handed in.", task.id), events })
+        }
+
+        "brief_member" => {
+            if !is_leader {
+                return Err("Only the leader briefs members.".into());
+            }
+            let given = need(args, "member")?;
+            let to = member_id(config, &given).ok_or_else(|| format!("'{given}' is not a member. Members: {}.", members_line(config)))?;
+            if to == member {
+                return Err("Brief a teammate, not yourself.".into());
+            }
+            let skills = list(args, "skills");
+            let mut body = text(args, "text").unwrap_or_default();
+            if !skills.is_empty() {
+                // The one place a tool reads the disk besides the delivery check: the skill texts.
+                let lines = crate::team_agents::skill_text(&skills);
+                if !body.is_empty() {
+                    body.push_str("\n\n");
+                }
+                body.push_str(lines.trim_end());
+            }
+            if body.trim().is_empty() {
+                return Err("Give `text`, `skills`, or both.".into());
+            }
+            let mut events = vec![Event::Briefed { member: to.clone(), text: body.clone(), by: member.to_string() }];
+            // Not yet at work: it reads this with its role. At work already:
+            // it hears it at its next turn, like any message.
+            let started = state.turns.get(&to).map(|t| t.count > 0).unwrap_or(false);
+            if started {
+                events.push(message(&mut ids, member, &to, brief::briefed(&body), None));
+            }
+            let when = if started { "They read it at the start of their next turn." } else { "They read it with their role when they start." };
+            Ok(Outcome { text: format!("{} briefed. {when}", brief::who(config, &to)), events })
         }
 
         "team_finish" => {
@@ -279,7 +348,8 @@ pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Out
 
         "review" => {
             let task = find_task(state, args)?;
-            let may = is_leader || task.deliver_to.as_deref() == Some(member);
+            let named = state.reviewer(task);
+            let may = is_leader || named.as_deref() == Some(member) || task.deliver_to.as_deref() == Some(member);
             if !may || task.owner == member {
                 return Err(format!("{} is reviewed by {}.", task.id, state.reviewer(task).map(|r| brief::who(config, &r)).unwrap_or_else(|| "nobody".into())));
             }
@@ -296,11 +366,20 @@ pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Out
             if !accept && reason.is_empty() {
                 return Err("Say why it is sent back: `reason` is missing.".into());
             }
+            if !accept && config.fast && task.rejections >= 1 {
+                return Err(format!("Fast mode: {} was already sent back once, and gets one round. Accept it and fix what is left yourself, or move it with `task_assign`.", task.id));
+            }
             let mut events = vec![Event::Reviewed { task: task.id.clone(), accepted: accept, reason: reason.clone(), by: member.to_string() }];
             // Sent back, the owner must hear why. Accepted, there is nothing
             // for it to do: the board says so, and a turn is not spent on it.
             if !accept {
                 events.push(message(&mut ids, SYSTEM, &task.owner, brief::rejected(config, task, member, &reason), Some(&task.id)));
+                // A second time round, the split was wrong: the leader moves
+                // the task or does it, rather than a third round (which pauses
+                // the team for the person).
+                if task.rejections >= 1 {
+                    events.push(message(&mut ids, SYSTEM, &config.leader, brief::rejected_again(task), Some(&task.id)));
+                }
             }
             Ok(Outcome { text: format!("{} {}.", task.id, if accept { "accepted" } else { "sent back" }), events })
         }
@@ -411,6 +490,9 @@ fn status_text(state: &State, config: &TeamConfig, member: &str) -> String {
         if let Some(to) = &t.deliver_to {
             out.push_str(&format!("    goes to {}\n", brief::who(config, to)));
         }
+        if let Some(r) = &t.reviewer {
+            out.push_str(&format!("    reviewed by {}\n", brief::who(config, r)));
+        }
     }
 
     if config.shared_board || member == config.leader {
@@ -487,7 +569,7 @@ pub fn describe(config: &TeamConfig, member: &str) -> Vec<Value> {
     if member == config.leader {
         tools.push(tool(
             "task_create",
-            "Leader only. Creates a task for one member. Coucou hands it to its owner as soon as everything in depends_on has been handed in.",
+            "Leader only. Creates a task for one member. Agent Center hands it to its owner as soon as everything in depends_on has been handed in.",
             json!({
                 "title": { "type": "string" },
                 "detail": { "type": "string", "description": "What to do, in enough words for someone who has not seen the goal." },
@@ -495,19 +577,36 @@ pub fn describe(config: &TeamConfig, member: &str) -> Vec<Value> {
                 "criteria": { "type": "array", "items": { "type": "string" }, "description": "What must be true for the task to be done, one item each." },
                 "depends_on": { "type": "array", "items": { "type": "string" }, "description": "Ids of tasks whose result this one needs." },
                 "deliver_to": { "type": "string", "description": "The member who receives the result, if any." },
+                "reviewer": { "type": "string", "description": "The member who accepts it, if not you. Spread reviews so you are not the bottleneck." },
                 "priority": { "type": "string", "enum": ["high", "medium", "low"] },
             }),
             &["title", "owner"],
         ));
         tools.push(tool(
             "task_assign",
-            "Leader only. Gives a task to another member.",
+            "Leader only. Gives a task to another member. Use it when its owner is overloaded, blocked or out of quota, and after a second rejection.",
             json!({ "task": task, "owner": { "type": "string", "description": format!("One of: {members}.") } }),
             &["task", "owner"],
         ));
         tools.push(tool(
+            "set_reviewer",
+            "Leader only. Names who accepts a task when it is handed in, instead of you. \"none\" goes back to the default.",
+            json!({ "task": task, "reviewer": { "type": "string", "description": format!("One of: {members}, or \"none\". Not the task's owner.") } }),
+            &["task", "reviewer"],
+        ));
+        tools.push(tool(
+            "brief_member",
+            "Leader only. Gives a teammate instructions to keep throughout their work, and/or skills from Agent Center's library (by name) whose text they then get. Before their first turn it comes with their role; later it reaches them as a message.",
+            json!({
+                "member": { "type": "string", "description": format!("One of: {members}.") },
+                "text": { "type": "string", "description": "Rules, conventions or a way of working for this member." },
+                "skills": { "type": "array", "items": { "type": "string" }, "description": "Names of skills from the library listed in your brief, or paths to a SKILL.md." },
+            }),
+            &["member"],
+        ));
+        tools.push(tool(
             "knowledge_share",
-            "Leader only. Shares a leader-only document of the knowledge base with the whole team. Only when the user has asked you to share that document; Coucou checks that they did.",
+            "Leader only. Shares a leader-only document of the knowledge base with the whole team. Only when the user has asked you to share that document; Agent Center checks that they did.",
             json!({ "doc": { "type": "string", "description": "The document's id (from knowledge_read) or its file name." } }),
             &["doc"],
         ));
@@ -681,7 +780,7 @@ mod tests {
         let ai3 = run.inbox("ai3");
         assert!(ai3.contains("TASK-02 is yours and ready") && ai3.contains("public/img"), "{ai3}");
         assert!(ai3.contains("which is meant for you"));
-        assert!(run.inbox("ai1").contains("Check it and call `review`"));
+        assert!(run.inbox("ai1").contains("call `review`"));
         run.ok("ai1", "review", json!({ "task": "TASK-01", "accept": true }));
 
         // AI 3 has a question for the leader and stops on it.
@@ -770,6 +869,80 @@ mod tests {
     }
 
     #[test]
+    fn a_named_reviewer_is_told_of_the_hand_in_and_may_accept() {
+        let mut run = Run::new("named-reviewer");
+        plan(&mut run);
+        // Not the owner.
+        assert!(run.call("ai1", "set_reviewer", json!({ "task": "TASK-01", "reviewer": "ai4" })).is_err());
+        // Only the leader names reviewers.
+        assert!(run.call("ai3", "set_reviewer", json!({ "task": "TASK-01", "reviewer": "ai2" })).is_err());
+        run.ok("ai1", "set_reviewer", json!({ "task": "TASK-01", "reviewer": "ai2" }));
+        run.ok("ai4", "deliver", json!({ "task": "TASK-01", "locator": "http://localhost/", "summary": "s" }));
+        // The hand-in goes to the named reviewer, not to the leader.
+        assert!(run.inbox("ai2").contains("handed in TASK-01"), "{}", run.inbox("ai2"));
+        assert!(!run.inbox("ai1").contains("handed in TASK-01"), "{}", run.inbox("ai1"));
+        run.ok("ai2", "review", json!({ "task": "TASK-01", "accept": true }));
+        assert_eq!(run.store.state().task("TASK-01").unwrap().status, TaskStatus::Done);
+        // A reviewer can be named at creation, and shows on the board.
+        run.ok("ai1", "task_create", json!({ "title": "文案", "owner": "ai4", "reviewer": "ai3" }));
+        assert_eq!(run.store.state().task("TASK-04").unwrap().reviewer.as_deref(), Some("ai3"));
+        assert!(run.ok("ai4", "team_status", json!({})).contains("reviewed by AI 3"));
+    }
+
+    #[test]
+    fn a_second_rejection_tells_the_leader_to_move_the_task() {
+        let mut run = Run::new("rejected-twice");
+        plan(&mut run);
+        run.ok("ai4", "deliver", json!({ "task": "TASK-01", "locator": "http://localhost/", "summary": "s" }));
+        run.ok("ai1", "review", json!({ "task": "TASK-01", "accept": false, "reason": "少兩張" }));
+        assert!(!run.inbox("ai1").contains("sent back twice"));
+        run.ok("ai4", "deliver", json!({ "task": "TASK-01", "locator": "http://localhost/", "summary": "s" }));
+        run.ok("ai1", "review", json!({ "task": "TASK-01", "accept": false, "reason": "還是少" }));
+        assert!(run.inbox("ai1").contains("sent back twice"), "{}", run.inbox("ai1"));
+        assert_eq!(run.store.state().task("TASK-01").unwrap().rejections, 2);
+    }
+
+    #[test]
+    fn fast_mode_gives_a_task_one_round_and_says_so_in_the_briefs() {
+        let mut run = Run::new("fast");
+        let mut config = shop(&run.dir.to_string_lossy());
+        config.fast = true;
+        run.store = Store::memory();
+        run.store.append(Event::Started { config: config.clone() });
+        assert!(brief::kickoff(&config).contains("FAST MODE") && brief::role(&config, "ai1").contains("FAST MODE") && !brief::role(&config, "ai4").contains("FAST MODE"));
+        plan(&mut run);
+        run.ok("ai4", "deliver", json!({ "task": "TASK-01", "locator": "http://localhost/", "summary": "s" }));
+        assert!(run.inbox("ai1").contains("the one review it gets"), "{}", run.inbox("ai1"));
+        run.ok("ai1", "review", json!({ "task": "TASK-01", "accept": false, "reason": "少兩張" }));
+        run.ok("ai4", "deliver", json!({ "task": "TASK-01", "locator": "http://localhost/", "summary": "s" }));
+        assert!(run.inbox("ai1").contains("sent back once already"), "{}", run.inbox("ai1"));
+        let err = run.call("ai1", "review", json!({ "task": "TASK-01", "accept": false, "reason": "還是少" })).unwrap_err();
+        assert!(err.contains("Fast mode") && err.contains("task_assign"), "{err}");
+        run.ok("ai1", "review", json!({ "task": "TASK-01", "accept": true }));
+    }
+
+    #[test]
+    fn the_leader_briefs_a_teammate_with_its_role_or_by_message_once_at_work() {
+        let mut run = Run::new("brief");
+        plan(&mut run);
+        assert!(run.call("ai3", "brief_member", json!({ "member": "ai4", "text": "x" })).is_err());
+        assert!(run.call("ai1", "brief_member", json!({ "member": "ai4" })).is_err());
+        // Before its first turn: kept for its role, not a message.
+        run.ok("ai1", "brief_member", json!({ "member": "ai4", "text": "只附實際打開過的連結" }));
+        assert!(brief::briefs(run.store.state(), "ai4").contains("只附實際打開過的連結"));
+        assert!(!run.inbox("ai4").contains("只附實際打開過的連結"));
+        // At work already: a message too, so it is not missed.
+        run.store.append(Event::TurnStarted { member: "ai4".into() });
+        run.store.append(Event::TurnEnded { member: "ai4".into(), ok: true, outcome: "end_turn".into() });
+        run.ok("ai1", "brief_member", json!({ "member": "ai4", "text": "每筆附日期" }));
+        assert!(run.inbox("ai4").contains("每筆附日期"), "{}", run.inbox("ai4"));
+        assert_eq!(run.store.state().briefs.get("ai4").map(Vec::len), Some(2));
+        // A skill nobody has is still named, so the member can look for it.
+        run.ok("ai1", "brief_member", json!({ "member": "ai3", "skills": ["no-such-skill-xyz"] }));
+        assert!(brief::briefs(run.store.state(), "ai3").contains("no-such-skill-xyz"));
+    }
+
+    #[test]
     fn the_leader_s_own_work_needs_no_reviewer() {
         let mut run = Run::new("own");
         run.ok("ai1", "task_create", json!({ "title": "需求拆解", "owner": "ai1" }));
@@ -826,7 +999,7 @@ mod tests {
         let names = |member: &str| describe(&config, member).iter().map(|t| t["name"].as_str().unwrap().to_string()).collect::<Vec<_>>();
         assert_eq!(
             names("ai1"),
-            ["team_status", "task_create", "task_assign", "knowledge_share", "team_finish", "task_update", "task_block", "deliver", "review", "message_send", "knowledge_read", "ask_human"]
+            ["team_status", "task_create", "task_assign", "set_reviewer", "brief_member", "knowledge_share", "team_finish", "task_update", "task_block", "deliver", "review", "message_send", "knowledge_read", "ask_human"]
         );
         assert_eq!(names("ai3"), ["team_status", "task_update", "task_block", "deliver", "review", "message_send", "knowledge_read", "ask_human"]);
         for tool in describe(&config, "ai1") {

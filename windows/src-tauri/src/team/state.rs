@@ -64,6 +64,18 @@ pub enum Event {
         by: String,
     },
     TaskAssigned { id: String, owner: String, by: String },
+    /// The leader named who accepts a task (`None` goes back to the rule:
+    /// the leader, or whoever receives the leader's own work).
+    ReviewerSet { id: String, reviewer: Option<String>, by: String },
+    /// The leader gave a member words to keep throughout its work (and the
+    /// skills it named, as text). Read with the member's role at its first
+    /// turn; a member already at work hears it as a message too.
+    Briefed { member: String, text: String, by: String },
+    /// The person waived one of the constitution's asks for this team
+    /// ("allow this for the whole team" on a card): `rule` is the rule's id.
+    Waived { rule: String, by: String },
+    /// The person took a waiver back (the team's setup).
+    Unwaived { rule: String, by: String },
     /// `checked` are the criteria the owner says are met (indexes from 0).
     TaskUpdated { id: String, status: Option<TaskStatus>, note: Option<String>, checked: Vec<usize>, by: String },
     TaskBlocked { id: String, reason: String, on: String, by: String },
@@ -95,6 +107,10 @@ pub enum Event {
     FinishReminded,
     /// Tokens a member's model used since the last report.
     Usage { member: String, usage: crate::usage::Usage },
+    /// The time limit's reserve began: the leader was told to assemble and deliver.
+    TimeWarned,
+    /// The time limit ran out: the leader was told to deliver now.
+    TimeUp,
     /// The person changed the team's turn limit while it ran (or paused on it).
     TurnsLimit { max: u32 },
     /// The person ended the team before its work was done: it closes now,
@@ -138,6 +154,8 @@ pub struct Task {
     pub criteria: Vec<Criterion>,
     pub depends_on: Vec<String>,
     pub deliver_to: Option<String>,
+    /// Who accepts it, when the leader named someone (`set_reviewer`).
+    pub reviewer: Option<String>,
     pub blocked: Option<Block>,
     pub note: String,
     pub rejections: u32,
@@ -194,6 +212,27 @@ pub struct Turns {
     /// Turns in a row that ended without one.
     pub silent: u32,
     pub last_outcome: String,
+    /// Time spent in turns that have ended, ms.
+    pub work_ms: u64,
+    /// When the turn under way began (0 between turns).
+    pub since: u64,
+}
+
+impl Turns {
+    /// Time at work so far: the ended turns, plus the one under way when
+    /// `live` (an agent really stands behind it) measured to `now`.
+    pub fn worked(&self, now: u64, live: bool) -> u64 {
+        let open = if live && self.active && self.since > 0 { now.saturating_sub(self.since) } else { 0 };
+        self.work_ms + open
+    }
+
+    fn turn_closed(&mut self, at: u64) {
+        if self.active && self.since > 0 {
+            self.work_ms += at.saturating_sub(self.since);
+        }
+        self.active = false;
+        self.since = 0;
+    }
 }
 
 /// One line of the "latest collaboration" timeline.
@@ -235,8 +274,15 @@ pub struct State {
     pub finish_asked: bool,
     /// …or was reminded to, once.
     pub finish_reminded: bool,
+    /// The time limit's warning (reserve) and its end have been sent.
+    pub time_warned: bool,
+    pub time_up: bool,
     pub feed: Vec<FeedItem>,
     pub total_turns: u32,
+    /// What the leader told each member to keep (`brief_member`), in order.
+    pub briefs: BTreeMap<String, Vec<String>>,
+    /// Constitution asks the person waived for this team, by rule id.
+    pub waived: std::collections::BTreeSet<String>,
 }
 
 impl State {
@@ -292,10 +338,14 @@ impl State {
             && self.messages.iter().all(|m| m.heard || !config.has_member(&m.to) || self.lost.contains_key(&m.to))
     }
 
-    /// Who accepts a task: the leader, unless the leader did it — then
-    /// whoever receives it, and failing that nobody (it is accepted as is).
+    /// Who accepts a task: whoever the leader named for it; else the leader,
+    /// unless the leader did it — then whoever receives it, and failing that
+    /// nobody (it is accepted as is).
     pub fn reviewer(&self, task: &Task) -> Option<String> {
         let leader = self.leader();
+        if let Some(r) = task.reviewer.as_ref().filter(|r| **r != task.owner) {
+            return Some(r.clone());
+        }
         if task.owner != leader {
             return Some(leader.to_string());
         }
@@ -382,6 +432,7 @@ impl State {
                     criteria: criteria.iter().map(|c| Criterion { text: c.clone(), claimed: false }).collect(),
                     depends_on: depends_on.clone(),
                     deliver_to: deliver_to.clone(),
+                    reviewer: None,
                     blocked: None,
                     note: String::new(),
                     rejections: 0,
@@ -400,6 +451,23 @@ impl State {
                     t.updated_at = at;
                 }
                 self.moved(by);
+            }
+            Event::ReviewerSet { id, reviewer, by } => {
+                if let Some(t) = self.task_mut(id) {
+                    t.reviewer = reviewer.clone();
+                    t.updated_at = at;
+                }
+                self.moved(by);
+            }
+            Event::Briefed { member, text, by } => {
+                self.briefs.entry(member.clone()).or_default().push(text.clone());
+                self.moved(by);
+            }
+            Event::Waived { rule, .. } => {
+                self.waived.insert(rule.clone());
+            }
+            Event::Unwaived { rule, .. } => {
+                self.waived.remove(rule);
             }
             Event::TaskUpdated { id, status, note, checked, by } => {
                 if let Some(t) = self.task_mut(id) {
@@ -532,19 +600,20 @@ impl State {
                 let t = self.turns.entry(member.clone()).or_default();
                 t.count += 1;
                 t.active = true;
+                t.since = at;
                 t.moves = 0;
                 self.total_turns += 1;
             }
             Event::TurnEnded { member, ok: _, outcome } => {
                 let t = self.turns.entry(member.clone()).or_default();
-                t.active = false;
+                t.turn_closed(at);
                 t.silent = if t.moves == 0 { t.silent + 1 } else { 0 };
                 t.last_outcome = outcome.clone();
             }
             Event::Lost { member, why } => {
                 self.lost.insert(member.clone(), why.clone());
                 if let Some(t) = self.turns.get_mut(member) {
-                    t.active = false;
+                    t.turn_closed(at);
                 }
                 self.say(at, "lost", member, YOU, why, None);
             }
@@ -576,12 +645,24 @@ impl State {
                 total.add(usage);
             }
             Event::Usage { .. } => {}
+            Event::TimeWarned => {
+                self.time_warned = true;
+                self.say(at, "time", SYSTEM, YOU, "reserve", None);
+            }
+            Event::TimeUp => {
+                self.time_up = true;
+                self.say(at, "time", SYSTEM, YOU, "up", None);
+            }
             Event::Reopened => {
                 self.status = TeamStatus::Running;
                 self.finished_at = 0;
                 self.ended = false;
                 self.finish_asked = false;
                 self.finish_reminded = false;
+                // The clock starts again with the new ask.
+                self.started_at = at;
+                self.time_warned = false;
+                self.time_up = false;
                 self.paused_why.clear();
                 self.say(at, "reopened", YOU, "", "", None);
             }
@@ -636,6 +717,9 @@ pub struct PermissionView {
     pub raw_input: Value,
     pub options: Vec<Value>,
     pub danger: Option<Danger>,
+    /// The check "allow this for the whole team" would waive: a rule's id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rule_id: Option<String>,
     /// The constitution's rule that asks about it, when one does.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rule: Option<String>,
@@ -679,6 +763,8 @@ pub struct MemberView {
     /// The tool it is using right now.
     pub activity: String,
     pub turns: u32,
+    /// Time it has spent in its turns this run, ms — the turn under way included.
+    pub work_ms: u64,
     /// The oldest request waiting for the person…
     pub permission: Option<PermissionView>,
     /// …and the ones behind it.
@@ -711,12 +797,19 @@ pub struct Snapshot {
     pub max_turns: u32,
     pub started_at: u64,
     pub finished_at: u64,
+    /// The time limit in minutes (0 for none), its reserve, and where it stands.
+    pub time_limit_min: u32,
+    pub time_reserve_min: u32,
+    pub time_warned: bool,
+    pub time_up: bool,
     pub members: Vec<MemberView>,
     pub tasks: Vec<Task>,
     pub deliverables: Vec<Deliverable>,
     pub messages: Vec<Message>,
     pub questions: Vec<Question>,
     pub feed: Vec<FeedItem>,
+    /// Constitution asks the person waived for this team, by rule id.
+    pub waived: Vec<String>,
 }
 
 impl State {
@@ -787,6 +880,7 @@ impl State {
 
     pub fn snapshot(&self, live: &BTreeMap<String, Live>) -> Option<Snapshot> {
         let config = self.config.as_ref()?;
+        let now = super::store::now_ms();
         let members = config
             .members
             .iter()
@@ -811,6 +905,7 @@ impl State {
                     waiting,
                     activity: l.map(|l| l.activity.clone()).unwrap_or_default(),
                     turns: self.turns.get(&m.id).map(|t| t.count).unwrap_or(0),
+                    work_ms: self.turns.get(&m.id).map(|t| t.worked(now, self.status == TeamStatus::Running)).unwrap_or(0),
                     permission: l.and_then(|l| l.permissions.first().cloned()),
                     more_permissions: l.map(|l| l.permissions.iter().skip(1).cloned().collect()).unwrap_or_default(),
                     lost_why: self.lost.get(&m.id).cloned().unwrap_or_default(),
@@ -834,12 +929,46 @@ impl State {
             max_turns: config.max_turns,
             started_at: self.started_at,
             finished_at: self.finished_at,
+            time_limit_min: config.time_limit_min,
+            time_reserve_min: config.time_reserve_min(),
+            time_warned: self.time_warned,
+            time_up: self.time_up,
             members,
             tasks: self.tasks.clone(),
             deliverables: self.deliverables.clone(),
             messages: self.messages.clone(),
             questions: self.questions.clone(),
             feed: self.feed.clone(),
+            waived: self.waived.iter().cloned().collect(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rec(seq: u64, at: u64, event: Event) -> Record {
+        Record { seq, at, event }
+    }
+
+    #[test]
+    fn a_members_time_at_work_is_the_sum_of_its_turns() {
+        let mut s = State::default();
+        s.status = TeamStatus::Running;
+        s.apply(&rec(1, 1_000, Event::TurnStarted { member: "ai1".into() }));
+        s.apply(&rec(2, 61_000, Event::TurnEnded { member: "ai1".into(), ok: true, outcome: "done".into() }));
+        assert_eq!(s.turns["ai1"].worked(99_000, true), 60_000, "one minute in the first turn");
+        s.apply(&rec(3, 100_000, Event::TurnStarted { member: "ai1".into() }));
+        assert_eq!(s.turns["ai1"].worked(130_000, true), 90_000, "the turn under way counts while it runs");
+        assert_eq!(s.turns["ai1"].worked(130_000, false), 60_000, "…but not for a run nobody stands behind");
+        // Lost in the middle of a turn: the time until then still counts.
+        s.apply(&rec(4, 160_000, Event::Lost { member: "ai1".into(), why: "crashed".into() }));
+        assert_eq!(s.turns["ai1"].worked(999_000, true), 120_000);
+        assert!(!s.turns["ai1"].active);
+        // An out-of-order clock never counts backwards.
+        s.apply(&rec(5, 200_000, Event::TurnStarted { member: "ai1".into() }));
+        s.apply(&rec(6, 150_000, Event::TurnEnded { member: "ai1".into(), ok: false, outcome: "error".into() }));
+        assert_eq!(s.turns["ai1"].worked(300_000, true), 120_000);
     }
 }

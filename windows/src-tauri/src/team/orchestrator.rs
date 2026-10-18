@@ -46,7 +46,7 @@ const MAX_SILENT_TURNS: u32 = 2;
 /// window's thread), spawning would panic and take the app down.
 fn runtime() -> Result<tokio::runtime::Handle, String> {
     tokio::runtime::Handle::try_current().map_err(|_| -> String {
-        tr!("Coucou 沒辦法在這裡執行團隊:這個要求不是從它的非同步執行環境送來的。", "Coucou cannot run a team from here: it was asked outside its async runtime.")
+        tr!("Agent Center 沒辦法在這裡執行團隊:這個要求不是從它的非同步執行環境送來的。", "Agent Center cannot run a team from here: it was asked outside its async runtime.")
     })
 }
 /// Lines of each member's screen in a snapshot.
@@ -54,6 +54,16 @@ const SCREEN_LINES: usize = 150;
 /// A screen's changes go out at most this often: an agent writes a few
 /// characters at a time, and the window needs no more than a smooth line.
 const SCREEN_EVERY: std::time::Duration = std::time::Duration::from_millis(120);
+
+/// Why a team cannot start with an n8n node as its leader: a leader plans,
+/// hands out, reviews and wraps up through the team tools, and a webhook
+/// answers once.
+pub fn n8n_cannot_lead(name: &str) -> String {
+    tr!(
+        format!("Leader「{name}」是 n8n 節點:n8n 節點只能接任務、交結果,不能當 Leader。請換一個 Agent 當 Leader。"),
+        format!("The leader '{name}' is an n8n node: n8n nodes take a task and hand in a result, but cannot lead. Pick another agent as the leader.")
+    )
+}
 
 /// One member's session: its key, the agent it runs as and how it is started.
 #[derive(Clone, Debug)]
@@ -70,6 +80,13 @@ pub struct Seat {
 pub trait Drive: Send + Sync {
     /// One turn: resolves with the stop reason when the agent ends it.
     fn prompt(&self, seat: Seat, text: String, events: Sink) -> BoxFuture<Result<String, String>>;
+    /// The same turn, with what an n8n node answered (`AcpOutcome::reply`),
+    /// for the team to hand in for it. A driver that knows no such node
+    /// has nothing to add to the stop reason.
+    fn turn(&self, seat: Seat, text: String, events: Sink) -> BoxFuture<Result<acp::AcpOutcome, String>> {
+        let turn = self.prompt(seat, text, events);
+        Box::pin(async move { turn.await.map(|stop_reason| acp::AcpOutcome { stop_reason, ..Default::default() }) })
+    }
     fn answer(&self, key: String, request_id: Value, option_id: Option<String>) -> BoxFuture<Result<(), String>>;
     fn cancel(&self, key: String) -> BoxFuture<Result<(), String>>;
     fn stop(&self, key: String) -> BoxFuture<()>;
@@ -82,6 +99,11 @@ impl Drive for AcpDrive {
     fn prompt(&self, seat: Seat, text: String, events: Sink) -> BoxFuture<Result<String, String>> {
         let agents = self.0.clone();
         Box::pin(async move { agents.prompt(&events, &seat.key, &seat.profile, &seat.launch, text).await.map(|o| o.stop_reason) })
+    }
+
+    fn turn(&self, seat: Seat, text: String, events: Sink) -> BoxFuture<Result<acp::AcpOutcome, String>> {
+        let agents = self.0.clone();
+        Box::pin(async move { agents.prompt(&events, &seat.key, &seat.profile, &seat.launch, text).await })
     }
 
     fn answer(&self, key: String, request_id: Value, option_id: Option<String>) -> BoxFuture<Result<(), String>> {
@@ -149,6 +171,8 @@ pub struct Team {
     show: Show,
     /// Where the teams' knowledge bases are; this team's is `<it>\<id>`.
     knowledge: PathBuf,
+    /// Constitution asks the person waived for this team, shared with every seat's rules.
+    waived: crate::policy::Waived,
 }
 
 /// An earlier run of a team, as the history list shows it.
@@ -396,7 +420,15 @@ impl Team {
                 }
             }
             settle(&mut store);
-            outcome.text
+            // Messages are otherwise read only at the start of a turn: a
+            // member in a long turn would miss a ruling and redo its work.
+            // `team_status` has just read them.
+            let unread = if tool == "team_status" { 0 } else { store.state().unheard(member).len() };
+            if unread > 0 {
+                format!("{}\n\n{}", outcome.text, brief::unread(unread))
+            } else {
+                outcome.text
+            }
         };
         log::line(format!("team {}: {member} {tool}", self.id));
         self.changed();
@@ -426,19 +458,29 @@ impl Team {
                 store.append(Event::Paused { why: format!("The team has used its {} turns.", config.max_turns) }); // i18n-ok: said() in team/main.ts translates it
                 break;
             }
+            // An n8n node is sent the team, its task and what it heard as
+            // JSON: it has no use for the brief or the team tools (n8n.rs).
+            let node = self.seat(&member.id).filter(|s| s.profile.protocol == acp::Protocol::N8n);
             // A session that has not heard its role yet hears it first.
             let first = self.briefed.lock().unwrap().insert(member.id.clone());
-            let mut text = if first {
+            let mut text = if let Some(seat) = &node {
+                let words = seat.profile.extras.as_ref().and_then(|x| x.system_prompt()).unwrap_or("");
+                crate::n8n::team_turn(&config, state, &member.id, &unheard, &seat.key, words, &acp::running_model(&seat.profile, &seat.launch), seat.profile.extras.as_ref().map(|x| x.effort.as_str()).unwrap_or(""))
+            } else if first {
                 // A team agent's words that have no other way in (team_agents.rs).
                 let own = self.seat(&member.id).map(|s| crate::team_agents::brief_text(&s.profile)).unwrap_or_default();
+                // What the leader gave it to keep (`brief_member`).
+                let from_leader = brief::briefs(state, &member.id);
                 // The documents it may read, as the knowledge base is now.
                 let docs = knowledge::brief_text(&self.kb(), member.id == config.leader);
                 // Last, the language the person reads the team in.
-                format!("{}{own}{docs}\n{}\n\n", brief::role(&config, &member.id), crate::i18n::reply_language())
+                format!("{}{own}{from_leader}{docs}\n{}\n\n", brief::role(&config, &member.id), crate::i18n::reply_language())
             } else {
                 String::new()
             };
-            text.push_str(&brief::turn(&config, &unheard));
+            if node.is_none() {
+                text.push_str(&brief::turn(&config, &unheard));
+            }
             let ids: Vec<String> = unheard.iter().map(|m| m.id.clone()).collect();
             let heard: Vec<(String, String)> = unheard.iter().map(|m| (m.from.clone(), m.text.clone())).collect();
             store.append(Event::TurnStarted { member: member.id.clone() });
@@ -543,6 +585,7 @@ impl Team {
                             raw_input: p.raw_input,
                             options: p.options,
                             danger: p.danger,
+                            rule_id: p.rule_id,
                             rule: p.rule,
                         });
                         true
@@ -570,6 +613,23 @@ impl Team {
         })
     }
 
+    /// An n8n member's answer, made into the team tool calls it would have
+    /// made (n8n::hand_in). A call the team refuses fails the turn.
+    fn hand_in(&self, member: &str, reply: &str) -> Result<(), String> {
+        let model = self.seat(member).map(|s| acp::running_model(&s.profile, &s.launch)).unwrap_or_default();
+        let answer = crate::n8n::read_answer(reply, &model);
+        let calls = {
+            let store = self.store.lock().unwrap();
+            let state = store.state();
+            let Some(config) = state.config.clone() else { return Ok(()) };
+            crate::n8n::hand_in(&config, state, member, &answer)?
+        };
+        for (tool, args) in calls {
+            self.act(member, tool, &args).map_err(|e| -> String { tr!(format!("n8n 的回覆沒辦法交給團隊({tool}):{e}"), format!("The n8n answer could not be handed in ({tool}): {e}")) })?;
+        }
+        Ok(())
+    }
+
     async fn run_turn(self: Arc<Self>, member: String, text: String, heard: Vec<(String, String)>) {
         let Some(seat) = self.seat(&member) else { return };
         log::line(format!("team {}: turn for {member} ({} characters)", self.id, text.chars().count()));
@@ -578,7 +638,14 @@ impl Team {
             screen.turn_started(number, heard);
             true
         });
-        let result = self.drive.prompt(seat, text, self.sink(&member)).await;
+        let node = seat.profile.protocol == acp::Protocol::N8n;
+        let result = self.drive.turn(seat, text, self.sink(&member)).await;
+        // What an n8n node answered is handed in for it before its turn
+        // ends, so the turn counts as one that moved its work along.
+        let result = match result {
+            Ok(outcome) if node => self.hand_in(&member, &outcome.reply).map(|_| outcome.stop_reason),
+            other => other.map(|o| o.stop_reason),
+        };
         self.live.lock().unwrap().remove(&member);
         self.on_screen(&member, |screen| {
             screen.turn_ended(number, result.as_ref().err().map(String::as_str));
@@ -643,8 +710,52 @@ impl Team {
     }
 
     /// The scheduler: one loop per team, asleep until something changes.
+    /// The time limit, checked by the scheduler: at the reserve the leader is told
+    /// to assemble, at the limit to deliver now. Each is said once per run.
+    fn check_time(&self) {
+        let mut store = self.store.lock().unwrap();
+        let state = store.state();
+        let Some(config) = state.config.as_ref() else { return };
+        if state.status != TeamStatus::Running || config.time_limit_min == 0 || state.time_up {
+            return;
+        }
+        let elapsed = super::store::now_ms().saturating_sub(state.started_at);
+        let limit = u64::from(config.time_limit_min) * 60_000;
+        let warn_at = limit.saturating_sub(u64::from(config.time_reserve_min()) * 60_000);
+        let leader = state.leader().to_string();
+        // One word at a time: at the limit the "time is up" word is the one that counts.
+        let events = if elapsed >= limit {
+            log::line(format!("team {}: time limit reached", self.id));
+            vec![Event::TimeUp, Event::Message { id: state.next_message_id(), from: SYSTEM.into(), to: leader, text: brief::time_up(config), task: None }]
+        } else if !state.time_warned && elapsed >= warn_at {
+            log::line(format!("team {}: time limit reserve", self.id));
+            let left = limit.saturating_sub(elapsed).div_ceil(60_000);
+            vec![Event::TimeWarned, Event::Message { id: state.next_message_id(), from: SYSTEM.into(), to: leader, text: brief::time_reserve(config, left), task: None }]
+        } else {
+            return;
+        };
+        store.append_all(events);
+        settle(&mut store);
+    }
+
+    /// How long the scheduler may sleep before the time limit needs a look: None without one.
+    fn time_nap(&self) -> Option<std::time::Duration> {
+        self.with_state(|s| {
+            let config = s.config.as_ref()?;
+            if s.status != TeamStatus::Running || config.time_limit_min == 0 || s.time_up {
+                return None;
+            }
+            let elapsed = super::store::now_ms().saturating_sub(s.started_at);
+            let limit = u64::from(config.time_limit_min) * 60_000;
+            let warn_at = limit.saturating_sub(u64::from(config.time_reserve_min()) * 60_000);
+            let next = if s.time_warned { limit } else { warn_at };
+            Some(std::time::Duration::from_millis(next.saturating_sub(elapsed).max(1_000)))
+        })
+    }
+
     async fn run(self: Arc<Self>) {
         loop {
+            self.check_time();
             let turns = self.next_turns();
             if !turns.is_empty() {
                 if let Some(snapshot) = self.snapshot() {
@@ -662,7 +773,15 @@ impl Team {
                 log::line(format!("team {}: finished", self.id));
                 break;
             }
-            self.wake.notified().await;
+            match self.time_nap() {
+                Some(nap) => {
+                    tokio::select! {
+                        _ = self.wake.notified() => {}
+                        _ = tokio::time::sleep(nap) => {}
+                    }
+                }
+                None => self.wake.notified().await,
+            }
         }
     }
 }
@@ -751,6 +870,11 @@ impl Teams {
         self.get(id).is_some_and(|t| t.has_seats() && t.with_state(|s| s.status != TeamStatus::Finished))
     }
 
+    /// Every team this run knows, run or loaded from its log.
+    pub fn ids(&self) -> Vec<String> {
+        self.teams.lock().unwrap().keys().cloned().collect()
+    }
+
     /// The team's file is gone: its picture goes too.
     pub fn forget(&self, id: &str) {
         self.teams.lock().unwrap().remove(id);
@@ -764,11 +888,14 @@ impl Teams {
     }
 
     /// An agent session per member, each with its own way into the team's tools.
-    fn seats_for(&self, config: &TeamConfig, profiles: &[AgentProfile]) -> Result<(BTreeMap<String, Seat>, BTreeMap<String, String>), String> {
+    fn seats_for(&self, config: &TeamConfig, profiles: &[AgentProfile], waived: &crate::policy::Waived) -> Result<(BTreeMap<String, Seat>, BTreeMap<String, String>), String> {
         let mut seats = BTreeMap::new();
         let mut tokens = BTreeMap::new();
         for member in &config.members {
             let profile = profiles.iter().find(|p| p.id == member.agent).cloned().ok_or_else(|| -> String { tr!("有一個 agent 不見了", "an agent went missing") })?;
+            if member.id == config.leader && profile.protocol == acp::Protocol::N8n {
+                return Err(n8n_cannot_lead(&member.name));
+            }
             let secret = token();
             let launch = Launch {
                 cwd: Some(config.work_dir.clone()),
@@ -795,9 +922,8 @@ impl Teams {
                     if config.agent_folders {
                         also.extend(crate::acp::agent_folder(&profile));
                     }
-                    Scope::new(&config.work_dir).with_also(also)
+                    Scope::new(&config.work_dir).with_also(also).with_waived(waived.clone())
                 }),
-                model: Some(member.model.trim().to_string()).filter(|m| !m.is_empty()),
                 // No team's knowledge base is anybody's to read but for its
                 // own part: the leader's whole team folder, the shared
                 // documents for everyone else (team::knowledge).
@@ -805,23 +931,13 @@ impl Teams {
                     dirs: vec![self.knowledge.clone()],
                     except: vec![if member.id == config.leader { self.kb(&config.id).dir().to_path_buf() } else { self.kb(&config.id).shared_dir() }],
                 },
+                model: None,
             };
             let mut launch = launch;
-            // A team agent's own MCP servers, after the team's (which stays first).
-            if let Some(x) = &profile.extras {
-                launch.mcp_servers.extend(x.mcp_servers.iter().cloned());
-            }
-            let mut metered = false;
-            // Copilot on an endpoint of its own: its calls go through
-            // Coucou's meter, which reads each one's tokens and the model it
-            // really asked for (meter.rs).
-            if let Some(meter) = crate::meter::global() {
-                let base = profile.env.get("COPILOT_PROVIDER_BASE_URL").map(|b| b.trim()).filter(|b| b.starts_with("http") && !b.contains('…'));
-                if let (crate::acp::Protocol::Acp, Some(base)) = (&profile.protocol, base) {
-                    launch.env.insert("COPILOT_PROVIDER_BASE_URL".into(), meter.route(base, &seat_key(&config.id, &member.id)));
-                    metered = true;
-                }
-            }
+            // The member's model, the team agent's own MCP servers after the
+            // team's (which stays first), and for Copilot on an endpoint of
+            // its own, Coucou's meter (acp::dress, which an agent test shares).
+            let metered = crate::acp::dress(&profile, &mut launch, &member.model, &seat_key(&config.id, &member.id));
             seats.insert(member.id.clone(), Seat { key: seat_key(&config.id, &member.id), profile, launch, metered });
             tokens.insert(member.id.clone(), secret);
         }
@@ -844,12 +960,15 @@ impl Teams {
             }
         }
 
+        // Seats first: a team that cannot start (an n8n node as its leader)
+        // keeps the log of its last run.
+        let waived = crate::policy::Waived::default();
+        let (seats, tokens) = self.seats_for(&config, profiles, &waived)?;
+
         let store = match &self.root {
             Some(root) => Store::fresh(&root.join(&config.id)).map_err(|e| -> String { tr!(format!("無法開啟團隊的紀錄:{e}"), format!("Could not open the team's log: {e}")) })?,
             None => Store::memory(),
         };
-
-        let (seats, tokens) = self.seats_for(&config, profiles)?;
 
         let team = Arc::new(Team {
             id: config.id.clone(),
@@ -867,6 +986,7 @@ impl Teams {
             emit: self.emit.clone(),
             show: self.show.clone(),
             knowledge: self.knowledge.clone(),
+            waived,
         });
         {
             let mut store = team.store.lock().unwrap();
@@ -898,7 +1018,8 @@ impl Teams {
         if !problems.is_empty() {
             return Err(problems.join("\n"));
         }
-        let (seats, tokens) = self.seats_for(&config, profiles)?;
+        let waived = crate::policy::Waived::from_iter(old.with_state(|s| s.waived.iter().cloned().collect::<Vec<_>>()));
+        let (seats, tokens) = self.seats_for(&config, profiles, &waived)?;
         let store = std::mem::replace(&mut *old.store.lock().unwrap(), Store::memory());
         let team = Arc::new(Team {
             id: id.to_string(),
@@ -916,6 +1037,7 @@ impl Teams {
             emit: self.emit.clone(),
             show: self.show.clone(),
             knowledge: self.knowledge.clone(),
+            waived,
         });
         {
             let mut store = team.store.lock().unwrap();
@@ -977,7 +1099,7 @@ impl Teams {
         // Their seats are made exactly as at the start, from the running setup.
         let mut theirs = config.clone();
         theirs.members = new.clone();
-        let (seats, tokens) = self.seats_for(&theirs, profiles)?;
+        let (seats, tokens) = self.seats_for(&theirs, profiles, &team.waived)?;
         team.seats.lock().unwrap().extend(seats);
         team.tokens.lock().unwrap().extend(tokens);
         {
@@ -1004,6 +1126,7 @@ impl Teams {
             return team.snapshot();
         }
         let store = Store::open(&self.root.as_ref()?.join(id)).ok()?;
+        let waived = crate::policy::Waived::from_iter(store.state().waived.iter().cloned());
         let team = Arc::new(Team {
             id: id.to_string(),
             store: Mutex::new(store),
@@ -1020,6 +1143,7 @@ impl Teams {
             emit: self.emit.clone(),
             show: self.show.clone(),
             knowledge: self.knowledge.clone(),
+            waived,
         });
         let snapshot = team.snapshot()?;
         self.teams.lock().unwrap().insert(id.to_string(), team);
@@ -1122,7 +1246,9 @@ impl Teams {
     /// per member again — the old ones were stopped when it finished — and
     /// the leader is told the person has come back with more. Returns the
     /// message's id; a `request` already sent comes back as it was.
-    pub fn reopen(&self, id: &str, to: &str, text: &str, request: Option<&str>, profiles: &[AgentProfile]) -> Result<String, String> {
+    /// `wanted` is the team file as it stands: members added to it since the team
+    /// finished join now, as `join` lets them while it runs, and the leader is told.
+    pub fn reopen(&self, id: &str, to: &str, text: &str, request: Option<&str>, profiles: &[AgentProfile], wanted: Option<&TeamConfig>) -> Result<String, String> {
         let runtime = runtime()?;
         let old = self.team(id)?;
         if let Some(sent) = request.and_then(|r| old.requests.lock().unwrap().get(r).cloned()) {
@@ -1135,7 +1261,17 @@ impl Teams {
         if !old.with_state(|s| s.status == TeamStatus::Finished) {
             return Err(tr!("團隊還沒完成:照平常那樣寫給它就好。", "The team has not finished: write to it as usual."));
         }
-        let config = old.config().ok_or("The team's record has no setup to pick up.")?; // i18n-ok: said() in team/main.ts translates it
+        let mut config = old.config().ok_or("The team's record has no setup to pick up.")?; // i18n-ok: said() in team/main.ts translates it
+        let newcomers: Vec<super::MemberConfig> = wanted.map(|w| w.members.iter().filter(|m| !config.has_member(&m.id)).cloned().collect()).unwrap_or_default();
+        for m in &newcomers {
+            if !super::is_plain_id(&m.id) || m.id == SYSTEM || m.id == YOU {
+                return Err(format!("'{}' cannot be a member id.", m.id)); // i18n-ok: said() in team/main.ts translates it
+            }
+            if !profiles.iter().any(|p| p.id == m.agent) {
+                return Err(super::no_agent(&m.name, &m.agent));
+            }
+        }
+        config.members.extend(newcomers.iter().cloned());
         let to = if to.is_empty() || to == "leader" { config.leader.clone() } else { to.to_string() };
         if !config.has_member(&to) {
             return Err("That is not a member of the team.".into()); // i18n-ok: said() in team/main.ts translates it
@@ -1145,7 +1281,8 @@ impl Teams {
         if !problems.is_empty() {
             return Err(problems.join("\n"));
         }
-        let (seats, tokens) = self.seats_for(&config, profiles)?;
+        let waived = old.waived.clone();
+        let (seats, tokens) = self.seats_for(&config, profiles, &waived)?;
         let store = std::mem::replace(&mut *old.store.lock().unwrap(), Store::memory());
         let requests = std::mem::take(&mut *old.requests.lock().unwrap());
         let team = Arc::new(Team {
@@ -1164,6 +1301,7 @@ impl Teams {
             emit: self.emit.clone(),
             show: self.show.clone(),
             knowledge: self.knowledge.clone(),
+            waived,
         });
         let message = {
             let mut store = team.store.lock().unwrap();
@@ -1172,6 +1310,11 @@ impl Teams {
             store.append_all(lost.into_iter().map(|member| Event::Recovered { member }).collect());
             let id = store.state().next_message_id();
             store.append(Event::Message { id, from: SYSTEM.into(), to: config.leader.clone(), text: brief::reopened(), task: None });
+            for m in &newcomers {
+                store.append(Event::Joined { member: m.clone() });
+                let id = store.state().next_message_id();
+                store.append(Event::Message { id, from: SYSTEM.into(), to: config.leader.clone(), text: brief::joined(&config, &m.id), task: None });
+            }
             let id = store.state().next_message_id();
             store.append(Event::Message { id: id.clone(), from: YOU.into(), to, text: text.to_string(), task: None });
             settle(&mut store);
@@ -1181,7 +1324,7 @@ impl Teams {
             team.requests.lock().unwrap().insert(r.to_string(), message.clone());
         }
         self.teams.lock().unwrap().insert(id.to_string(), team.clone());
-        log::line(format!("team {id}: reopened with {} member(s)", team.seat_keys().len()));
+        log::line(format!("team {id}: reopened with {} member(s), {} new", team.seat_keys().len(), newcomers.len()));
         runtime.spawn(team.clone().run());
         team.changed();
         Ok(message)
@@ -1233,14 +1376,36 @@ impl Teams {
     /// or, with `all`, every one it holds, each with its own option of the
     /// same kind (allow once, reject once) as the one chosen.
     pub async fn permit(&self, team: &str, member: &str, option_id: Option<String>, all: bool) -> Result<(), String> {
+        self.permit_remembering(team, member, option_id, all, false).await
+    }
+
+    /// `remember`: the check behind the first card is waived for the whole
+    /// team from now on (Event::Waived), and every card of this member that
+    /// asks the same is answered with it.
+    pub async fn permit_remembering(&self, team: &str, member: &str, option_id: Option<String>, all: bool, remember: bool) -> Result<(), String> {
         let team = self.team(team)?;
         let key = team.seat(member).map(|s| s.key).ok_or("That is not a member of the team.")?; // i18n-ok: said() in team/main.ts translates it
         let requests: Vec<PermissionView> = {
             let mut live = team.live.lock().unwrap();
             let held = live.get_mut(member).map(|l| &mut l.permissions).filter(|p| !p.is_empty());
             let held = held.ok_or_else(|| -> String { tr!("這位成員沒有在等權限。", "That member is not waiting for a permission.") })?;
-            if all { std::mem::take(held) } else { vec![held.remove(0)] }
+            let waive = remember.then(|| held[0].rule_id.clone()).flatten();
+            match waive {
+                Some(rule) => {
+                    team.waived.add(&rule);
+                    let (same, rest): (Vec<PermissionView>, Vec<PermissionView>) = std::mem::take(held).into_iter().partition(|p| p.rule_id.as_deref() == Some(rule.as_str()));
+                    *held = rest;
+                    same
+                }
+                None if all => std::mem::take(held),
+                None => vec![held.remove(0)],
+            }
         };
+        if remember {
+            if let Some(rule) = requests[0].rule_id.clone() {
+                team.record(vec![Event::Waived { rule, by: "you".into() }]);
+            }
+        }
         let option_of = |r: &PermissionView, id: &str| r.options.iter().find(|o| o.get("optionId").and_then(Value::as_str) == Some(id)).cloned();
         let kind = option_id.as_deref().and_then(|id| option_of(&requests[0], id)).and_then(|o| o.get("kind").and_then(Value::as_str).map(str::to_string));
         let mut result = Ok(());
@@ -1265,6 +1430,24 @@ impl Teams {
         result
     }
 
+    /// Waives, or takes back, one of the constitution's asks for this team (its setup page).
+    pub fn waive(&self, team: &str, rule: &str, on: bool) -> Result<(), String> {
+        let team = self.team(team)?;
+        let rule = rule.trim();
+        if rule.is_empty() {
+            return Err("Which rule?".into()); // i18n-ok: said() in team/main.ts translates it
+        }
+        if on {
+            team.waived.add(rule);
+            team.record(vec![Event::Waived { rule: rule.to_string(), by: "you".into() }]);
+        } else {
+            team.waived.remove(rule);
+            team.record(vec![Event::Unwaived { rule: rule.to_string(), by: "you".into() }]);
+        }
+        team.changed();
+        Ok(())
+    }
+
     /// An agent's hook asks before a step (agy, whose headless mode cannot
     /// ask anyone): the rules answer what is safe at once; anything else
     /// becomes a card like every other agent's and waits for the person.
@@ -1273,7 +1456,7 @@ impl Teams {
     // i18n: model-facing
     pub async fn gate(&self, team: &str, member: &str, token: &str, tool: &str, args: &Value) -> Value {
         let deny = |why: &str| serde_json::json!({ "decision": "deny", "reason": why });
-        let Ok(team) = self.team(team) else { return deny("Coucou has no such team running.") };
+        let Ok(team) = self.team(team) else { return deny("Agent Center has no such team running.") };
         if !team.token_ok(member, token) {
             return deny("This session is not a member of that team.");
         }
@@ -1286,7 +1469,7 @@ impl Teams {
             return deny(crate::policy::PRIVATE_REFUSAL);
         }
         // The constitution first: refused here, or asked for whatever the rules say.
-        let ruled = crate::constitution::rule_for(&asked, &work_dir);
+        let ruled = crate::constitution::rule_for_in(&asked, &work_dir, seat.launch.auto.as_ref());
         if let Some((crate::constitution::Level::Never, rule)) = &ruled {
             let (title, _) = crate::agy::title_of(tool, args);
             log::line(format!("team {}: {member} {tool} refused by the constitution — {}", team.id, rule.text));
@@ -1294,6 +1477,7 @@ impl Teams {
             team.record(vec![Event::Message { id, from: SYSTEM.into(), to: member.to_string(), text: brief::refused(&title, &rule.text), task: None }]);
             return deny(&format!("Refused by the user's constitution: {}. Do not try this again.", rule.text));
         }
+        let mut rule_id = ruled.as_ref().map(|(_, r)| r.id.clone());
         let rule = ruled.map(|(_, r)| r.text);
         let verdict = seat.launch.auto.as_ref().filter(|_| rule.is_none()).map(|scope| crate::policy::decide(scope, &asked));
         if verdict == Some(crate::policy::Verdict::Allow) {
@@ -1303,6 +1487,7 @@ impl Teams {
             Some(crate::policy::Verdict::Ask(why)) => Some(why),
             _ => None,
         };
+        rule_id = rule_id.or_else(|| danger.and_then(crate::policy::check_of).map(str::to_string));
         let (title, kind) = crate::agy::title_of(tool, args);
         log::line(format!("team {}: {member} {tool} waits for a person — {danger:?}", team.id));
         let id = format!("gate:{}:{}", member, token_short());
@@ -1325,6 +1510,7 @@ impl Teams {
                 serde_json::json!({ "optionId": "deny", "name": "Deny", "kind": "reject_once" }),
             ],
             danger,
+            rule_id,
             rule,
         });
         team.changed();
@@ -1449,13 +1635,16 @@ impl Teams {
     }
 
     /// Coucou is closing: no agent outlives it.
+    /// Every member's agent goes, all at once (see `Agents::shutdown`).
     pub async fn shutdown(&self) {
         let teams: Vec<Arc<Team>> = self.teams.lock().unwrap().values().cloned().collect();
+        let mut going = tokio::task::JoinSet::new();
         for team in teams {
             for key in team.seat_keys() {
-                team.drive.stop(key).await;
+                going.spawn(team.drive.stop(key));
             }
         }
+        while going.join_next().await.is_some() {}
     }
 }
 
@@ -1501,9 +1690,21 @@ mod tests {
         hold: Arc<Notify>,
         held: Mutex<Vec<String>>,
         asks: Mutex<Vec<String>>,
+        /// How long each agent takes to stop, like a CLI in the middle of a turn.
+        stop_takes: Mutex<Duration>,
     }
 
     impl Drive for Scripted {
+        /// A member on an n8n node: what its script returns is what the
+        /// webhook answered.
+        fn turn(&self, seat: Seat, text: String, events: Sink) -> BoxFuture<Result<acp::AcpOutcome, String>> {
+            let node = seat.profile.protocol == acp::Protocol::N8n;
+            let turn = self.prompt(seat, text, events);
+            Box::pin(async move {
+                turn.await.map(|said| if node { acp::AcpOutcome { stop_reason: "end_turn".into(), reply: said } } else { acp::AcpOutcome { stop_reason: said, ..Default::default() } })
+            })
+        }
+
         fn prompt(&self, seat: Seat, text: String, events: Sink) -> BoxFuture<Result<String, String>> {
             let member = seat.key.rsplit(':').next().unwrap().to_string();
             self.prompts.lock().unwrap().push((member.clone(), text.clone()));
@@ -1527,6 +1728,7 @@ mod tests {
                             json!({ "optionId": format!("no{i}"), "name": "Reject", "kind": "reject_once" }),
                         ],
                         danger: Some(crate::policy::Danger::DeletesFolder),
+                        rule_id: Some("download".into()),
                         rule: None,
                     }));
                 }
@@ -1548,7 +1750,8 @@ mod tests {
 
         fn stop(&self, key: String) -> BoxFuture<()> {
             self.stopped.lock().unwrap().push(key);
-            Box::pin(async {})
+            let takes = *self.stop_takes.lock().unwrap();
+            Box::pin(async move { tokio::time::sleep(takes).await })
         }
     }
 
@@ -1573,6 +1776,7 @@ mod tests {
             hold: Arc::new(Notify::new()),
             held: Default::default(),
             asks: Default::default(),
+            stop_takes: Mutex::new(Duration::ZERO),
         });
         let emitted = Arc::new(AtomicUsize::new(0));
         let count = emitted.clone();
@@ -1713,7 +1917,7 @@ mod tests {
 
             let turns = bench.turns_of("ai4");
             assert_eq!(turns.len(), 2, "one turn for the task, one for the reminder, and no more");
-            assert!(turns[1].contains("still open and Coucou has no report on it: TASK-01"));
+            assert!(turns[1].contains("still open and Agent Center has no report on it: TASK-01"));
             assert!(bench.member("ai4").lost_why.contains("two turns in a row"));
             assert_eq!(bench.snap().status, TeamStatus::Running);
 
@@ -1722,6 +1926,61 @@ mod tests {
             bench.until("ai4 gets a third turn", |_| bench.turns_of("ai4").len() >= 3).await;
             assert!(bench.turns_of("ai4")[2].contains("You were restarted") && bench.turns_of("ai4")[2].contains("TASK-01"));
             assert!(bench.drive.stopped.lock().unwrap().contains(&"team:shop:ai4".to_string()));
+        });
+    }
+
+    #[test]
+    fn an_n8n_member_s_answer_is_handed_in_for_it_and_it_never_leads() {
+        run(async {
+            let script: Script = Arc::new(|mate, text| {
+                if text.contains("Plan the work for this goal") {
+                    mate.tool("task_create", json!({ "title": "週報", "owner": "ai4" }));
+                }
+                // The n8n member: its webhook's answer.
+                if text.contains("\"kind\":\"team-turn\"") {
+                    return Ok(r#"{"output":"本週完成 3 件工單。"}"#.into());
+                }
+                Ok("end_turn".into())
+            });
+            let dir = std::env::temp_dir().join(format!("agent-center-n8n-team-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let bench = bench(script);
+            let node = AgentProfile { id: "flow".into(), name: "Report flow".into(), protocol: acp::Protocol::N8n, url: "http://localhost/webhook/x".into(), ..Default::default() };
+            let profiles = [AgentProfile::copilot(), node];
+            let mut config = shop(&dir.to_string_lossy());
+            config.members.iter_mut().find(|m| m.id == "ai4").unwrap().agent = "flow".into();
+
+            let mut led = config.clone();
+            led.leader = "ai4".into();
+            assert!(bench.teams.start(led, &profiles).unwrap_err().contains("n8n"));
+
+            bench.teams.start(config, &profiles).expect("start");
+            let snap = bench.until("the n8n answer is handed in", |s| s.deliverables.iter().any(|d| d.by == "ai4")).await;
+            let handed = snap.deliverables.iter().find(|d| d.by == "ai4").unwrap();
+            assert_eq!(handed.locator, "n8n-output/ai4/TASK-01.md");
+            assert!(std::fs::read_to_string(dir.join(&handed.locator)).unwrap().contains("本週完成 3 件工單"));
+            // It was sent the team and its task as JSON, not a CLI's brief.
+            let turn = &bench.turns_of("ai4")[0];
+            assert!(turn.contains("\"title\":\"週報\"") && !turn.contains("You are AI 4"), "{turn}");
+            // Handing in is a move: the member is not reminded or lost.
+            assert_ne!(bench.member("ai4").status, MemberStatus::Lost);
+            let _ = std::fs::remove_dir_all(&dir);
+        });
+    }
+
+    #[test]
+    fn quitting_stops_every_member_side_by_side() {
+        run(async {
+            let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));
+            bench.start(shop(&work_dir()));
+            // Four members, each taking a while to let go, as in the middle of a turn.
+            *bench.drive.stop_takes.lock().unwrap() = Duration::from_millis(400);
+            let started = std::time::Instant::now();
+            bench.teams.shutdown().await;
+            let took = started.elapsed();
+            assert_eq!(bench.drive.stopped.lock().unwrap().len(), 4);
+            // One after another would be 1.6 s: the window would freeze for each.
+            assert!(took < Duration::from_millis(1200), "took {took:?}");
         });
     }
 
@@ -1773,6 +2032,78 @@ mod tests {
         });
     }
 
+    /// A team with a time limit: at the reserve the leader is told to assemble,
+    /// at the limit to deliver now, each once; a team without one hears nothing.
+    #[test]
+    fn a_time_limit_tells_the_leader_to_assemble_and_then_to_deliver() {
+        run(async {
+            let bench = bench(diligent());
+            bench.drive.held.lock().unwrap().push("ai1".into());
+            let mut config = shop(&work_dir());
+            config.time_limit_min = 4;
+            assert_eq!(config.time_reserve_min(), 2);
+            bench.start(config);
+            bench.until("the leader is working", |s| s.members[0].status == MemberStatus::Working).await;
+            let team = bench.teams.get("shop").unwrap();
+            // Nothing yet: the limit is far.
+            team.check_time();
+            assert!(!bench.snap().time_warned);
+            // Two minutes in: the reserve begins.
+            {
+                let mut store = team.store.lock().unwrap();
+                let at = store.state().started_at;
+                store.state_mut_started_at(at.saturating_sub(2 * 60_000 + 1));
+            }
+            team.check_time();
+            let snap = bench.snap();
+            assert!(snap.time_warned && !snap.time_up);
+            assert_eq!(snap.messages.iter().filter(|m| m.text.starts_with("TIME CHECK")).count(), 1);
+            team.check_time();
+            assert_eq!(bench.snap().messages.iter().filter(|m| m.text.starts_with("TIME CHECK")).count(), 1, "said once");
+            // Four minutes in: time is up.
+            {
+                let mut store = team.store.lock().unwrap();
+                let at = store.state().started_at;
+                store.state_mut_started_at(at.saturating_sub(2 * 60_000 + 1));
+            }
+            team.check_time();
+            let snap = bench.snap();
+            assert!(snap.time_up);
+            assert_eq!(snap.messages.iter().filter(|m| m.text.starts_with("TIME IS UP")).count(), 1);
+            assert!(snap.feed.iter().filter(|f| f.kind == "time").count() == 2);
+            assert!(team.time_nap().is_none());
+        });
+    }
+
+    /// A member added to the team file after the team finished joins when the
+    /// person writes to the leader again, with the leader told, and keeps the record.
+    #[test]
+    fn a_member_added_after_the_team_finished_joins_when_it_is_reopened() {
+        run(async {
+            let bench = bench(diligent());
+            bench.drive.held.lock().unwrap().push("ai1".into());
+            bench.start(shop(&work_dir()));
+            bench.until("the leader is working", |s| s.members[0].status == MemberStatus::Working).await;
+            bench.teams.end("shop").await.unwrap();
+            bench.until("the agents stop", |_| bench.drive.stopped.lock().unwrap().len() == 4).await;
+            bench.drive.held.lock().unwrap().clear();
+            bench.drive.hold.notify_one();
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            let mut wanted = shop(&work_dir());
+            let mut extra = wanted.members[0].clone();
+            extra.id = "ai5".into();
+            extra.name = "網站開發".into();
+            extra.role = "開發網頁".into();
+            wanted.members.push(extra);
+            bench.teams.reopen("shop", "", "再加一個頁面", None, &[AgentProfile::copilot()], Some(&wanted)).unwrap();
+            let snap = bench.snap();
+            assert!(snap.members.iter().any(|m| m.id == "ai5" && m.name == "網站開發"), "{:?}", snap.members.iter().map(|m| m.id.as_str()).collect::<Vec<_>>());
+            assert!(snap.feed.iter().any(|f| f.kind == "joined" && f.text.contains("網站開發")));
+            assert!(snap.messages.iter().any(|m| m.to == "ai1" && m.text.contains("A new teammate has joined") && m.text.contains("ai5")));
+            assert_eq!(bench.teams.get("shop").unwrap().seat_keys().len(), 5);
+        });
+    }
+
     #[test]
     fn the_person_can_end_a_team_mid_work_and_every_agent_stops() {
         run(async {
@@ -1797,7 +2128,7 @@ mod tests {
             // Once is enough; and writing to it starts it again.
             bench.teams.end("shop").await.unwrap();
             assert_eq!(bench.snap().feed.iter().filter(|f| f.kind == "ended").count(), 1);
-            bench.teams.reopen("shop", "", "還是做完吧", None, &[AgentProfile::copilot()]).unwrap();
+            bench.teams.reopen("shop", "", "還是做完吧", None, &[AgentProfile::copilot()], None).unwrap();
             assert!(!bench.snap().ended);
         });
     }
@@ -1850,9 +2181,9 @@ mod tests {
             assert_eq!(reports(&bench.snap()), 1);
             assert!(bench.teams.is_finished("shop"));
 
-            let sent = bench.teams.reopen("shop", "", "再加優惠券功能", Some("more-1"), &[AgentProfile::copilot()]).unwrap();
+            let sent = bench.teams.reopen("shop", "", "再加優惠券功能", Some("more-1"), &[AgentProfile::copilot()], None).unwrap();
             // A retry of the same request sends nothing more.
-            assert_eq!(bench.teams.reopen("shop", "", "再加優惠券功能", Some("more-1"), &[AgentProfile::copilot()]).unwrap(), sent);
+            assert_eq!(bench.teams.reopen("shop", "", "再加優惠券功能", Some("more-1"), &[AgentProfile::copilot()], None).unwrap(), sent);
             let again = bench.until("the team runs again", |s| s.status == TeamStatus::Running || s.tasks.len() == 4).await;
             assert_eq!(again.finished_at, 0);
             assert!(again.feed.iter().any(|f| f.kind == "reopened"));
@@ -1904,7 +2235,7 @@ mod tests {
 
             // AI 2 takes its time to answer: the leader's turn ends first.
             bench.drive.held.lock().unwrap().push("ai2".into());
-            bench.teams.reopen("shop", "", "大家各自用什麼模型?", None, &[AgentProfile::copilot()]).unwrap();
+            bench.teams.reopen("shop", "", "大家各自用什麼模型?", None, &[AgentProfile::copilot()], None).unwrap();
             bench.until("the leader has answered for now", |s| s.messages.iter().any(|m| m.text.starts_with("我已請大家回報")) && s.members[0].status != MemberStatus::Working).await;
             tokio::time::sleep(Duration::from_millis(50)).await;
             assert_eq!(bench.snap().status, TeamStatus::Running, "closed while AI 2 was still answering");
@@ -2192,12 +2523,39 @@ mod tests {
         });
     }
 
+    /// "Allow this for the whole team": the check is waived for every seat
+    /// from now on, every card asking the same is answered, and the setup
+    /// page can take it back.
+    #[test]
+    fn a_waiver_answers_every_card_of_its_kind_and_holds_for_the_team() {
+        run(async {
+            let bench = bench(diligent());
+            bench.drive.held.lock().unwrap().push("ai1".into());
+            bench.drive.asks.lock().unwrap().extend(["ai1".to_string(), "ai1".to_string()]);
+            bench.start(shop(&work_dir()));
+            bench.until("both are held", |s| s.members[0].permission.is_some() && s.members[0].more_permissions.len() == 1).await;
+            assert_eq!(bench.member("ai1").permission.unwrap().rule_id.as_deref(), Some("download"));
+
+            bench.teams.permit_remembering("shop", "ai1", Some("yes0".into()), false, true).await.unwrap();
+            let answered: Vec<Option<String>> = bench.drive.answered.lock().unwrap().iter().map(|(_, o)| o.clone()).collect();
+            assert_eq!(answered, vec![Some("yes0".to_string()), Some("yes1".to_string())]);
+            assert_eq!(bench.member("ai1").status, MemberStatus::Working);
+            let team = bench.teams.team("shop").unwrap();
+            assert_eq!(bench.snap().waived, vec!["download".to_string()]);
+            assert!(team.seats.lock().unwrap()["ai1"].launch.auto.as_ref().unwrap().waived.contains("download"));
+
+            bench.teams.waive("shop", "download", false).unwrap();
+            assert!(bench.snap().waived.is_empty());
+            assert!(!team.seats.lock().unwrap()["ai1"].launch.auto.as_ref().unwrap().waived.contains("download"));
+            bench.drive.hold.notify_one();
+        });
+    }
+
     #[test]
     fn a_member_on_a_team_agent_gets_its_servers_after_the_team_s_and_its_words_in_the_brief() {
         run(async {
             let bench = bench(Arc::new(|_, _| Ok("end_turn".into())));
             let doc = crate::team_agents::TeamAgents {
-                source: crate::team_agents::Source::Team,
                 agents: vec![crate::team_agents::TeamAgent {
                     id: "planner".into(),
                     name: "規劃師".into(),
@@ -2207,6 +2565,8 @@ mod tests {
                     mcp: vec![crate::team_agents::Mcp { name: "docs".into(), url: "https://example.test/mcp".into(), ..Default::default() }],
                     skills: vec![],
                     description: String::new(),
+                    category: String::new(),
+                    effort: String::new(),
                 }],
             };
             let profiles = doc.runnable(&[AgentProfile::copilot()]);

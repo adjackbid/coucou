@@ -12,10 +12,54 @@
   --dim-2: #6b7079;
   --bg: #0b0c0e;
   --card: #141518;
-  --hairline: rgba(255, 255, 255, 0.07);
+  --hairline: rgba(var(--fg), 0.07);
   --green: #22c55e;
   --red: #f4505e;
   --amber: #f5a524;
+
+  /* What flips with the look (core/theme.ts). */
+  --fg: 255, 255, 255;
+  --shade: 11, 12, 14;
+  --well: 0, 0, 0;
+  --well-k: 1;
+  --side: #0e0f12;
+  --ink-soft: #c9ccd2;
+  --ink-strong: #fff;
+  --accent-text: #bfe9ff;
+  --ok-text: #86efac;
+  --err-text: #ff8d97;
+  --warn-text: #fbc06a;
+  --link: #8fb4ff;
+  --panel-solid: #101114;
+  --well-solid: #08090b;
+}
+
+/* The light look: dark ink on near-white, accents a shade deeper. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ink: #16181d;
+  --dim: #5b616c;
+  --dim-2: #80858f;
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --hairline: rgba(22, 26, 34, 0.1);
+  --green: #16a34a;
+  --red: #e0384a;
+  --amber: #b26a00;
+  --fg: 22, 26, 34;
+  --shade: 247, 248, 250;
+  --well: 22, 26, 34;
+  --well-k: 0.22;
+  --side: #eceef2;
+  --ink-soft: #3c414a;
+  --ink-strong: #0d0f13;
+  --accent-text: #1259a8;
+  --ok-text: #15803d;
+  --err-text: #c22636;
+  --warn-text: #9a5800;
+  --link: #1f6fd6;
+  --panel-solid: #ffffff;
+  --well-solid: #f1f3f6;
 }
 
 * {
@@ -49,7 +93,7 @@ body.settings-window {
   flex-direction: column;
   gap: 6px;
   padding: 18px 10px 14px;
-  background: #0e0f12;
+  background: var(--side);
   border-right: 1px solid var(--hairline);
   overflow-y: auto;
 }
@@ -93,13 +137,13 @@ body.settings-window {
   padding: 8px 10px;
   border-radius: 9px;
   background: none;
-  color: #c9ccd2;
+  color: var(--ink-soft);
   font: 500 13px var(--font);
   text-align: left;
 }
 
 .side-item:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--fg), 0.05);
 }
 
 .side-item:active:not(:disabled) {
@@ -107,8 +151,8 @@ body.settings-window {
 }
 
 .side-item.on {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: rgba(var(--fg), 0.08);
+  color: var(--ink-strong);
 }
 
 .side-item .icon {
@@ -157,7 +201,7 @@ body.settings-window {
 .side-lang button {
   padding: 4px 10px;
   font-size: 12px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--fg), 0.05);
   color: var(--dim);
 }
 
@@ -173,7 +217,7 @@ body.settings-window {
 
 .side-lang button.on {
   background: rgba(56, 189, 248, 0.18);
-  color: #bfe9ff;
+  color: var(--accent-text);
 }
 
 .side-note {
@@ -303,7 +347,7 @@ body.settings-window {
 }
 
 .lead {
-  color: #c9ccd2;
+  color: var(--ink-soft);
   font-size: 13px;
 }
 
@@ -343,7 +387,7 @@ body.settings-window {
   border-radius: 999px;
   font: 500 11.5px var(--font);
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--fg), 0.06);
   color: var(--dim);
 }
 
@@ -356,17 +400,17 @@ body.settings-window {
 
 .badge.ok {
   background: rgba(34, 197, 94, 0.12);
-  color: #86efac;
+  color: var(--ok-text);
 }
 
 .badge.todo {
   background: rgba(244, 80, 94, 0.14);
-  color: #ff8d97;
+  color: var(--err-text);
 }
 
 .badge.update {
   background: rgba(245, 165, 36, 0.14);
-  color: #fbc06a;
+  color: var(--warn-text);
 }
 
 .badge.missing,
@@ -426,7 +470,7 @@ body.settings-window {
 }
 
 .fold.what .fold-body {
-  color: #c9ccd2;
+  color: var(--ink-soft);
   font-size: 12.5px;
 }
 
@@ -487,7 +531,7 @@ textarea.env {
   flex: 1 1 auto;
   min-width: 0;
   font: 11.5px var(--mono);
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(var(--fg), 0.07);
   border: 1px solid var(--hairline);
   border-radius: 8px;
   color: var(--ink);
@@ -556,7 +600,7 @@ textarea.env {
   gap: 4px;
   padding: 3px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--fg), 0.05);
   align-self: flex-start;
 }
 
@@ -567,7 +611,7 @@ textarea.env {
 
 .segmented button.on {
   background: rgba(56, 189, 248, 0.2);
-  color: #d7f2ff;
+  color: var(--accent-text);
 }
 
 .choice-list {
@@ -588,7 +632,7 @@ textarea.env {
 
 .choice.on {
   color: var(--ink);
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(var(--fg), 0.2);
 }
 
 .choice .radio {
@@ -600,6 +644,38 @@ textarea.env {
 
 .choice.on .radio {
   box-shadow: inset 0 0 0 4px var(--green);
+}
+
+/* A choice that is a button (清除歷史紀錄): a row, not a pill. */
+button.choice {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border-radius: 10px;
+}
+
+button.choice:hover:not(:disabled) {
+  background: rgba(var(--fg), 0.05);
+}
+
+button.choice:active:not(:disabled) {
+  transform: none;
+}
+
+.history-choice .radio {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 3px;
+}
+
+.history-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-choice-text b {
+  font-weight: 600;
 }
 
 /* ── Overview ──────────────────────────────────────────────────────────── */
@@ -630,7 +706,7 @@ textarea.env {
 
 .all-set {
   border-color: rgba(34, 197, 94, 0.3);
-  color: #b7f5cf;
+  color: var(--ok-text);
 }
 
 .summary-row {
@@ -702,8 +778,8 @@ textarea.env {
   max-height: 100%;
   display: flex;
   flex-direction: column;
-  background: #101114;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--panel-solid);
+  border: 1px solid rgba(var(--fg), 0.1);
   border-radius: 18px;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
   overflow: hidden;
@@ -834,14 +910,14 @@ button {
   padding: 7px 14px;
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.09);
+  background: rgba(var(--fg), 0.09);
   color: var(--ink);
   cursor: pointer;
   transition: background 0.14s, transform 0.08s;
 }
 
 button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(var(--fg), 0.15);
 }
 
 button:active:not(:disabled) {
@@ -852,17 +928,17 @@ button:active:not(:disabled) {
 button.primary {
   font-weight: 600;
   color: var(--ink);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.09));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, rgba(var(--fg), 0.22), rgba(var(--fg), 0.09));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 0 0 1px rgba(var(--fg), 0.14);
 }
 
 button.primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.13));
+  background: linear-gradient(180deg, rgba(var(--fg), 0.3), rgba(var(--fg), 0.13));
 }
 
 button.danger {
   background: rgba(244, 80, 94, 0.16);
-  color: #ff8d97;
+  color: var(--err-text);
 }
 
 button:disabled {
@@ -883,7 +959,7 @@ code,
   width: 36px;
   height: 20px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(var(--fg), 0.15);
   flex: 0 0 36px;
   padding: 0;
 }
@@ -913,7 +989,7 @@ input[type="range"] {
   appearance: none;
   height: 4px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(var(--fg), 0.2);
   width: 140px;
 }
 
@@ -930,7 +1006,7 @@ input[type="text"],
 input[type="password"],
 select {
   font: 400 12.5px var(--font);
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(var(--fg), 0.07);
   border: 1px solid var(--hairline);
   border-radius: 8px;
   color: var(--ink);
@@ -944,13 +1020,13 @@ input::placeholder {
 input:focus,
 select:focus {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.28);
+  border-color: rgba(var(--fg), 0.28);
 }
 
 /* The popup is drawn by the OS: give it an explicit pair of colours rather than
    inheriting white on white. */
 select option {
-  background-color: #1a1c20;
+  background-color: var(--card);
   color: var(--ink);
 }
 
@@ -973,7 +1049,7 @@ select option {
 
 .diff {
   font: 400 11.5px/1.5 var(--mono);
-  background: #08090b;
+  background: var(--well-solid);
   border: 1px solid var(--hairline);
   border-radius: 10px;
   padding: 10px 12px;
@@ -984,11 +1060,11 @@ select option {
 }
 
 .diff .add {
-  color: #86efac;
+  color: var(--ok-text);
 }
 
 .diff .del {
-  color: #ff8d97;
+  color: var(--err-text);
 }
 
 .diff .ctx {
@@ -1003,17 +1079,17 @@ select option {
 
 .notice.ok {
   background: rgba(34, 197, 94, 0.12);
-  color: #86efac;
+  color: var(--ok-text);
 }
 
 .notice.err {
   background: rgba(244, 80, 94, 0.14);
-  color: #ff8d97;
+  color: var(--err-text);
 }
 
 .notice.warn {
   background: rgba(245, 165, 36, 0.13);
-  color: #fbc06a;
+  color: var(--warn-text);
 }
 
 /* Install CLIs */
@@ -1061,7 +1137,7 @@ select option {
 
 .cli-command {
   font: 400 12px var(--mono);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--fg), 0.05);
   border-radius: 6px;
   padding: 6px 8px;
   user-select: all;
@@ -1084,9 +1160,463 @@ select option {
 button.link {
   background: none;
   padding: 4px 6px;
-  color: #8fb4ff;
+  color: var(--link);
 }
 
 button.link:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--fg), 0.06);
+}
+
+/* ── Agents: Cloud Agent / Local Agent ─────────────────────────────────── */
+
+.kind-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 0 2px;
+}
+
+.kind-section-head:first-child {
+  margin-top: 0;
+}
+
+.kind-section-head h2 {
+  font: 600 15px var(--font);
+}
+
+.kind-section-head .count {
+  min-width: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(var(--fg), 0.07);
+  color: var(--dim);
+  font-size: 11.5px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.kind-section-head .hint {
+  color: var(--dim-2);
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.kind-empty {
+  color: var(--dim-2);
+  font-size: 12.5px;
+  padding: 0 2px 6px;
+}
+
+.kind-mark {
+  flex: none;
+}
+
+.kind-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kind-switch button.on {
+  background: rgba(var(--fg), 0.1);
+  color: var(--ink);
+}
+
+.kind-switch button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+input.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+input.short {
+  width: 110px;
+}
+
+/* Light look: the marks' white details (eyes, ticks) would vanish on their
+   pale fill, so they take the mark's own colour. */
+:root[data-theme="light"] :is(svg.kind-mark, svg.icon) [fill="#fff"] {
+  fill: var(--a);
+}
+
+:root[data-theme="light"] :is(svg.kind-mark, svg.icon) [stroke="#fff"] {
+  stroke: var(--a);
+}
+
+/* Light look: the white slider knob needs an edge to show on the pale track. */
+:root[data-theme="light"] input[type="range"]::-webkit-slider-thumb {
+  box-shadow: 0 0 0 1px rgba(22, 26, 34, 0.25), 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* What an agent can do (views/caps.ts), and the tick for making images. */
+.caps-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-height: 20px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.caps-row.empty::before {
+  content: "—";
+}
+
+.caps-tier b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.caps-tier span {
+  opacity: 0.35;
+}
+
+.caps-price {
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.caps-price.about {
+  color: var(--dim);
+}
+
+.caps-pill.warn {
+  color: #ffb86b;
+  background: rgba(255, 184, 107, 0.16);
+}
+
+.caps-pill {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: #b3a8ff;
+  background: rgba(139, 124, 255, 0.16);
+}
+
+.caps-pill.image {
+  color: #f9a8d4;
+  background: rgba(244, 114, 182, 0.16);
+}
+
+:root[data-theme="light"] .caps-pill {
+  color: #5b3cc4;
+}
+
+:root[data-theme="light"] .caps-pill.image {
+  color: #b0287a;
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+  color: var(--ink);
+}
+
+/* Abilities on a provider: one row, the price list's marks first, then chips
+   the person flips. Grey = lacks it, coloured = has it. */
+.ability-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.ability-row .caps-row {
+  margin-right: 4px;
+}
+
+.ability-row .caps-row.empty::before {
+  content: none;
+}
+
+.ability-chip {
+  padding: 2px 11px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: 600 12px var(--font);
+  cursor: default;
+  transition: background 0.12s ease-out, color 0.12s ease-out, transform 0.08s ease-out;
+}
+
+.ability-chip:active {
+  transform: scale(0.94);
+}
+
+.ability-chip.off {
+  color: var(--dim);
+  background: rgba(128, 128, 128, 0.12);
+  border-color: rgba(128, 128, 128, 0.18);
+}
+
+.ability-chip.off:hover {
+  background: rgba(128, 128, 128, 0.2);
+}
+
+.ability-chip.on {
+  color: #b3a8ff;
+  background: rgba(139, 124, 255, 0.2);
+  border-color: rgba(139, 124, 255, 0.35);
+}
+
+.ability-chip.on:hover {
+  background: rgba(139, 124, 255, 0.3);
+}
+
+.ability-chip.on.image {
+  color: #f9a8d4;
+  background: rgba(244, 114, 182, 0.2);
+  border-color: rgba(244, 114, 182, 0.35);
+}
+
+.ability-chip.on.image:hover {
+  background: rgba(244, 114, 182, 0.3);
+}
+
+/* A chip the person set against its kind: a small notch so a later look knows why. */
+.ability-chip.own::after {
+  content: "·";
+  margin-left: 4px;
+  opacity: 0.6;
+}
+
+:root[data-theme="light"] .ability-chip.on {
+  color: #5b3cc4;
+}
+
+:root[data-theme="light"] .ability-chip.on.image {
+  color: #b0287a;
+}
+
+/* The picker behind 新增 Agent Provider: every kind as a card, one picked. */
+.add-row .add-provider {
+  padding: 8px 16px;
+}
+
+.preset-panel {
+  width: min(760px, 100%);
+}
+
+.preset-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 22px 10px;
+}
+
+.preset-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.preset-head h1 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.preset-head .hint {
+  margin: 0;
+}
+
+.preset-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.preset-body {
+  display: grid;
+  gap: 18px;
+  padding: 6px 22px 16px;
+  overflow: auto;
+}
+
+.preset-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.preset-group-head .hint {
+  font-size: 12px;
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.preset-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(var(--fg), 0.1);
+  border-radius: 14px;
+  background: rgba(var(--fg), 0.03);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease-out, border-color 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+
+.preset-card:hover {
+  background: rgba(var(--fg), 0.06);
+  border-color: rgba(var(--fg), 0.18);
+}
+
+.preset-card.on {
+  border-color: var(--link);
+  background: color-mix(in srgb, var(--link) 14%, transparent);
+  box-shadow: 0 0 0 1px var(--link);
+}
+
+.preset-card:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+.preset-mark {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(var(--fg), 0.3);
+  transition: border-color 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+
+.preset-card.on .preset-mark {
+  border-color: var(--link);
+  box-shadow: inset 0 0 0 3px var(--panel-solid);
+  background: var(--link);
+}
+
+.preset-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.preset-text b {
+  font-size: 14px;
+}
+
+.preset-text small {
+  font-size: 12px;
+  color: var(--dim);
+  white-space: normal;
+}
+
+.preset-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 22px 18px;
+  border-top: 1px solid rgba(var(--fg), 0.08);
+}
+
+/* The Skill market. */
+.skill-kind {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0b0f1c;
+  background: #f5a524;
+}
+
+.skill-kind.center {
+  color: #fff;
+  background: #ff5a4e;
+}
+
+.skill-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.skill-stars {
+  color: var(--dim-2);
+}
+
+.skill-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.skill-cat {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dim-2);
+  box-shadow: inset 0 0 0 1px var(--hairline, rgba(255, 255, 255, 0.14));
+}
+
+.skill-group-head {
+  margin: 10px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--dim-2);
+}
+
+.skill-text {
+  width: 100%;
+  min-height: 320px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--fg), 0.12);
+  background: rgba(var(--fg), 0.04);
+  color: var(--ink);
+  font: 12.5px/1.55 ui-monospace, Consolas, "Cascadia Mono", monospace;
+  resize: vertical;
+}
+
+.skill-name {
+  max-width: 360px;
+}
+
+.skill-found {
+  display: grid;
+  gap: 6px;
+}
+
+.skill-found-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(var(--fg), 0.04);
+}
+
+.skill-found-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.skill-found-text small {
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

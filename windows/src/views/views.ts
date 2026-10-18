@@ -25,13 +25,15 @@ export interface ViewActions {
   /** `terminal` gives the request back unanswered, for Claude Code to ask itself. */
   /** `allow-all`: a team member asked for several steps at once. */
   decide(d: "allow" | "deny" | "terminal" | "allow-all"): void;
-  /** 「Ask」: the secretary explains the waiting request; null when it cannot be explained. */
+  /** 「Ask」: Agent Center explains the waiting request; null when it cannot be explained. */
   explain(requestId: string): Promise<string> | null;
   /** The card changed what it shows: size the island to it again. */
   relayout(): void;
   /** Answers the current field of the focused session's question, in its terminal. */
   answerQuestion(answer: QuestionAnswer): Promise<void>;
   toggleSound(): void;
+  /** 勿擾 on or off. */
+  toggleDnd(): void;
   setVolume(v: number): void;
   setAutoClose(seconds: number): void;
   openSettingsWindow(): void;
@@ -125,6 +127,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
   });
   const gearBtn = h("button", { title: tr("設定", "Settings"), onclick: () => go("settings") }, svg(ICONS.gear, 14));
   const soundBtn = h("button", { title: tr("靜音", "Mute"), onclick: () => actions.toggleSound() }, svg(ICONS.speakerOn, 14));
+  const dndBtn = h("button", { class: "dnd", title: tr("勿擾模式", "Do not disturb"), onclick: () => actions.toggleDnd() }, svg(ICONS.moon, 13));
   // Always there, on every view: the island must never have to be waited out.
   const closeBtn = h("button", { title: tr("關閉", "Close"), onclick: () => actions.collapse() }, svg(ICONS.xmark, 12));
 
@@ -138,7 +141,7 @@ export function buildHeader(actions: ViewActions): ViewHost {
     { id: "header" },
     h("div", { class: "tabs" }, tabHome, tabChat, tabDrop),
     teamBtn,
-    h("div", { class: "header-actions" }, gearBtn, soundBtn, closeBtn),
+    h("div", { class: "header-actions" }, gearBtn, dndBtn, soundBtn, closeBtn),
   );
 
   return {
@@ -153,6 +156,8 @@ export function buildHeader(actions: ViewActions): ViewHost {
       gearBtn.append(svg(v === "settings" ? ICONS.gearFill : ICONS.gear, 14));
       clear(soundBtn);
       soundBtn.append(svg(State.settings.soundEnabled ? ICONS.speakerOn : ICONS.speakerOff, 14));
+      dndBtn.classList.toggle("on", State.settings.doNotDisturb);
+      dndBtn.title = State.settings.doNotDisturb ? tr("勿擾模式:開(不會自動跳出、不出聲;按一下關掉)", "Do not disturb: on (no popping up, no sound; click to turn off)") : tr("勿擾模式:關(開會時打開,就不會自動跳出)", "Do not disturb: off (turn it on in a meeting so nothing pops up)");
       el.style.opacity = v === "confused" ? "0" : "1";
     },
   };
@@ -402,7 +407,7 @@ function buildApproval(actions: ViewActions): ViewHost {
   const head = h("div", { class: "code-head" });
   const body = h("div", { class: "code" });
   const note = h("div", { class: "sub" });
-  // 「Ask」's answer: the secretary's reading of the request, under it.
+  // 「Ask」's answer: Agent Center's reading of the request, under it.
   const explained = h("div", { class: "explain" });
   explained.style.display = "none";
   const answers = new Map<string, string>();
@@ -491,14 +496,14 @@ function buildApproval(actions: ViewActions): ViewHost {
         const pending = actions.explain(r.requestId);
         if (!pending) {
           explained.textContent = tr(
-            "這張卡片來自瀏海島聊天啟動的 agent，秘書目前還不能解讀這一種。",
-            "This card comes from an agent the island's chat started; the secretary can't explain this kind yet.",
+            "這張卡片來自瀏海島聊天啟動的 agent，Agent Center 目前還不能解讀這一種。",
+            "This card comes from an agent the island's chat started; Agent Center can't explain this kind yet.",
           );
           return;
         }
         explained.textContent = tr(
-          "秘書解讀中…（讀取完整指令、工作資料夾與這個工作階段最近的紀錄）",
-          "The secretary is reading it… (the full command, the working folder and this session's recent history)",
+          "Agent Center 解讀中…（讀取完整指令、工作資料夾與這個工作階段最近的紀錄）",
+          "Agent Center is reading it… (the full command, the working folder and this session's recent history)",
         );
         const id = r.requestId;
         pending.then(
@@ -507,7 +512,7 @@ function buildApproval(actions: ViewActions): ViewHost {
             if (State.pendingApproval?.requestId === id) explained.textContent = text;
           },
           (e) => {
-            if (State.pendingApproval?.requestId === id) explained.textContent = trf("秘書無法解讀：{e}", "The secretary couldn't explain it: {e}", { e: String(e).replace(/^Error:\s*/, "") });
+            if (State.pendingApproval?.requestId === id) explained.textContent = trf("Agent Center 無法解讀：{e}", "Agent Center couldn't explain it: {e}", { e: String(e).replace(/^Error:\s*/, "") });
           },
         );
       };

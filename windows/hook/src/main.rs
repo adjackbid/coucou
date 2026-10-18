@@ -298,7 +298,7 @@ fn decision_json(decision: &str, agent: &str) -> Option<String> {
         // "always" still answers a plain allow; remembering it is the island's
         // business, not the CLI's.
         "allow" | "always" => r#"{"behavior":"allow"}"#.to_string(),
-        "deny" if reason.is_empty() => r#"{"behavior":"deny","message":"Denied from Coucou"}"#.to_string(),
+        "deny" if reason.is_empty() => r#"{"behavior":"deny","message":"Denied from Agent Center"}"#.to_string(),
         "deny" => serde_json::json!({ "behavior": "deny", "message": reason }).to_string(),
         _ => return None,
     };
@@ -687,7 +687,7 @@ mod tests {
         );
         assert_eq!(
             decision_json("deny", "claude").unwrap(),
-            r#"{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"Denied from Coucou"}}}"#
+            r#"{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"Denied from Agent Center"}}}"#
         );
         // "always" is an island concept; Claude Code just gets an allow.
         assert!(decision_json("always", "claude").unwrap().contains(r#""behavior":"allow""#));
@@ -698,7 +698,7 @@ mod tests {
         assert_eq!(decision_json("allow", "copilot").unwrap(), r#"{"behavior":"allow"}"#);
         assert_eq!(
             decision_json("deny", "copilot").unwrap(),
-            r#"{"behavior":"deny","message":"Denied from Coucou"}"#
+            r#"{"behavior":"deny","message":"Denied from Agent Center"}"#
         );
     }
 

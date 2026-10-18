@@ -132,7 +132,7 @@ const CODE_LINE_H = 16;
  * than a window.
  */
 export function approvalHeight(lines: number, explaining = false): number {
-  // 「Ask」: the secretary's reading takes the request's place, at the card's
+  // 「Ask」: Agent Center's reading takes the request's place, at the card's
   // full height (the island window is no taller than that).
   if (explaining) return APPROVAL_MAX_H;
   return Math.min(APPROVAL_MAX_H, APPROVAL_MIN_H + Math.round(Math.max(0, lines - 1) * CODE_LINE_H));

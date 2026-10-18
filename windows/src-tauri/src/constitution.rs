@@ -146,10 +146,10 @@ impl Constitution {
         }
         let mut out = String::from("\nThe user's constitution — rules you must keep, whatever the task:\n");
         for t in never {
-            out.push_str(&format!("- Never: {t}. Coucou refuses such a request; do not try it, find another way or tell the leader.\n"));
+            out.push_str(&format!("- Never: {t}. Agent Center refuses such a request; do not try it, find another way or tell the leader.\n"));
         }
         for t in ask {
-            out.push_str(&format!("- Ask the user first: {t}. Coucou shows the user a card; it may be refused.\n"));
+            out.push_str(&format!("- Ask the user first: {t}. Agent Center shows the user a card; it may be refused.\n"));
         }
         out
     }
@@ -295,6 +295,15 @@ pub fn brief_text() -> String {
 }
 
 /// What the constitution says about a request, for an agent working in `work_dir`.
+/// `rule_for`, less the asks the person waived for this team (`scope.waived`,
+/// "allow this for the whole team" on a card). A Never rule is never waived.
+pub fn rule_for_in(request: &Request, work_dir: &Path, auto: Option<&Scope>) -> Option<(Level, Rule)> {
+    match rule_for(request, work_dir) {
+        Some((Level::Ask, rule)) if auto.is_some_and(|s| s.waived.contains(&rule.id)) => None,
+        ruled => ruled,
+    }
+}
+
 pub fn rule_for(request: &Request, work_dir: &Path) -> Option<(Level, Rule)> {
     if cfg!(test) {
         // A test's agents keep the general rules only — the person's file is

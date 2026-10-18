@@ -36,13 +36,13 @@ function lead(agent: HookAgent): string {
       );
     case "copilot":
       return tr(
-        "GitHub 的 coding agent（copilot 指令，或 cg 這類包裝）。連結後，它的步驟、提問和回覆會出現在瀏海島上。Coucou 只寫一個自己的檔案，其他東西都不動。",
-        "GitHub's coding agent (the copilot command, or a wrapper such as cg). Once connected, its steps, questions and replies appear in the island. Coucou writes one file of its own and touches nothing else.",
+        "GitHub 的 coding agent（copilot 指令，或 cg 這類包裝）。連結後，它的步驟、提問和回覆會出現在瀏海島上。Agent Center 只寫一個自己的檔案，其他東西都不動。",
+        "GitHub's coding agent (the copilot command, or a wrapper such as cg). Once connected, its steps, questions and replies appear in the island. Agent Center writes one file of its own and touches nothing else.",
       );
     case "antigravity":
       return tr(
-        "Google 的 agent（agy CLI、App 和 IDE 共用同一個設定檔）。Coucou 只在旁邊看：它永遠不會替 Antigravity 回答權限。",
-        "Google's agent (the agy CLI, the app and the IDE share one settings file). Coucou only watches: it never answers a permission for Antigravity.",
+        "Google 的 agent（agy CLI、App 和 IDE 共用同一個設定檔）。Agent Center 只在旁邊看：它永遠不會替 Antigravity 回答權限。",
+        "Google's agent (the agy CLI, the app and the IDE share one settings file). Agent Center only watches: it never answers a permission for Antigravity.",
       );
   }
 }
@@ -72,16 +72,16 @@ function agentCard(agent: HookAgent, ctx: PageCtx, start?: string): HTMLElement 
 
     if (state === "relay") {
       body.push(notice("warn", tr(
-        "Coucou 的轉送程式 coucou-hook.exe 不在該在的地方，所以現在什麼都不能連結。請重新啟動 Coucou；如果還是一樣，用 cargo build -p coucou-hook 重新建置。",
-        "Coucou's relay, coucou-hook.exe, is not where it should be, so nothing can be connected right now. Restart Coucou; if that does not help, build it with cargo build -p coucou-hook.",
+        "Agent Center 的轉送程式 coucou-hook.exe 不在該在的地方，所以現在什麼都不能連結。請重新啟動 Agent Center；如果還是一樣，用 cargo build -p coucou-hook 重新建置。",
+        "Agent Center's relay, coucou-hook.exe, is not where it should be, so nothing can be connected right now. Restart Agent Center; if that does not help, build it with cargo build -p coucou-hook.",
       )));
     }
     if (state === "unreadable") {
       body.push(
         notice("err", read?.error ?? ""),
         h("p", { class: "hint", text: trf(
-          "Coucou 不會覆寫讀不懂的檔案。請先修好你的 {file}（或把它移到別處），再回來連結。",
-          "Coucou never overwrites a file it cannot read. Fix your {file} (or move it away) first, then come back to connect.",
+          "Agent Center 不會覆寫讀不懂的檔案。請先修好你的 {file}（或把它移到別處），再回來連結。",
+          "Agent Center never overwrites a file it cannot read. Fix your {file} (or move it away) first, then come back to connect.",
           { file: fileName(agent) },
         ) }),
       );
@@ -89,8 +89,8 @@ function agentCard(agent: HookAgent, ctx: PageCtx, start?: string): HTMLElement 
     // An entry an older Coucou wrote counts as not connected: say why.
     if (agent === "antigravity" && status && !status.installed && /^- /m.test(read?.diff ?? "")) {
       body.push(h("p", { class: "hint", text: tr(
-        "你之前用舊版 Coucou 連結過 Antigravity。再連結一次，就會把舊的設定換成新的。",
-        "You connected Antigravity with an older Coucou. Connect again to replace the old entry.",
+        "你之前用舊版 Agent Center 連結過 Antigravity。再連結一次，就會把舊的設定換成新的。",
+        "You connected Antigravity with an older Agent Center. Connect again to replace the old entry.",
       ) }));
     }
 
@@ -131,7 +131,7 @@ function agentCard(agent: HookAgent, ctx: PageCtx, start?: string): HTMLElement 
     if (state === "nocli") {
       next.append(
         h("button", { type: "button", class: "primary", text: trf("先安裝 {name} →", "Install {name} first →", { name }), onclick: () => ctx.go("install", `cli-${HOOK_CLI[agent]}`) }),
-        h("button", { type: "button", class: "link", text: tr("仍要連結…", "Connect anyway…"), title: tr("CLI 裝在 Coucou 找不到的地方時用", "For a CLI installed where Coucou cannot find it"), onclick: () => preview(true) }),
+        h("button", { type: "button", class: "link", text: tr("仍要連結…", "Connect anyway…"), title: tr("CLI 裝在 Agent Center 找不到的地方時用", "For a CLI installed where Agent Center cannot find it"), onclick: () => preview(true) }),
       );
     }
     if (state === "checking") next.append(h("span", { class: "hint", text: tr("正在讀取設定檔…", "Reading its settings file…") }));
@@ -192,7 +192,7 @@ function agentCard(agent: HookAgent, ctx: PageCtx, start?: string): HTMLElement 
     body.append(
       h("p", { class: "hint", text: install
         ? trf("下面就是 {file} 會改的地方。你自己的 hooks 都不會動。", "This is exactly what will change in your {file}. Your own hooks are left untouched.", { file: fileName(agent) })
-        : tr("這只會移除 Coucou 自己的項目，你自己的 hooks 都不會動。", "This removes Coucou's entries only. Your own hooks are left untouched.") }),
+        : tr("這只會移除 Agent Center 自己的項目，你自己的 hooks 都不會動。", "This removes Agent Center's entries only. Your own hooks are left untouched.") }),
       h("p", { class: "field-help", text: tr("+ 開頭的是新增的行，- 開頭的是移除的行，其他內容維持原樣。", "Lines with + are added, lines with - are removed. Everything else in the file stays as it is.") }),
       // Rust's "No change." is compared elsewhere, so it is translated here.
       plan.diff.trim() === "No change." // i18n-ok: Rust's own answer, compared
@@ -281,13 +281,13 @@ export const connectPage: Page = {
         "connect",
         tr("連結 Agent", "Connect agents"),
         tr(
-          "讓 Coucou 看見你的 Claude Code、Copilot CLI、Antigravity 工作階段，它們的提問和權限請求會出現在瀏海島上。",
-          "Let Coucou watch your Claude Code, Copilot CLI and Antigravity sessions, so their questions and permission requests show up in the island.",
+          "讓 Agent Center 看見你的 Claude Code、Copilot CLI、Antigravity 工作階段，它們的提問和權限請求會出現在瀏海島上。",
+          "Let Agent Center watch your Claude Code, Copilot CLI and Antigravity sessions, so their questions and permission requests show up in the island.",
         ),
         () => h("div", { class: "stack" },
           h("p", { text: tr(
-            "Coucou 會在每個工具自己的設定檔裡加一個小小的「hook」。agent 開始一個步驟、提問或需要你的許可時，hook 會通知 Coucou；Coucou 不會自己改變 agent 的行為。",
-            "Coucou adds a small \"hook\" to each tool's own settings file. The hook tells Coucou whenever the agent starts a step, asks a question or needs your permission; Coucou never changes what the agent does on its own.",
+            "Agent Center 會在每個工具自己的設定檔裡加一個小小的「hook」。agent 開始一個步驟、提問或需要你的許可時，hook 會通知 Agent Center；Agent Center 不會自己改變 agent 的行為。",
+            "Agent Center adds a small \"hook\" to each tool's own settings file. The hook tells Agent Center whenever the agent starts a step, asks a question or needs your permission; Agent Center never changes what the agent does on its own.",
           ) }),
           h("p", { text: tr(
             "寫入之前，你會先看到確切要改的內容，原本的檔案也會先備份。隨時都可以移除。",

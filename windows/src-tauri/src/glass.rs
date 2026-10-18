@@ -14,7 +14,9 @@ use std::ffi::c_void;
 
 use tauri::WebviewWindow;
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER};
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetWindowLongW, SetWindowLongW, SetWindowPos, GWL_STYLE, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WS_CAPTION,
+};
 
 const WCA_ACCENT_POLICY: u32 = 19;
 const ACCENT_ENABLE_BLURBEHIND: u32 = 3;
@@ -142,9 +144,32 @@ pub fn apply(win: &WebviewWindow, tint: u32) {
     }
 }
 
+/// Windows 10 draws a window's standard frame — its title, – □ ×, its
+/// border — under the whole window when the window has a caption style,
+/// and the page lets it show through. The windowing library gives its
+/// undecorated windows that style and puts it back whenever it rewrites
+/// the styles (shown, hidden, maximized, restored): it is taken away again
+/// after each of those.
+pub fn drop_caption(win: &WebviewWindow) {
+    if !win10() {
+        return;
+    }
+    let Ok(raw) = win.hwnd() else { return };
+    let hwnd = HWND(raw.0 as isize as *mut _);
+    unsafe {
+        let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+        if style & WS_CAPTION.0 == 0 {
+            return;
+        }
+        SetWindowLongW(hwnd, GWL_STYLE, (style & !WS_CAPTION.0) as i32);
+        let _ = SetWindowPos(hwnd, None, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    }
+}
+
 #[link(name = "gdi32")]
 extern "system" {
     fn CreateRoundRectRgn(x1: i32, y1: i32, x2: i32, y2: i32, w: i32, h: i32) -> *mut c_void;
+    fn CreateRectRgn(x1: i32, y1: i32, x2: i32, y2: i32) -> *mut c_void;
 }
 
 #[link(name = "user32")]
@@ -153,24 +178,29 @@ extern "system" {
 }
 
 /// Windows 10 has no DWM rounding: the window itself is cut to a rounded
-/// rectangle (blur and all). Maximized, it keeps its square edges. Called on
-/// every resize, since a region is in pixels.
+/// rectangle (blur and all), over the page only — any frame around it is cut
+/// away. Maximized, it keeps its square edges, and what a maximized window
+/// has beyond the screen's edge (where a second display may be) is cut too.
+/// Called on every resize, since a region is in pixels.
 pub fn round_corners(win: &WebviewWindow) {
     if !win10() {
         return;
     }
     let Ok(raw) = win.hwnd() else { return };
     let hwnd = HWND(raw.0 as isize as *mut _);
-    let Ok(size) = win.outer_size() else { return };
+    let (Ok(outer), Ok(inner), Ok(size)) = (win.outer_position(), win.inner_position(), win.inner_size()) else { return };
+    // The page within the window, in the window's own pixels.
+    let (x, y) = (inner.x - outer.x, inner.y - outer.y);
+    let (w, h) = (size.width as i32, size.height as i32);
     let maximized = win.is_maximized().unwrap_or(false);
     unsafe {
-        if maximized {
-            SetWindowRgn(hwnd, std::ptr::null_mut(), 1);
-            return;
-        }
-        let scale = win.scale_factor().unwrap_or(1.0);
-        let d = (16.0 * scale).round() as i32; // ellipse size = 2 × an 8 px radius
-        let rgn = CreateRoundRectRgn(0, 0, size.width as i32 + 1, size.height as i32 + 1, d, d);
+        let rgn = if maximized {
+            CreateRectRgn(x, y, x + w, y + h)
+        } else {
+            let scale = win.scale_factor().unwrap_or(1.0);
+            let d = (16.0 * scale).round() as i32; // ellipse size = 2 × an 8 px radius
+            CreateRoundRectRgn(x, y, x + w + 1, y + h + 1, d, d)
+        };
         // The window owns the region from here on: it is not deleted.
         SetWindowRgn(hwnd, rgn, 1);
     }

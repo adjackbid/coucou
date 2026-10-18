@@ -13,6 +13,10 @@ export interface MemberConfig {
   maxTokens?: number;
   /** At most this estimated cost in a run, US dollars; absent for no limit. */
   maxCostUsd?: number;
+  /** What Agent Center told this member to keep throughout its work. */
+  brief?: string;
+  /** Skills from Agent Center's library this member gets the text of, by name. */
+  skills?: string[];
 }
 
 export interface TeamConfig {
@@ -37,6 +41,12 @@ export interface TeamConfig {
   agentFolders?: boolean;
   /** More folders trusted like the work folder, for steps approved by themselves. */
   trustedDirs?: string[];
+  /** Agent Center's plan for the leader, read with its first message. */
+  kickoff?: string;
+  /** Fast mode: the smallest team that does the job, one review per task, no second round. */
+  fast?: boolean;
+  /** A time limit in minutes from the start (0 or absent for none); the leader keeps the end of it for assembling. */
+  timeLimitMin?: number;
 }
 
 export interface TeamFile {
@@ -68,6 +78,8 @@ export interface Permission {
   rawInput: unknown;
   options: { optionId: string; name: string; kind: string }[];
   danger: Danger | null;
+  /** The check "allow this for the whole team" would waive: a constitution rule's id. */
+  ruleId?: string;
   /** The constitution's rule that asks about it, when one does. */
   rule?: string;
 }
@@ -90,6 +102,8 @@ export interface MemberView {
   /** The tool it is using right now. */
   activity: string;
   turns: number;
+  /** Time it has spent in its turns this run, ms — the turn under way included. */
+  workMs?: number;
   /** The oldest request waiting for the person… */
   permission: Permission | null;
   /** …and the ones behind it (an agent may ask for several steps at once). */
@@ -141,6 +155,7 @@ export interface Task {
   criteria: { text: string; claimed: boolean }[];
   dependsOn: string[];
   deliverTo: string | null;
+  reviewer: string | null;
   blocked: { reason: string; on: string } | null;
   note: string;
   rejections: number;
@@ -231,12 +246,19 @@ export interface Snapshot {
   maxTurns: number;
   startedAt: number;
   finishedAt: number;
+  /** The time limit in minutes (0 for none), its reserve, and where it stands. */
+  timeLimitMin: number;
+  timeReserveMin: number;
+  timeWarned: boolean;
+  timeUp: boolean;
   members: MemberView[];
   tasks: Task[];
   deliverables: Deliverable[];
   messages: Message[];
   questions: Question[];
   feed: FeedItem[];
+  /** Constitution asks the person waived for this team, by rule id. */
+  waived?: string[];
 }
 
 // ── Usage and cost — mirrors of usage::Usage, pricing.rs and cost.rs ──────────
@@ -309,6 +331,8 @@ export interface Activity {
   leader: boolean;
   turns: number;
   failedTurns: number;
+  /** Time spent in those turns, ms. */
+  workMs: number;
   delivered: number;
   rejected: number;
   accepted: number;
@@ -336,12 +360,14 @@ export interface KeySpend {
   askedAt: number;
 }
 
-// ── The secretary — mirrors of secretary.rs ─────────────────────────────────
+// ── Agent Center — mirrors of secretary.rs ─────────────────────────────────
 
-/** A look-up or a preparation the secretary made on the way to its answer. */
+/** A look-up or a preparation Agent Center made on the way to its answer. */
 export interface SecretaryStep {
   tool: string;
   label: string;
+  /** The agent it looks at (agent_models): lit in the picking animation. */
+  agent?: string;
 }
 
 // ── A team's knowledge base — mirror of team/knowledge.rs ─────────────────────
@@ -380,7 +406,7 @@ export interface KnowledgeAdded {
   keyLike: { line: number; sample: string } | null;
 }
 
-/** Something the secretary prepared; it happens only when the person clicks `confirm`. */
+/** Something Agent Center prepared; it happens only when the person clicks `confirm`. */
 export interface SecretaryProposal {
   id: string;
   kind: "team" | "instruction" | "action" | "knowledge";
@@ -391,9 +417,20 @@ export interface SecretaryProposal {
   outcome: string;
   /** The attached files it would put in a knowledge base. */
   uses?: string[];
+  /** A new team's members as picked from Agent Pool (secretary.rs Pick), for the picking animation. */
+  picks?: { agent: string; name: string; role: string; leader: boolean }[];
 }
 
-/** A file attached in the secretary's conversation (secretary.rs UploadView). */
+/** A saved Agent Center conversation (secretary.rs ChatInfo). */
+export interface SecretaryChat {
+  id: string;
+  title: string;
+  updatedMs: number;
+  /** The one on screen now. */
+  current: boolean;
+}
+
+/** A file attached in Agent Center's conversation (secretary.rs UploadView). */
 export interface SecretaryUpload {
   id: string;
   name: string;
@@ -405,10 +442,38 @@ export interface SecretaryUpload {
   force: boolean;
 }
 
+/** A skill in Agent Center's library (team_agents.rs `LibrarySkill`). */
+export interface LibrarySkill {
+  name: string;
+  description: string;
+  path: string;
+  /** `for: agent-center` in its front matter: Agent Center's own, never handed to a member. */
+  forCenter: boolean;
+  /** `source:` of its front matter: where it comes from (a GitHub URL), or "". */
+  source: string;
+  /** `stars:` of its front matter, as written ("103.3k"), or "". */
+  stars: string;
+  /** `stars-at:` of its front matter: the day the stars were counted, or "". */
+  starsAt: string;
+  /** `role:` of its front matter: what the market calls it (開發總監), or "". */
+  role: string;
+  /** `category:` of its front matter (程式開發, UI/UX 設計…), the words Agent Pool groups by; "" for none. */
+  category: string;
+}
+
 export interface SecretaryReply {
   text: string;
   steps: SecretaryStep[];
   proposals: SecretaryProposal[];
+  /** A question asked with options to click (secretary.rs Choices). */
+  choices?: SecretaryChoices;
+}
+
+/** Options to click; the one clicked is sent as the person's answer. */
+export interface SecretaryChoices {
+  question: string;
+  options: string[];
+  multiple: boolean;
 }
 
 // ── The constitution — mirror of constitution.rs ─────────────────────────────
@@ -432,9 +497,6 @@ export interface Constitution {
 
 // ── Team agents — mirror of team_agents.rs ───────────────────────────────────
 
-/** Where new teams take their agents from: Settings → Agents, or the team agents only. */
-export type TeamAgentSource = "native" | "team";
-
 export interface TeamAgentMcp {
   name: string;
   /** A command to start (stdio)… */
@@ -444,11 +506,14 @@ export interface TeamAgentMcp {
   url: string;
 }
 
-/** An agent of the person's own making, built on a native agent of Settings → Agents. */
+/**
+ * An agent of the person's own making, built on a native agent of Settings →
+ * Agents; a Cloud Agent or a Local Agent as its base is.
+ */
 export interface TeamAgent {
   id: string;
   name: string;
-  /** The native agent it runs on: its command, environment and key. */
+  /** The native agent it runs on: its command (or webhook), environment and key. */
   base: string;
   /** Empty: the base's model. */
   model: string;
@@ -456,12 +521,16 @@ export interface TeamAgent {
   mcp: TeamAgentMcp[];
   /** Skill folders (each with a SKILL.md) or skill names. */
   skills: string[];
-  /** What it is good for: the secretary picks members by it. */
+  /** What it is good for: Agent Center picks members by it. */
   description: string;
+  /** The person's own grouping in Agent Pool (程式開發, 文案製作…); empty for none. */
+  category: string;
+  /** How hard it thinks: low, medium, high, xhigh, max; empty for the provider's own default. */
+  effort: string;
 }
 
+/** New teams are built from these only; an older file's `source` is read past. */
 export interface TeamAgents {
-  source: TeamAgentSource;
   agents: TeamAgent[];
 }
 
@@ -472,6 +541,8 @@ export interface TeamAgentSupports {
   systemPrompt: TeamAgentSupport;
   mcp: TeamAgentSupport;
   skills: TeamAgentSupport;
+  /** Reasoning effort: a flag of the provider's (or, for n8n, a field of each call). */
+  effort: TeamAgentSupport;
 }
 
 export interface TeamAgentsView {

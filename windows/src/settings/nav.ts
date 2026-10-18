@@ -109,7 +109,7 @@ export class Nav {
     this.items.clear();
     this.side.setAttribute("aria-label", tr("設定分頁", "Settings pages"));
     this.side.append(
-      h("div", { class: "brand" }, h("span", { class: "brand-name", text: "Coucou" }), h("span", { class: "version", text: version })),
+      h("div", { class: "brand" }, h("span", { class: "brand-name", text: "Agent Center" }), h("span", { class: "version", text: version })),
     );
     const list = h("div", { class: "side-list", role: "tablist" });
     for (const p of this.pages) {

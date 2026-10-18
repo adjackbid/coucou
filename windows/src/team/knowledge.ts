@@ -62,7 +62,7 @@ export function usageLine(view: KnowledgeView): string {
 /** What a member gets of a document of this kind, in a few words. */
 export function kindHint(doc: KnowledgeDoc): string {
   if (doc.program) return tr("程式或腳本:只保存,不會執行;成員拿到檔案路徑", "A program or script: only kept, never run; members get its path");
-  if (doc.kind === "file") return tr("Coucou 不讀內容,成員拿到檔案路徑;沒有檢查是否含金鑰", "Coucou doesn't read it, members get its path; not checked for keys");
+  if (doc.kind === "file") return tr("Agent Center 不讀內容,成員拿到檔案路徑;沒有檢查是否含金鑰", "Agent Center doesn't read it, members get its path; not checked for keys");
   if (doc.kind === "image") return tr("圖片", "Picture");
   return tr("文字", "Text");
 }
@@ -85,7 +85,7 @@ export function kbSaid(text: string): string {
     [/^There is no such team\.$/, () => tr("請先建立團隊", "Create the team first")],
     [/^Could not read (.+?): (.+)$/, (m) => trf("讀不到 {name}:{why}", "Can't read {name}: {why}", { name: m[1], why: m[2] })],
     [/^(.+) is not a file\.$/, (m) => trf("{name} 不是檔案", "{name} is not a file", { name: m[1] })],
-    [/^Coucou does not open programs, scripts or shortcuts\. Show it in Explorer instead\.$/, () => tr("Coucou 不開啟程式、腳本或捷徑;請改用「在檔案總管中顯示」", "Coucou doesn't open programs, scripts or shortcuts: use “Show in File Explorer” instead")],
+    [/^(?:Coucou|Agent Center) does not open programs, scripts or shortcuts\. Show it in Explorer instead\.$/, () => tr("Agent Center 不開啟程式、腳本或捷徑;請改用「在檔案總管中顯示」", "Agent Center doesn't open programs, scripts or shortcuts: use “Show in File Explorer” instead")],
     [/^This kind of file has no preview: open it instead\.$/, () => tr("這種檔案沒有預覽,請用「開啟」", "This kind of file has no preview: use “Open”")],
   ];
   for (const [pattern, to] of rules) {
@@ -159,9 +159,9 @@ function load(team: string, host: KnowledgeHost) {
     });
 }
 
-/** The backend says the list changed (an edit here, the leader sharing, the secretary adding). */
+/** The backend says the list changed (an edit here, the leader sharing, Agent Center adding). */
 export function knowledgeChanged(team: string, host: KnowledgeHost) {
-  // "*": the secretary made a team or added documents somewhere.
+  // "*": Agent Center made a team or added documents somewhere.
   if (team === "*") {
     views.clear();
     host.render();

@@ -16,7 +16,7 @@ export type LinkState =
   | "checking"    // not read yet
   | "relay"       // coucou-hook.exe is missing: nothing can be connected
   | "unreadable"  // the tool's own settings file cannot be read
-  | "update"      // connected, but the hooks differ from what this Coucou writes
+  | "update"      // connected, but the hooks differ from what this Agent Center writes
   | "connected"
   | "unconnected" // the CLI may be there; the hooks are not
   | "nocli";      // the CLI is not installed: nothing to connect yet
@@ -85,13 +85,14 @@ export function providerUsable(p: Provider, present: Record<string, boolean>): b
 
 /** An agent whose environment names {secret} needs the key saved for it. */
 export function agentNeedsKey(a: AgentProfile): boolean {
+  if (a.protocol === "n8n") return !!a.headerName?.trim();
   return Object.values(a.env ?? {}).some((v) => v.includes("{secret}"));
 }
 
 // ── What is left ─────────────────────────────────────────────────────────────
 
 export type PageId =
-  | "overview" | "connect" | "install" | "chat" | "agents" | "integrations" | "island" | "team" | "general";
+  | "overview" | "connect" | "install" | "chat" | "agents" | "skills" | "integrations" | "island" | "team" | "general";
 
 export type TodoKind =
   | "relay"                 // name: —
@@ -103,6 +104,7 @@ export type TodoKind =
   | "chat-incomplete"
   | "agent-profile-no-key"  // name: agent profile name
   | "agent-profile-no-command"
+  | "agent-profile-no-url"  // an n8n node without its webhook
   | "hotkey";               // name: the hotkey
 
 export interface Todo {
@@ -146,7 +148,7 @@ export function todoList(input: StatusInput): Todo[] {
     }
   }
 
-  // The chat (and the secretary) need one provider that can answer.
+  // The chat (and Agent Center) need one provider that can answer.
   const active = settings.providers.find((p) => p.id === settings.activeProvider);
   if (!settings.providers.length) {
     out.push({ kind: "chat-no-provider", page: "chat", anchor: "chat-add", name: "", level: "todo" });
@@ -157,14 +159,14 @@ export function todoList(input: StatusInput): Todo[] {
       out.push({ kind: "chat-no-key", page: "chat", anchor: `provider-${active.id}`, name: active.name, level: "todo" });
     }
   } else if (!settings.providers.some((p) => providerUsable(p, present))) {
-    // The chat bar talks to an agent; the secretary still needs a provider.
+    // The chat bar talks to an agent; Agent Center still needs a provider.
     const first = settings.providers[0];
     out.push({ kind: "chat-no-key", page: "chat", anchor: `provider-${first.id}`, name: first.name, level: "todo" });
   }
 
   for (const a of settings.agents) {
-    if (!a.command.trim()) {
-      out.push({ kind: "agent-profile-no-command", page: "agents", anchor: `agent-profile-${a.id}`, name: a.name, level: "todo" });
+    if (a.protocol === "n8n" ? !a.url?.trim() : !a.command.trim()) {
+      out.push({ kind: a.protocol === "n8n" ? "agent-profile-no-url" : "agent-profile-no-command", page: "agents", anchor: `agent-profile-${a.id}`, name: a.name, level: "todo" });
     } else if (agentNeedsKey(a) && !present[agentKey(a)]) {
       out.push({ kind: "agent-profile-no-key", page: "agents", anchor: `agent-profile-${a.id}`, name: a.name, level: "todo" });
     }
@@ -191,7 +193,7 @@ export interface PageBadge {
 
 /** The sidebar badge of each page. */
 export function pageBadges(input: StatusInput, todos: Todo[] = todoList(input)): Record<PageId, PageBadge> {
-  const pages: PageId[] = ["overview", "connect", "install", "chat", "agents", "integrations", "island", "team", "general"];
+  const pages: PageId[] = ["overview", "connect", "install", "chat", "agents", "skills", "integrations", "island", "team", "general"];
   const out = {} as Record<PageId, PageBadge>;
   for (const p of pages) {
     const mine = p === "overview" ? todos : todos.filter((t) => t.page === p);

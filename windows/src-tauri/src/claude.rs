@@ -32,11 +32,20 @@ use crate::log;
 use crate::policy::{self, Kind, Verdict};
 
 /// A model an agent offers, for the drop-down next to a member.
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelChoice {
     pub id: String,
     pub label: String,
+    /// What the agent itself says the model takes, when it says (Codex's `inputModalities`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vision: Option<bool>,
+    /// The reasoning efforts it offers (Codex's `supportedReasoningEfforts`); empty when unsaid.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub efforts: Vec<String>,
+    /// The agent's own default.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub default: bool,
 }
 
 #[derive(Default)]
@@ -153,15 +162,35 @@ pub async fn setup(running: &mut Running, key: &str, launch: &Launch, timeout: D
         .map(|list| {
             list.iter()
                 .filter_map(|m| {
-                    let id = m.get("value").and_then(Value::as_str)?.to_string();
-                    let name = m.get("displayName").and_then(Value::as_str).unwrap_or(&id).to_string();
+                    // Claude Code offers aliases ("opus") that resolve to a full
+                    // model id ("claude-opus-5-5"). The full id is what is kept:
+                    // it is what the price list and the usage records name, so
+                    // an agent set up from this list is priced from the start.
+                    let alias = m.get("value").and_then(Value::as_str)?.to_string();
+                    let name = m.get("displayName").and_then(Value::as_str).unwrap_or(&alias).to_string();
                     let resolved = m.get("resolvedModel").and_then(Value::as_str).unwrap_or("");
-                    let label = if resolved.is_empty() || resolved == id { name } else { format!("{name} ({resolved})") };
-                    Some(ModelChoice { id, label })
+                    let id = if resolved.is_empty() { alias.clone() } else { resolved.to_string() };
+                    let label = if alias == id { name } else { format!("{name} ({alias})") };
+                    Some(ModelChoice { id, label, default: alias == "default", ..Default::default() })
                 })
                 .collect()
         })
         .unwrap_or_default();
+    // "default" resolves to a model that is listed under its own name too:
+    // one entry per model, the named one, marked as the default.
+    let mut seen: Vec<ModelChoice> = Vec::new();
+    for m in models {
+        match seen.iter_mut().find(|s| s.id == m.id) {
+            Some(had) => {
+                had.default |= m.default;
+                if had.label.ends_with("(default)") {
+                    had.label = m.label;
+                }
+            }
+            None => seen.push(m),
+        }
+    }
+    let models = seen;
     *running.claude.models.lock().unwrap() = models;
     // Its models are listed either way; its turns need an account or a key.
     let signed_out = init.pointer("/account/tokenSource").and_then(Value::as_str) == Some("none");
@@ -193,7 +222,7 @@ pub async fn prompt(running: &Running, text: String, timeout: Duration) -> Resul
         return Err(e);
     }
     match tokio::time::timeout(timeout, rx).await {
-        Ok(Ok(result)) => result.map(|stop_reason| AcpOutcome { stop_reason }),
+        Ok(Ok(result)) => result.map(|stop_reason| AcpOutcome { stop_reason, ..Default::default() }),
         Ok(Err(_)) => Err(went_away()),
         Err(_) => Err(tr!("Claude Code 沒有及時完成這一輪。", "Claude Code did not finish the turn in time.")),
     }
@@ -302,13 +331,14 @@ pub async fn dispatch(route: &Route, state: &ClaudeState, msg: Value) {
                 return;
             }
             // The constitution first: refused here, or asked for whatever the rules say.
-            let ruled = crate::constitution::rule_for(&asked, &route.work_dir);
+            let ruled = crate::constitution::rule_for_in(&asked, &route.work_dir, route.auto.as_ref());
             if let Some((crate::constitution::Level::Never, rule)) = &ruled {
                 log::line(format!("claude {key}: {tool} refused by the constitution — {}", rule.text));
                 let _ = acp::write_line(&route.writer, &refusal_reply(state, &id, &rule.text)).await;
                 (route.sink)(Event::Refused(acp::Refusal { agent_id: key.clone(), title, rule: rule.text.clone() }));
                 return;
             }
+            let mut rule_id = ruled.as_ref().map(|(_, r)| r.id.clone());
             let rule = ruled.map(|(_, r)| r.text);
             let mut danger = None;
             if let Some(scope) = route.auto.as_ref().filter(|_| rule.is_none()) {
@@ -322,6 +352,7 @@ pub async fn dispatch(route: &Route, state: &ClaudeState, msg: Value) {
                     Verdict::Ask(why) => {
                         log::line(format!("claude {key}: {tool} waits for a person — {why:?}"));
                         danger = Some(why);
+                        rule_id = rule_id.or_else(|| policy::check_of(why).map(str::to_string));
                     }
                 }
             } else {
@@ -335,6 +366,7 @@ pub async fn dispatch(route: &Route, state: &ClaudeState, msg: Value) {
                 raw_input: input,
                 options: options(),
                 danger,
+                rule_id,
                 rule,
             }));
         }
@@ -532,7 +564,7 @@ mod tests {
                         "control_request" if msg["request"]["subtype"] == "initialize" => out.push(json!({
                             "type": "control_response",
                             "response": { "subtype": "success", "request_id": msg["request_id"], "response": {
-                                "models": [{ "value": "sonnet", "resolvedModel": "claude-sonnet-5-5", "displayName": "Sonnet" }] } } })),
+                                "models": [{ "value": "default", "resolvedModel": "claude-sonnet-5-5", "displayName": "Default (recommended)" }, { "value": "sonnet", "resolvedModel": "claude-sonnet-5-5", "displayName": "Sonnet" }] } } })),
                         "user" => {
                             asked += 1;
                             let command = msg["message"]["content"][0]["text"].as_str().unwrap().to_string();
@@ -614,9 +646,9 @@ mod tests {
             assert!(used.iter().all(|u| u.model == "claude-sonnet-5-5" && u.input == 100 && u.cache_read == 500 && u.output == 10));
             assert!((used[1].cost_usd.unwrap() - 0.1).abs() < 1e-9);
 
-            // The handshake's model list is what the drop-down offers.
+            // The handshake's model list is what the drop-down offers: the full id, with the alias beside it.
             let listed = agents.models(&claude_profile()).await.unwrap();
-            assert_eq!(listed, vec![ModelChoice { id: "sonnet".into(), label: "Sonnet (claude-sonnet-5-5)".into() }]);
+            assert_eq!(listed, vec![ModelChoice { id: "claude-sonnet-5-5".into(), label: "Sonnet (sonnet)".into(), default: true, ..Default::default() }]);
         });
     }
 
@@ -628,6 +660,7 @@ mod tests {
         let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
         let models = runtime.block_on(Agents::default().models(&claude_profile()));
         let models = models.expect("handshake");
-        assert!(models.iter().any(|m| m.id == "sonnet" || m.id == "opus"), "{models:?}");
+        eprintln!("{models:#?}");
+        assert!(models.iter().any(|m| m.id.starts_with("claude-") && (m.label.contains("(sonnet)") || m.label.contains("(opus)"))), "{models:?}");
     }
 }

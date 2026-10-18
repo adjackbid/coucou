@@ -106,9 +106,9 @@ function write(key: string, value: string | null) {
 export function savedMode(): PresentationMode {
   // A browser opened at `?mode=battle` (or `?mode=orbit`) starts in that mode, to look at it.
   const asked = import.meta.env?.DEV && typeof location !== "undefined" ? new URLSearchParams(location.search).get("mode") : null;
-  if (asked === "battle" || asked === "orbit") return asked;
+  if (asked === "battle" || asked === "orbit" || asked === "space") return asked;
   const saved = read("coucou.office.mode");
-  return saved === "battle" || saved === "orbit" ? saved : "office";
+  return saved === "battle" || saved === "orbit" || saved === "space" ? saved : "office";
 }
 
 /** Whether the company map plays each room's fight too (it costs more to draw); on unless turned off. */

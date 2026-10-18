@@ -2,11 +2,12 @@
 // what would bring it down. Charts drawn here from the usage records — the
 // cost piling up member by member, the context each call carried, what kind
 // of token the money went on — the members' work beside their spend, and
-// findings worked out from those numbers. The secretary can then be asked
+// findings worked out from those numbers. Agent Center can then be asked
 // to read the same numbers (its cost_analysis tool) and explain them.
 
 import { tr, trf } from "../core/i18n";
 import { h } from "../views/dom";
+import { fmtWork } from "./cost";
 import type { Activity, Found, UsageReport, UsageRow } from "./types";
 
 export interface AnalysisHost {
@@ -16,7 +17,7 @@ export interface AnalysisHost {
   tokens(n: number): string;
   /** "近 30 天" / "the last 30 days", "2026-10-01 ~ 2026-10-04". */
   periodLabel(): string;
-  /** The person asks the secretary; resolves to its words, or why not. */
+  /** The person asks Agent Center; resolves to its words, or why not. */
   consult(text: string): Promise<string>;
   openSecretary(): void;
 }
@@ -146,7 +147,9 @@ function cumulative(ms: Member[], rows: UsageRow[], host: AnalysisHost): HTMLEle
     let sum = 0;
     return list.filter((r) => r.estimatedUsd != null).map((r) => [r.at, (sum += r.estimatedUsd!)] as [number, number]);
   };
-  const series: Series[] = [{ label: tr("全隊", "Whole team"), color: "#f5f6f8", points: pile(rows), width: 3 }, ...ms.slice(0, 6).map((m) => ({ label: m.name, color: m.color, points: pile(m.rows) }))];
+  // The whole team in the page's own ink: white on dark glass, near-black on light.
+  const ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim() || "#f5f6f8";
+  const series: Series[] = [{ label: tr("全隊", "Whole team"), color: ink, points: pile(rows), width: 3 }, ...ms.slice(0, 6).map((m) => ({ label: m.name, color: m.color, points: pile(m.rows) }))];
   return chart(series, host.money, tr("這段期間沒有可以估價的用量。", "No usage that can be priced in this period."));
 }
 
@@ -238,7 +241,7 @@ function findings(report: UsageReport, ms: Member[], rows: UsageRow[], host: Ana
   const cached = rows.reduce((a, r) => a + r.usage.cacheRead, 0);
   const hit = inputSide ? cached / inputSide : 0;
   if (kinds.input / priced > 0.4 && hit < 0.5) {
-    out.push({ tone: "warn", title: trf("輸入佔成本 {pct}%,快取命中只有 {hit}%", "Input is {pct}% of the cost, with only {hit}% from the cache", { pct: Math.round((kinds.input / priced) * 100), hit: Math.round(hit * 100) }), advice: tr("同樣的內容每次都重新計費。讓成員在同一個 session 裡連續工作(Coucou 會沿用),避免一直換模型或重開;端點若支援提示快取,確認有開。", "The same content is billed again every time. Let members keep working in one session (Coucou keeps it), avoid switching models or restarting; if the endpoint supports prompt caching, make sure it is on.") });
+    out.push({ tone: "warn", title: trf("輸入佔成本 {pct}%,快取命中只有 {hit}%", "Input is {pct}% of the cost, with only {hit}% from the cache", { pct: Math.round((kinds.input / priced) * 100), hit: Math.round(hit * 100) }), advice: tr("同樣的內容每次都重新計費。讓成員在同一個 session 裡連續工作(Agent Center 會沿用),避免一直換模型或重開;端點若支援提示快取,確認有開。", "The same content is billed again every time. Let members keep working in one session (Agent Center keeps it), avoid switching models or restarting; if the endpoint supports prompt caching, make sure it is on.") });
   } else if (hit >= 0.8) {
     const saved = rows.reduce((a, r) => {
       const p = priceOf(report, r.usage.model)?.price;
@@ -303,7 +306,7 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
     asking = true;
     answer = null;
     host.render();
-    // Sent as the person's own question, so in their language: the secretary answers in it.
+    // Sent as the person's own question, so in their language: Agent Center answers in it.
     const text = await host.consult(
       trf(
         "幫我分析「{team}」在{period}的成本:為什麼這麼高(或這麼低)?怎麼優化、改善?請用具體數字說明,並給可以直接照做的建議。",
@@ -344,15 +347,15 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
       h(
         "div",
         { class: "ca-ask" },
-        h("button", { class: "btn primary", type: "button", disabled: asking, onClick: () => void ask() }, asking ? tr("秘書分析中…", "The secretary is analysing…") : tr("請秘書分析原因與優化方式", "Ask the secretary why, and how to cut it")),
-        h("span", { class: "hint", text: tr("秘書會讀同一份數字(成員、模型、回合、退件、快取),用你的聊天模型寫成說明與建議。", "The secretary reads the same numbers (members, models, turns, send-backs, cache) and explains them with advice, using your chat model.") }),
+        h("button", { class: "btn primary", type: "button", disabled: asking, onClick: () => void ask() }, asking ? tr("Agent Center 分析中…", "Agent Center is analysing…") : tr("請 Agent Center 分析原因與優化方式", "Ask Agent Center why, and how to cut it")),
+        h("span", { class: "hint", text: tr("Agent Center 會讀同一份數字(成員、模型、回合、退件、快取),用你的聊天模型寫成說明與建議。", "Agent Center reads the same numbers (members, models, turns, send-backs, cache) and explains them with advice, using your chat model.") }),
       ),
       answer && answer.team === picked
         ? h(
             "div",
             { class: "ca-answer" },
             wordsOf(answer.text),
-            h("button", { class: "link", type: "button", onClick: () => host.openSecretary() }, tr("到秘書頁繼續問 →", "Keep asking on the secretary's page →")),
+            h("button", { class: "link", type: "button", onClick: () => host.openSecretary() }, tr("到 Agent Center 頁繼續問 →", "Keep asking on Agent Center's page →")),
           )
         : null,
     ),
@@ -369,7 +372,7 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
         h(
           "table",
           {},
-          h("thead", {}, h("tr", {}, ...[tr("成員", "Member"), tr("模型", "Model"), tr("成本", "Cost"), tr("占比", "Share"), tr("回合", "Turns"), tr("每回合", "Per turn"), tr("交付", "Delivered"), tr("退回", "Sent back"), tr("驗收", "Accepted")].map((t, i) => h("th", { class: i > 1 ? "num" : "", text: t })))),
+          h("thead", {}, h("tr", {}, ...[tr("成員", "Member"), tr("模型", "Model"), tr("成本", "Cost"), tr("占比", "Share"), tr("回合", "Turns"), tr("每回合", "Per turn"), tr("工時", "Time"), tr("每小時", "Per hour"), tr("交付", "Delivered"), tr("退回", "Sent back"), tr("驗收", "Accepted")].map((t, i) => h("th", { class: i > 1 ? "num" : "", text: t })))),
           h(
             "tbody",
             {},
@@ -384,6 +387,8 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
                 h("td", { class: "num", text: `${usd ? Math.round((m.usd / usd) * 100) : 0}%` }),
                 h("td", { class: "num", text: String(m.did?.turns ?? 0) }),
                 h("td", { class: "num", text: m.did?.turns ? host.money(m.usd / m.did.turns) : "—" }),
+                h("td", { class: "num", text: m.did?.workMs ? fmtWork(m.did.workMs) : "—" }),
+                h("td", { class: "num", text: (m.did?.workMs ?? 0) >= 60_000 ? host.money(m.usd / (m.did!.workMs / 3_600_000)) : "—" }),
                 h("td", { class: "num", text: String(m.did?.delivered ?? 0) }),
                 h("td", { class: `num${(m.did?.rejected ?? 0) > 0 ? " warn-text" : ""}`, text: String(m.did?.rejected ?? 0) }),
                 h("td", { class: "num", text: String(m.did?.accepted ?? 0) }),
@@ -396,7 +401,7 @@ export function analysisView(report: UsageReport, host: AnalysisHost): HTMLEleme
   );
 }
 
-/** The secretary's words: paragraphs, lists, headings and **bold**. */
+/** Agent Center's words: paragraphs, lists, headings and **bold**. */
 function wordsOf(text: string): HTMLElement {
   const box = h("div", { class: "sec-words" });
   let list: HTMLElement | null = null;

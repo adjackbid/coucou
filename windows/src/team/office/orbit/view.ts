@@ -219,7 +219,7 @@ export class OrbitView {
         controls,
         h("div", { class: "orbit-scene-bottom" }, this.legend, say(h("span", { class: "orbit-gesture" }), (s) => (s.textContent = tr("拖曳旋轉 · 滾輪縮放 · 點光環看協作關係", "Drag to turn · scroll to zoom · click a ring to see who it works with")))),
       ),
-      (el) => el.setAttribute("aria-label", tr("可旋轉、縮放的 Agent 協作星域", "A universe of your agents and how they work together, to turn and zoom")),
+      (el) => el.setAttribute("aria-label", tr("Space:可旋轉、縮放的 Agent 協作宇宙", "Space: a universe of your agents and how they work together, to turn and zoom")),
     );
     say(this.fallback, (c) => c.setAttribute("aria-label", tr(
       "Agent 以彩色光環和光芯呈現,在星塵和柔光緩慢流動的宇宙中漂浮;同團隊以常駐光線連結,傳送資料時沿連線出現更亮的光流。",

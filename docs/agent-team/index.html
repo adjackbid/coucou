@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="description" content="Agent Team：接進內外部 AI Agent、建立 Agent Pool、由 Agent Center 自動組隊、即時看板與成本、人隨時介入。">
+<title>Agent Team｜投影簡報</title>
+<style>
+:root{--paper:#f5f2eb;--ink:#142e40;--muted:#526672;--accent:#bd421c;--line:#ccd3d0;--soft:#e7ece7;--white:#fffdf8;--font:"Segoe UI","Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);min-height:100svh}
+button,a{-webkit-tap-highlight-color:transparent}button{font:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
+a{color:var(--accent);text-underline-offset:3px}
+.topbar{max-width:1600px;margin:auto;padding:18px 4%;display:flex;justify-content:space-between;align-items:center;gap:20px;font-size:13px;letter-spacing:.08em}
+.brand{font-weight:750}.edition{color:var(--muted)}
+.progress{height:3px;width:100%;border:0;display:block;background:var(--line)}
+.progress::-webkit-progress-bar{background:var(--line)}.progress::-webkit-progress-value{background:var(--accent)}.progress::-moz-progress-bar{background:var(--accent)}
+.stage{max-width:1600px;margin:auto;height:calc(100svh - 150px);min-height:480px}
+.slide{padding:clamp(22px,3.6vw,56px) clamp(24px,4.2vw,68px);height:100%;display:flex;flex-direction:column;position:relative;overflow:auto}
+.slide[hidden]{display:none}.slide:focus{outline:none}
+@media print{.figs{margin-top:14px}.fig{break-inside:avoid}}
+.eyebrow{font-size:14px;font-weight:700;color:var(--accent);letter-spacing:.14em;margin:0 0 14px}
+h1,h2,h3,p{margin-top:0}
+h1{font-size:clamp(46px,6.4vw,92px);line-height:1.16;letter-spacing:-.035em;margin-bottom:24px;font-weight:780}
+h2{font-size:clamp(30px,3.8vw,54px);line-height:1.22;letter-spacing:-.025em;margin-bottom:18px}
+h3{font-size:clamp(20px,2.1vw,29px);line-height:1.3;margin-bottom:14px}
+.lead{font-size:clamp(20px,2.2vw,30px);line-height:1.6;max-width:1100px}
+.subtle{color:var(--muted)}.small{font-size:clamp(15px,1.4vw,19px);line-height:1.7}.accent{color:var(--accent)}
+.cover-layout{display:grid;grid-template-columns:1.35fr 1fr;align-items:center;gap:6%;flex:1}
+.cover-mark{position:relative;min-height:280px;display:grid;place-items:center;isolation:isolate}
+.cover-mark:before,.cover-mark:after{content:"";position:absolute;width:260px;height:260px;border:1px solid var(--line);border-radius:50%;z-index:-1}
+.cover-mark:after{width:190px;height:190px;border-color:var(--accent)}
+.cover-type{font-size:72px;font-weight:700;letter-spacing:-.06em;background:var(--paper);padding:0 14px}
+.cover-path{display:flex;gap:20px;flex-wrap:wrap;font-size:18px;line-height:1.6}
+.cover-path span{border-top:2px solid var(--accent);padding-top:12px;min-width:130px}
+.process{display:grid;grid-template-columns:repeat(var(--cols,3),1fr);gap:28px;margin:18px 0 20px}
+.step{border-top:2px solid var(--ink);padding-top:15px;position:relative}
+.step-number{font-size:14px;color:var(--accent);display:block;margin-bottom:12px;font-weight:750}
+.step h3{margin-bottom:8px}
+.step p{font-size:clamp(17px,1.7vw,23px);line-height:1.5;margin-bottom:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px 48px;margin:14px 0 18px}
+.pain{border-top:2px solid var(--ink);padding-top:14px}
+.pain h3{margin-bottom:8px}.pain p{font-size:clamp(17px,1.75vw,24px);line-height:1.55;margin:0}
+.takeaway{border-left:4px solid var(--accent);padding-left:18px;font-size:clamp(17px,1.9vw,24px);line-height:1.5;margin-top:auto;margin-bottom:12px}
+.compare{width:100%;border-collapse:collapse;font-size:clamp(16px,1.65vw,22px);line-height:1.45;margin:6px 0 14px;table-layout:fixed}
+.compare th{text-align:left;font-weight:700;padding:12px 16px;border-bottom:2px solid var(--ink)}
+.compare td{vertical-align:top;padding:12px 16px;border-bottom:1px solid var(--line)}
+.compare th:first-child,.compare td:first-child{padding-left:0}
+.compare .num{font-variant-numeric:tabular-nums;text-align:right}
+.source-line{font-size:13px;color:var(--muted);line-height:1.5;margin-top:auto;padding-top:16px}
+.slide-notes{display:none}
+.shot-layout{display:grid;grid-template-columns:1.55fr 1fr;gap:4%;flex:1;min-height:0;align-items:start}
+.shot-layout.tall{grid-template-columns:1.25fr 1fr}
+.shot{margin:0;min-height:0;height:100%;display:flex;flex-direction:column;gap:8px}
+.shot img{width:100%;max-height:100%;object-fit:contain;object-position:left top;border:1px solid var(--line);background:#fff;box-shadow:0 14px 34px -22px #142e4080;display:block;min-height:0}
+.shot figcaption{font-size:13px;color:var(--muted);line-height:1.5}
+.shot-wide{margin:6px 0 0;flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+.shot-wide img{width:100%;max-height:100%;object-fit:contain;object-position:left top;border:1px solid var(--line);background:#fff;box-shadow:0 14px 34px -22px #142e4080;display:block;min-height:0}
+.shot-wide figcaption{font-size:13px;color:var(--muted)}
+.side{display:flex;flex-direction:column;gap:14px}
+.side .point{border-top:2px solid var(--ink);padding-top:12px}
+.side .point h3{margin-bottom:6px;font-size:clamp(18px,1.7vw,24px)}
+.side .point p{font-size:clamp(15px,1.45vw,20px);line-height:1.55;margin:0}
+
+.row-list{margin:10px 0 18px;padding:0;list-style:none;counter-reset:items}
+.row-list li{display:grid;grid-template-columns:46px minmax(0,1fr);align-items:start;gap:14px;padding:12px 0;border-top:1px solid var(--line);font-size:clamp(17px,1.75vw,23px);line-height:1.5}
+.row-list li:before{counter-increment:items;content:counter(items,decimal-leading-zero);color:var(--accent);font-size:15px;font-weight:750;padding-top:4px}
+.row-list strong{font-weight:700}
+.two-column{display:grid;grid-template-columns:1fr 1fr;gap:6%;margin:10px 0 18px;flex:1;min-height:0}
+.column{border-top:2px solid var(--ink);padding-top:16px;min-height:0}
+.column p{font-size:clamp(16px,1.7vw,22px);line-height:1.6}
+.column ul{padding-left:1.1em;font-size:clamp(16px,1.6vw,21px);line-height:1.7;margin:0}
+.scale{display:grid;grid-template-columns:1fr 1fr 1fr;gap:26px;margin:14px 0 16px}
+.scale div{border-top:2px solid var(--ink);padding-top:14px}
+.scale .tag{font-size:clamp(26px,3vw,44px);font-weight:750;color:var(--accent);line-height:1.1;margin-bottom:10px}
+.scale p{font-size:clamp(17px,1.7vw,23px);line-height:1.55;margin:0}
+.prompt-example{border-left:4px solid var(--accent);padding:12px 18px;background:#e7ece780;margin:2px 0 16px;font-size:clamp(17px,1.8vw,23px);line-height:1.6}
+.hitl{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:8px 0 14px}
+.hitl div{border:1px solid var(--line);border-radius:6px;padding:12px 14px;font-size:clamp(15px,1.45vw,20px);line-height:1.5;background:var(--white)}
+.hitl b{display:block;color:var(--accent);margin-bottom:4px}
+.closing-line{font-size:clamp(20px,2.2vw,30px);color:var(--accent);font-weight:700;margin:6px 0 10px}
+/* 可點的示意圖 */
+.figs{display:grid;grid-template-columns:repeat(var(--fcols,4),1fr);gap:18px;margin:auto 0 10px}
+.fig{border:1px solid var(--line);background:var(--white);border-radius:8px;padding:12px 12px 10px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;text-align:center;color:var(--ink);transition:border-color .15s,transform .15s}
+.fig:hover{border-color:var(--accent);transform:translateY(-2px)}
+.fig svg{width:100%;height:clamp(110px,17vh,180px);overflow:visible}
+.fig .cap{font-size:14px;color:var(--muted);line-height:1.4}.fig .cap b{color:var(--ink);font-weight:700}
+.fig-hint{font-size:12px;color:var(--muted);letter-spacing:.08em;margin:0 0 8px}
+.fig-hint:before{content:"◎ ";color:var(--accent)}
+.fig .ic{stroke:var(--ink);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.fig .ac{stroke:var(--accent)}.fig .fa{fill:var(--accent);stroke:none}.fig .fi{fill:var(--ink);stroke:none}.fig .fs{fill:var(--soft);stroke:var(--line);stroke-width:1.5}.fig .fw{fill:var(--white);stroke:var(--ink);stroke-width:2}
+.fig text{font-family:var(--font);font-size:12px;fill:var(--ink)}
+.note-content .fig-body p{margin:0 0 10px}
+/* 成品示意 */
+.mock{flex:1;min-height:0;display:grid;grid-template-rows:auto 1fr;border:1px solid var(--line);border-radius:8px;background:#fff;overflow:hidden;box-shadow:0 14px 34px -22px #142e4080}
+.mock .bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted);background:#fafaf7}
+.mock .bar i{width:10px;height:10px;border-radius:50%;background:#d9d5cc;display:inline-block}
+.site{padding:26px 34px;display:grid;grid-template-rows:auto 1fr;gap:18px;min-height:0}
+.site .hero{display:grid;grid-template-columns:1.2fr 1fr;gap:24px;align-items:center}
+.site .hero h3{font-size:clamp(22px,2.4vw,34px);margin-bottom:8px}
+.site .hero p{font-size:clamp(14px,1.3vw,18px);color:var(--muted);margin:0}
+.site .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;min-height:0}
+.site .card{border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:8px;min-height:0}
+.site .card .img{height:90px;border-radius:6px;background:linear-gradient(135deg,#142e40,#3b6b85)}
+.site .card:nth-child(2) .img{background:linear-gradient(135deg,#bd421c,#e8955a)}
+.site .card:nth-child(3) .img{background:linear-gradient(135deg,#2f6f5e,#8fc9a8)}
+.site .card b{font-size:clamp(15px,1.3vw,19px)}.site .card span{font-size:clamp(13px,1.1vw,16px);color:var(--muted);line-height:1.5}
+.factory{display:grid;grid-template-columns:1.5fr 1fr;min-height:0}
+.factory svg{width:100%;height:100%;display:block}
+.factory .panel{border-left:1px solid var(--line);padding:16px 18px;display:flex;flex-direction:column;gap:12px;font-size:clamp(13px,1.2vw,17px)}
+.factory .kpi{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.factory .kpi div{border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.factory .kpi b{display:block;font-size:clamp(18px,1.9vw,26px);line-height:1.2}
+.factory .kpi span{color:var(--muted);font-size:12px}
+.factory .ev{border-top:1px solid var(--line);padding-top:8px;line-height:1.6}
+.factory .ev .warn{color:var(--accent);font-weight:700}
+/* 控制列 */
+.controls{max-width:1600px;margin:0 auto;padding:13px 4% 17px;display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:1px solid var(--line)}
+.nav-side{display:flex;gap:9px;align-items:center}
+.control{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:4px;padding:9px 15px;line-height:1.2;min-height:40px}
+.control:hover{background:var(--soft)}.control:disabled{opacity:.35;cursor:default}
+.counter{font-variant-numeric:tabular-nums;font-size:14px;min-width:64px;text-align:center}
+.keyboard-hint{color:var(--muted);font-size:13px}
+.notes-button,.fs-button{font-size:14px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+dialog{max-width:760px;width:calc(100% - 32px);max-height:85svh;border:1px solid var(--line);border-radius:6px;padding:28px;background:var(--white);color:var(--ink);line-height:1.7}
+dialog::backdrop{background:#142e4070}
+.dialog-head{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:20px}
+.dialog-head h2{font-size:24px;margin:0}
+.note-content{font-size:16px;overflow-wrap:anywhere}.note-content h3{font-size:19px;margin:20px 0 8px}.note-content li{margin:10px 0}.note-content ol,.note-content ul{padding-left:24px}
+.note-date{color:var(--muted);font-size:13px}
+.no-js{padding:16px;color:var(--accent)}
+/* 投影：全螢幕時只留投影片 */
+:fullscreen .topbar,:fullscreen .controls{display:none}
+:fullscreen .stage{height:calc(100svh - 3px);max-width:none;padding:0 2vw}
+:fullscreen .progress{position:fixed;left:0;right:0;bottom:0;z-index:5}
+@media(min-width:1600px){.stage{height:min(860px,calc(100svh - 150px))}}
+@media(max-width:760px){.figs{grid-template-columns:1fr 1fr}.topbar{padding:15px 6%;font-size:12px}.edition{letter-spacing:0}.stage{height:auto;min-height:calc(100svh - 150px)}.slide{min-height:calc(100svh - 150px);height:auto;padding:28px 6%}.cover-layout{grid-template-columns:1fr;gap:0}.cover-mark{display:none}h1{font-size:clamp(40px,9vw,64px)}h2{font-size:clamp(28px,6vw,40px)}.lead{font-size:20px}.cover-path{font-size:16px;gap:16px;margin:30px 0}.process,.grid2,.scale,.hitl,.two-column,.shot-layout,.shot-layout.tall,.site .cards,.factory{grid-template-columns:1fr}.shot,.shot-wide{height:auto}.shot img,.shot-wide img{max-height:none}.controls{padding:12px 6%;gap:8px}.keyboard-hint{display:none}.control{padding:10px}.factory .panel{border-left:0;border-top:1px solid var(--line)}}
+@media(prefers-reduced-motion:no-preference){.slide:not([hidden]){animation:appear .18s ease-out}@keyframes appear{from{opacity:.6;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}}
+@media print{@page{size:A4 landscape;margin:10mm}body{background:white}.topbar,.progress,.controls,dialog,.no-js{display:none!important}.stage{height:auto;max-width:none;min-height:0}.slide,.slide[hidden]{display:flex!important;page-break-after:always;break-after:page;height:188mm;min-height:0;padding:6mm 5mm;overflow:hidden;animation:none!important;break-inside:avoid}.slide:last-child{break-after:auto}.slide h1{font-size:50pt}.slide h2{font-size:28pt;margin-bottom:12px}.slide h3{font-size:18pt}.eyebrow{font-size:10pt;margin-bottom:8px}.lead{font-size:18pt;line-height:1.5}.source-line{font-size:8pt;padding-top:8px;margin-bottom:0}.shot img,.shot-wide img{box-shadow:none;max-height:120mm}.takeaway{font-size:15pt;margin-bottom:6px}.compare{font-size:14pt}.compare th,.compare td{padding:8px 10px}.step p,.pain p,.scale p,.column p,.column ul,.row-list li{font-size:15pt}.cover-mark{display:grid}.mock{box-shadow:none}}
+
+/* 實際畫面縮圖 */
+.fig.shotfig{padding:8px 8px 10px;gap:8px}
+.fig.shotfig img{width:100%;aspect-ratio:16/9;max-height:clamp(80px,12.5vh,170px);object-fit:cover;object-position:left top;border:1px solid var(--line);background:#131419;display:block}
+.figs.five .fig.shotfig .cap{font-size:13px}
+dialog.wide{max-width:min(1500px,calc(100% - 32px));width:100%}
+.big-shot{display:grid;grid-template-columns:1.7fr 1fr;gap:24px;align-items:start}
+.big-shot img{width:100%;border:1px solid var(--line);background:#131419;display:block}
+.big-shot .txt{font-size:16px;line-height:1.7}.big-shot .txt p{margin:0 0 10px}
+@media(max-width:900px){.big-shot{grid-template-columns:1fr}}
+/* 可點選的流程 */
+.flow{flex:1;min-height:0;display:grid;grid-template-rows:auto 1fr auto;gap:10px}
+.flow-steps{display:flex;gap:10px;flex-wrap:wrap}
+.flow-step{border:1px solid var(--line);background:var(--white);border-radius:999px;padding:7px 14px;font-size:14px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.flow-step b{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--soft);color:var(--ink);font-size:12px}
+.flow-step.on{border-color:var(--accent);color:var(--ink)}.flow-step.on b{background:var(--accent);color:#fff}
+.flow-step.done b{background:var(--ink);color:#fff}
+.flow-stage{min-height:0;position:relative;cursor:pointer;display:flex;justify-content:center;align-items:flex-start}
+.flow-stage img{width:auto;max-width:100%;height:100%;max-height:100%;object-fit:contain;border:1px solid var(--line);background:#131419;display:block;box-shadow:0 14px 34px -22px #142e4080}
+.flow-stage img[hidden]{display:none}
+.figs.illus .fig svg{height:clamp(84px,12.5vh,140px)}
+.flow-pop{position:relative;height:100%;max-height:100%;display:flex;justify-content:center}.flow-pop[hidden]{display:none}.flow-pop>img{width:auto;max-width:100%;height:100%;object-fit:contain;border:1px solid var(--line);background:#131419;display:block;filter:brightness(.55)}.flow-pop>video{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64%;max-height:84%;border:1px solid #ffffff2e;border-radius:10px;background:#0b0c10;box-shadow:0 36px 90px -24px #000d}
+.flow-next{position:absolute;right:14px;bottom:14px;background:var(--accent);color:#fff;border:0;border-radius:999px;padding:9px 16px;font-size:14px;font-weight:700;box-shadow:0 8px 20px -8px #0008}
+.flow-next.end{background:var(--ink)}
+.flow-cap{font-size:14px;color:var(--muted);line-height:1.5;min-height:2.6em}
+.flow-cap b{color:var(--ink)}
+</style>
+</head>
+<body>
+<header class="topbar"><span class="brand">Agent Team</span><span class="edition">15 張認識平台、流程與畫面</span></header>
+<progress class="progress" id="progress" value="1" max="17" aria-label="簡報進度"></progress>
+<main class="stage" id="deck" aria-label="Agent Team 簡報">
+
+<section class="slide" id="slide-1" aria-labelledby="title-1" tabindex="-1">
+  <div class="cover-layout">
+    <div><p class="eyebrow">Agent Team</p><h1 id="title-1">把內外部 AI Agent<br><span class="accent">組成團隊</span></h1><p class="lead subtle">像管理一間公司一樣，管理你的 Agent</p></div>
+    <div class="cover-mark" aria-hidden="true"><span class="cover-type">A<span class="accent">✳</span>T</span></div>
+  </div>
+  <div class="cover-path"><span>為什麼需要</span><span>五個環節</span><span>Agent Center 組隊</span><span>看板與人介入</span><span>Skill 與成本</span></div>
+  <aside class="slide-notes"><h3>開場</h3><p>一句話：Agent Team 是一個管理與調度 AI Agent 的平台。接進雲端與地端的各種 Agent、放進 Agent Pool、由 Agent Center 依需求自動組隊；團隊執行時隨時看得到進度與花費，人也隨時可以介入。</p><p>按 F 進入全螢幕投影；← → 翻頁；N 開講者備註。</p></aside>
+</section>
+
+<section class="slide" id="slide-2" aria-labelledby="title-2" tabindex="-1" hidden>
+  <p class="eyebrow">01　為什麼需要</p><h2 id="title-2">AI Agent 越多，越需要一個「組隊與管理」的地方</h2>
+  <p class="lead">一個人手上同時有 Claude Code、Codex、Gemini、公司內部的 LocalLLM、還有 n8n 流程。每一個都很強，但各自為政。</p>
+  <div class="grid2">
+    <div class="pain"><h3>Agent 散落各處</h3><p>雲端服務、地端模型、自動化流程各有入口與金鑰，沒有統一名冊，也分不清誰能做什麼。</p></div>
+    <div class="pain"><h3>一件事需要多種專長</h3><p>寫網頁要企劃、設計、前端、審查；做系統要 3D、後端、UI/UX、測試。單一 agent 做不好，人工串接又慢。</p></div>
+    <div class="pain"><h3>進度與花費看不見</h3><p>各 agent 各自回報 token，模型單價不同，到底花了多少、誰花的、花在哪，事後才知道。</p></div>
+    <div class="pain"><h3>自動化不等於失控</h3><p>團隊跑起來後，人需要能加人、改任務、下指示、按暫停，而不是只能等結果。</p></div>
+  </div>
+  <p class="fig-hint">點圖看這些問題長什麼樣</p>
+  <div class="figs illus">
+    <button class="fig" type="button" data-fig="p-scatter"><svg viewBox="0 0 200 110"><g class="fw"><circle cx="34" cy="30" r="17"/><circle cx="100" cy="22" r="17"/><circle cx="166" cy="34" r="17"/><circle cx="58" cy="82" r="17"/><circle cx="142" cy="84" r="17"/></g><g font-size="7" text-anchor="middle" fill="var(--ink)"><text x="34" y="33">Claude</text><text x="100" y="25">Codex</text><text x="166" y="37">Gemini</text><text x="58" y="85">Local</text><text x="142" y="87">n8n</text></g><g class="ic ac" stroke-dasharray="3 3"><path d="M49 34 L85 26 M115 26 L151 32 M44 44 L52 66 M156 48 L148 70 M73 82 L127 84"/></g><g class="fa"><circle cx="46" cy="18" r="4"/><circle cx="112" cy="10" r="4"/><circle cx="178" cy="22" r="4"/><circle cx="70" cy="70" r="4"/><circle cx="154" cy="72" r="4"/></g><text x="100" y="62" text-anchor="middle" font-size="16" font-weight="700" fill="var(--accent)">?</text></svg><span class="cap"><b>散落各處</b><br>五個入口、五把金鑰</span></button>
+    <button class="fig" type="button" data-fig="p-skills"><svg viewBox="0 0 200 110"><g class="fw"><rect x="70" y="38" width="60" height="30" rx="4"/></g><text x="100" y="57" text-anchor="middle" font-size="10" font-weight="700" fill="var(--ink)">一個網頁</text><g class="fs"><rect x="6" y="8" width="40" height="18" rx="3"/><rect x="154" y="8" width="40" height="18" rx="3"/><rect x="6" y="84" width="40" height="18" rx="3"/><rect x="154" y="84" width="40" height="18" rx="3"/></g><g font-size="8.5" text-anchor="middle" fill="var(--ink)"><text x="26" y="20">企劃</text><text x="174" y="20">設計</text><text x="26" y="96">前端</text><text x="174" y="96">審查</text></g><g class="ic ac"><path d="M46 17 C70 17 60 50 70 50 M154 17 C130 17 140 50 130 50 M46 93 C70 93 60 60 70 60 M154 93 C130 93 140 60 130 60"/></g><g class="ic"><path d="M100 76 v12 M92 100 l8 -10 8 10 M100 80 m-5 0 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0"/></g><text x="100" y="20" text-anchor="middle" font-size="8" fill="var(--muted)">人工一段一段接</text></svg><span class="cap"><b>多種專長</b><br>人在中間手動串接</span></button>
+    <button class="fig" type="button" data-fig="p-cost"><svg viewBox="0 0 200 110"><g class="fs"><rect x="26" y="60" width="22" height="36"/><rect x="62" y="40" width="22" height="56"/><rect x="98" y="72" width="22" height="24"/></g><g class="ic"><path d="M16 96 h116"/></g><g font-size="8" text-anchor="middle" fill="var(--muted)"><text x="37" y="106">A</text><text x="73" y="106">B</text><text x="109" y="106">C</text></g><g font-size="9" text-anchor="middle" fill="var(--accent)" font-weight="700"><text x="37" y="54">?k</text><text x="73" y="34">? M</text><text x="109" y="66">—</text></g><g class="fw"><rect x="144" y="18" width="44" height="74" rx="3"/></g><g class="ic" stroke-width="1.5"><path d="M152 32 h28 M152 44 h28 M152 56 h18"/></g><text x="166" y="82" text-anchor="middle" font-size="14" font-weight="700" fill="var(--accent)">$ ?</text><text x="80" y="18" text-anchor="middle" font-size="8" fill="var(--muted)">各自回報、單位不同</text></svg><span class="cap"><b>看不見</b><br>花了多少，事後才知道</span></button>
+    <button class="fig" type="button" data-fig="p-control"><svg viewBox="0 0 200 110"><g class="ic ac"><path d="M118 55 a34 34 0 1 1 -10 -24"/><path d="M104 26 l6 6 -8 3"/></g><g class="fw"><circle cx="84" cy="55" r="12"/></g><g font-size="8" text-anchor="middle" fill="var(--ink)"><text x="84" y="58">自動</text></g><g class="ic"><path d="M150 38 v22 M150 44 m-5 0 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0 M142 74 l8 -12 8 12"/></g><g class="ic" stroke-dasharray="3 3"><path d="M130 20 v70"/></g><g class="fs"><rect x="150" y="86" width="40" height="16" rx="8"/></g><text x="170" y="97" text-anchor="middle" font-size="8" fill="var(--muted)">暫停？</text><text x="60" y="104" text-anchor="middle" font-size="8" fill="var(--muted)">跑起來就只能等</text></svg><span class="cap"><b>失控</b><br>人在迴圈外</span></button>
+  </div>
+  <template id="p-scatter"><div class="fig-body"><p><b>Agent 散落各處。</b>Claude Code、Codex、Gemini 各有自己的登入與金鑰，公司內部的 LocalLLM 在另一台機器上，n8n 流程又在瀏覽器裡。要用誰，就得去那個入口。</p><p>沒有一份名冊寫著「我們有哪些 Agent、各自擅長什麼、一次多少錢」；新人問起來，答案在每個人腦子裡。</p></div></template>
+  <template id="p-skills"><div class="fig-body"><p><b>一件事需要多種專長。</b>做一個網頁要企劃、設計、前端、審查；做一套系統要 3D、後端、UI/UX、測試。單一 agent 什麼都做，結果就是每一段都普通。</p><p>於是人站在中間：把 A 的輸出貼給 B，再把 B 的結果拿給 C 審，來回搬運。慢，而且錯都出在交接。</p></div></template>
+  <template id="p-cost"><div class="fig-body"><p><b>進度與花費看不見。</b>每個 agent 用自己的方式回報 token（有的連報都不報），模型單價又不一樣，沒人能即時說出「這個案子到現在花了多少、誰花最多、花在哪」。</p><p>進度也一樣：誰做完了、誰卡住、誰在等人，要一個一個視窗去翻。</p></div></template>
+  <template id="p-control"><div class="fig-body"><p><b>自動化不等於失控。</b>流程一跑起來，人就在迴圈外面：想加一個需求、換一個人、先停一下，都沒有地方下手，只能等它跑完再看結果。</p><p>更怕的是它要裝套件、刪檔案、對外送東西時，沒有人在那一刻說「等等」。</p></div></template>
+  <p class="takeaway">真正的工作需要好幾種專長一起做，而且做的時候人要看得到、能插手。</p>
+  <aside class="slide-notes"><h3>講法</h3><p>先問聽眾：你現在同時用幾個 AI 工具？結果怎麼合在一起？花了多少錢知道嗎？四個痛點各點一張示意圖把問題講清楚；怎麼解留到後面的畫面再揭曉。</p></aside>
+</section>
+
+
+<section class="slide" id="slide-3" aria-labelledby="title-3" tabindex="-1" hidden>
+  <p class="eyebrow">02　整體架構</p><h2 id="title-3">五個環節，從「接進 Agent」到「人介入」</h2>
+  <div class="process" style="--cols:5">
+    <div class="step"><span class="step-number">1 · Agent Provider</span><h3>管理內外部 Agent</h3><p>Cloud Agent、Local Agent、n8n 節點。</p></div>
+    <div class="step"><span class="step-number">2 · Agent Pool</span><h3>依需求建立 Agent</h3><p>指定模型、分類、Effort、Skill。</p></div>
+    <div class="step"><span class="step-number">3 · Agent Center</span><h3>自動判斷怎麼組隊</h3><p>Harness + Skill 決定規模與分工。</p></div>
+    <div class="step"><span class="step-number">4 · Agent Team</span><h3>團隊執行、即時看板</h3><p>任務、交付、token、費用、工時。</p></div>
+    <div class="step"><span class="step-number">5 · Human in the loop</span><h3>人隨時介入</h3><p>加人、改任務、下指示、暫停。</p></div>
+  </div>
+  <p class="fig-hint">點畫面看每個環節</p>
+  <div class="figs five" style="--fcols:5">
+    <button class="fig shotfig" type="button" data-fig="r-1"><img src="shots/01-provider-settings.png" alt="" loading="lazy"><span class="cap"><b>1 · Provider</b><br>接進來</span></button>
+    <button class="fig shotfig" type="button" data-fig="r-2"><img src="shots/02-agent-pool.png" alt="" loading="lazy"><span class="cap"><b>2 · Pool</b><br>建專長</span></button>
+    <button class="fig shotfig" type="button" data-fig="r-3"><img src="shots/04c-center-plan.png" alt="" loading="lazy"><span class="cap"><b>3 · Center</b><br>自動組隊</span></button>
+    <button class="fig shotfig" type="button" data-fig="r-4"><img src="shots/05-team-board.png" alt="" loading="lazy"><span class="cap"><b>4 · Team</b><br>即時看板</span></button>
+    <button class="fig shotfig" type="button" data-fig="r-5"><img src="shots/06-hitl.png" alt="" loading="lazy"><span class="cap"><b>5 · Human</b><br>隨時介入</span></button>
+  </div>
+  <template id="r-1" data-img="shots/01-provider-settings.png"><div class="fig-body"><p><b>第 1 環：Agent Provider。</b>把 Cloud Agent、Local Agent、n8n 節點接進同一個名冊，握手時自動偵測模型、能力與價位，金鑰集中保管。</p></div></template>
+  <template id="r-2" data-img="shots/02-agent-pool.png"><div class="fig-body"><p><b>第 2 環：Agent Pool。</b>依需求建立不同專長的 Agent：指定模型、分類、Effort、Skill，建立時就看到單價。這是 Agent Center 挑人的來源。</p></div></template>
+  <template id="r-3" data-img="shots/04c-center-plan.png"><div class="fig-body"><p><b>第 3 環：Agent Center。</b>讀自己的規劃 Skill（Harness）判斷 Quick / Medium / Large，挑人、分工、指定審查者，提出方案卡；人確認後開工。</p></div></template>
+  <template id="r-4" data-img="shots/05-team-board.png"><div class="fig-body"><p><b>第 4 環：Agent Team。</b>團隊執行時，看板與 Office 即時顯示任務、交付、每位成員的回合、token、費用、工時；所有事件寫在本機的 events.jsonl，中斷後可從原處繼續。</p></div></template>
+  <template id="r-5" data-img="shots/06-hitl.png"><div class="fig-body"><p><b>第 5 環：Human in the loop。</b>核准危險操作、回答成員提問、加人、改任務、下指示、暫停、結束團隊；成本與時間有上限。</p></div></template>
+  <p class="takeaway">資料都留在本機：團隊事件寫成 events.jsonl，金鑰存在 Windows 認證管理員，前端永遠看不到。</p>
+  <aside class="slide-notes"><h3>講法</h3><p>從左講到右。強調 3 與 5：組隊是自動的，但人隨時可以插手，兩者不衝突。</p></aside>
+</section>
+
+<section class="slide" id="slide-4" aria-labelledby="title-4" tabindex="-1" hidden>
+  <p class="eyebrow">03　Agent Provider</p><h2 id="title-4">內部或外部，自由新增</h2>
+  <div class="shot-layout">
+    <figure class="shot"><img src="shots/01-provider-settings.png" alt="設定視窗的 Agent Provider 頁面" loading="lazy"><figcaption>設定 › Agent Provider。Open AI（Codex）與 Anthropic（Claude Code）兩個 Cloud Agent：連線方式、模型、價位 $$$ 與輸入／輸出單價、上下文、能力標記。</figcaption></figure>
+    <div class="side">
+      <div class="point"><h3>Cloud Agent</h3><p>外部雲端服務：Claude Code、Codex、Antigravity 等 coding CLI，或任何 OpenAI 相容端點。</p></div>
+      <div class="point"><h3>Local Agent</h3><p>公司自己的模型端點或本機模型，工作與資料留在內網。</p></div>
+      <div class="point"><h3>n8n 節點</h3><p>既有的自動化流程包成一個成員，由 Webhook 收任務、回結果。</p></div>
+      <div class="point"><h3>金鑰集中保管</h3><p>存在 Windows 認證管理員，改一次全部更新。</p></div>
+    </div>
+  </div>
+  <aside class="slide-notes"><h3>講法</h3><p>指出畫面上的價位標記（$ 到 $$$$）與能力標記（看圖、思考、生圖、上網、Code）。三種來源用同一個名冊管理，團隊成員不分來源可以混搭。</p></aside>
+</section>
+
+<section class="slide" id="slide-5" aria-labelledby="title-5" tabindex="-1" hidden>
+  <p class="eyebrow">03　Agent Pool</p><h2 id="title-5">依需求建立不同專長的 Agent</h2>
+  <div class="shot-layout">
+    <figure class="shot"><img src="shots/02-agent-pool.png" alt="Agent Pool 環狀檢視" loading="lazy"><figcaption>Teamwork › Agent Pool 環狀檢視。中央是 Agent Center，內圈 3 個 Local Agent，外圈 6 個 Cloud Agent；也可切換成卡片檢視。</figcaption></figure>
+    <div class="side">
+      <div class="point"><h3>分類</h3><p>規劃審查、程式開發、UI/UX 設計、文件簡報、文案、研究、圖片影音、工具自動化。</p></div>
+      <div class="point"><h3>能力</h3><p>看圖、思考、生圖、上網、Code，由 Provider 握手時自動偵測，也可以手動調整。</p></div>
+      <div class="point"><h3>Effort 與 Skill</h3><p>每個 Agent 可設思考深度與帶著開工的 Skill。</p></div>
+    </div>
+  </div>
+  <aside class="slide-notes"><h3>講法</h3><p>Agent Pool 是「人才庫」：同一個模型可以建成多個不同專長的 Agent。Agent Center 挑人時看的就是這裡的分類、能力、價位與最近花費。</p></aside>
+</section>
+
+<section class="slide" id="slide-6" aria-labelledby="title-6" tabindex="-1" hidden>
+  <p class="eyebrow">03　建立 Agent</p><h2 id="title-6">選模型時就看到單價與價位</h2>
+  <div class="shot-layout tall">
+    <figure class="shot"><img src="shots/03-agent-editor.png" alt="Agent 編輯視窗" loading="lazy"><figcaption>Agent Pool › 編輯 Agent。模型下方直接顯示「輸入 $ · 輸出 $ /M」與上下文長度，再設分類、Effort、說明與 Skill。</figcaption></figure>
+    <div class="side">
+      <div class="point"><h3>價格怎麼來</h3><p>自訂價目 › 代理端點回報 › 公開價目表（LiteLLM），依序取用。</p></div>
+      <div class="point"><h3>別名自動對應</h3><p>opus、fable、sonnet 自動對到完整模型；價目表沒有的版本先用同系列最新價格並標示「≈」。</p></div>
+      <div class="point"><h3>沒有價格會提醒</h3><p>找不到價格的模型顯示「無價格」，避免事後算不出費用。</p></div>
+    </div>
+  </div>
+  <aside class="slide-notes"><h3>講法</h3><p>成本控管從建立 Agent 這一步就開始：還沒組隊就知道這個人多貴。</p></aside>
+</section>
+
+<section class="slide" id="slide-7" aria-labelledby="title-7" tabindex="-1" hidden>
+  <p class="eyebrow">04　Agent Center</p><h2 id="title-7">一句話，組好一個團隊</h2>
+  <div class="flow" id="flow">
+    <div class="flow-steps"><span class="flow-step on" data-step="0"><b>1</b>說需求</span><span class="flow-step" data-step="1"><b>2</b>從 Agent Pool 挑人</span><span class="flow-step" data-step="2"><b>3</b>提出方案，給你選項</span><span class="flow-step" data-step="3"><b>4</b>建立團隊</span></div>
+    <div class="flow-stage" id="flowStage" title="點一下看下一步">
+      <img src="shots/04a-center-input.png" alt="Agent Center：輸入需求" data-step="0">
+      <div class="flow-pop" data-step="1" hidden><img src="shots/04a-center-input.png" alt="" loading="lazy"><video src="shots/04b-picking.mp4" poster="shots/04b-picking.png" muted loop playsinline preload="metadata" aria-label="Agent Center 挑人動畫"></video></div>
+      <img src="shots/04c-center-plan.png" alt="Agent Center：提出團隊方案與選項" data-step="2" hidden loading="lazy">
+      <img src="shots/05-team-board.png" alt="團隊建立，進入看板" data-step="3" hidden loading="lazy">
+      <button class="flow-next" id="flowNext" type="button">下一步 →</button>
+    </div>
+    <p class="flow-cap" id="flowCap"></p>
+  </div>
+  <aside class="slide-notes"><h3>講法</h3><p>四步都是真的操作畫面：打一段需求送出；Agent Center 跳出挑人畫面，從 Agent Pool 裡掃一遍、點亮選中的人；接著提出方案卡與選項，等人決定；確認後團隊建立，進到看板。點畫面或「下一步」切換。</p></aside>
+</section>
+
+
+<section class="slide" id="slide-8" aria-labelledby="title-8" tabindex="-1" hidden>
+  <p class="eyebrow">05　團隊看板</p><h2 id="title-8">任務、交付、token、費用、工時，即時顯示</h2>
+  <div class="shot-layout">
+    <figure class="shot"><img src="shots/05-team-board.png" alt="團隊看板" loading="lazy"><figcaption>Teamwork › 看板。整體進度、已驗收任務、回合、已執行時間、tokens、費用、工作時間；每位成員一張卡，含最新回合、tokens、費用與「工作」時間；下方是任務看板與最新協作。</figcaption></figure>
+    <div class="side">
+      <div class="point"><h3>進度</h3><p>任務狀態與已驗收數量，最新協作訊息即時捲動。</p></div>
+      <div class="point"><h3>每位成員</h3><p>回合數、失敗回合、token、依價目表算出的費用、累計工作時間。</p></div>
+      <div class="point"><h3>整隊合計</h3><p>看板標題列彙總全隊 token、費用與工時；多人同時工作時，工時會比已執行時間長。費用依你設定的幣別顯示。</p></div>
+    </div>
+  </div>
+  <aside class="slide-notes"><h3>講法</h3><p>工時是每個回合從開始到結束的時間加總，用來看「誰花了多少時間在這個案子上」。</p></aside>
+</section>
+
+<section class="slide" id="slide-9" aria-labelledby="title-9" tabindex="-1" hidden>
+  <p class="eyebrow">05　Human in the loop</p><h2 id="title-9">團隊跑的時候，人隨時可以插手</h2>
+  <div class="shot-layout">
+    <figure class="shot"><img src="shots/06-hitl.png" alt="人類介入控制" loading="lazy"><figcaption>Codex Sol 要安裝套件，先停下來等人「允許這一次」或「拒絕」；組長提問等你回覆；右上角是暫停、全部中斷、結束團隊，「＋ 加人手」在團隊現場右側，底下是下指示的輸入列。</figcaption></figure>
+    <div class="hitl">
+      <div><b>＋ 新增人手</b>從 Agent Pool 再拉一個人進來。</div>
+      <div><b>✎ 調整任務</b>改範圍、改驗收條件、拆任務。</div>
+      <div><b>💬 新增指示</b>對全隊或單一成員下一句話。</div>
+      <div><b>⏸ 暫停 / 繼續</b>中斷後從原處接著跑。</div>
+      <div><b>✓ 核准</b>刪檔、對外送出等危險操作先問人。</div>
+      <div><b>■ 結束</b>收尾、留下成果與統計。</div>
+    </div>
+  </div>
+  <aside class="slide-notes"><h3>講法</h3><p>還有：回答成員的提問、打斷單一成員這一回合。重點是「自動化不等於失控」。</p></aside>
+</section>
+
+<section class="slide" id="slide-10" aria-labelledby="title-10" tabindex="-1" hidden>
+  <p class="eyebrow">05　憲法</p><h2 id="title-10">所有成員都要遵守的規則</h2>
+  <div class="shot-layout">
+    <figure class="shot"><img src="shots/12-constitution.png" alt="憲法頁面" loading="lazy"><figcaption>Teamwork › 憲法。內建條文與自訂條文，每條可設「一般規則／要問我／絕對不能做」；每個成員開工時都會帶著這份規則。</figcaption></figure>
+    <div class="side">
+      <div class="point"><h3>一處管理</h3><p>規則寫一次，所有團隊、所有成員都適用，不必每個 Agent 各寫一份。</p></div>
+      <div class="point"><h3>人訂的底線</h3><p>什麼不能做、什麼要先問人、交付要長什麼樣，由人決定，Agent 照做。</p></div>
+      <div class="point"><h3>與 Skill 分工</h3><p>憲法是底線，Skill 是方法：前者所有人共用，後者依專長派發。</p></div>
+    </div>
+  </div>
+  <aside class="slide-notes"><h3>講法</h3><p>憲法與 HITL 是一組：事前用規則約束，事中用核准把關。</p></aside>
+</section>
+
+<section class="slide" id="slide-11" aria-labelledby="title-11" tabindex="-1" hidden>
+  <p class="eyebrow">05　Office 檢視</p><h2 id="title-11">把團隊看成一間辦公室</h2>
+  <figure class="shot-wide"><img src="shots/07-office.png" alt="Office 檢視" loading="lazy"><figcaption>Teamwork › Office。每位成員一個座位，頭上標示在做什麼；右側是辦公室動態與之前的執行紀錄，下方是每位成員的 tokens 與費用。</figcaption></figure>
+  <aside class="slide-notes"><h3>講法</h3><p>Office 與看板是同一份資料的兩種看法：看板給做事的人，Office 給巡視的人。</p></aside>
+</section>
+
+<section class="slide" id="slide-12" aria-labelledby="title-12" tabindex="-1" hidden>
+  <p class="eyebrow">06　同時組多個團隊</p><h2 id="title-12">Standard：一眼看到所有 Agent Team 的概況</h2>
+  <div class="shot-layout">
+    <figure class="shot"><img src="shots/08-company-overview.png" alt="公司總覽（Standard）" loading="lazy"><figcaption>Teamwork › 公司總覽（Standard）。四個團隊各一間辦公室，中央是 Agent Center；右側是員工、工作中、等你處理、預估成本、工時，以及各隊的任務、token、成本、工時；下方是需要你注意的事。</figcaption></figure>
+    <div class="side">
+      <div class="point"><h3>多團隊並行</h3><p>可以同時跑多個團隊，各自有看板、各自記帳。</p></div>
+      <div class="point"><h3>總覽數字</h3><p>員工（Agent）總數、工作中、等你處理、休息待命、各隊預估成本與合計工時。</p></div>
+      <div class="point"><h3>進出</h3><p>點一間看摘要，雙擊進入那個團隊的看板。</p></div>
+    </div>
+  </div>
+  <aside class="slide-notes"><h3>講法</h3><p>「等你處理」是最重要的數字：那是需要人回答或核准的團隊。</p></aside>
+</section>
+
+<section class="slide" id="slide-13" aria-labelledby="title-13" tabindex="-1" hidden>
+  <p class="eyebrow">07　Skill</p><h2 id="title-13">Skill 讓 Agent 帶著方法開工</h2>
+  <div class="shot-layout">
+    <figure class="shot"><img src="shots/10-skills.png" alt="Skill 市集" loading="lazy"><figcaption>設定 › Skill 市集。最上面是 Agent Center 自己讀的 agent-center-planning，其餘是從 GitHub 來的 skill，附來源、更新日期與星數；預設 15 份初次安裝就在。</figcaption></figure>
+    <div class="side">
+      <div class="point"><h3>給成員用的</h3><p>派給組長或成員，開工時把全文帶進它的腦袋：superpowers、ui-ux-pro-max、pptx、marketing-skills……</p></div>
+      <div class="point"><h3>Agent Center 自己讀的</h3><p>標 for: agent-center，只影響它怎麼判斷規模、挑人、分工，不會派給成員。</p></div>
+      <div class="point"><h3>自己寫</h3><p>一份 SKILL.md 放進資料夾就是一個 Skill。</p></div>
+    </div>
+  </div>
+  <aside class="slide-notes"><h3>講法</h3><p>Skill 是方法，Agent 是人，Provider 是模型：三者分開，才能自由組合。</p></aside>
+</section>
+
+<section class="slide" id="slide-14" aria-labelledby="title-14" tabindex="-1" hidden>
+  <p class="eyebrow">08　成本控管</p><h2 id="title-14">每一顆 token 都知道是誰、用哪個模型、花了多少</h2>
+  <div class="shot-layout">
+    <figure class="shot"><img src="shots/09b-cost-analysis.png" alt="成本分析" loading="lazy"><figcaption>Teamwork › 成本與用量 › 分析。各成員累積 token 曲線、成本花在哪種 token（輸入／輸出／快取），以及成員效率表：成本、回合、工時、每小時、交付／退回／驗收。</figcaption></figure>
+    <div class="side">
+      <div class="point"><h3>自動計價</h3><p>成員回報用量，平台依價目表計價，換算成你設定的幣別。</p></div>
+      <div class="point"><h3>上限與警示</h3><p>每位成員可設 token 上限與金額上限；團隊可設時間上限。到上限成員會停、團隊會提醒收尾。</p></div>
+      <div class="point"><h3>診斷與建議</h3><p>分析頁上方會指出成本集中在誰、快取命中率、退回次數與每小時成本；也可以請 Agent Center 讀用量紀錄，說明錢花在哪。</p></div>
+    </div>
+  </div>
+  <aside class="slide-notes"><h3>講法</h3><p>看板、Office、公司總覽、成本頁看到的是同一份用量紀錄，只是切法不同。</p></aside>
+</section>
+
+<section class="slide" id="slide-15" aria-labelledby="title-15" tabindex="-1" hidden>
+  <p class="eyebrow">09　小結</p><h2 id="title-15">一個平台，四件事</h2>
+  <ol class="row-list">
+    <li><span><strong>管理</strong>　內部、外部、n8n 三種 Agent 進同一個名冊，金鑰集中保管，能力與價位一目了然。</span></li>
+    <li><span><strong>建立</strong>　在 Agent Pool 依需求建立不同專長的 Agent，指定模型、Effort、Skill。</span></li>
+    <li><span><strong>組隊</strong>　Agent Center 依 Harness 與 Skill 判斷規模、挑人、分工，一句話就能開工；可同時跑多個團隊。</span></li>
+    <li><span><strong>掌控</strong>　進度、交付、token、費用、工時即時可見；人隨時加人、改任務、下指示、暫停；成本有上限。</span></li>
+  </ol>
+  <p class="closing-line">AI Agent 越多，越需要一個組隊與管理的地方。</p>
+  <aside class="slide-notes"><h3>結尾</h3><p>回到開頭的四個痛點，每一個都有對應的畫面。接著開現場 demo：打開 Teamwork，走一次 Agent Center 組隊。</p></aside>
+</section>
+
+</main>
+<nav class="controls" aria-label="投影片控制">
+  <div class="nav-side"><button class="control notes-button" id="notesButton" type="button">講者備註</button><button class="control fs-button" id="fsButton" type="button">全螢幕投影</button></div>
+  <span class="keyboard-hint">← → 翻頁　Home / End 首末頁　F 全螢幕　N 備註</span>
+  <div class="nav-side"><button class="control" id="prev" type="button" aria-label="上一張投影片">←</button><output class="counter" id="counter" aria-live="polite" aria-atomic="true">01 / 15</output><button class="control" id="next" type="button" aria-label="下一張投影片">→</button></div>
+</nav>
+<dialog id="notesDialog" aria-labelledby="notesTitle"><div class="dialog-head"><h2 id="notesTitle">講者備註</h2><button class="control" id="closeNotes" type="button" aria-label="關閉">關閉 ×</button></div><div class="note-content" id="noteContent"></div></dialog>
+<noscript><style>.slide[hidden]{display:flex}.stage,.slide{height:auto}.controls{display:none}</style><p class="no-js">JavaScript 未啟用，目前以連續頁面顯示全部投影片。</p></noscript>
+<script>
+(()=>{'use strict';
+const slides=Array.from(document.querySelectorAll('.slide'));
+const prev=document.getElementById('prev'),next=document.getElementById('next');
+const counter=document.getElementById('counter'),progress=document.getElementById('progress');
+const dialog=document.getElementById('notesDialog'),notesButton=document.getElementById('notesButton'),fsButton=document.getElementById('fsButton');
+let current=0;
+function show(index,moveFocus=false){
+ current=Math.max(0,Math.min(slides.length-1,index));
+ slides.forEach((slide,i)=>{slide.hidden=i!==current;});
+ counter.textContent=String(current+1).padStart(2,'0')+' / '+String(slides.length).padStart(2,'0');
+ progress.max=slides.length;progress.value=current+1;
+ prev.disabled=current===0;next.disabled=current===slides.length-1;
+ document.title=(current+1)+' / '+slides.length+'｜Agent Team';
+ try{history.replaceState(null,'','#slide-'+(current+1));}catch(e){}
+ if(moveFocus){slides[current].focus({preventScroll:true});}
+ slides[current].scrollTop=0;
+ const nextImg=slides[current+1]&&slides[current+1].querySelector('img');if(nextImg)nextImg.loading='eager';
+}
+function fromHash(){const m=location.hash.match(/^#slide-(\d+)$/);return m?Number(m[1])-1:0;}
+function openDialog(title,html,wide){
+ document.getElementById('notesTitle').textContent=title;
+ document.getElementById('noteContent').innerHTML=html;
+ dialog.classList.toggle('wide',!!wide);
+ dialog.showModal();
+}
+function openNotes(){
+ const n=slides[current].querySelector('.slide-notes');
+ openDialog('第 '+(current+1)+' 張｜講者備註',n?n.innerHTML:'<p>這一張沒有備註。</p>',false);
+}
+function toggleFullscreen(){
+ if(document.fullscreenElement){document.exitFullscreen();}
+ else if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen().catch(()=>{});}
+}
+prev.addEventListener('click',()=>show(current-1,true));
+next.addEventListener('click',()=>show(current+1,true));
+notesButton.addEventListener('click',openNotes);
+fsButton.addEventListener('click',toggleFullscreen);
+document.addEventListener('keydown',event=>{
+ if(dialog.open||event.altKey||event.ctrlKey||event.metaKey||/INPUT|TEXTAREA|SELECT/.test(event.target.tagName)||event.target.isContentEditable)return;
+ const d={ArrowRight:current+1,PageDown:current+1,' ':current+1,ArrowLeft:current-1,PageUp:current-1,Home:0,End:slides.length-1};
+ if(Object.prototype.hasOwnProperty.call(d,event.key)){event.preventDefault();show(d[event.key],true);return;}
+ if(event.key==='f'||event.key==='F'){event.preventDefault();toggleFullscreen();}
+ if(event.key==='n'||event.key==='N'){event.preventDefault();openNotes();}
+});
+document.getElementById('closeNotes').addEventListener('click',()=>dialog.close());
+dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();}});
+document.addEventListener('fullscreenchange',()=>{fsButton.textContent=document.fullscreenElement?'離開全螢幕':'全螢幕投影';});
+/* 可點的圖：實際畫面開大圖＋說明，示意圖只開說明 */
+document.querySelectorAll('.fig').forEach(btn=>btn.addEventListener('click',()=>{
+ const t=document.getElementById(btn.dataset.fig);const cap=btn.querySelector('.cap');
+ const title=cap?cap.textContent.replace(/\s+/g,' ').trim():'說明';
+ if(!t){openDialog(title,'',false);return;}
+ const img=t.dataset.img;
+ if(img){openDialog(title,'<div class="big-shot"><img src="'+img+'" alt=""><div class="txt">'+t.innerHTML+'</div></div>',true);}
+ else{openDialog(title,t.innerHTML,false);}
+}));
+/* Agent Center 三段流程 */
+const flow=document.getElementById('flow');
+if(flow){
+ const frames=Array.from(flow.querySelectorAll('.flow-stage > [data-step]')),steps=Array.from(flow.querySelectorAll('.flow-step')),cap=document.getElementById('flowCap'),nextBtn=document.getElementById('flowNext');
+ const caps=['<b>1 · 說需求。</b>打開 Agent Center，像對人說話一樣打一段需求：「你幫我做一份『生成式 AI 介紹』的網頁，要有圖片、三個章節，可以直接放到公司官網。」按送出。',
+  '<b>2 · 從 Agent Pool 挑人。</b>送出後跳出挑人畫面：Agent Pool 的成員繞著 Agent Center 排開，它依分類、能力、價位與最近花費掃過一遍，選中的亮起、名單列在右邊。這裡從 6 位裡挑出 4 位。',
+  '<b>3 · 提出方案，給你選項。</b>回覆裡列出規模、成員與分工，並附「新團隊」方案卡；接著由你決定：確認建立、改人選、或先補指示。沒有確認之前不會動工、不花錢。',
+  '<b>4 · 建立團隊。</b>按下確認，團隊建立並開工，畫面進到團隊看板：任務、交付、每位成員的回合、token、費用從這裡開始看。'];
+ let k=0;
+ function setStep(n){k=(n+frames.length)%frames.length;frames.forEach((f,i)=>{f.hidden=i!==k;const v=f.querySelector&&f.querySelector('video');if(v){if(i===k){try{v.currentTime=0;}catch(e){}v.play().catch(()=>{});}else{v.pause();}}});steps.forEach((s,i)=>{s.classList.toggle('on',i===k);s.classList.toggle('done',i<k);});cap.innerHTML=caps[k];nextBtn.textContent=k===frames.length-1?'↺ 從頭看':'下一步 →';nextBtn.classList.toggle('end',k===frames.length-1);}
+ nextBtn.addEventListener('click',e=>{e.stopPropagation();setStep(k+1);});
+ flow.querySelector('.flow-stage').addEventListener('click',()=>setStep(k+1));
+ steps.forEach((s,i)=>s.addEventListener('click',()=>setStep(i)));
+ setStep(0);
+}
+window.addEventListener('hashchange',()=>show(fromHash()));
+show(fromHash());
+})();
+</script>
+</body>
+</html>

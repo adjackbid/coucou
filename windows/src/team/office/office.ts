@@ -9,7 +9,7 @@
 import "./office.css";
 import { h } from "../../views/dom";
 import { onLangChange, tr, trf } from "../../core/i18n";
-import type { Artifact, CommandRecord, MemberSnapshot, Message, Team, TeamRun, Capabilities } from "./contracts";
+import type { Artifact, CommandRecord, MemberSnapshot, Message, Team, TeamRun, Capabilities, WorkStatus } from "./contracts";
 import { OfficeStore } from "./store";
 import { floorColumns } from "./floor";
 import { RealAdapter, fileFromSnapshot } from "./adapter-real";
@@ -18,7 +18,7 @@ import { loadArt, STATUS, TeamScene, themeName, THEME_LABELS, wake } from "./sce
 import { dropdown, editableText } from "../ui";
 import { thumbsFor } from "../images";
 import type { PastRun, Snapshot, TeamFile, Usage } from "../types";
-import { fmtMoney, fmtTokens, usageSummary } from "../cost";
+import { fmtMoney, fmtTokens, fmtWork, usageSummary } from "../cost";
 import { Battle, companyFps, companyLive, HERO_LABELS, heroOf, savedMode, saveCompanyLive, saveMode, setHero, setSkill, skillOf } from "./battle/session";
 import { savedWorld, WORLDS } from "./battle/worlds";
 import type { BossBlockCause } from "./battle/bossMoves";
@@ -44,6 +44,8 @@ export interface OfficeHost {
   openArtifact(teamId: string, ref: string): void;
   /** Jump to 團隊設定 (to raise a fallen member's limits). */
   openSetup?(teamId: string): void;
+  /** Agent Center: the hub of the 無邊界 map. */
+  openSecretary?(): void;
   /** A deliverable that is a picture, as bytes; rejects when it is not one or cannot be read. */
   preview?(teamId: string, ref: string): Promise<ArrayBuffer>;
   /** A team's earlier runs, newest first, and one of them as it ended. */
@@ -175,7 +177,7 @@ export class Office {
   private runs = new Map<string, Snapshot>();
   /** 中二模式: the same work told as a raid; the person's own preference. */
   mode: PresentationMode = savedMode();
-  /** Whether 中二模式 is offered at all (設定 → 團隊與秘書). Off, nothing of it is drawn or named. */
+  /** Whether 中二模式 is offered at all (設定 → 團隊與 Agent Center). Off, nothing of it is drawn or named. */
   battleAllowed = true;
   /** In 中二模式, whether the company map plays every room's fight (it costs more to draw). */
   companyLive = companyLive();
@@ -574,17 +576,26 @@ export class Office {
     return { tokens: s.tokens, cost: s.usd == null ? "" : `${s.priced ? "" : "≥ "}${fmtMoney(s.usd)}` };
   }
 
-  /** "任務 2/4 · 1.2M tokens · NT$3.4" — the team's numbers, live. */
+  /** Time a team (or one member) has spent in its turns this run, ms. */
+  private worked(teamId: string, memberId?: string): number {
+    const snap = this.runs.get(teamId);
+    if (!snap) return 0;
+    return snap.members.filter((m) => !memberId || m.id === memberId).reduce((a, m) => a + (m.workMs ?? 0), 0);
+  }
+
+  /** "任務 2/4 · 1.2M tokens · NT$3.4 · 工時 12 分鐘" — the team's numbers, live. */
   private figures(teamId: string, cls = "office-figures"): HTMLElement | null {
     const snap = this.runs.get(teamId);
     if (!snap) return null;
     const s = this.spend(teamId);
+    const w = this.worked(teamId);
     return h(
       "div",
-      { class: cls, title: tr("本輪的任務、用掉的 token 與預估成本(依「成本與用量」的價格表),隨團隊工作即時更新", "This run's tasks, the tokens used and their estimated cost (from the price list in Cost & usage), updated live as the team works") },
+      { class: cls, title: tr("本輪的任務、用掉的 token、預估成本(依「成本與用量」的價格表)與成員在回合裡工作的時間加總,隨團隊工作即時更新", "This run's tasks, the tokens used, their estimated cost (from the price list in Cost & usage) and the members' time in their turns added up, updated live as the team works") },
       h("span", {}, h("small", { text: tr("任務", "Tasks") }), h("b", { text: `${snap.done}/${snap.total}` })),
       h("span", {}, h("small", { text: "Token" }), h("b", { text: s ? fmtTokens(s.tokens) : "0" })),
       h("span", {}, h("small", { text: tr("成本", "Cost") }), h("b", { text: s?.cost || "—" })),
+      h("span", {}, h("small", { text: tr("工時", "Time") }), h("b", { text: w ? fmtWork(w) : "—" })),
     );
   }
 
@@ -644,14 +655,20 @@ export class Office {
     return h("span", { class: `bt-hero ${c}`, title: tr("戰鬥模式的職業外觀:只是外觀,不改變工作", "Your class in Battle mode: just a look, the work stays the same"), text: HERO_LABELS[c] });
   }
 
-  /** Office, 中二模式 or 星域: the same work, told three ways. */
-  private modeSwitch(): HTMLElement {
+  /**
+   * Office, 中二模式, Space or Standard: the same work, told four ways. A
+   * team's own page offers only Office and 中二模式 (Space and Standard are
+   * company-wide pictures), and no switch at all when that leaves one.
+   */
+  private modeSwitch(team = false): HTMLElement | null {
     const opt = (mode: PresentationMode, label: string, title: string) =>
       h("button", { class: `bt-${mode}${this.mode === mode ? " on" : ""}`, type: "button", "aria-pressed": this.mode === mode ? "true" : "false", title, onClick: () => this.setMode(mode) }, label);
+    if (team && !this.battleAllowed) return null;
     return h("div", { class: "bt-mode", role: "group", "aria-label": tr("畫面模式", "View mode") },
       opt("office", "Office", tr("一般辦公室畫面", "The usual office view")), // i18n-ok: the view's name, the same in both languages
       this.battleAllowed ? opt("battle", tr("戰鬥模式", "Battle mode"), tr("同一份工作,看成團隊討伐需求魔王:只改變畫面,不影響工作", "The same work, told as your team's raid on the Requirements Overlord: only the picture changes, never the work")) : null,
-      opt("orbit", tr("星域", "Orbit mode"), tr("同一份工作,看成 Agent 在同一個宇宙裡的光環與協作連線:只改變畫面,不影響工作", "The same work, told as your agents' light rings and the lines between them, all in one universe: only the picture changes, never the work")));
+      team ? null : opt("orbit", "Space", tr("同一份工作,看成 Agent 在同一個宇宙裡的光環與協作連線:只改變畫面,不影響工作", "The same work, told as your agents' light rings and the lines between them, all in one universe: only the picture changes, never the work")), // i18n-ok: Space is the view's name in both languages
+      team ? null : opt("space", "Standard", tr("每個團隊的辦公室漂在同一片星空裡,圍著 Agent Center;只改變畫面,不影響工作", "Every team's office floats in one sky around Agent Center: only the picture changes, never the work"))); // i18n-ok: Standard is the view's name in both languages
   }
 
   /** 團隊設定 picked another battlefield: the old one's moves stop where they are. */
@@ -929,7 +946,8 @@ export class Office {
       h("div", { class: "office-figures" },
         h("span", {}, h("small", { text: tr("驗收任務", "Accepted") }), h("b", { text: trf("{n} 項", "{n}", { n: vm.progress.completed }) })),
         s ? h("span", {}, h("small", { text: "Token" }), h("b", { text: fmtTokens(s.tokens) })) : null,
-        s ? h("span", {}, h("small", { text: tr("成本", "Cost") }), h("b", { text: s.cost || "—" })) : null),
+        s ? h("span", {}, h("small", { text: tr("成本", "Cost") }), h("b", { text: s.cost || "—" })) : null,
+        !this.viewing && this.worked(teamId) ? h("span", {}, h("small", { text: tr("工時", "Time") }), h("b", { text: fmtWork(this.worked(teamId)) })) : null),
       h("ul", { class: "bt-result-tasks" }, ...tasks.map((t) =>
         h("li", {}, h("button", {
           type: "button", title: tr("看這個任務的對話與交付", "See this task's talk and deliverables"),
@@ -954,6 +972,7 @@ export class Office {
     const count = this.store.headcount();
     if (!teams.length) return h("div", { class: "office-empty" }, h("p", { text: away ? trf("{n} 個團隊都已封存。到側欄下方的「已封存」可以取出。", "All {n} teams are archived. You can bring them back from Archived at the bottom of the sidebar.", { n: away }) : tr("還沒有團隊。按左下角的「新增團隊」開始。", "No teams yet. Click New team at the bottom left to start.") }));
     if (this.mode === "orbit") return this.orbitCompany(teams, away, count);
+    if (this.mode === "space") return this.spaceCompany(teams, away, count);
     // The room picked, if any: a click on the floor where there is no room lets it go.
     const pick = teams.find((t) => t.teamId === this.companyPick) ?? null;
     // Rooms laid out as a floor: as many columns as rows. A large office takes 2 × 2 cells.
@@ -1041,6 +1060,203 @@ export class Office {
     );
   }
 
+  // ── 無邊界 ────────────────────────────────────────────────────────────────────
+
+  /** The tone of each team on the 無邊界 map, by its place in the list: neighbours never share one. */
+  private static SPACE_TONES = ["#F5A524", "#FB7185", "#34D399", "#A78BFA", "#F472B6", "#38BDF8", "#2DD4BF", "#FBBF24"];
+
+  /** A fixed sprinkle of stars, as one box-shadow: the same sky every time. */
+  private static stars(w: number, h: number): string {
+    let seed = 7;
+    const next = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const out: string[] = [];
+    for (let i = 0; i < 140; i++) {
+      const x = Math.round(next() * w), y = Math.round(next() * h), a = (0.2 + next() * 0.5).toFixed(2);
+      out.push(`${x}px ${y}px 0 ${next() < 0.15 ? 1 : 0}px rgba(255, 255, 255, ${a})`);
+    }
+    return out.join(",");
+  }
+
+  /** Agent Center's mark: a hexagon with a dot in it. */
+  private static HEX = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 2.5 20.2 7.25v9.5L12 21.5 3.8 16.75v-9.5Z"/><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="5.6" stroke-dasharray="2.2 3"/></svg>';
+
+  /**
+   * 無邊界: one team per card around Agent Center, inside one big dashed
+   * ring. Each card reads left to right the way the work flows: what was
+   * asked of Agent Center, Agent Center, then the agents it put on it; a bar
+   * under them is how far the team is. A dotted path ties every card to the
+   * hub, flowing while the team works. The corners carry the company's numbers.
+   */
+  private spaceCompany(teams: Team[], away: number, count: { seats: number }): HTMLElement {
+    const pick = teams.find((t) => t.teamId === this.companyPick) ?? null;
+    const n = teams.length;
+    const CW = 320, CH = 190;
+    // Cards on an ellipse wide enough that none touch: its rim is about 2π·0.83·rx long.
+    const rx = Math.max(560, Math.ceil((n * (CW + 70)) / (2 * Math.PI * 0.832)));
+    const ry = Math.round(rx * 0.62);
+    const W = 2 * rx + CW + 260, H = 2 * ry + CH + 220;
+    const cx = W / 2, cy = H / 2;
+    const spots = teams.map((t, i) => {
+      // The first card sits top-left, the way a page is read; the rest follow clockwise.
+      const a = -Math.PI * 0.75 + (i / n) * 2 * Math.PI;
+      return { t, i, x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a), tone: Office.SPACE_TONES[i % Office.SPACE_TONES.length] };
+    });
+    const live = (run: TeamRun | undefined) => !!run && (run.status === "running" || run.status === "needs_attention" || run.status === "pausing");
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("class", "office-space-paths");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("width", String(W));
+    svg.setAttribute("height", String(H));
+    svg.setAttribute("aria-hidden", "true");
+    // The company's edge: one dashed ring around every card.
+    const rim = document.createElementNS(ns, "ellipse");
+    rim.setAttribute("cx", String(cx));
+    rim.setAttribute("cy", String(cy));
+    rim.setAttribute("rx", String(rx + CW / 2 + 70));
+    rim.setAttribute("ry", String(ry + CH / 2 + 70));
+    rim.setAttribute("class", "office-space-rim");
+    svg.append(rim);
+    for (const s of spots) {
+      const run = this.store.run(s.t.currentRunId);
+      const path = document.createElementNS(ns, "path");
+      path.setAttribute("d", `M ${s.x} ${s.y} L ${cx} ${cy}`);
+      path.setAttribute("class", `office-space-path${live(run) ? " live" : ""}`);
+      path.setAttribute("style", `--tone:${s.tone}`);
+      svg.append(path);
+      // A bead on the path, a little out from the hub, in the team's tone.
+      const bead = document.createElementNS(ns, "circle");
+      const k = 0.62;
+      bead.setAttribute("cx", String(cx + (s.x - cx) * k));
+      bead.setAttribute("cy", String(cy + (s.y - cy) * k));
+      bead.setAttribute("r", "5");
+      bead.setAttribute("class", "office-space-bead");
+      bead.setAttribute("style", `--tone:${s.tone}`);
+      svg.append(bead);
+    }
+    const board = h("div", { class: "office-space", style: `${this.mapTransform()}width:${W}px;height:${H}px;` },
+      h("i", { class: "office-space-stars", "aria-hidden": "true", style: `box-shadow:${Office.stars(W, H)}` }),
+      svg);
+    const working = new Set<WorkStatus>(["working", "planning", "reviewing"]);
+    let online = 0, done = 0, decisions = 0;
+    const badge = (run: TeamRun | undefined, alerts: number): [string, string] => {
+      if (alerts) return [tr("等你決定", "Needs you"), "alert"];
+      switch (run?.status) {
+        case "running": return [tr("進行中", "Running"), "work"];
+        case "pausing": case "paused": return [tr("暫停", "Paused"), "quiet"];
+        case "needs_attention": return [tr("等你決定", "Needs you"), "alert"];
+        case "completed": return [tr("完成", "Done"), "done"];
+        case "failed": return [tr("失敗", "Failed"), "alert"];
+        default: return [tr("待命", "Standing by"), "quiet"];
+      }
+    };
+    const face = (color: string, cls = "", title = "") => h("i", { class: `sp-face ${cls}`, style: `--c:${color}`, title, "aria-hidden": title ? undefined : "true" });
+    for (const s of spots) {
+      const { t } = s;
+      const run = this.store.run(t.currentRunId);
+      const alerts = this.alerts(t.teamId).length;
+      const p = this.store.progress(t.teamId);
+      const members = this.store.members(t.teamId);
+      const busy = members.filter((m) => working.has(m.workStatus)).length;
+      online += busy;
+      done += p.completed;
+      decisions += alerts;
+      // What the team was asked: its goal, or failing that the last thing said in it.
+      const talk = t.goal.trim() || [...this.store.messages(t.teamId)].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)).at(-1)?.text?.trim() || tr("還沒有交代任務", "Nothing asked yet");
+      const [label, tone] = badge(run, alerts);
+      const shown = members.slice(0, 5);
+      const card = h(
+        "div",
+        { class: `sp-card${t.teamId === pick?.teamId ? " on" : ""}${live(run) ? " live" : ""}`, role: "listitem", style: `left:${s.x}px;top:${s.y}px;--tone:${s.tone}` },
+        h(
+          "button",
+          {
+            class: "sp-card-pick", type: "button",
+            "aria-label": [t.name, label, p.percent === null ? tr("尚未派工", "No tasks yet") : `${p.percent}%`].join(tr(",", ", ")),
+            onClick: () => {
+              if (this.dragged) return;
+              this.companyPick = t.teamId;
+              this.host.render();
+            },
+            onKeydown: ((e: KeyboardEvent) => { if (e.key === "Enter" && e.shiftKey) this.host.openTeam(t.teamId); }) as EventListener,
+            onDblclick: () => this.host.openTeam(t.teamId),
+          },
+          h("div", { class: "sp-head" },
+            h("b", { title: t.name, text: t.name }),
+            h("span", { class: `sp-badge ${tone}`, text: label })),
+          h("div", { class: "sp-flow" },
+            h("div", { class: "sp-talk", title: talk },
+              face(s.tone, "you"),
+              h("p", { text: talk })),
+            h("i", { class: "sp-wire", "aria-hidden": "true" }),
+            h("span", { class: "sp-center", title: "Agent Center", html: Office.HEX }), // i18n-ok: the same in both
+            h("i", { class: "sp-wire fan", "aria-hidden": "true" }),
+            h("div", { class: "sp-agents", title: trf("{n} 位成員,{busy} 位工作中", "{n} members, {busy} working", { n: members.length, busy }) },
+              ...shown.map((m) => face(m.color ?? s.tone, working.has(m.workStatus) ? "busy" : "", `${m.displayName ?? m.memberId} · ${STATUS[m.workStatus]?.label ?? m.workStatus}`)),
+              members.length > shown.length ? h("small", { text: `+${members.length - shown.length}` }) : null,
+              members.length ? null : h("small", { class: "dim", text: tr("還沒有成員", "No members yet") }))),
+          h("div", { class: "sp-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": String(p.percent ?? 0), title: p.total ? trf("{done} / {all} 項任務", "{done} / {all} tasks", { done: p.completed, all: p.total }) : tr("尚未派工", "No tasks yet") },
+            h("i", { style: `width:${p.percent ?? 0}%` })),
+        ),
+      );
+      board.append(card);
+    }
+    const hub = h(
+      "button",
+      {
+        class: "office-hub", type: "button", style: `left:${cx}px;top:${cy}px`,
+        title: this.host.openSecretary ? tr("打開 Agent Center", "Open Agent Center") : "",
+        onClick: () => { if (!this.dragged) this.host.openSecretary?.(); },
+      },
+      h("i", { class: "office-hub-ring r3", "aria-hidden": "true" }),
+      h("i", { class: "office-hub-ring r2", "aria-hidden": "true" }),
+      h("span", { class: "office-hub-core", html: Office.HEX }),
+      h("span", { class: "office-hub-label", text: "Agent Center" }), // i18n-ok: the same in both
+    );
+    board.append(hub);
+    // The company's numbers in the corners, over the sky and not scaled with it.
+    const stat = (where: string, big: string, small: string, tone = "") =>
+      h("div", { class: `sp-stat ${where} ${tone}` }, h("b", { text: big }), h("small", { text: small }));
+    // The company's name and size are in the page head already: only the numbers here.
+    const corners = [
+      stat("tr", String(done), tr("個任務 · 已完成", "tasks · done"), "ok"),
+      stat("bl", String(online), tr("位 Agent · 同時在線", "agents · at work now"), "ok"),
+      stat("br", String(decisions), decisions === 1 ? tr("個決定等你", "decision waits for you") : tr("個決定等你", "decisions wait for you"), decisions ? "alert" : ""),
+    ];
+    const chart = h(
+      "div",
+      { class: "office-minimap", "aria-hidden": "true" },
+      h("div", { class: "office-minimap-sky" },
+        h("i", { class: "office-minimap-hub", style: `left:${((cx / W) * 100).toFixed(1)}%;top:${((cy / H) * 100).toFixed(1)}%` }),
+        ...spots.map((s) => h("i", { class: `office-minimap-dot${s.t.teamId === pick?.teamId ? " on" : ""}`, style: `left:${((s.x / W) * 100).toFixed(1)}%;top:${((s.y / H) * 100).toFixed(1)}%;background:${s.tone}` }))),
+    );
+    const side = h(
+      "aside",
+      { class: "office-side" },
+      ...(pick ? this.roomSummary(pick) : [this.companySummary(teams)]),
+      this.attentionCard(teams),
+    );
+    return h(
+      "div",
+      { class: "office office-company space" },
+      h("div", { class: "office-head" },
+        h("div", {}, editableText("company", companyName(), {
+          tag: "h1",
+          label: tr("公司名稱", "Company name"),
+          fallback: tr("我的公司", "My Company"),
+          onSave: (v) => setCompanyName(v),
+          render: () => this.host.render(),
+        }), h("p", { class: "dim", text: `${trf("{n} 間辦公室 · {seats} 位員工", "{n} offices · {seats} staff", { n: teams.length, seats: count.seats })}${away ? trf(" · 另有 {n} 個團隊已封存", " · {n} more archived", { n: away }) : ""}` })),
+        this.demoTag(),
+        this.demo ? h("button", { class: "btn plain", type: "button", title: tr("播放規格附帶的下一個事件", "Plays the next event that comes with the spec"), onClick: () => { if (!this.step()) this.tell(() => tr("示範事件已全部播放。", "Every demo event has played.")); this.host.render(); } }, tr("下一個示範事件", "Next demo event")) : null,
+        h("span", { style: "flex:1" }),
+        this.modeSwitch()),
+      this.connection(),
+      this.trouble(),
+      h("div", { class: "office-body" }, this.mapViewport(board, { cls: "space", over: [...corners, chart] }), side),
+    );
+  }
+
   /** In 中二模式, the picked room's boss: the same numbers as its office. */
   private bossCard(pick: Team): HTMLElement | null {
     const vm = this.battle.vm(pick.teamId);
@@ -1094,10 +1310,11 @@ export class Office {
     const stat = (n: number, label: string, tone: string) => h("div", { class: `office-stat ${tone}` }, h("b", { text: String(n) }), h("span", { text: label }));
     // Every team's run: tasks, tokens and their cost, most expensive first.
     const rows = teams
-      .map((t) => ({ t, snap: this.runs.get(t.teamId), s: this.spend(t.teamId) }))
+      .map((t) => ({ t, snap: this.runs.get(t.teamId), s: this.spend(t.teamId), w: this.worked(t.teamId) }))
       .filter((r) => r.snap);
     const tasks = rows.reduce((a, r) => [a[0] + r.snap!.done, a[1] + r.snap!.total], [0, 0]);
     const tokens = rows.reduce((a, r) => a + (r.s?.tokens ?? 0), 0);
+    const worked = rows.reduce((a, r) => a + r.w, 0);
     const all = usageSummary(rows.flatMap((r) => r.snap!.members.flatMap((m) => m.usage ?? [])), () => this.host.render());
     rows.sort((a, b) => (b.s?.tokens ?? 0) - (a.s?.tokens ?? 0));
     // Everyone on the payroll, by what they are doing now.
@@ -1123,17 +1340,19 @@ export class Office {
         ? h("div", { class: "office-figures", title: tr("各團隊本輪的合計,隨團隊工作即時更新", "Every team's totals for this run, updated live as they work") },
             h("span", {}, h("small", { text: tr("任務", "Tasks") }), h("b", { text: `${tasks[0]}/${tasks[1]}` })),
             h("span", {}, h("small", { text: "Token" }), h("b", { text: fmtTokens(tokens) })),
-            h("span", {}, h("small", { text: tr("預估成本", "Est. cost") }), h("b", { text: all.usd == null ? "—" : `${all.priced ? "" : "≥ "}${fmtMoney(all.usd)}` })))
+            h("span", {}, h("small", { text: tr("預估成本", "Est. cost") }), h("b", { text: all.usd == null ? "—" : `${all.priced ? "" : "≥ "}${fmtMoney(all.usd)}` })),
+            h("span", {}, h("small", { text: tr("工時", "Time") }), h("b", { text: worked ? fmtWork(worked) : "—" })))
         : null,
       rows.length
         ? h("table", { class: "office-teams" },
-            h("thead", {}, h("tr", {}, h("th", { text: tr("團隊", "Team") }), h("th", { text: tr("任務", "Tasks") }), h("th", { text: "Token" }), h("th", { text: tr("成本", "Cost") }))),
-            h("tbody", {}, ...rows.map(({ t, snap, s }) =>
+            h("thead", {}, h("tr", {}, h("th", { text: tr("團隊", "Team") }), h("th", { text: tr("任務", "Tasks") }), h("th", { text: "Token" }), h("th", { text: tr("成本", "Cost") }), h("th", { text: tr("工時", "Time") }))),
+            h("tbody", {}, ...rows.map(({ t, snap, s, w }) =>
               h("tr", { onClick: () => { this.companyPick = t.teamId; this.host.render(); }, title: tr("看這間辦公室的摘要", "See this office's summary") },
                 h("td", {}, h("i", { class: `office-dot ${this.runTone(t)}` }), t.name),
                 h("td", { text: `${snap!.done}/${snap!.total}` }),
                 h("td", { text: s ? fmtTokens(s.tokens) : "0" }),
-                h("td", { text: s?.cost || "—" })))))
+                h("td", { text: s?.cost || "—" }),
+                h("td", { text: w ? fmtWork(w) : "—" })))))
         : null,
       h("p", { class: "dim", text: `${this.mode === "orbit" ? tr("點團隊名稱看它的摘要,再按「進入辦公室」進去。", "Click a team name for its summary, then Go into the office. ") : tr("點一間辦公室看它的摘要;雙擊直接進去。", "Click an office for its summary; double-click to go in. ")}${tr("成本依「成本與用量」的價格表估算。", "Costs are estimated from the price list in Cost & usage.")}` }),
     );
@@ -1187,8 +1406,8 @@ export class Office {
     this.host.render();
   }
 
-  private mapViewport(grid: HTMLElement): HTMLElement {
-    const vp = h("div", { class: "office-map-viewport", "aria-label": tr("辦公室地圖,拖曳可移動", "Office map, drag to move it") }, grid);
+  private mapViewport(grid: HTMLElement, extra: { cls?: string; over?: (HTMLElement | null)[] } = {}): HTMLElement {
+    const vp = h("div", { class: `office-map-viewport${extra.cls ? ` ${extra.cls}` : ""}`, "aria-label": tr("辦公室地圖,拖曳可移動", "Office map, drag to move it") }, grid, ...(extra.over ?? []));
     let start: { x: number; y: number; vx: number; vy: number; id: number } | null = null;
     vp.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
@@ -1261,9 +1480,9 @@ export class Office {
     if (this.sel && this.sel.teamId !== teamId) this.sel = null;
     const run = this.store.run(team.currentRunId);
     const members = this.store.members(teamId);
-    const orbit = this.mode === "orbit";
-    // In the 星域 the room is a cluster of rings; the Mochi scene is not built.
-    const scene = orbit ? null : this.scene(teamId);
+    // Space and Standard are the company's pictures: a team's page is its office, or its battle.
+    const orbit = false;
+    const scene = this.scene(teamId);
     const past = !!this.viewing;
     const battle = this.mode === "battle";
     const vm = battle ? this.boss(teamId) : null;
@@ -1303,7 +1522,9 @@ export class Office {
             h("span", { class: "office-roster-task", text: m.summary || (m.primaryTaskId ? this.store.task(m.primaryTaskId)?.title ?? "" : "") }),
             (() => {
               const s = past ? null : this.spend(teamId, m.memberId);
-              return s ? h("span", { class: "office-roster-spend", text: `${fmtTokens(s.tokens)} tokens${s.cost ? ` · ${s.cost}` : ""}` }) : null;
+              const w = past ? 0 : this.worked(teamId, m.memberId);
+              const parts = [s ? `${fmtTokens(s.tokens)} tokens${s.cost ? ` · ${s.cost}` : ""}` : "", w ? trf("工作 {t}", "at work {t}", { t: fmtWork(w) }) : ""].filter(Boolean);
+              return parts.length ? h("span", { class: "office-roster-spend", text: parts.join(" · ") }) : null;
             })(),
             (() => {
               if (!battle || past) return null;
@@ -1324,7 +1545,7 @@ export class Office {
         h("div", { class: "office-head-main" }, this.runLabel(run), this.progressBar(teamId), past ? null : this.figures(teamId, "office-figures inline"), this.demoTag()),
         toggles,
         pauseBtn,
-        this.modeSwitch()),
+        this.modeSwitch(true)),
       past
         ? h("div", { class: "office-history-bar", role: "status" },
             h("span", { class: "grow" }, h("b", { text: tr("你正在看之前的一輪", "You're looking at an earlier run") }), trf(" · {when} 收起的紀錄,只能查看,不會影響現在的團隊", " · the record put away {when}, to look at only: it doesn't touch the team now", { when: this.when(this.store.run(team.currentRunId) ? pick!.at : pick!.at) })),
@@ -1413,7 +1634,7 @@ export class Office {
     const items: { at: string; who: string | null; head: string; body: string; artifact?: string }[] = [];
     for (const m of this.store.messages(teamId)) {
       const from = m.from.kind === "member" ? m.from.memberId : null;
-      const fromName = m.from.kind === "member" ? name(m.from.memberId) : m.from.kind === "user" ? tr("你", "You") : "Coucou";
+      const fromName = m.from.kind === "member" ? name(m.from.memberId) : m.from.kind === "user" ? tr("你", "You") : "Agent Center";
       items.push({ at: m.occurredAt, who: from, head: `${fromName}${m.toMemberIds.length ? ` → ${m.toMemberIds.map(name).join(tr("、", ", "))}` : ""}`, body: m.text });
     }
     for (const a of this.store.artifacts(teamId)) {
@@ -1465,7 +1686,8 @@ export class Office {
             m.engineStatus === "offline" ? h("span", { class: "office-pill quiet", title: tr("沒有代理在執行;顯示的是紀錄裡最後的狀態", "No agent is running; this is the last state in the record"), text: tr("⌁ 未連線", "⌁ Offline") }) : null, this.demoTag()),
           h("small", { class: "dim", text: (() => {
             const s = this.viewing ? null : this.spend(teamId, m.memberId);
-            return `${trf("最後更新 {t}", "Last updated {t}", { t: clock(m.lastActivityAt) || "—" })}${s ? `${trf(" · 本輪 {tokens} tokens", " · {tokens} tokens this run", { tokens: fmtTokens(s.tokens) })}${s.cost ? ` · ${s.cost}` : ""}` : ""}`;
+            const w = this.viewing ? 0 : this.worked(teamId, m.memberId);
+            return `${trf("最後更新 {t}", "Last updated {t}", { t: clock(m.lastActivityAt) || "—" })}${s ? `${trf(" · 本輪 {tokens} tokens", " · {tokens} tokens this run", { tokens: fmtTokens(s.tokens) })}${s.cost ? ` · ${s.cost}` : ""}` : ""}${w ? trf(" · 工作 {t}", " · at work {t}", { t: fmtWork(w) }) : ""}`;
           })() })),
         h("button", { class: "icon-btn", type: "button", title: tr("關閉(Esc)", "Close (Esc)"), "aria-label": tr("關閉", "Close"), onClick: () => this.close(teamId) }, "✕")),
       this.back
@@ -1546,7 +1768,7 @@ export class Office {
       ? h("li", { class: "office-more" }, h("button", { class: "link", type: "button", onClick: () => { this.threadLength.set(key, shown + 40); this.host.render(); } }, trf("顯示更早的 {n} 則(還有 {left} 則)", "Show {n} earlier ({left} left)", { n: Math.min(40, hidden), left: hidden })))
       : null;
     return h("ol", { class: "office-thread" }, more, ...talk.slice(-shown).map((x) => {
-      const from = x.from.kind === "member" ? name(x.from.memberId) : x.from.kind === "user" ? tr("你", "You") : "Coucou";
+      const from = x.from.kind === "member" ? name(x.from.memberId) : x.from.kind === "user" ? tr("你", "You") : "Agent Center";
       const long = x.text.length > 160;
       const body = h("p", { class: long ? "clip" : "", text: x.text });
       return h("li", {},

@@ -109,8 +109,8 @@ export const integrationsPage: Page = {
         tr("整合", "Integrations"),
         tr("在 Mochi 旁邊顯示你用的服務狀態小膠囊：GitHub、Vercel、Stripe……", "Small status pills next to Mochi for services you use: GitHub, Vercel, Stripe…"),
         () => tr(
-          "最多開 4 個。每個膠囊需要那個服務的金鑰，存在 Windows 認證管理員。Coucou 只會連到你在這裡打開的服務。",
-          "Turn on up to 4. Each pill needs that service's key, stored in the Windows Credential Manager. Coucou only talks to services you turn on here.",
+          "最多開 4 個。每個膠囊需要那個服務的金鑰，存在 Windows 認證管理員。Agent Center 只會連到你在這裡打開的服務。",
+          "Turn on up to 4. Each pill needs that service's key, stored in the Windows Credential Manager. Agent Center only talks to services you turn on here.",
         ),
       ),
       note,

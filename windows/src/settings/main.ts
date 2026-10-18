@@ -5,6 +5,7 @@
 import "./settings.css";
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import { onLangChange, setLang } from "../core/i18n";
+import { applyTheme } from "../core/theme";
 import type { Settings } from "../core/state";
 import { glassify } from "../team/ui";
 import { Nav } from "./nav";
@@ -19,6 +20,7 @@ import { connectPage } from "./pages/connect";
 import { installPage } from "./pages/install";
 import { chatPage } from "./pages/chat";
 import { agentsPage } from "./pages/agents";
+import { skillsPage } from "./pages/skills";
 import { integrationsPage } from "./pages/integrations";
 import { islandPage } from "./pages/island";
 import { teamPage } from "./pages/team";
@@ -26,9 +28,10 @@ import { generalPage } from "./pages/general";
 
 const root = document.getElementById("settings-root")!;
 
-const PAGES = [overviewPage, connectPage, installPage, chatPage, agentsPage, integrationsPage, islandPage, teamPage, generalPage];
+const PAGES = [overviewPage, connectPage, installPage, chatPage, agentsPage, skillsPage, integrationsPage, islandPage, teamPage, generalPage];
 
 async function main() {
+  applyTheme(settings.theme);
   // Native dropdowns and model lists are drawn by Windows as a white list: the window's own instead.
   glassify(root);
   const boot = await Bridge.boot();
@@ -55,7 +58,7 @@ async function main() {
   });
   void onEvent<string>("lang-changed", (l) => setLang(l));
   void onEvent<Settings>("settings-changed", (s) => replaceSettings({ ...settings, ...s }));
-  // Another window asked for a page ("Settings → Agents" in Teamwork, an integration's card).
+  // Another window asked for a page ("Settings → Agent Provider" in Teamwork, an integration's card).
   void onEvent<{ page: PageId; anchor: string | null; action: string | null }>("settings-goto", (g) =>
     nav.go(g.page, g.anchor ?? undefined, g.action ?? undefined),
   );

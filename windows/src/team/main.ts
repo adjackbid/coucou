@@ -10,6 +10,7 @@
 // stream between pictures (`team-screen`) and are moved into each new one.
 
 import { onLangChange, setLang, tr, trf } from "../core/i18n";
+import { applyTheme } from "../core/theme";
 import "./team.css";
 import { Bridge, IS_TAURI, onEvent } from "../core/bridge";
 import type { AgentProfile, ModelChoice } from "../core/state";
@@ -21,13 +22,15 @@ import { companyName, Office, setCompanyName } from "./office/office";
 import { LARGE_FROM, THEME_LABELS } from "./office/scene";
 import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds";
 import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCompanyFps, type Tempo } from "./office/battle/session";
-import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
-import { onStep as secretaryStep, secretaryAttachFiles, secretaryName, secretaryPage, secretaryTitle, setSecretaryDragging, setSecretaryName, type SecretaryHost } from "./secretary";
+import { costPage, fmtMoney, fmtTokens, fmtWork, refreshSoon, usageSummary, type CostHost } from "./cost";
+import { skillChips } from "./skill-lib";
+import { openSkillModal, redrawSkillModal } from "./skill-modal";
+import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, pickShowOn, previewPickShow, refreshProviders, secretaryRoot, setSecretaryRoot, secretarySpeed, speedName, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
-import { agentLabel, agentSource, agentsPage, baseOf, loadTeamAgents, sourceSwitch, teamAgents, teamProfiles, type AgentsHost } from "./agents";
+import { agentLabel, agentsPage, baseOf, loadTeamAgents, memberChoices, poolForShow, teamAgentCounts, teamAgents, teamProfiles, type AgentsHost } from "./agents";
 import { addFiles as addKnowledgeFiles, dropTarget, knowledgeChanged, knowledgePanel, setDragging, type KnowledgeHost } from "./knowledge";
-import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
+import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, Permission, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
 
@@ -60,11 +63,15 @@ function saveSheet(value: number) {
   }
 }
 applySheet();
+// Dark until the settings say otherwise (or `?theme=light` in a browser).
+applyTheme("dark");
 
 let dir = "";
 let files: TeamFile[] = [];
-/** The agents of Settings → Agents: what a member can run as. */
+/** The agents of Settings → Agent Provider: what a member can run as. */
 let agents: AgentProfile[] = [];
+/** The app's version (Cargo.toml), shown at the foot of the sidebar so a build is told from another. */
+let appVersion = "";
 /** The latest snapshot of each team, by team id. */
 const runs = new Map<string, Snapshot>();
 /** The team file being looked at, and which of its screens. */
@@ -72,12 +79,15 @@ let selected: string | null = null;
 let tab: "setup" | "links" | "monitor" | "log" = "setup";
 /** 檢查代理 results, while the setup tab shows them. */
 let doctor: import("../core/state").AgentCheck[] | "running" | string | null = null;
-/** The little gear beside 秘書 or 公司總覽: which panel is open, and where. */
-let sidePop: { which: "secretary" | "company"; top: number } | null = null;
+/** The little gear beside Agent Center or 公司總覽: which panel is open, and where. */
+/** The settings panel over the content area (⚙ beside Agent Center or the company): which one, or none. */
+let sidePop: { which: "secretary" | "company" } | null = null;
 /** The monitor as a board, or as the team's office. */
 let monitorMode: "board" | "office" = "board";
 /** The company map instead of one team; or the office of a team that has no file here (示範資料). */
 let place: "team" | "company" | "office" | "cost" | "secretary" | "law" | "agents" = "team";
+/** The place the window showed when it was last drawn: a page can tell being entered from being redrawn. */
+let drawnPlace: string | null = null;
 let officeTeam: string | null = null;
 /** The form's working copy of the selected team; saved on request. */
 let editing: TeamConfig | null = null;
@@ -175,13 +185,27 @@ function aiMembers(n: number): string {
 /** The team whose 結束團隊 has been pressed once, and until when it waits for the second press. */
 let ending: { team: string; until: number } | null = null;
 
+/** The icons of the team's tools, top right: a folder, pause, play, stop, power. */
+const TOOL_ICONS = {
+  folder: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.4l2 2h8.6A1.5 1.5 0 0 1 21 9.5V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18Z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 5v14M15 5v14"/></svg>',
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M7 5.5v13l11-6.5Z"/></svg>',
+  stop: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+  power: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.6 6.6a7.5 7.5 0 1 0 10.8 0"/></svg>',
+};
+
+/** One tool, top right: an icon over a small word. */
+function tool(label: string, icon: keyof typeof TOOL_ICONS, tone: "" | "primary" | "danger", title: string, onClick: () => void): HTMLElement {
+  return h("button", { class: `tool ${tone}`, type: "button", title, onClick: () => onClick() }, h("span", { class: "tool-icon", html: TOOL_ICONS[icon] }), h("span", { class: "tool-label", text: label }));
+}
+
 /** 結束團隊: pressed twice, since what is under way is cut short. */
 function endButton(snap: Snapshot): HTMLElement {
   const armed = ending?.team === snap.id && ending.until > Date.now();
   return h(
     "button",
     {
-      class: `btn ${armed ? "danger" : "plain"} end-team`,
+      class: `tool ${armed ? "danger armed" : ""}`,
       type: "button",
       title: tr(
         "結束這個團隊:正在做的這一輪會被打斷,所有成員的代理都會停掉,未完成的任務就停在現在的樣子。做好的檔案都留著;之後再傳指示,團隊會重新開工。",
@@ -203,11 +227,38 @@ function endButton(snap: Snapshot): HTMLElement {
         void act(() => Bridge.teamEnd(snap.id));
       },
     },
-    armed ? tr("確定結束?再按一次", "End it? Press again") : tr("結束團隊", "End team"),
+    h("span", { class: "tool-icon", html: TOOL_ICONS.power }),
+    h("span", { class: "tool-label", text: armed ? tr("再按一次結束", "Press again") : tr("結束團隊", "End team") }),
   );
 }
 
 /** Why a step waits for approval, after "Needs your approval:". */
+/** What a waived constitution check is about (one of Coucou's checks by id; a rule of the person's own by its id). */
+function waivedLabel(rule: string): string {
+  const labels: Record<string, string> = {
+    install: tr("安裝軟體或套件", "installing software or packages"),
+    download: tr("從網路下載檔案", "downloading files from the internet"),
+    "git-destructive": tr("會丟掉變更的 git 指令", "git commands that throw changes away"),
+    "send-out": tr("對外發送或發布", "sending or publishing outside"),
+    system: tr("變更系統", "changing the system"),
+  };
+  return labels[rule] ?? rule;
+}
+
+/** The constitution asks the person waived for this team ("allow for this team" on a card), each with a way back. */
+function waivedRules(team: string, waived: string[]): HTMLElement {
+  return h(
+    "div",
+    { class: "trusted" },
+    h("label", { text: tr("這個團隊不再問的事", "Not asked again in this team") }),
+    ...waived.map((rule) =>
+      h("div", { class: "row nowrap" },
+        h("span", { text: waivedLabel(rule) }),
+        h("button", { class: "link", type: "button", onClick: () => void act(() => Bridge.teamWaive(team, rule, false)) }, tr("改回要問", "Ask again")))),
+    h("p", { class: "hint", text: tr("你在批准卡上按了「這個團隊都允許」。只對這個團隊有效,憲法本身沒有改;團隊重新啟動後仍然記得。", "You pressed \"Allow for this team\" on a card. It holds for this team only and leaves the constitution as it is; the team remembers it when started again.") }),
+  );
+}
+
 function dangerLabel(d: Danger): string {
   const labels: Record<Danger, string> = {
     "deletes-folder": tr("會刪除資料夾", "it deletes a folder"),
@@ -251,17 +302,17 @@ function said(text: string): string {
     ],
     [/^The team has used its (\d+) turns\.$/, (m) => trf("已用完 {n} 回合的上限", "Used up its limit of {n} turns", { n: m[1] })],
     [/^(TASK-\d+) was sent back (\d+) times\.$/, (m) => trf("{task} 已被退回 {n} 次", "{task} was sent back {n} times", { task: m[1], n: m[2] })],
-    [/^Coucou was closed while the team was running\.$/, () => tr("團隊執行中時 Coucou 被關閉", "Coucou was closed while the team was running")],
+    [/^(?:Coucou|Agent Center) was closed while the team was running\.$/, () => tr("團隊執行中時 Agent Center 被關閉", "Agent Center was closed while the team was running")],
     [/^interrupted$/, () => tr("被中斷", "Interrupted")],
     // Why a team cannot start.
     [/^The work folder (.+) does not exist\.$/, (m) => trf("工作資料夾 {p} 不存在", "The work folder {p} doesn't exist", { p: m[1] })],
     [/^The work folder must be a full path\.$/, () => tr("還沒有選擇工作資料夾", "No work folder chosen yet")],
     [
-      /^(.+) runs as agent '(.*)', which is not in Settings → Agents( or Teamwork → Agent 設定)?\.$/,
+      /^(.+) runs as agent '(.*)', which is not in Settings → Agent Provider( or Teamwork → Agent Pool)?\.$/,
       (m) =>
         trf("{who} 還沒有選擇代理{why}", "{who} has no agent yet{why}", {
           who: m[1],
-          why: m[2] ? trf("(「{id}」不在 設定 → Agents 或 Agent 設定 裡)", " (\"{id}\" isn't in Settings → Agents or Agent settings)", { id: m[2] }) : "",
+          why: m[2] ? trf("(「{id}」不在 設定 → Agent Provider 或 Agent Pool 裡)", " (\"{id}\" isn't in Settings → Agent Provider or Agent Pool)", { id: m[2] }) : "",
         }),
     ],
     [/^The leader '(.+)' is not a member\.$/, (m) => trf("Leader「{id}」不是團隊成員", "The Leader \"{id}\" isn't a member of the team", { id: m[1] })],
@@ -321,7 +372,7 @@ function colorOf(team: { members: { id: string; color: string }[] }, id: string)
 
 function nameOf(snap: Snapshot, id: string): string {
   if (id === YOU) return tr("你", "You");
-  if (id === "system") return "Coucou";
+  if (id === "system") return "Agent Center";
   return snap.members.find((m) => m.id === id)?.name ?? id;
 }
 
@@ -488,6 +539,22 @@ function sidebar(): HTMLElement {
     if (showArchived) for (const file of away) list.append(row(file, true));
   }
 
+  // Agent Center's skills: how many go where, and the picker over the window.
+  const skillRows = (): HTMLElement => {
+    const lib = skillLibrary();
+    if (!lib) {
+      loadSkillLibrary(render);
+      return h("p", { class: "hint", text: tr("讀取中…", "Loading…") });
+    }
+    const members = lib.filter(membersGet).length;
+    const center = lib.filter(centerReads).length;
+    return h("div", { class: "side-pop-skills-summary" },
+      h("p", { class: "hint", text: lib.length
+        ? trf("市集 {n} 份:{m} 份可派給組長／成員,{c} 份 Agent Center 自己讀。", "{n} in the market: {m} members may get, {c} Agent Center reads itself.", { n: lib.length, m: members, c: center })
+        : tr("市集還是空的。", "The market is empty.") }),
+      h("button", { class: "btn primary", type: "button", onClick: () => openSkillModal(render) }, tr("挑選 Skill…", "Pick skills…")));
+  };
+
   // A small gear on the row: the panel beside it holds the quieter settings.
   const gear = (which: "secretary" | "company", label: string) =>
     h("span", {
@@ -495,8 +562,7 @@ function sidebar(): HTMLElement {
       html: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
       onClick: (e: Event) => {
         e.stopPropagation();
-        const at = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        sidePop = sidePop?.which === which ? null : { which, top: Math.min(at.top, window.innerHeight - 280) };
+        sidePop = sidePop?.which === which ? null : { which };
         render();
       },
     });
@@ -504,33 +570,90 @@ function sidebar(): HTMLElement {
     ? null
     : h(
         "div",
-        { class: "side-pop", role: "dialog", "aria-label": sidePop.which === "secretary" ? tr("秘書設定", "Secretary settings") : tr("公司設定", "Company settings"), style: `top:${sidePop.top}px` },
+        { class: "side-pop", role: "dialog", "aria-label": sidePop.which === "secretary" ? tr("Agent Center 設定", "Agent Center settings") : tr("公司設定", "Company settings") },
         h("div", { class: "side-pop-head" },
-          h("b", { text: sidePop.which === "secretary" ? tr("秘書設定", "Secretary settings") : tr("公司設定", "Company settings") }),
+          h("b", { text: sidePop.which === "secretary" ? tr("Agent Center 設定", "Agent Center settings") : tr("公司設定", "Company settings") }),
           h("button", { class: "side-pop-close", type: "button", "aria-label": tr("關閉", "Close"), onClick: () => { sidePop = null; render(); } }, "✕")),
         sidePop.which === "secretary"
           ? h("div", { class: "side-pop-body" },
-              h("label", { text: tr("秘書名稱", "Secretary's name") }),
+              h("section", { class: "side-pop-sec" },
+              h("label", { text: tr("顯示名稱", "Display name") }),
               h("input", {
-                value: secretaryName(), placeholder: tr("秘書", "Secretary"),
+                value: secretaryName(), placeholder: "Agent Center",
                 onChange: (e: Event) => { setSecretaryName((e.target as HTMLInputElement).value); render(); },
               }),
               h("p", { class: "hint", text: tr("想叫它什麼都可以;改完馬上生效。", "Call it anything you like; the change applies right away.") }),
+              h("label", { for: "sec-instructions", text: tr("自訂指示", "Your instructions") }),
+              ...((count: HTMLElement) => [
+                h("textarea", {
+                  id: "sec-instructions",
+                  class: "side-pop-text",
+                  "data-key": "sec-instructions",
+                  rows: "7",
+                  maxlength: String(MAX_INSTRUCTIONS),
+                  spellcheck: "false",
+                  placeholder: tr("例如:\n開團隊預設 3 人。\n預算優先,便宜的模型夠用就用便宜的。\n回答先講結論,再列細節。", "e.g.\nNew teams have 3 members by default.\nBudget first: use cheaper models where they will do.\nLead with the answer, then the details."),
+                  text: secretaryInstructions(),
+                  // Kept as it is typed: the window may be drawn again before the box loses focus.
+                  onInput: (e: Event) => {
+                    setSecretaryInstructions((e.target as HTMLTextAreaElement).value);
+                    count.textContent = `${secretaryInstructions().length} / ${MAX_INSTRUCTIONS}`;
+                  },
+                }),
+                count,
+              ])(h("span", { class: "side-pop-count", text: `${secretaryInstructions().length} / ${MAX_INSTRUCTIONS}` })),
+              h("p", { class: "hint", text: tr("每次問 Agent Center 都會接在它的系統提示後面,下一個問題就生效。可以調它的做法、口吻和偏好;它還是不會不經你按確認就做事。", "Added after Agent Center's own system prompt each time you ask; it applies from your next question. Shape how it works, its tone and what it prefers; it still never acts without your click.") }),
+              ),
+              h("section", { class: "side-pop-sec" },
+              h("label", { text: tr("根目錄", "Root folder") }),
+              h("input", {
+                value: secretaryRoot(), placeholder: "D:\\ai", spellcheck: "false",
+                onChange: (e: Event) => { setSecretaryRoot((e.target as HTMLInputElement).value); render(); },
+              }),
+              h("div", { class: "side-pop-row" },
+                h("button", { class: "btn plain", type: "button", onClick: () => void (async () => {
+                  const picked = await Bridge.pickFolder(secretaryRoot(), tr("Agent Center 的根目錄", "Agent Center's root folder")).catch(() => null);
+                  if (picked) { setSecretaryRoot(picked); render(); }
+                })() }, tr("選擇資料夾…", "Choose a folder…")),
+                h("button", { class: "btn plain", type: "button", disabled: !secretaryRoot(), onClick: () => void Bridge.openFolder(secretaryRoot()).catch((err) => alert(String(err))) }, tr("開啟", "Open"))),
+              h("p", { class: "hint", text: tr("你沒指定工作資料夾時,Agent Center 不會再問,直接在這底下開一個以團隊為名的資料夾;你指定的完整路徑照舊。", "When you name no work folder, Agent Center no longer asks: it opens a folder named after the team under this one. A full path you name is used as it is.") }),
+              ),
+              h("section", { class: "side-pop-sec" },
+              h("label", { text: tr("任務完成速度", "Speed of the work") }),
+              h("p", { class: "hint", text: trf("現在是「{level}」。用聊天框旁的 ⚡ 拉桿調整:愈左愈仔細(多一層審查、可以來回),愈右愈快(最小團隊、一次審查、不來回);拉到「快」以上就是強制快速模式。每個團隊的設定頁也能單獨開關快速模式。", "Now \"{level}\". Set it with the ⚡ slider by the chat box: left is thorough (an extra review, work may go back), right is fast (the smallest team, one review, no second round); \"Fast\" and beyond force fast mode. Each team's settings page has its own fast-mode switch too.", { level: speedName(secretarySpeed()) }) }),
+              ),
+              h("section", { class: "side-pop-sec" },
+              h("label", { text: "Skills" }), // i18n-ok: the same in both
+              skillRows(),
+              h("div", { class: "side-pop-row" },
+                h("button", { class: "btn plain", type: "button", onClick: () => void Bridge.openSettingsPage("skills") }, tr("管理 Skill 市集", "Manage the skill market")),
+                h("button", { class: "btn plain", type: "button", onClick: () => void Bridge.teamOpenSkills() }, tr("開啟資料夾", "Open the folder")),
+                h("button", { class: "btn plain", type: "button", onClick: () => loadSkillLibrary(render) }, tr("重新整理", "Refresh"))),
+              h("p", { class: "hint", text: tr("每份 skill 是資料夾裡的 <名稱>\\SKILL.md 或 <名稱>.md。「Agent Center 讀」的會接在它的系統提示後面,讓它知道這類題目怎麼分大小、挑人、切工;「可派給成員」的它擬團隊時可以指定給組長或成員,成員開工時會拿到全文。front matter 寫 for: agent-center 的是它自己的,不會派給成員。", "Each skill is <name>\\SKILL.md or <name>.md in the folder. One Agent Center reads goes after its system prompt, so it knows how to size, staff and split that kind of request; one members may get it can give to the leader or a member when it proposes a team, and they get its text as they start. A skill whose front matter says for: agent-center is its own and is never handed out.") }),
+              ),
+              h("section", { class: "side-pop-sec" },
+              h("label", { text: tr("組隊動畫", "Team-picking animation") }),
+              h("label", { class: "side-pop-check" },
+                h("input", { type: "checkbox", checked: pickShowOn(), onChange: (e: Event) => { setPickShowOn((e.target as HTMLInputElement).checked); render(); } }),
+                h("span", { text: tr("提出新團隊時,播放從 Agent Pool 挑人的動畫", "Show Agent Center picking from Agent Pool when it proposes a team") })),
+              h("button", { class: "btn plain", type: "button", onClick: () => { sidePop = null; place = "secretary"; previewPickShow(secretaryHost); } }, tr("預覽動畫", "Preview")),
+              ),
+              h("section", { class: "side-pop-sec" },
               h("label", { text: tr("開團隊使用的 Agent", "Agents for new teams") }),
-              sourceSwitch(() => render()),
-              h("p", { class: "hint" }, agentSource() === "team"
-                ? tr("秘書開團隊、你新增團隊成員時,只從 ", "When the secretary starts a team or you add a member, agents come only from ")
-                : tr("秘書開團隊、你新增團隊成員時,用 設定 → Agents 的原生 Agent。切到「團隊定義的 Agent」就只從 ", "When the secretary starts a team or you add a member, the native agents in Settings → Agents are used. Switch to Team agents to pick only from "),
-                h("button", { class: "link", type: "button", onClick: () => { sidePop = null; place = "agents"; render(); } }, tr("Agent 設定", "Agent settings")),
-                tr(" 裡挑,秘書會照每個 Agent 的說明選人。已經設定好的團隊照舊能啟動。", ", and the secretary picks each one by its description. Teams already set up still start as before.")))
+              h("p", { class: "hint" },
+                tr("Agent Center 開團隊、你新增團隊成員時,只從 ", "When Agent Center starts a team or you add a member, agents come only from the team agents in "),
+                h("button", { class: "link", type: "button", onClick: () => { sidePop = null; place = "agents"; render(); } }, "Agent Pool"),
+                tr(" 裡的團隊 Agent(Cloud Agent 與 Local Agent)挑,Agent Center 會照每個 Agent 的說明選人。以前設定好、直接用 Agent Provider 的團隊照樣能啟動。", " (Cloud Agents and Local Agents), and Agent Center picks each one by its description. Teams set up earlier that use an Agent Provider directly still start."))))
           : h("div", { class: "side-pop-body" },
+              h("section", { class: "side-pop-sec" },
               h("label", { text: tr("公司名稱", "Company name") }),
               h("input", {
                 value: companyName(), placeholder: tr("我的公司", "My company"),
                 onChange: (e: Event) => { setCompanyName((e.target as HTMLInputElement).value); render(); },
               }),
-              // 中二模式's own knobs, only while 設定 → 團隊與秘書 offers it at all.
-              ...(office.battleAllowed ? [
+              ),
+              // 中二模式's own knobs, only while 設定 → 團隊與 Agent Center offers it at all.
+              ...(office.battleAllowed ? [h("section", { class: "side-pop-sec" },
               h("label", { text: tr("戰鬥動畫流暢度(戰鬥模式)", "Animation frame rate (Battle mode)") }),
               h("div", { class: "segmented" },
                 ...[20, 30, 60].map((n) =>
@@ -539,7 +662,8 @@ function sidebar(): HTMLElement {
                     onClick: () => { office.companyFps = n; saveCompanyFps(n); render(); },
                   }, `${n} FPS`))),
               h("p", { class: "hint", text: tr("公司總覽裡每間辦公室戰鬥動畫的更新頻率。團隊多的時候調低比較省效能,只有一兩個團隊時可以調高。", "How often each office's battle animation updates in the company overview. Turn it down when you have many teams, to save power; with one or two teams you can turn it up.") }),
-              ] : []),
+              )] : []),
+              h("section", { class: "side-pop-sec" },
               h("label", { text: tr("玻璃濃度", "Glass opacity") }),
               (() => {
                 const shown = h("b", { class: "sheet-value", text: `${sheet()}%` });
@@ -561,7 +685,8 @@ function sidebar(): HTMLElement {
                   h("div", { class: "segmented" }, preset(tr("玻璃", "Glass"), SHEET_DEFAULT), preset(tr("加深", "Darker"), 80), preset(tr("不透明", "Opaque"), 100)));
               })(),
               h("p", { class: "hint", text: tr("越低,模糊的桌面透出越多;越高越接近實色。模糊本身的強度由 Windows 決定,無法調整。拖動時視窗會即時變化。", "Lower lets more of the blurred desktop show through; higher gets closer to a solid color. Windows sets how strong the blur is, and that can't be changed. The window changes as you drag.") }),
-              ...(office.battleAllowed ? [
+              ),
+              ...(office.battleAllowed ? [h("section", { class: "side-pop-sec" },
               h("label", { text: tr("戰鬥節奏(戰鬥模式)", "Battle pace (Battle mode)") }),
               h("div", { class: "segmented" },
                 ...([["calm", tr("平靜", "Calm")], ["normal", tr("一般", "Normal")], ["fierce", tr("激烈", "Fierce")]] as [Tempo, string][]).map(([v, label]) =>
@@ -571,7 +696,7 @@ function sidebar(): HTMLElement {
                 h("input", { type: "checkbox", checked: ambientMotion(), onChange: (e: Event) => { saveAmbientMotion((e.target as HTMLInputElement).checked); render(); } }),
                 tr("場地微動(戰鬥模式)", "Ambient motion (Battle mode)")),
               h("p", { class: "hint", text: tr("戰場上的餘燼、雪花、落葉、電花、星塵。只是氣氛,減少動態時一律停止。", "Embers, snow, falling leaves, sparks and stardust on the battlefield. Just atmosphere; it always stops when motion is reduced.") }),
-              ] : [])),
+              )] : [])),
       );
   return h(
     "aside",
@@ -590,7 +715,7 @@ function sidebar(): HTMLElement {
       },
       h("span", { class: "team-item-name", text: secretaryName() }),
       h("span", { class: "team-item-state", text: tr("需要時叫我:查現況、開團隊", "Call me when you need me: check status, start teams") }),
-      gear("secretary", tr("秘書設定", "Secretary settings")),
+      gear("secretary", tr("Agent Center 設定", "Agent Center settings")),
     ),
     h(
       "button",
@@ -642,8 +767,8 @@ function sidebar(): HTMLElement {
           render();
         },
       },
-      h("span", { class: "team-item-name", text: tr("Agent 設定", "Agent settings") }),
-      h("span", { class: "team-item-state", text: agentSource() === "team" ? tr("團隊 Agent · 使用中", "Team agents · in use") : tr("團隊專用的 Agent", "Agents made for teams") }),
+      h("span", { class: "team-item-name", text: "Agent Pool" }),
+      h("span", { class: "team-item-state", text: ((c) => `Cloud ${c.cloud} · Local ${c.local}`)(teamAgentCounts(agents)) }), // i18n-ok: the same in both
     ),
     h("div", { class: "side-title", text: tr("團隊", "Teams") }),
     list,
@@ -658,6 +783,7 @@ function sidebar(): HTMLElement {
         }),
       ),
       h("button", { class: "link", type: "button", title: dir, onClick: () => void Bridge.teamOpenConfigs() }, tr("開啟團隊檔案的資料夾", "Open the team files folder")),
+      appVersion ? h("span", { class: "side-version", title: tr("App 版本", "App version"), text: `v${appVersion}` }) : null,
     ),
   );
 }
@@ -777,7 +903,7 @@ function memberHelpCard(): HTMLElement {
         tr("2～6 個字的職稱。全隊都看得到,Leader 依它決定任務派給誰;工位和 Office 的標籤也顯示它。", "A job title of a word or two. The whole team sees it, the Leader decides who gets which task by it, and it labels the desk and the Office too."),
         tr("網站開發、圖片生成、測試", "Web dev, Image generation, Testing"),
       ),
-      item(tr("代理", "Agent"), tr("這位成員用哪個 AI 工具工作。每位成員可以用不同的代理;要新增或修改代理,到「設定 → Agents」。", "Which AI tool this member works with. Each member can use a different agent; to add or change agents, go to Settings → Agents.")),
+      item(tr("代理", "Agent"), tr("這位成員用哪個 AI 工具工作。每位成員可以用不同的代理;要新增或修改代理,到「設定 → Agent Provider」。", "Which AI tool this member works with. Each member can use a different agent; to add or change agents, go to Settings → Agent Provider.")),
       item(tr("模型", "Model"), tr("留空就用代理自己的預設模型。也可以指定一個:點這一欄會列出這個代理提供的模型。", "Leave it empty to use the agent's own default model. Or pick one: click the field to list the models this agent offers.")),
       item(
         tr("職責", "Duty"),
@@ -868,8 +994,9 @@ function nextMemberId(config: TeamConfig): string {
 /** A new member row in the form, to fill in. */
 function addMember(config: TeamConfig) {
   const id = nextMemberId(config);
-  // New members take their agent from where the secretary's switch says.
-  const first = agentSource() === "team" ? teamProfiles(agents)[0] : agents[0];
+  // New members take a team agent; the first member leads, and an n8n node cannot.
+  const pool = teamProfiles(agents);
+  const first = config.members.length ? pool[0] : pool.find((p) => p.protocol !== "n8n");
   config.members.push({ id, name: `AI ${id.slice(2)}`, role: "", duty: "", agent: first?.id ?? "", color: "" });
   unsaved = true;
 }
@@ -896,6 +1023,9 @@ function setup(file: TeamFile): HTMLElement {
   const again = !!run && !running;
   // Members added to the form while the team runs: they can join it now.
   const newcomers = running && run ? config.members.filter((m) => !run.members.some((x) => x.id === m.id)) : [];
+  // Added after the team finished: they join as the person writes to the leader again.
+  const finished = run?.status === "finished" && !run.detached;
+  const latecomers = finished && run ? config.members.filter((m) => !run.members.some((x) => x.id === m.id)) : [];
 
   // ── Left: what the team is for ──
   const folder = bound("input", "workDir", config.workDir, (v) => (config.workDir = v), { placeholder: tr("選擇所有成員一起工作的資料夾", "Choose the folder every member works in") });
@@ -910,6 +1040,16 @@ function setup(file: TeamFile): HTMLElement {
     h("label", { text: tr("任務範圍(以逗號分隔)", "Scope (comma-separated)") }),
     // Read back with any of the separators, whichever language wrote it.
     bound("input", "scope", joinNames(config.scope), (v) => (config.scope = v.split(/[,,、]/).map((x) => x.trim()).filter(Boolean)), { placeholder: tr("商品目錄、購物車、會員登入", "Product catalog, cart, member login") }),
+    h("label", { text: tr("給組長的開局指示", "Kickoff for the leader") }),
+    // Agent Center writes this when it proposes the team; the person may change it.
+    bound("textarea", "kickoff", config.kickoff ?? "", (v) => (config.kickoff = v.trim() || undefined), { rows: "4", placeholder: tr("題目大小、怎麼切、誰驗收什麼、第一批交什麼、工作規則;留空就讓組長自己規劃", "How big the goal is, how to split it, who reviews what, the first batch, the rules; empty lets the leader plan alone") }),
+    h("label", { text: tr("快速模式", "Fast mode") }),
+    h("label", { class: "trusted-check" },
+      h("input", { type: "checkbox", checked: !!config.fast, onChange: (e: Event) => { config.fast = (e.target as HTMLInputElement).checked || undefined; unsaved = true; render(); } }),
+      h("span", { text: tr("組長走快速規則:最小團隊、每個任務一次審查、退件一次後改派或自己做、驗收後不追加", "The leader runs fast: the smallest team, one review per task, a task sent back once is moved or done by the leader, nothing added after acceptance") })),
+    h("label", { text: tr("時限(分鐘)", "Time limit (minutes)") }),
+    bound("input", "timeLimitMin", config.timeLimitMin ? String(config.timeLimitMin) : "", (v) => (config.timeLimitMin = Math.max(0, Math.min(1440, Math.floor(Number(v) || 0))) || undefined), { type: "number", min: "0", max: "1440", placeholder: tr("留空就不限時", "Empty for no limit") }),
+    h("p", { class: "hint", text: tr("有時限時,組長會把最後一段(四分之一,至少 2 分鐘)留著彙整:時間一到就把手上有的整理成成果交出,沒做完也交。例如 10 分鐘:做 8 分鐘、留 2 分鐘彙整。", "With a limit, the leader keeps the last part (a quarter, at least 2 minutes) for assembling: when it comes, what is in is written up and delivered, done or not. For 10 minutes: 8 of work, 2 to assemble.") }),
     h("label", { text: tr("工作資料夾", "Work folder") }),
     h(
       "div",
@@ -940,6 +1080,7 @@ function setup(file: TeamFile): HTMLElement {
         : tr("成員的每一個權限請求都會問你。", "You're asked about every permission request a member makes."),
     }),
     config.autoApprove ? trustedFolders(config) : null,
+    config.autoApprove && run && run.waived?.length ? waivedRules(config.id, run.waived) : null,
     h("label", { text: tr("辦公室風格", "Office style") }),
     h(
       "div",
@@ -956,7 +1097,7 @@ function setup(file: TeamFile): HTMLElement {
         { n: LARGE_FROM },
       ),
     }),
-    // The battlefield is only a choice while 設定 → 團隊與秘書 offers 中二模式 at all.
+    // The battlefield is only a choice while 設定 → 團隊與 Agent Center offers 中二模式 at all.
     ...(office.battleAllowed ? [
     h("label", { text: tr("戰鬥模式戰場", "Battle mode arena") }),
     h(
@@ -975,24 +1116,16 @@ function setup(file: TeamFile): HTMLElement {
   // ── Right: who is in it ──
   const members = h("div", { class: "member-rows" });
   config.members.forEach((m, at) => {
-    const kindOf = (a: AgentProfile) => (a.protocol === "codex" ? "Codex" : a.protocol === "claude" ? "Claude Code" : a.protocol === "agy" ? "Antigravity" : a.command);
-    // The switch (秘書設定 / Agent 設定) says which agents a member is chosen from.
-    const teamMode = agentSource() === "team";
+    const isLeader = config.leader === m.id;
+    // Members are chosen from the team agents, Cloud then Local; a native
+    // agent set up earlier stays on the list (memberChoices).
     const hintOf = (a: AgentProfile) => {
       const own = teamAgents().find((t) => t.id === a.id);
-      if (own) return trf("團隊 Agent · 基底 {base}", "Team agent · based on {base}", { base: agents.find((n) => n.id === own.base)?.name ?? own.base });
-      return kindOf(a) !== a.name ? kindOf(a) : undefined;
+      return own ? trf("Provider:{base}", "Provider: {base}", { base: agents.find((n) => n.id === own.base)?.name ?? own.base }) : undefined;
     };
-    const pool = teamMode ? teamProfiles(agents) : agents;
-    const agentChoices = pool.map((a) => ({ value: a.id, label: a.name, hint: hintOf(a) }));
-    if (m.agent && !pool.some((a) => a.id === m.agent)) {
-      // Set up before the switch moved: still runs, still shown.
-      const other = allAgents().find((a) => a.id === m.agent);
-      agentChoices.unshift(
-        other
-          ? { value: m.agent, label: other.name, hint: teamMode ? tr("原生 Agent(既有設定,照樣能啟動)", "Native agent (set up earlier, still starts)") : tr("團隊 Agent(既有設定,照樣能啟動)", "Team agent (set up earlier, still starts)") }
-          : { value: m.agent, label: trf("{id}(不存在)", "{id} (missing)", { id: m.agent }), hint: tr("不在 設定 → Agents 或 Agent 設定 裡", "Not in Settings → Agents or Agent settings") },
-      );
+    const agentChoices = memberChoices(agents, m.agent, isLeader, hintOf);
+    if (m.agent && !agentChoices.some((c) => c.value === m.agent)) {
+      agentChoices.unshift({ value: m.agent, label: trf("{id}(不存在)", "{id} (missing)", { id: m.agent }), hint: tr("不在 設定 → Agent Provider 或 Agent Pool 裡", "Not in Settings → Agent Provider or Agent Pool") });
     }
     const agent = dropdown({
       value: m.agent,
@@ -1005,8 +1138,8 @@ function setup(file: TeamFile): HTMLElement {
         render();
       },
     });
-    const isLeader = config.leader === m.id;
     const profile = allAgents().find((a) => a.id === m.agent);
+    const nodeLeads = isLeader && profile?.protocol === "n8n";
     // A team agent offers its base's models: asked of the base, with the base's key.
     const lister = baseOf(m.agent, agents);
     const known = lister ? modelLists.get(lister.id) : undefined;
@@ -1016,7 +1149,7 @@ function setup(file: TeamFile): HTMLElement {
       autocomplete: "off",
     });
     suggest(model, () => {
-      const got = lister ? modelLists.get(lister.id) : tr("這個代理不在 設定 → Agents 裡", "This agent isn't in Settings → Agents");
+      const got = lister ? modelLists.get(lister.id) : tr("這個代理不在 設定 → Agent Provider 裡", "This agent isn't in Settings → Agent Provider");
       if (got === undefined) return tr("讀取這個代理提供的模型…", "Reading the models this agent offers…");
       return Array.isArray(got) ? got.map((c) => ({ value: c.id, label: c.id, hint: c.label !== c.id ? c.label : undefined })) : got;
     });
@@ -1046,10 +1179,15 @@ function setup(file: TeamFile): HTMLElement {
             agent,
           ),
           h("div", { class: "row nowrap" }, model),
+          nodeLeads ? h("p", { class: "problem", text: tr("n8n 節點不能當 Leader:請把 Leader 換給別的成員,或替這位成員換一個 Agent。", "An n8n node cannot lead: make another member the Leader, or give this member another agent.") }) : null,
           bound("input", `m${at}.duty`, m.duty, (v) => (m.duty = v), {
             placeholder: tr("職責:這位成員負責什麼、交付什麼(只給它自己看)", "Duty: what this member is responsible for and hands in (only it sees this)"),
             title: tr("只寫給這位成員的工作說明", "Work notes for this member alone"),
           }),
+          // The skills this member starts with, from the market: Agent Center's picks lit, the rest a click away.
+          h("div", { class: "member-skills", title: tr("成員開工時會拿到這些 skill 的全文(SKILL.md);Agent Center 擬團隊時挑的會先亮著", "The member gets the full text of these skills (SKILL.md) as it starts; the ones Agent Center picked are lit already") },
+            h("span", { class: "member-skills-label", text: "Skill" }), // i18n-ok: the same in both
+            skillChips(m.skills ?? [], (next) => { m.skills = next.length ? next : undefined; unsaved = true; }, render, m.name)),
           advanced(config, m, at),
         ),
         h(
@@ -1119,13 +1257,13 @@ function setup(file: TeamFile): HTMLElement {
       tr("＋ 加入成員", "＋ Add member"),
     ),
     agents.length
-      ? h("p", { class: "hint" }, tr("代理在 ", "Add and edit agents in "), h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, tr("設定 → Agents", "Settings → Agents")), tr(" 裡新增與修改", ""), agentSource() === "team" ? h("span", {}, tr(";現在只列 ", "; only the team agents in "), h("button", { class: "link", type: "button", onClick: () => { place = "agents"; render(); } }, tr("Agent 設定", "Agent settings")), tr(" 裡的團隊 Agent", " are listed now")) : null, tr("。 ", ". "),
+      ? h("p", { class: "hint" }, tr("代理在 ", "Add and edit agents in "), h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, tr("設定 → Agent Provider", "Settings → Agent Provider")), tr(" 裡新增與修改", ""), h("span", {}, tr(";成員只從 ", "; members are chosen from the team agents in "), h("button", { class: "link", type: "button", onClick: () => { place = "agents"; render(); } }, "Agent Pool"), tr(" 裡的團隊 Agent 挑", "")), tr("。 ", ". "),
           h("button", { class: "link", type: "button", disabled: doctor === "running", title: tr("逐一確認每個代理的 CLI 找不找得到、能不能回答版本;找得到就等於重新定位成功", "Checks each agent's CLI in turn: can it be found, does it answer with its version. Found means it was located again."), onClick: () => {
             doctor = "running";
             render();
             Bridge.agentsDoctor(agents).then((r) => { doctor = r; render(); }, (e) => { doctor = String(e); render(); });
           } }, doctor === "running" ? tr("檢查中…", "Checking…") : tr("檢查代理", "Check agents")))
-      : h("p", { class: "problem" }, tr("還沒有任何代理。請先到 ", "No agents yet. Create one in "), h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, tr("設定 → Agents", "Settings → Agents")), tr(" 建立。", " first.")),
+      : h("p", { class: "problem" }, tr("還沒有任何代理。請先到 ", "No agents yet. Create one in "), h("button", { class: "link", type: "button", onClick: () => void Bridge.openSettingsPage("agents") }, tr("設定 → Agent Provider", "Settings → Agent Provider")), tr(" 建立。", " first.")),
     Array.isArray(doctor)
       ? h("div", { class: "agent-doctor" }, ...doctor.map((c) =>
           h("p", { class: c.error ? "problem" : "hint" },
@@ -1170,7 +1308,24 @@ function setup(file: TeamFile): HTMLElement {
             }),
           )
         : null,
-      again ? h("span", { class: "hint", text: tr("重新開始會從頭跑一次;上一次的紀錄會保留在團隊紀錄資料夾。", "Starting again runs it from the top; the last run's record stays in the team's records folder.") }) : null,
+      latecomers.length
+        ? button(latecomers.length === 1 ? tr("讓 1 位新成員加入並繼續 →", "Let the new member join and carry on →") : trf("讓 {n} 位新成員加入並繼續 →", "Let {n} new members join and carry on →", { n: latecomers.length }), "primary", () =>
+            void act(async () => {
+              if (!(await save())) return;
+              const again = files.find((f) => f.file === selected);
+              const theirs = again?.problems.filter((p) => latecomers.some((m) => p.startsWith(`${m.name} `))) ?? [];
+              if (theirs.length) throw new Error(theirs.join("\n"));
+              // The leader is told who joined; the person says what they are for.
+              drafts.set(`instruct:${config.id}`, trf("新成員 {names} 加入了,請安排工作給他們:", "{names} joined; give them work:", { names: joinNames(latecomers.map((m) => m.name)) }));
+              tab = "monitor";
+            }),
+          )
+        : null,
+      latecomers.length
+        ? h("span", { class: "hint", text: tr("團隊已完成:新成員會在你下次寫給 Leader 時一起加入,進度保留;「重新開始」則從頭跑。", "The team is done: new members join when you next write to the Leader, keeping the progress; Start again runs from the top.") })
+        : again
+          ? h("span", { class: "hint", text: tr("重新開始會從頭跑一次;上一次的紀錄會保留在團隊紀錄資料夾。", "Starting again runs it from the top; the last run's record stays in the team's records folder.") })
+          : null,
       h("button", { class: `btn plain save${unsaved ? " due" : ""}`, type: "button", onClick: () => void act(save) }, tr("儲存", "Save")), // i18n-ok: CSS classes
       button(
         again ? tr("重新開始 →", "Start again →") : tr("啟動 Teamwork →", "Start Teamwork →"),
@@ -1251,6 +1406,7 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
       pulse,
       otherModel(m),
       spend(m.usage, trf("{name} 這一輪用掉的 token", "Tokens {name} used this run", { name: m.name })),
+      worked(m.workMs ?? 0, trf("{name} 這一輪在回合裡工作的時間(進行中的回合也算)", "Time {name} has spent in its turns this run, the one under way included", { name: m.name })),
       m.status === "working"
         ? h("button", { class: "btn plain stall", type: "button", title: tr("停掉它這一輪;它下一輪會被提醒手上的工作", "Stops its turn under way; on its next turn it's reminded of its open work"), onClick: () => void act(() => Bridge.teamInterruptMember(snap.id, m.id)) }, tr("打斷這一輪", "Interrupt this turn")) // i18n-ok: CSS classes
         : null,
@@ -1274,10 +1430,26 @@ function desk(snap: Snapshot, m: MemberView): HTMLElement {
  * What a member waits on the person for — a permission card, a question —
  * answered right there: on its desk, in the Office's drawer, on the company map.
  */
+/** 解讀 on a permission card: Agent Center's model explains the waiting request (explain.rs), by its key. */
+const explained = new Map<string, string>();
+
+function explainAsk(snap: Snapshot, m: MemberView, p: Permission) {
+  const key = `team:${snap.id}:${m.id}:${JSON.stringify(p.requestId)}`;
+  if (explained.has(key)) return;
+  explained.set(key, "");
+  render();
+  Bridge.explainRequest(key)
+    .then((text) => explained.set(key, text || tr("(沒有說明)", "(no explanation)")))
+    .catch((err) => explained.set(key, trf("解讀不了:{why}", "Could not explain: {why}", { why: String(err instanceof Error ? err.message : err) })))
+    .finally(() => render());
+}
+
 function asks(snap: Snapshot, m: MemberView): HTMLElement[] {
   const out: HTMLElement[] = [];
   if (m.permission) {
     const p = m.permission;
+    const explainKey = `team:${snap.id}:${m.id}:${JSON.stringify(p.requestId)}`;
+    const explanation = explained.get(explainKey);
     const input = p.rawInput && typeof p.rawInput === "object" ? (p.rawInput as Record<string, unknown>) : {};
     const command = typeof input.command === "string" ? input.command : "";
     const allow = p.options.find((o) => o.kind === "allow_once") ?? p.options.find((o) => o.kind === "allow_always");
@@ -1310,11 +1482,16 @@ function asks(snap: Snapshot, m: MemberView): HTMLElement[] {
               ...more.map((x) => h("div", { class: "ask-what mono", text: commandOf(x) })),
             )
           : null,
+        explanation !== undefined
+          ? h("div", { class: `ask-explain${explanation ? "" : " loading"}`, text: explanation || tr("Agent Center 正在解讀這個請求…", "Agent Center is reading this request…") })
+          : null,
         h(
           "div",
           { class: "row" },
+          button(tr("解讀", "Explain"), "plain", () => explainAsk(snap, m, p), explanation !== undefined),
           button(tr("允許這一次", "Allow once"), "primary", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null)), !allow),
           button(tr("拒絕", "Deny"), "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null))),
+          p.ruleId && allow ? button(tr("這個團隊都允許", "Allow for this team"), "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow.optionId, false, true))) : null,
           more.length ? button(trf("全部允許({n})", "Allow all ({n})", { n: more.length + 1 }), "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, allow?.optionId ?? null, true)), !allow) : null,
           more.length ? button(tr("全部拒絕", "Deny all"), "plain", () => void act(() => Bridge.teamPermit(snap.id, m.id, reject?.optionId ?? null, true))) : null,
         ),
@@ -1461,15 +1638,16 @@ function deliverables(snap: Snapshot): HTMLElement {
   for (const d of [...snap.deliverables].reverse()) {
     const task = snap.tasks.find((t) => t.id === d.task);
     const picture = isImage(d.locator);
+    const document = !picture && !d.locator.startsWith("http") && /\.(html?|pdf|md|txt|docx|xlsx|pptx|csv|json|svg|mp4|mp3|wav)$/i.test(d.locator.trim());
     row.append(
       h(
         "button",
         {
           class: `deliverable${picture ? " picture" : ""}`,
           type: "button",
-          title: picture ? trf("看 {path}", "View {path}", { path: d.locator }) : trf("開啟 {path}", "Open {path}", { path: d.locator }),
-          // A picture opens large in the window; anything else in Explorer.
-          onClick: () => (picture ? openImage(snap.id, pictures, pictures.indexOf(d.locator)) : void act(() => Bridge.teamOpen(snap.id, d.locator))),
+          title: picture ? trf("看 {path}", "View {path}", { path: d.locator }) : document ? trf("用系統的程式打開 {path}", "Open {path} with its program", { path: d.locator }) : trf("開啟 {path}", "Open {path}", { path: d.locator }),
+          // A picture opens large in the window; a document in its program (a page in the browser); anything else in Explorer.
+          onClick: () => (picture ? openImage(snap.id, pictures, pictures.indexOf(d.locator)) : void act(() => (document ? Bridge.teamOpenFile(snap.id, d.locator) : Bridge.teamOpen(snap.id, d.locator)))),
         },
         h("span", { class: "deliverable-icon", text: icon(d) }, picture ? thumbImg(snap.id, d.locator) : null),
         h(
@@ -1479,6 +1657,9 @@ function deliverables(snap: Snapshot): HTMLElement {
           h("span", { class: "dim mono", text: d.locator }),
           h("span", { class: "dim", text: `${nameOf(snap, d.by)} · ${clock(d.at)} · ${d.summary}` }),
         ),
+        document
+          ? h("span", { class: "deliverable-reveal", role: "button", tabindex: "0", title: tr("在檔案總管中顯示", "Show in Explorer"), onClick: (e: Event) => { e.stopPropagation(); void act(() => Bridge.teamOpen(snap.id, d.locator)); } }, "📂")
+          : null,
         h("span", {
           class: `chip ${d.accepted === true ? "ok" : d.accepted === false ? "warn" : "pending"}`,
           text: d.accepted === true ? tr("已驗收", "Accepted") : d.accepted === false ? tr("已退回", "Sent back") : tr("待驗收", "Awaiting review"),
@@ -1600,6 +1781,32 @@ function composer(snap: Snapshot): HTMLElement {
   );
 }
 
+/** The time limit's countdown on the progress row; nothing without a limit. */
+function timeLeft(snap: Snapshot): HTMLElement | null {
+  if (!snap.timeLimitMin) return null;
+  if (snap.status === "finished") return h("span", { class: "chip", text: trf("時限 {n} 分", "Limit {n} min", { n: snap.timeLimitMin }) });
+  const left = snap.startedAt + snap.timeLimitMin * 60_000 - Date.now();
+  const tone = snap.timeUp || left <= 0 ? "warn" : snap.timeWarned ? "pending" : "ok";
+  return h("span", { class: `chip ${tone} time-left`, title: snap.timeUp ? tr("時間到:組長已被要求立刻交付", "Time is up: the leader was told to deliver now") : snap.timeWarned ? tr("彙整時段:組長已被要求停止派工、整理交付", "Assembling: the leader was told to stop handing out work and deliver") : trf("最後 {r} 分鐘留給組長彙整", "The last {r} minutes are for the leader to assemble", { r: snap.timeReserveMin }), text: timeLeftText(snap) });
+}
+
+function timeLeftText(snap: Snapshot): string {
+  const left = snap.startedAt + snap.timeLimitMin * 60_000 - Date.now();
+  const mm = Math.floor(Math.abs(left) / 60_000);
+  const ss = Math.floor((Math.abs(left) % 60_000) / 1000).toString().padStart(2, "0");
+  return left <= 0 ? trf("時限 {n} 分 · 已超時 {m}:{s}", "Limit {n} min · over by {m}:{s}", { n: snap.timeLimitMin, m: mm, s: ss }) : trf("時限 {n} 分 · 剩 {m}:{s}", "Limit {n} min · {m}:{s} left", { n: snap.timeLimitMin, m: mm, s: ss });
+}
+
+// The countdown moves between snapshots: the chip alone is refreshed each second, not the page.
+window.setInterval(() => {
+  const snap = selected ? runs.get(files.find((f) => f.file === selected)?.config?.id ?? "") : undefined;
+  if (!snap || !snap.timeLimitMin || snap.status !== "running") return;
+  for (const el of document.querySelectorAll<HTMLElement>(".time-left")) {
+    el.textContent = timeLeftText(snap);
+    if (snap.startedAt + snap.timeLimitMin * 60_000 - Date.now() <= 0) el.classList.replace("ok", "warn"), el.classList.replace("pending", "warn");
+  }
+}, 1000);
+
 function monitor(snap: Snapshot): HTMLElement {
   // The board and the Office read progress from the same calculation.
   const shared = office.main.progress(snap.id);
@@ -1618,7 +1825,9 @@ function monitor(snap: Snapshot): HTMLElement {
       h("span", { class: "dim", text: trf("已驗收 {done} / {total} 項任務", "{done} / {total} tasks accepted", { done: snap.done, total: snap.total }) }),
       h("span", { class: "dim", text: trf("{used} / {max} 回合", "{used} / {max} turns", { used: snap.totalTurns, max: snap.maxTurns }) }),
       h("span", { class: "dim", text: trf("已執行 {n} 分鐘", "Running for {n} min", { n: minutes }) }),
+      timeLeft(snap),
       spend(snap.members.flatMap((m) => m.usage ?? []), tr("全隊這一輪用掉的 token", "Tokens the whole team used this run")),
+      worked(snap.members.reduce((a, m) => a + (m.workMs ?? 0), 0), tr("全隊這一輪在回合裡工作的時間加總(成員同時工作時會比已執行的時間長)", "Every member's time in its turns this run, added up (longer than the run when members work at once)")),
     ),
     stage(snap),
     h("div", { class: "split" }, board(snap), feed(snap)),
@@ -1640,25 +1849,6 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
   const name = snap?.name || editing?.name || file.config?.name || tr("未命名的團隊", "Untitled team");
   const goal = (snap?.goal ?? editing?.goal ?? "").split("\n")[0];
   const count = snap?.members.length ?? editing?.members.length ?? 0;
-  const actions = h("div", { class: "row" });
-  if (snap?.status === "running") {
-    actions.append(
-      h("button", { class: "btn plain", type: "button", title: tr("不再開始新的回合;正在做的這一輪會做完", "No new turns start; the turns under way finish"), onClick: () => void act(() => Bridge.teamPause(snap.id)) }, tr("暫停", "Pause")),
-      button(tr("全部中斷", "Interrupt all"), "danger", () => void act(() => Bridge.teamInterrupt(snap.id))),
-      endButton(snap),
-    );
-  } else if (snap?.status === "paused") {
-    // A team from an earlier run gets its agents back, and its members
-    // their work, where it stopped.
-    actions.append(button(snap.detached ? tr("從中斷處繼續", "Resume where it stopped") : tr("繼續", "Continue"), "primary", () => void act(() => Bridge.teamResume(snap.id))));
-    // Pausing hands out no new turns; the ones under way run to their end.
-    // Whoever is still at it can be stopped now.
-    const busy = snap.members.filter((m) => m.status === "working").length;
-    if (busy && !snap.detached) {
-      actions.append(button(trf("立刻停下({n} 位還在做)", "Stop now ({n} still working)", { n: busy }), "danger", () => void act(() => Bridge.teamInterrupt(snap.id))));
-    }
-    actions.append(endButton(snap));
-  }
   return h(
     "header",
     { class: "top", "data-drag": "" },
@@ -1666,7 +1856,7 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
       "div",
       { class: "top-title", "data-drag": "" },
       h("h1", { "data-drag": "" }, name, snap ? h("span", { class: `state ${snap.status}${snap.ended ? " ended" : ""}`, text: teamStatus(snap) }) : null),
-      h("p", { class: "dim", "data-drag": "", text: goal ? `${goal} · ${aiMembers(count)}` : aiMembers(count) }),
+      h("p", { class: "dim", "data-drag": "", title: goal, text: goal ? `${goal} · ${aiMembers(count)}` : aiMembers(count) }),
       snap?.status === "paused" && snap.pausedWhy
         ? h("p", {
             class: "paused-why",
@@ -1682,9 +1872,41 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
           })
         : null,
     ),
-    actions,
     windowButtons(),
   );
+}
+
+/**
+ * The team's tools (folder, pause, interrupt, end): one row of icons with a
+ * small word each, at the right end of the tab row, so the title and goal
+ * above keep the whole width.
+ */
+function teamTools(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
+  // The team's tools in one row: an icon over a small word each, never stacked.
+  const actions = h("div", { class: "team-tools", role: "toolbar", "aria-label": tr("團隊操作", "Team actions") });
+  const workDir = snap?.workDir ?? editing?.workDir ?? file.config?.workDir ?? "";
+  if (workDir) {
+    actions.append(tool(tr("資料夾", "Folder"), "folder", "", trf("在檔案總管打開工作資料夾\n{dir}", "Open the work folder in Explorer\n{dir}", { dir: workDir }), () => void Bridge.openFolder(workDir).catch((err) => alert(String(err)))));
+  }
+  if (snap?.status === "running") {
+    actions.append(
+      tool(tr("暫停", "Pause"), "pause", "", tr("不再開始新的回合;正在做的這一輪會做完", "No new turns start; the turns under way finish"), () => void act(() => Bridge.teamPause(snap.id))),
+      tool(tr("全部中斷", "Interrupt"), "stop", "danger", tr("馬上停下每一位成員正在做的事", "Stops what every member is doing right now"), () => void act(() => Bridge.teamInterrupt(snap.id))),
+      endButton(snap),
+    );
+  } else if (snap?.status === "paused") {
+    // A team from an earlier run gets its agents back, and its members
+    // their work, where it stopped.
+    actions.append(tool(snap.detached ? tr("從中斷處繼續", "Resume") : tr("繼續", "Continue"), "play", "primary", snap.detached ? tr("把成員的代理叫回來,從停下的地方接著做", "Brings the members' agents back and carries on where it stopped") : tr("繼續派工", "Hand out turns again"), () => void act(() => Bridge.teamResume(snap.id))));
+    // Pausing hands out no new turns; the ones under way run to their end.
+    // Whoever is still at it can be stopped now.
+    const busy = snap.members.filter((m) => m.status === "working").length;
+    if (busy && !snap.detached) {
+      actions.append(tool(tr("立刻停下", "Stop now"), "stop", "danger", trf("{n} 位還在做這一輪,馬上停下", "{n} still on this turn: stop them now", { n: busy }), () => void act(() => Bridge.teamInterrupt(snap.id))));
+    }
+    actions.append(endButton(snap));
+  }
+  return actions;
 }
 
 function tabs(snap: Snapshot | undefined): HTMLElement {
@@ -1726,8 +1948,8 @@ function main(): HTMLElement {
     return h(
       "main",
       { class: "main pane" },
-      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": tr("位置", "Location") }, h("b", { text: tr("Agent 設定", "Agent settings") })), windowButtons()),
-      h("div", { class: "scroll" }, agentsPage(agentsHost)),
+      h("header", { class: "top", "data-drag": "" }, h("nav", { class: "crumbs", "data-drag": "", "aria-label": tr("位置", "Location") }, h("b", { text: "Agent Pool" })), windowButtons()),
+      h("div", { class: "scroll" }, agentsPage(agentsHost, drawnPlace !== "agents")),
     );
   }
   if (place === "law") {
@@ -1796,16 +2018,18 @@ function main(): HTMLElement {
     "main",
     { class: "main pane" },
     header(file, snap),
-    tabs(snap),
+    h("div", { class: "tab-row" }, tabs(snap), teamTools(file, snap)),
     trouble ? h("div", { class: "problem", role: "alert", text: trouble.split("\n").map(said).join("\n") }) : null,
     h("div", { class: "scroll" }, view),
   );
 }
 
-/** The secretary's page: it may add a team, and point at one. */
+/** Agent Center's page: it may add a team, and point at one. */
 const secretaryHost: SecretaryHost = {
   render: () => render(),
   reload: () => load(),
+  pool: () => poolForShow(agents),
+  profiles: () => agents,
   openTeam: (id) => {
     const file = files.find((f) => f.config?.id === id);
     if (file) {
@@ -1818,12 +2042,12 @@ const secretaryHost: SecretaryHost = {
 /** A team's 知識庫 panel, in its setup. */
 const knowledgeHost: KnowledgeHost = { render: () => render() };
 
-/** The Agent 設定 page: team agents built on Settings → Agents. */
+/** The Agent Pool page: team agents built on Settings → Agent Provider. */
 const agentsHost: AgentsHost = {
   render: () => render(),
   natives: () => agents,
   usedBy: (id) => files.filter((f) => f.config?.members.some((m) => m.agent === id)).map((f) => f.config!.name || f.file),
-  openSettings: () => void Bridge.openSettingsPage("agents"),
+  openSettings: (anchor, action) => void Bridge.openSettingsPage("agents", anchor ?? null, action ?? null),
 };
 
 /** Every agent a member may name, for names and default models: native and team. */
@@ -1861,6 +2085,12 @@ function spend(usage: MemberView["usage"], title: string): HTMLElement | null {
   if (!s.tokens) return null;
   const text = `${fmtTokens(s.tokens)} tokens${s.usd != null ? ` · ${s.priced ? "" : "≥ "}${fmtMoney(s.usd)}` : ""}`;
   return h("span", { class: "chip spend", title: trf("{title}。預估成本依「成本與用量」的價格表計算。", "{title}. The estimated cost uses the price list in Cost & usage.", { title }), text });
+}
+
+/** Time a member (or the whole team) has spent in its turns: "工作 12 分鐘". */
+function worked(ms: number, title: string): HTMLElement | null {
+  if (ms < 1000) return null;
+  return h("span", { class: "chip spend", title, text: trf("工作 {t}", "At work {t}", { t: fmtWork(ms) }) });
 }
 
 /** The Office: the same record as the board, as rooms. `?office=mock` in a browser shows the spec's demo company. */
@@ -1906,6 +2136,10 @@ const office = new Office(
       const file = files.find((f) => f.config?.id === teamId);
       if (file) select(file.file);
       tab = "setup";
+      render();
+    },
+    openSecretary: () => {
+      place = "secretary";
       render();
     },
     pause: (teamId) => Bridge.teamPause(teamId),
@@ -1954,6 +2188,7 @@ function render() {
   if (scroller) scroller.scrollTop = scroll;
   // Nodes kept across redraws (the 星域, its rings) were detached and put back: give them their focus back.
   if (active && active !== document.body && active.isConnected && document.activeElement !== active) active.focus({ preventScroll: true });
+  drawnPlace = place;
   live.afterRender();
   office.afterRender();
   if (key) {
@@ -1972,8 +2207,10 @@ async function load() {
     files = listed?.files ?? [];
     const boot = await Bridge.boot();
     agents = boot?.settings.agents ?? [];
+    appVersion = boot?.version ?? "";
     setLang(boot?.lang);
-    // 中二模式 is off unless 設定 → 團隊與秘書 turned it on; a raid saved as
+    applyTheme(boot?.settings.theme);
+    // 中二模式 is off unless 設定 → 團隊與 Agent Center turned it on; a raid saved as
     // the last view then opens as the office (the preference itself is kept).
     office.battleAllowed = !!boot?.settings.battleMode;
     if (!office.battleAllowed && office.mode === "battle") office.mode = "office";
@@ -2050,6 +2287,7 @@ async function load() {
     if (adv) advancedOpen.add(adv);
   }
   if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "law") place = "law";
+  if (import.meta.env.DEV && !IS_TAURI && firstLoad && new URLSearchParams(location.search).get("view") === "agents") place = "agents";
   firstLoad = false;
   render();
 }
@@ -2057,7 +2295,7 @@ let firstLoad = true;
 
 /**
  * Files dragged onto the window: into the knowledge base of the team being
- * set up, to the secretary, or with the next instruction to the team on
+ * set up, to Agent Center, or with the next instruction to the team on
  * screen. Through the page's own HTML5 drag and drop (the window has no
  * Tauri drop handler, see create_team_window): the files come as bytes.
  * Anywhere else a dropped file is refused, never opened by the webview.
@@ -2127,19 +2365,23 @@ async function start() {
     if (tab === "monitor" || !unsaved) render();
   });
   wireDrops();
-  // What the secretary is doing while it works on a request.
+  // What Agent Center is doing while it works on a request.
   await onEvent<SecretaryStep>("secretary-step", (step) => secretaryStep(step, secretaryHost));
+  // Settings → 清除歷史紀錄: the teams, their runs and Agent Center's words this window holds are gone; start over from disk.
+  await onEvent<boolean>("history-cleared", () => location.reload());
   // Each member's screen, as it happens: no redraw, just the lines.
   await onEvent<ScreenPatch>("team-screen", live.applyPatch);
-  // A team's documents changed: here, by its leader sharing one, or by the secretary.
+  // A team's documents changed: here, by its leader sharing one, or by Agent Center.
   await onEvent<{ team: string }>("team-knowledge-changed", ({ team }) => knowledgeChanged(team, knowledgeHost));
   // Team agents saved: what teams can start with may have changed.
+  // The Skill market (Settings) wrote or removed a skill: every chip row and Agent Center's list follow.
+  await onEvent("skills-changed", () => loadSkillLibrary(() => { redrawSkillModal(); render(); }));
   await onEvent("team-agents-changed", () => {
     void load().then(() => {
       if (!unsaved) render();
     });
   });
-  // The settings window's "Open the secretary ↗" / "Agent settings ↗".
+  // The settings window's "Open Agent Center ↗" / "Agent Pool ↗".
   await onEvent<string>("team-goto", (page) => {
     if (page === "secretary" || page === "agents") {
       place = page;
@@ -2147,10 +2389,13 @@ async function start() {
     }
   });
   // Agents may have been added in the settings window meanwhile.
-  await onEvent<{ agents: AgentProfile[]; battleMode?: boolean }>("settings-changed", (s) => {
+  await onEvent<{ agents: AgentProfile[]; battleMode?: boolean; theme?: string }>("settings-changed", (s) => {
     agents = s.agents ?? agents;
+    applyTheme(s.theme);
     office.allowBattle(!!s.battleMode);
     if (!unsaved) render();
+    // Chat models may have changed too (another marked 使用中, a model edited).
+    void refreshProviders(secretaryHost);
   });
 
   // The browser's own right-click menu belongs to no app: only fields and

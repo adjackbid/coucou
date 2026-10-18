@@ -11,7 +11,9 @@
 // Nothing here applies to an agent outside a team: the chat's agent and every
 // hooked session keep their card for every request.
 
+use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
+use std::sync::{Arc, RwLock};
 
 use serde::Serialize;
 use serde_json::Value;
@@ -76,6 +78,53 @@ pub struct Request {
 pub struct Scope {
     pub work_dir: PathBuf,
     pub also: Vec<PathBuf>,
+    /// Checks the person waived for this team ("allow this for the whole
+    /// team" on a card): their asks are answered yes. Shared by every seat
+    /// of the team, so a waiver given on one member's card holds for all.
+    pub waived: Waived,
+}
+
+/// The checks a team's person waived, by the constitution rule's id (one of
+/// Coucou's checks is its own id: "download", "install", …). Shared between
+/// the team's sessions; compared by what is in it.
+#[derive(Debug, Clone, Default)]
+pub struct Waived(Arc<RwLock<BTreeSet<String>>>);
+
+impl PartialEq for Waived {
+    fn eq(&self, other: &Self) -> bool {
+        *self.0.read().unwrap() == *other.0.read().unwrap()
+    }
+}
+
+impl Waived {
+    pub fn from_iter(rules: impl IntoIterator<Item = String>) -> Self {
+        Self(Arc::new(RwLock::new(rules.into_iter().collect())))
+    }
+    pub fn contains(&self, rule: &str) -> bool {
+        self.0.read().unwrap().contains(rule)
+    }
+    pub fn add(&self, rule: &str) {
+        self.0.write().unwrap().insert(rule.to_string());
+    }
+    pub fn remove(&self, rule: &str) {
+        self.0.write().unwrap().remove(rule);
+    }
+    pub fn all(&self) -> Vec<String> {
+        self.0.read().unwrap().iter().cloned().collect()
+    }
+}
+
+/// The constitution check a danger is the same question as, when one is:
+/// waiving the check waives the danger too.
+pub fn check_of(danger: Danger) -> Option<&'static str> {
+    match danger {
+        Danger::Installs => Some("install"),
+        Danger::Downloads => Some("download"),
+        Danger::DestructiveGit => Some("git-destructive"),
+        Danger::SendsOut => Some("send-out"),
+        Danger::System => Some("system"),
+        _ => None,
+    }
 }
 
 const MAX_COMMAND: usize = 8 * 1024;
@@ -132,6 +181,13 @@ impl Request {
 }
 
 pub fn decide(scope: &Scope, request: &Request) -> Verdict {
+    match decide_raw(scope, request) {
+        Verdict::Ask(danger) if check_of(danger).is_some_and(|c| scope.waived.contains(c)) => Verdict::Allow,
+        verdict => verdict,
+    }
+}
+
+fn decide_raw(scope: &Scope, request: &Request) -> Verdict {
     match request.kind {
         Kind::Read | Kind::Search | Kind::Think | Kind::Fetch => Verdict::Allow,
         Kind::Edit | Kind::Move => {
@@ -236,7 +292,13 @@ impl Private {
 
 impl Scope {
     pub fn new(work_dir: impl Into<PathBuf>) -> Self {
-        Self { work_dir: work_dir.into(), also: Vec::new() }
+        Self { work_dir: work_dir.into(), also: Vec::new(), waived: Waived::default() }
+    }
+
+    /// The same, sharing the team's waived checks.
+    pub fn with_waived(mut self, waived: Waived) -> Self {
+        self.waived = waived;
+        self
     }
 
     /// The same, with more folders trusted like the work folder. Only full paths count.
@@ -874,6 +936,23 @@ mod tests {
 
     fn scope() -> Scope {
         Scope::new(r"D:\Work\shop")
+    }
+
+    #[test]
+    fn a_waived_check_answers_its_danger_for_every_seat_of_the_team() {
+        let waived = Waived::default();
+        let a = Scope::new(r"D:\Work\shop").with_waived(waived.clone());
+        let b = Scope::new(r"D:\Work\shop").with_waived(waived.clone());
+        let fetch = Request { kind: Kind::Execute, command: None, paths: vec![] };
+        let fetch = Request { command: Some("curl -o data.json https://example.com/data.json".into()), ..fetch };
+        assert_eq!(decide(&a, &fetch), Verdict::Ask(Danger::Downloads));
+        waived.add("download");
+        // Both seats share it; other dangers still ask.
+        assert_eq!((decide(&a, &fetch), decide(&b, &fetch)), (Verdict::Allow, Verdict::Allow));
+        assert_eq!(decide(&a, &Request { command: Some("npm install left-pad".into()), kind: Kind::Execute, paths: vec![] }), Verdict::Ask(Danger::Installs));
+        waived.remove("download");
+        assert_eq!(decide(&b, &fetch), Verdict::Ask(Danger::Downloads));
+        assert_eq!(check_of(Danger::OutsideWorkDir), None);
     }
 
     #[test]

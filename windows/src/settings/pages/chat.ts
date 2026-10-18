@@ -1,4 +1,4 @@
-// Chat models: where the island's chat (and the secretary) sends its
+// Chat models: where the island's chat (and Agent Center) sends its
 // questions. Keys go to the Windows Credential Manager, never to disk.
 
 import { Bridge } from "../../core/bridge";
@@ -62,8 +62,8 @@ export const chatPage: Page = {
         : null;
       if (agent) {
         top.append(notice("warn", trf(
-          "聊天列現在是跟 Agent「{name}」說話；秘書仍然用下面標「使用中」的聊天模型，沒有的話用第一個。",
-          "The chat bar talks to the agent “{name}” right now; the secretary still uses the chat model below (the first one when none is in use).",
+          "聊天列現在是跟 Agent「{name}」說話；Agent Center 仍然用下面標「使用中」的聊天模型，沒有的話用第一個。",
+          "The chat bar talks to the agent “{name}” right now; Agent Center still uses the chat model below (the first one when none is in use).",
           { name: agent.name },
         )));
       }
@@ -230,15 +230,15 @@ export const chatPage: Page = {
       pageHeader(
         "chat",
         tr("聊天模型", "Chat models"),
-        tr("你在瀏海島聊天時回答你的 AI，秘書也用它。至少要有一個存好金鑰。", "The AI that answers when you type in the island's chat, and that the secretary uses. You need at least one with a key."),
+        tr("你在瀏海島聊天時回答你的 AI，Agent Center 也用它。至少要有一個存好金鑰。", "The AI that answers when you type in the island's chat, and that Agent Center uses. You need at least one with a key."),
         () => h("div", { class: "stack" },
           h("p", { text: tr(
             "Claude、OpenAI，或任何說 OpenAI 格式的服務（OpenRouter、Azure、本機的 Ollama 或 LM Studio、你自己的 proxy）。標著「使用中」的那個負責回答聊天。金鑰存在 Windows 認證管理員，絕不寫進硬碟。",
             "Claude, OpenAI, or anything that speaks the OpenAI format (OpenRouter, Azure, a local Ollama or LM Studio, your own proxy). The one marked \"In use\" answers the chat. Keys are stored in the Windows Credential Manager, never on disk.",
           ) }),
           h("p", { text: tr(
-            "和「Agents」不一樣：聊天模型只會說話；Agent 還能在你的資料夾裡做事。",
-            "Not the same as Agents: a chat model only talks; an agent can also work in your folders.",
+            "和「Agent Provider」不一樣：聊天模型只會說話；Agent 還能在你的資料夾裡做事。",
+            "Not the same as Agent Provider: a chat model only talks; an agent can also work in your folders.",
           ) }),
         ),
       ),

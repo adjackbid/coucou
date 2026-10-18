@@ -82,6 +82,36 @@ pub struct TeamConfig {
     /// More folders the person trusts like the work folder, for steps approved by themselves.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub trusted_dirs: Vec<String>,
+    /// Agent Center's plan for the leader, written when the team was
+    /// proposed: how big the goal is, how to split it, who reviews what.
+    /// Read with the leader's first message; empty for none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub kickoff: String,
+    /// Fast mode, as the person set it: the leader sizes the goal and takes the
+    /// smallest team that does it, one review per task, a task sent back once
+    /// is moved rather than sent back again (brief.rs, tools.rs).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fast: bool,
+    /// A time limit in minutes from the start (0 for none): the leader is told
+    /// to keep the last part of it for assembling what is in and delivering,
+    /// done or not (brief.rs time_rules, orchestrator.rs check_time).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub time_limit_min: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
+impl TeamConfig {
+    /// How much of a time limit is kept for assembling: a quarter, at least 2
+    /// minutes and at most 15, never the whole limit.
+    pub fn time_reserve_min(&self) -> u32 {
+        if self.time_limit_min == 0 {
+            return 0;
+        }
+        (self.time_limit_min / 4).clamp(2, 15).min(self.time_limit_min.saturating_sub(1)).max(1)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -93,7 +123,7 @@ pub struct MemberConfig {
     pub role: String,
     #[serde(default)]
     pub duty: String,
-    /// The agent profile (Settings → Agents) this member runs as.
+    /// The agent profile (Settings → Agent Provider) this member runs as.
     pub agent: String,
     /// The model, instead of the agent's own. Empty: the agent's.
     #[serde(default)]
@@ -106,6 +136,14 @@ pub struct MemberConfig {
     /// At most this estimated cost in a run, US dollars; none: no limit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_cost_usd: Option<f64>,
+    /// What Agent Center told this member to keep throughout its work,
+    /// read with its role. Empty for nothing.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub brief: String,
+    /// Skills from Agent Center's library (settings::team_skills_dir) this
+    /// member gets the text of with its role, by name.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skills: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -179,8 +217,8 @@ pub fn preview_path(work_dir: &str, locator: &str) -> Result<std::path::PathBuf,
 /// the window); the Chinese is said()'s own, for where it is shown as is.
 pub fn no_agent(name: &str, agent: &str) -> String {
     tr!(
-        if agent.is_empty() { format!("{name} 還沒有選擇代理") } else { format!("{name} 還沒有選擇代理(「{agent}」不在 設定 → Agents 或 Agent 設定 裡)") },
-        format!("{name} runs as agent '{agent}', which is not in Settings → Agents or Teamwork → Agent 設定.")
+        if agent.is_empty() { format!("{name} 還沒有選擇代理") } else { format!("{name} 還沒有選擇代理(「{agent}」不在 設定 → Agent Provider 或 Agent Pool 裡)") },
+        format!("{name} runs as agent '{agent}', which is not in Settings → Agent Provider or Teamwork → Agent Pool.")
     )
 }
 
@@ -273,6 +311,8 @@ pub(crate) mod fixtures {
             color: String::new(),
             max_tokens: None,
             max_cost_usd: None,
+            brief: String::new(),
+            skills: vec![],
         };
         let link = |from: &str, to: &str, kind, what: &str| Link { from: from.into(), to: to.into(), kind, what: what.into() };
         TeamConfig {
@@ -301,6 +341,9 @@ pub(crate) mod fixtures {
             archived: false,
             agent_folders: false,
             trusted_dirs: vec![],
+            kickoff: String::new(),
+            fast: false,
+            time_limit_min: 0,
         }
     }
 }
@@ -309,6 +352,21 @@ pub(crate) mod fixtures {
 mod tests {
     use super::fixtures::shop;
     use super::*;
+
+    #[test]
+    fn agent_center_s_plan_reaches_the_leader_and_a_member_s_brief_only_that_member() {
+        let mut team = shop("D:\\shop");
+        team.kickoff = "Large: split by product line; ai2 reviews ai4.".into();
+        team.members[3].brief = "Only URLs you actually opened.".into();
+        let kickoff = brief::kickoff(&team);
+        assert!(kickoff.contains("Agent Center's plan") && kickoff.contains("split by product line"), "{kickoff}");
+        assert!(brief::role(&team, "ai4").contains("Only URLs you actually opened"));
+        assert!(!brief::role(&team, "ai3").contains("Only URLs you actually opened"));
+        // Nothing of it in a file or a prompt when there is none.
+        let plain = shop("D:\\shop");
+        assert!(!serde_json::to_string(&plain).unwrap().contains("kickoff"));
+        assert!(!brief::kickoff(&plain).contains("Agent Center's plan"));
+    }
 
     #[test]
     fn a_team_put_away_says_so_in_its_file_and_one_in_use_does_not() {

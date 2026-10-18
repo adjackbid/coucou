@@ -1,0 +1,542 @@
+/* Agent Center picking a team (pick-show.ts): a dark place in either look,
+   a sweep going round, picks locking on in the sweep's colour. */
+
+.ps {
+  --hot: #ff7a59;
+  --ink: #f5f6f8;
+  --dim: #9398a1;
+  color-scheme: dark;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+  padding: 12px 14px 14px;
+  border-radius: 18px;
+  color: var(--ink);
+  background:
+    radial-gradient(60% 70% at 40% 50%, rgba(255, 122, 89, 0.06), transparent 70%),
+    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.05) 0.6px, transparent 1px) 0 0 / 34px 34px,
+    #0d1016;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.ps-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.ps-title b {
+  font-size: 13.5px;
+}
+
+.ps-sub {
+  color: var(--hot);
+  font-size: 12px;
+  font-weight: 600;
+  animation: ps-fade 0.4s ease-out both;
+}
+
+.ps-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 14px;
+  align-items: center;
+}
+
+.ps-stage {
+  position: relative;
+  height: 380px;
+  container-type: size;
+}
+
+.ps-field {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+  transform: translate(-50%, -50%);
+}
+
+.ps-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.ps-orbit {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-dasharray: 3 7;
+  vector-effect: non-scaling-stroke;
+}
+
+.ps-link {
+  stroke: var(--hot);
+  stroke-width: 2;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  vector-effect: non-scaling-stroke;
+  animation: ps-draw 0.35s ease-out both;
+}
+
+.ps-knot {
+  fill: var(--hot);
+  animation: ps-fade 0.25s ease-out both;
+}
+
+/* The sweep: a wedge of light behind its leading edge, once round from the top. */
+.ps-sweep {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(255, 122, 89, 0) 0deg, rgba(255, 122, 89, 0) 290deg, rgba(255, 122, 89, 0.34) 359deg, rgba(255, 160, 130, 0.9) 360deg);
+  transform: translate(-50%, -50%) rotate(0deg);
+  opacity: 0;
+  pointer-events: none;
+  animation: ps-sweep 2.6s linear both;
+}
+
+@keyframes ps-sweep {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  4% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.ps-hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transform: translate(-50%, -36px);
+  color: var(--hot);
+}
+
+.ps-core {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 122, 89, 0.22), rgba(12, 14, 18, 0.95) 70%);
+  box-shadow: inset 0 0 0 2px var(--hot), 0 0 30px rgba(255, 122, 89, 0.3);
+}
+
+.ps-hub b {
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.ps-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 92px;
+  transform: translate(-50%, -19px);
+  animation: ps-in 0.35s ease-out var(--in) both, ps-scan 0.55s ease-out var(--d) both, ps-dim 0.45s ease-out var(--e) forwards;
+}
+
+.ps-node.picked {
+  animation: ps-in 0.35s ease-out var(--in) both;
+}
+
+.ps-ring {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(12, 14, 18, 0.92);
+  box-shadow: inset 0 0 0 2px var(--m);
+}
+
+.ps-node.picked .ps-ring {
+  animation: ps-lock 0.5s ease-out calc(var(--d) + 150ms) both;
+}
+
+.ps-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 92px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px #000;
+}
+
+.ps-name span,
+.ps-cat {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ps-cat {
+  max-width: 92px;
+  font-size: 10px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+@keyframes ps-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -19px) scale(0.6);
+  }
+}
+
+/* Swept: a short glint. */
+@keyframes ps-scan {
+  0% {
+    filter: none;
+  }
+  30% {
+    filter: brightness(1.8) drop-shadow(0 0 8px rgba(255, 122, 89, 0.8));
+  }
+  100% {
+    filter: none;
+  }
+}
+
+/* Not picked: back into the dark once the sweep is round. */
+@keyframes ps-dim {
+  to {
+    opacity: 0.28;
+    filter: grayscale(0.7);
+  }
+}
+
+/* Picked: locks on, and stays lit. */
+/* From however it stood (lit by the looking, or not). */
+@keyframes ps-lock {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1.12);
+    box-shadow: inset 0 0 0 2px var(--hot), 0 0 0 5px rgba(255, 122, 89, 0.18), 0 0 0 10px rgba(255, 122, 89, 0.07), 0 0 22px rgba(255, 122, 89, 0.55);
+  }
+}
+
+@keyframes ps-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes ps-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.ps-count {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(21, 23, 27, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.ps-count > span {
+  display: block;
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.ps-count-n {
+  font: 700 24px/1.1 var(--mono, monospace);
+  color: var(--hot);
+}
+
+.ps-count-n span {
+  color: var(--hot);
+  opacity: 0.85;
+}
+
+.ps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ps-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 122, 89, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 122, 89, 0.6);
+  animation: ps-row 0.35s ease-out both;
+}
+
+.ps-row .blob {
+  grid-row: span 2;
+}
+
+.ps-row b {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ps-role {
+  color: var(--dim);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes ps-row {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+
+/* Previewed from Agent Center's ⚙: over the page, until closed. */
+.ps-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.ps-overlay .ps {
+  width: min(900px, 100%);
+  margin: 0;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.ps-overlay-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ps-node,
+  .ps-node.picked .ps-ring,
+  .ps-link,
+  .ps-knot,
+  .ps-row,
+  .ps-sub {
+    animation-duration: 0.01ms !important;
+  }
+
+  .ps-sweep {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .ps-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* In the conversation: the full width of it; narrow, the list goes under the rings. */
+.sec-row.sec-show {
+  display: block;
+}
+
+.sec-row.sec-show .ps {
+  max-width: 920px;
+}
+
+.ps {
+  container-type: inline-size;
+}
+
+@container (max-width: 640px) {
+  .ps-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Still looking: the sweep keeps going round, the agents looked at light up. */
+.ps-sweep.spin {
+  opacity: 1;
+  animation: ps-spin 2.6s linear infinite; /* SPIN in pick-show.ts */
+}
+
+@keyframes ps-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.ps-node.scanning {
+  animation: ps-in 0.35s ease-out var(--in) both;
+}
+
+/* Looked at: lights up once, when it is looked at, and stays lit across redraws. */
+.ps-node.seen .ps-ring {
+  transform: scale(1.08);
+  box-shadow: inset 0 0 0 2px var(--hot), 0 0 0 4px rgba(255, 122, 89, 0.14), 0 0 18px rgba(255, 122, 89, 0.45);
+  animation: ps-seen 0.45s ease-out var(--s) both;
+}
+
+@keyframes ps-seen {
+  from {
+    transform: scale(1);
+    box-shadow: inset 0 0 0 2px var(--m), 0 0 0 0 rgba(255, 122, 89, 0), 0 0 0 rgba(255, 122, 89, 0);
+  }
+}
+
+/* Looked at and picked: the lock wins. */
+.ps-node.picked.seen .ps-ring {
+  animation: ps-lock 0.5s ease-out calc(var(--d) + 150ms) both;
+}
+
+.ps-node.seen .ps-name {
+  color: #fff;
+}
+
+.ps-sub.live {
+  animation: ps-breathe 1.6s ease-in-out var(--b, 0ms) infinite;
+}
+
+@keyframes ps-breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.ps-row.wait {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dim);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgba(255, 122, 89, 0.35);
+  border: 0;
+  animation: none;
+}
+
+.ps-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.ps-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--hot);
+  animation: ps-breathe 1s ease-in-out var(--t, 0ms) infinite;
+}
+
+.ps-dots i:nth-child(2) {
+  animation-delay: calc(var(--t, 0ms) + 0.15s);
+}
+
+.ps-dots i:nth-child(3) {
+  animation-delay: calc(var(--t, 0ms) + 0.3s);
+}
+
+/* Over the conversation while Agent Center works: lighter, so the page shows through. */
+.ps-overlay.live {
+  background: rgba(0, 0, 0, 0.35);
+  /* Its delay is set from when it first came: drawn again, it does not fade in again. */
+  animation: ps-fade 0.2s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ps-sweep.spin {
+    display: none;
+  }
+}
+
+/* The picking straight after the looking: the sweep is already there, at the top. */
+.ps-sweep.cont {
+  animation-name: ps-sweep-on;
+}
+
+@keyframes ps-sweep-on {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/* The looking's words and the outcome share one place. */
+.ps-subs {
+  display: inline-grid;
+}
+
+.ps-subs > * {
+  grid-area: 1 / 1;
+}
+
+.ps-sub.live.going {
+  animation: ps-breathe 1.6s ease-in-out var(--b, 0ms) infinite, ps-out 0.25s ease-out var(--o) forwards;
+}
+
+.ps-row.wait.going {
+  animation: ps-out 0.25s ease-out var(--o) forwards;
+}
+
+@keyframes ps-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* Going: fades out instead of vanishing. */
+.ps-overlay.leaving {
+  animation: ps-leave 0.25s ease-out 0s forwards !important;
+  pointer-events: none;
+}
+
+@keyframes ps-leave {
+  to {
+    opacity: 0;
+  }
+}

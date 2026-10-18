@@ -76,9 +76,9 @@ fn connect() -> Result<Link, String> {
     let env = |name: &str| std::env::var(name).unwrap_or_default();
     let (team, member, token) = (env("COUCOU_TEAM"), env("COUCOU_MEMBER"), env("COUCOU_TEAM_TOKEN"));
     if team.is_empty() || member.is_empty() {
-        return Err("This session was not started by a Coucou team.".into());
+        return Err("This session was not started by a Agent Center team.".into());
     }
-    let file = open_pipe().ok_or("Coucou is not running, so the team's tools are not available.")?;
+    let file = open_pipe().ok_or("Agent Center is not running, so the team's tools are not available.")?;
     let read = file.try_clone().map_err(|e| e.to_string())?;
     let mut link = Link { write: file, read: BufReader::new(read) };
     link.send(&json!({ "team": team, "member": member, "token": token }).to_string()).map_err(|e| e.to_string())?;
@@ -86,7 +86,7 @@ fn connect() -> Result<Link, String> {
     if welcome.get("ok").and_then(Value::as_bool) == Some(true) {
         Ok(link)
     } else {
-        Err(welcome.get("error").and_then(Value::as_str).unwrap_or("Coucou did not recognise this session.").to_string())
+        Err(welcome.get("error").and_then(Value::as_str).unwrap_or("Agent Center did not recognise this session.").to_string())
     }
 }
 
@@ -112,8 +112,8 @@ fn gate() {
             Ok(mut link) => {
                 let request = json!({ "jsonrpc": "2.0", "id": 1, "method": "coucou/gate", "params": { "tool": call.get("name"), "args": call.get("args") } });
                 match link.send(&request.to_string()).and_then(|_| link.receive()) {
-                    Ok(line) => serde_json::from_str::<Value>(&line).ok().and_then(|v| v.get("result").cloned()).unwrap_or_else(|| json!({ "decision": "deny", "reason": "Coucou gave no answer." })),
-                    Err(_) => json!({ "decision": "deny", "reason": "Coucou was closed while this step waited." }),
+                    Ok(line) => serde_json::from_str::<Value>(&line).ok().and_then(|v| v.get("result").cloned()).unwrap_or_else(|| json!({ "decision": "deny", "reason": "Agent Center gave no answer." })),
+                    Err(_) => json!({ "decision": "deny", "reason": "Agent Center was closed while this step waited." }),
                 }
             }
             Err(why) => json!({ "decision": "deny", "reason": why }),
@@ -145,8 +145,8 @@ fn main() {
                 match passed {
                     Ok(reply) => reply,
                     Err(_) => {
-                        link = Err("Coucou was closed, so the team's tools are no longer available.".into());
-                        id.as_ref().map(|id| refusal(id, "Coucou was closed, so the team's tools are no longer available."))
+                        link = Err("Agent Center was closed, so the team's tools are no longer available.".into());
+                        id.as_ref().map(|id| refusal(id, "Agent Center was closed, so the team's tools are no longer available."))
                     }
                 }
             }

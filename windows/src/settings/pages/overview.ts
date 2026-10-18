@@ -2,6 +2,7 @@
 // It only shows; changes happen on the page each line points to.
 
 import { tr, trf } from "../../core/i18n";
+import { locationOf } from "../../core/state";
 import { h } from "../../views/dom";
 import type { Page, PageCtx } from "../nav";
 import { HOOK_AGENTS, HOOK_NAME, agentLink, providerNeedsNoKey, providerKey, todoList, type Todo } from "../status";
@@ -19,7 +20,7 @@ function todoLine(t: Todo, ctx: PageCtx): HTMLElement {
   let action: string | undefined;
   switch (t.kind) {
     case "relay":
-      text = tr("Coucou 的轉送程式（coucou-hook.exe）不見了，所有 agent 都連不上。", "Coucou's relay (coucou-hook.exe) is missing, so no agent can be connected.");
+      text = tr("Agent Center 的轉送程式（coucou-hook.exe）不見了，所有 agent 都連不上。", "Agent Center's relay (coucou-hook.exe) is missing, so no agent can be connected.");
       button = tr("怎麼修 →", "How to fix →");
       break;
     case "agent-unreadable":
@@ -54,6 +55,10 @@ function todoLine(t: Todo, ctx: PageCtx): HTMLElement {
       break;
     case "agent-profile-no-command":
       text = trf("Agent「{name}」沒有指令。", "Agent “{name}” has no command.", v);
+      button = tr("補上 →", "Fill in →");
+      break;
+    case "agent-profile-no-url":
+      text = trf("n8n 節點「{name}」還沒填 Webhook 網址。", "n8n node “{name}” has no webhook URL yet.", v);
       button = tr("補上 →", "Fill in →");
       break;
     case "hotkey":
@@ -100,7 +105,7 @@ export const overviewPage: Page = {
         : h(
             "section",
             { class: "card all-set" },
-            h("p", { text: tr("都設定好了。Coucou 會顯示你的工作階段，聊天也能回答你。", "You're all set. Coucou shows your sessions and can answer in the chat.") }),
+            h("p", { text: tr("都設定好了。Agent Center 會顯示你的工作階段，聊天也能回答你。", "You're all set. Agent Center shows your sessions and can answer in the chat.") }),
           );
       const guide = row(h("span", { class: "grow" }), h("button", {
         type: "button",
@@ -112,7 +117,7 @@ export const overviewPage: Page = {
       // Agents Coucou watches.
       const watched = card({
         anchor: "ov-connect",
-        title: tr("Coucou 看著的 Agent", "Agents Coucou watches"),
+        title: tr("Agent Center 看著的 Agent", "Agents Agent Center watches"),
         body: HOOK_AGENTS.map((a) => {
           const state = agentLink(hooks[a], clis, a);
           const link =
@@ -145,12 +150,13 @@ export const overviewPage: Page = {
         ],
       });
 
-      // Agents Coucou can run.
+      // Agents Agent Center can run, Cloud and Local.
       const names = settings.agents.map((a) => a.name);
+      const cloud = settings.agents.filter((a) => locationOf(a) === "cloud").length;
       const agents = card({
         anchor: "ov-agents",
-        title: tr("Coucou 能執行的 Agent", "Agents Coucou can run"),
-        body: [summaryRow(trf("已設定 {n} 個", "{n} set up", { n: names.length }), names.join(", ") || "—", { text: tr("管理 →", "Manage →"), go: () => ctx.go("agents") })],
+        title: "Agent Provider",
+        body: [summaryRow(`Cloud ${cloud} · Local ${names.length - cloud}`, names.join(", ") || "—", { text: tr("管理 →", "Manage →"), go: () => ctx.go("agents") })], // i18n-ok: the same in both
       });
 
       // Island.
@@ -175,9 +181,7 @@ export const overviewPage: Page = {
         title: "Teamwork",
         body: [summaryRow(
           tr("新團隊用", "New teams use"),
-          doc
-            ? `${doc.source === "team" ? tr("團隊 Agent", "team agents") : tr("原生 Agent", "native agents")} · ${trf("已定義 {n} 個團隊 Agent", "{n} team agents defined", { n: doc.agents.length })}`
-            : "—",
+          doc ? trf("團隊 Agent · 已定義 {n} 個", "team agents · {n} defined", { n: doc.agents.length }) : "—",
           { text: tr("打開 Teamwork ↗", "Open Teamwork ↗"), go: () => openTeam() },
         )],
       });

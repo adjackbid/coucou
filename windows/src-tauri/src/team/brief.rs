@@ -14,7 +14,7 @@ use super::{LinkKind, TeamConfig, SYSTEM, YOU};
 pub fn who(config: &TeamConfig, id: &str) -> String {
     match id {
         YOU => "the user".to_string(),
-        SYSTEM => "Coucou".to_string(),
+        SYSTEM => "Agent Center".to_string(),
         other => match config.member(other) {
             Some(m) => format!("{} ({})", m.name, m.id),
             None => other.to_string(),
@@ -44,7 +44,7 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
     let mut out = String::new();
 
     out.push_str(&format!(
-        "You are {name} (id `{id}`), the {role} of the team \"{team}\". The team is a group of AI coding agents, each in its own session, coordinated by Coucou. The others cannot see your screen or your replies: the only things that reach them are what you send and hand in through the `coucou-team` tools.\n\n",
+        "You are {name} (id `{id}`), the {role} of the team \"{team}\". The team is a group of AI coding agents, each in its own session, coordinated by Agent Center. The others cannot see your screen or your replies: the only things that reach them are what you send and hand in through the `coucou-team` tools.\n\n",
         name = member.name,
         id = member.id,
         role = member.role,
@@ -60,6 +60,17 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
     }
     if !member.duty.trim().is_empty() {
         out.push_str(&format!("\nYour duty: {}\n", member.duty.trim()));
+    }
+    // What Agent Center gave this member when the team was proposed.
+    if !member.brief.trim().is_empty() || !member.skills.is_empty() {
+        out.push_str("\nFrom Agent Center, to keep throughout your work:\n");
+        if !member.brief.trim().is_empty() {
+            out.push_str(member.brief.trim());
+            out.push('\n');
+        }
+        if !member.skills.is_empty() {
+            out.push_str(&crate::team_agents::skill_text(&member.skills));
+        }
     }
 
     out.push_str(&format!("\nYour teammates:\n{}\n", roster(config, me)));
@@ -78,10 +89,32 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
     out.push_str("\nHow the team works:\n");
     if is_leader {
         out.push_str(
-            "- You are the leader. Break the goal into tasks with `task_create`: one owner each, the criteria that make it done, the tasks it depends on (`depends_on`) and who receives the result (`deliver_to`). Give every teammate work that fits their role, then end your turn. Coucou hands each task to its owner as soon as what it depends on has been delivered.\n\
+            "- You are the leader. Break the goal into tasks with `task_create`: one owner each, the criteria that make it done, the tasks it depends on (`depends_on`), who receives the result (`deliver_to`) and, if not you, who accepts it (`reviewer`). Give every teammate work that fits their role, then end your turn. Agent Center hands each task to its owner as soon as what it depends on has been delivered.\n\
              - When a teammate hands something in you are told. Check it against the criteria and call `review` to accept it or send it back with the reason.\n\
              - Answer teammates' questions with `message_send`. The user may send you new instructions at any time: adjust the tasks to them.\n",
         );
+        out.push_str(
+            "\nHow Agent Center runs the team, and what follows for your plan:\n\
+             - Each member runs one turn at a time. Two tasks owned by the same member run one after the other, so spread independent tasks over different members (yourself included) and give everyone work in your first turn. A member holding most of the tasks sets the finish time.\n\
+             - A member reads messages only at the start of a turn. A ruling sent while someone is deep in a long turn reaches them after they hand in, and the work is redone. Put the rules in the task itself; send corrections in one message, not several.\n\
+             - A dependent task starts as soon as its inputs are handed in, before they are accepted. Only a rejection sends the chain backwards.\n\
+             - Size the goal first. A fact or a short answer: one task for yourself, do it, deliver, report to the user with `message_send` (to \"you\"), `team_finish`. One document with no natural split: one member does it, another accepts it (`reviewer`). Several parts: split by scope (themes, chapters, product lines), each member from start to finish, chains of at most two links; if the user fixed the roles, split by batch instead and have each member deliver batch by batch. Do not put the cheapest model at the head of a chain.\n\
+             - Review against the criteria you wrote. Send back once with every fix listed; accepted is final, no follow-up checks by message. If a task comes back a second time, move it with `task_assign` or do it yourself. Spot-check two or three items rather than redoing a member's work.\n\
+             - A member out of quota, missing a tool, or blocked for more than a turn: move its remaining work with `task_assign` at once.\n",
+        );
+        if config.fast {
+            out.push_str(&format!("\n{}\n", fast_rules()));
+        }
+        if config.time_limit_min > 0 {
+            out.push_str(&format!("\n{}\n", time_rules(config)));
+        }
+        let library = crate::team_agents::member_library();
+        if !library.is_empty() {
+            out.push_str("\nSkills in Agent Center's library. Hand one to a teammate with `brief_member` (skills: [name]) when it fits their task; they get its text with their role:\n");
+            for s in &library {
+                out.push_str(&format!("- {}{}\n", s.name, if s.description.is_empty() { String::new() } else { format!(": {}", s.description) }));
+            }
+        }
     } else {
         out.push_str("- The leader hands out tasks. You are told when one is yours and ready; until then there is nothing to do.\n");
     }
@@ -91,17 +124,97 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
          - When you cannot go on: `task_block` with the reason and who you are waiting for, or `ask_human` if only the user can decide. Then end your turn.\n\
          - To ask or tell a teammate something: `message_send`. `team_status` shows your tasks, the board and any new messages.\n\
          - Then end your turn. You get a new turn when a task, a delivery or a message arrives for you. Do not wait or poll.\n\
+         - Tool results tell you when messages arrived during your turn: call `team_status` to read them before you deliver, so a ruling does not reach you after the work is done.\n\
          - Write notes, messages and summaries in the language named on the last line of this brief.\n",
     );
     out
 }
 
+/// What the leader gave a member to keep (`brief_member`), as a message to
+/// one already at work.
+// i18n: model-facing
+pub fn briefed(text: &str) -> String {
+    format!("From the leader, to keep throughout your work:\n{text}")
+}
+
+/// Everything the leader gave a member to keep, for its first-turn brief;
+/// nothing when there is none.
+// i18n: model-facing
+pub fn briefs(state: &State, member: &str) -> String {
+    match state.briefs.get(member).filter(|b| !b.is_empty()) {
+        Some(items) => format!("\nFrom the leader, to keep throughout your work:\n{}\n", items.join("\n\n")),
+        None => String::new(),
+    }
+}
+
+/// Appended to a tool result when messages arrived during the turn.
+// i18n: model-facing
+pub fn unread(n: usize) -> String {
+    format!("You have {n} unread message{}. Call `team_status` to read {} before you go on.", if n == 1 { "" } else { "s" }, if n == 1 { "it" } else { "them" })
+}
+
 /// The leader's first message.
 // i18n: model-facing
 pub fn kickoff(config: &TeamConfig) -> String {
+    let plan = if config.kickoff.trim().is_empty() {
+        String::new()
+    } else {
+        format!("\n\nAgent Center's plan for this team, from the user's request. Follow it unless the board shows it is wrong; then say what you changed and why:\n{}", config.kickoff.trim())
+    };
+    let fast = if config.fast { format!("\n\n{}", fast_rules()) } else { String::new() };
+    let timed = if config.time_limit_min > 0 { format!("\n\n{}", time_rules(config)) } else { String::new() };
     format!(
-        "The team has started. Plan the work for this goal and create the tasks now:\n{}\nUse `team_status` to see your teammates and `task_create` for each task.",
+        "The team has started. Plan the work for this goal and create the tasks now:\n{}\nUse `team_status` to see your teammates and `task_create` for each task.{plan}{fast}{timed}",
         config.goal.trim()
+    )
+}
+
+/// What fast mode asks of the leader (TeamConfig::fast): the smallest team that
+/// does the job, one review, no second round. Said with the kickoff and again
+/// in the leader's role, so it holds for the whole run.
+// i18n: model-facing
+pub fn fast_rules() -> String {
+    "FAST MODE is on: the user wants the result in the shortest time, with one independent check for accuracy. Rules that override your planning habits:\n\
+     1. Size first, and choose the smaller size when in doubt. A fact, a short answer or one small file: one task owned by you, do it yourself now, `deliver`, report to the user with `message_send` (to \"you\"), `team_finish`. Do not give teammates work for a quick goal.\n\
+     2. One deliverable with no natural split: one member does the whole thing and one other member, on a different model, is its `reviewer`. Nobody else works on it.\n\
+     3. Several parts: split by scope so every member works at the same time, from start to finish on its slice; hand-off chains of at most two links. When the user fixed the roles, split by batch and have each member deliver batch by batch.\n\
+     4. Every task is reviewed once. Send it back at most once, with every fix listed; if it comes back again, accept it and fix the rest yourself or move it with `task_assign`. Accepted is final: no follow-up checks or additions by message.\n\
+     5. Spot-check two or three items; never redo a member's work. Keep your own messages short.\n\
+     6. A member blocked, out of quota or silent for a turn: move its work at once."
+        .to_string()
+}
+
+/// What a time limit asks of the leader (TeamConfig::time_limit_min): the last part
+/// is for assembling, and the deliverable goes out at the limit, done or not.
+// i18n: model-facing
+pub fn time_rules(config: &TeamConfig) -> String {
+    let total = config.time_limit_min;
+    let reserve = config.time_reserve_min();
+    format!(
+        "TIME LIMIT: the user wants the deliverable within {total} minutes of the start, done or not. The last {reserve} minutes are reserved for assembling, so the work itself has {} minutes. Rules:\n\
+         1. Plan for the time: small first batches that can be assembled on their own, delivered early; nothing that only pays off at the end.\n\
+         2. You will get a message when the reserve begins. From then on hand out no new work, collect what has been handed in (accept it as it is), write the deliverable from it yourself, mark plainly what is missing or unverified, `deliver`, report to the user with `message_send` (to \"you\"), and `team_finish`.\n\
+         3. When the limit is reached you will be told again: deliver within your next turn with whatever you have, even a partial one, and close the team.\n\
+         4. A partial deliverable on time beats a complete one late.",
+        total.saturating_sub(reserve)
+    )
+}
+
+/// The reserve of the time limit has begun.
+// i18n: model-facing
+pub fn time_reserve(config: &TeamConfig, left_min: u64) -> String {
+    format!(
+        "TIME CHECK: {left_min} of the {} minutes are left: the assembling reserve has begun. Hand out no new work. Collect what has been handed in (accept it as it is), write the deliverable from it yourself now, mark what is missing or unverified, `deliver`, report to the user with `message_send` (to \"you\"), then `team_finish`. Teammates still working: tell them with `message_send` to hand in what they have within this turn.",
+        config.time_limit_min
+    )
+}
+
+/// The time limit is reached.
+// i18n: model-facing
+pub fn time_up(config: &TeamConfig) -> String {
+    format!(
+        "TIME IS UP: the {} minutes are over. Deliver now, in this turn, with whatever you have: write the deliverable from what is in, mark the gaps, `deliver`, report to the user with `message_send` (to \"you\"), and `team_finish`. Do not wait for anyone.",
+        config.time_limit_min
     )
 }
 
@@ -146,7 +259,7 @@ pub fn task(state: &State, task: &Task) -> String {
 pub fn to_review(config: &TeamConfig, task: &Task, by: &str, locator: &str, summary: &str) -> String {
     let criteria: Vec<String> = task.criteria.iter().enumerate().map(|(i, c)| format!("{}. {}", i + 1, c.text)).collect();
     format!(
-        "{} handed in {} ({}): {}\nWhere: {}\n{}Check it and call `review` (task \"{}\", accept true or false, and the reason when you send it back).",
+        "{} handed in {} ({}): {}\nWhere: {}\n{}Check it against these and call `review` (task \"{}\", accept true or false). If you send it back, list every fix in the reason at once; once accepted, it is final.{}",
         who(config, by),
         task.id,
         task.title,
@@ -154,6 +267,7 @@ pub fn to_review(config: &TeamConfig, task: &Task, by: &str, locator: &str, summ
         locator,
         if criteria.is_empty() { String::new() } else { format!("It is done when:\n{}\n", criteria.join("\n")) },
         task.id,
+        if config.fast && task.rejections >= 1 { " Fast mode: it was sent back once already, so accept it now and fix what is left yourself, or move it with `task_assign`." } else if config.fast { " Fast mode: spot-check two or three criteria; this is the one review it gets." } else { "" },
     )
 }
 
@@ -180,6 +294,16 @@ pub fn rejected(config: &TeamConfig, task: &Task, by: &str, reason: &str) -> Str
     )
 }
 
+/// A task was sent back for the second time: the leader changes the plan
+/// rather than the reviewer trying a third time.
+// i18n: model-facing
+pub fn rejected_again(task: &Task) -> String {
+    format!(
+        "{} ({}) has now been sent back twice. Rather than another round, move it to someone else with `task_assign` or do it yourself; a third rejection pauses the team for the user.",
+        task.id, task.title,
+    )
+}
+
 /// A member ended its turn with work still open and nothing said about it.
 // i18n: model-facing
 pub fn nudge(tasks: &[&Task]) -> String {
@@ -188,7 +312,7 @@ pub fn nudge(tasks: &[&Task]) -> String {
         .map(|t| format!("{} ({}, {})", t.id, t.title, if t.status == TaskStatus::Doing { "doing" } else { "not started" }))
         .collect();
     format!(
-        "You ended your turn, but this is still open and Coucou has no report on it: {}.\nIf it is finished, call `deliver`. If you are stuck, call `task_block` with the reason. Otherwise carry on with it now.",
+        "You ended your turn, but this is still open and Agent Center has no report on it: {}.\nIf it is finished, call `deliver`. If you are stuck, call `task_block` with the reason. Otherwise carry on with it now.",
         list.join("; ")
     )
 }
@@ -217,7 +341,7 @@ pub fn finish_reminder() -> String {
 /// A member's request the constitution refused.
 // i18n: model-facing
 pub fn refused(title: &str, rule: &str) -> String {
-    format!("Coucou refused \"{title}\": the user's constitution says {rule}. It will be refused every time — do not try it again. Find another way, or tell the leader (or ask the user with `ask_human`) if the task cannot be done without it.")
+    format!("Agent Center refused \"{title}\": the user's constitution says {rule}. It will be refused every time — do not try it again. Find another way, or tell the leader (or ask the user with `ask_human`) if the task cannot be done without it.")
 }
 
 /// The leader of a finished team, when the person comes back with more.
@@ -249,7 +373,7 @@ pub fn turn(config: &TeamConfig, messages: &[&Message]) -> String {
 /// member's agent is a new session that remembers nothing.
 // i18n: model-facing
 pub fn revived(open: &[&Task], to_review: &[&Task]) -> String {
-    let mut out = "Coucou was closed while the team was working and has now picked the team up again. Your session is a new one: call `team_status` to see where the team stands.".to_string();
+    let mut out = "Agent Center was closed while the team was working and has now picked the team up again. Your session is a new one: call `team_status` to see where the team stands.".to_string();
     if !open.is_empty() {
         let list: Vec<String> = open
             .iter()

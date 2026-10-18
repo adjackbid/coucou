@@ -42,6 +42,37 @@ export function languagePicker(onData: (fn: () => void) => void): HTMLElement {
   return box;
 }
 
+/** 深色 / 淺色: the settings window and Teamwork change right away; the island stays dark. */
+function themePicker(onData: (fn: () => void) => void): HTMLElement {
+  const box = h("div", { class: "segmented", role: "radiogroup", "aria-label": tr("外觀", "Appearance") });
+  const choices: [Settings["theme"], string][] = [
+    ["dark", tr("深色", "Dark")],
+    ["light", tr("淺色", "Light")],
+  ];
+  for (const [value, label] of choices) {
+    box.append(h("button", {
+      type: "button",
+      role: "radio",
+      "data-value": value,
+      text: label,
+      onclick: () => {
+        settings.theme = value;
+        void save();
+      },
+    }));
+  }
+  const mark = () => {
+    for (const b of box.querySelectorAll<HTMLButtonElement>("button")) {
+      const on = b.dataset.value === (settings.theme === "light" ? "light" : "dark");
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-checked", String(on));
+    }
+  };
+  onData(mark);
+  mark();
+  return box;
+}
+
 export const generalPage: Page = {
   id: "general",
   icon: "general",
@@ -55,13 +86,21 @@ export const generalPage: Page = {
     return h(
       "div",
       { class: "page-body" },
-      pageHeader("general", tr("一般", "General"), tr("語言、音效、開機啟動，以及關於 Coucou。", "Language, sound, startup, and about Coucou.")),
+      pageHeader("general", tr("一般", "General"), tr("語言、外觀、音效、開機啟動，以及關於 Agent Center。", "Language, appearance, sound, startup, and about Agent Center.")),
       card({
         anchor: "language",
         title: h("div", { class: "title-icon" }, icon("language", 20), h("h2", { text: tr("語言", "Language") })),
         body: [
           languagePicker(ctx.onData),
           h("p", { class: "field-help", text: tr("所有視窗會立刻換成這個語言。", "Every window changes right away.") }),
+        ],
+      }),
+      card({
+        anchor: "appearance",
+        title: tr("外觀", "Appearance"),
+        body: [
+          themePicker(ctx.onData),
+          h("p", { class: "field-help", text: tr("設定視窗和 Teamwork 會立刻換成這個外觀。瀏海島維持深色。", "The settings window and Teamwork change right away. The island stays dark.") }),
         ],
       }),
       card({
@@ -82,7 +121,7 @@ export const generalPage: Page = {
         anchor: "about",
         title: tr("關於", "About"),
         body: [
-          h("p", {}, h("b", { text: "Coucou" }), " ", h("span", { class: "hint", text: version })),
+          h("p", {}, h("b", { text: "Agent Center" }), " ", h("span", { class: "hint", text: version })),
           h("p", { class: "hint", text: tr("沒有遙測。網路請求只會送到你自己設定的服務。", "No telemetry. Network requests only go to the services you set up yourself.") }),
         ],
       }),

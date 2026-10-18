@@ -8,7 +8,7 @@
 // agents' step titles and the orchestrator's sentences stay in English, as
 // the app writes them: the window words them (heardWords, said, toolWords).
 
-import { tr } from "../core/i18n";
+import { tr, trf } from "../core/i18n";
 import type { Line, PastRun, PricingChoices, ScreenPatch, Snapshot, TeamFile, TeamConfig, Usage, UsageReport, UsageRow } from "./types";
 
 const NOW = Date.now();
@@ -53,6 +53,8 @@ export const demoAgents: import("../core/state").AgentProfile[] = [
   { id: "claude", name: "Claude Code", command: "claude", args: [], env: {}, cwd: "", protocol: "claude" },
   { id: "codex", name: "Codex", command: "codex", args: ["app-server"], env: {}, cwd: "", protocol: "codex" },
   { id: "agy", name: "Antigravity", command: "agy", args: [], env: {}, cwd: "", protocol: "agy" },
+  { id: "ollama", name: tr("本機模型 · qwen3-coder", "Local model · qwen3-coder"), command: "copilot", args: ["--acp", "--stdio"], env: { COPILOT_PROVIDER_BASE_URL: "http://localhost:11434/v1" }, cwd: "", model: "qwen3-coder", location: "local" },
+  { id: "n8n-report", name: tr("n8n 週報流程", "n8n weekly report"), command: "", args: [], env: {}, cwd: "", protocol: "n8n", location: "local", url: "http://n8n.office.lan/webhook/weekly-report", headerName: "X-API-Key" },
 ];
 
 function used(model: string, input: number, output: number, cacheRead = 0, cacheWrite = 0): Usage {
@@ -66,7 +68,7 @@ export const demoFiles: { dir: string; files: TeamFile[] } = {
     {
       file: "docs.json",
       config: { ...config, id: "docs", name: tr("文件翻譯團隊", "Docs translation team"), goal: tr("把 README 翻成三種語言", "Translate the README into three languages") },
-      problems: ["The work folder D:\\Projects\\docs does not exist.", "AI 3 runs as agent 'cg', which is not in Settings → Agents."], // i18n-ok: Rust's English, worded by said()
+      problems: ["The work folder D:\\Projects\\docs does not exist.", "AI 3 runs as agent 'cg', which is not in Settings → Agent Provider."], // i18n-ok: Rust's English, worded by said()
     },
   ],
 };
@@ -91,6 +93,7 @@ const task = (
   criteria: [],
   dependsOn: [],
   deliverTo: null,
+  reviewer: null,
   blocked: null,
   note: "",
   rejections: 0,
@@ -124,7 +127,7 @@ const team = (name: string, input: unknown, status = "done") => line("tool", `co
 /** What each member's screen shows, eighteen minutes in. */
 const screens: Record<string, Line[]> = {
   ai1: [
-    turn(1, [{ from: "system", text: "The team has started. Plan the work for this goal and create the tasks now:" }]), // i18n-ok: what Coucou tells a member
+    turn(1, [{ from: "system", text: "The team has started. Plan the work for this goal and create the tasks now:" }]), // i18n-ok: what Agent Center tells a member
     line("say", tr("我先看一下團隊與需求,再把工作拆成可以驗收的任務。", "Let me look at the team and the requirements first, then split the work into tasks that can be reviewed.")),
     team("team_status", {}),
     team("task_create", { title: tr("商品圖片", "Product images"), owner: "ai4" }),
@@ -135,13 +138,13 @@ const screens: Record<string, Line[]> = {
     line("say", tr("首版先完成基本結帳流程,優惠券規則後續再擴充。我回覆 AI 3,", "The first version does the basic checkout; coupon rules can come later.")),
   ],
   ai2: [
-    turn(1, [{ from: "system", text: `TASK-06 is yours and ready to start: ${tr("整合測試", "Integration tests")}` }]), // i18n-ok: what Coucou tells a member
+    turn(1, [{ from: "system", text: `TASK-06 is yours and ready to start: ${tr("整合測試", "Integration tests")}` }]), // i18n-ok: what Agent Center tells a member
     line("say", tr("TASK-06 要等 AI 3 的購物車功能交付才能開始,我先把測試清單寫好。", "TASK-06 has to wait for AI 3's cart, so I'm writing the test checklist first.")),
     tool("Edit tests/checklist.md", "edit", "done"),
     line("turn", "1", { status: "end" }),
   ],
   ai3: [
-    turn(3, [{ from: "system", text: `AI 4 (ai4) handed in TASK-03 (${tr("商品圖片", "Product images")}), which is meant for you: ${tr("6 張商品圖", "6 product pictures")}` }]), // i18n-ok: what Coucou tells a member
+    turn(3, [{ from: "system", text: `AI 4 (ai4) handed in TASK-03 (${tr("商品圖片", "Product images")}), which is meant for you: ${tr("6 張商品圖", "6 product pictures")}` }]), // i18n-ok: what Agent Center tells a member
     line("say", tr("收到商品圖,接著把購物車頁面做出來。", "Got the product pictures; now building the cart page.")),
     team("task_update", { task: "TASK-04", status: "doing" }),
     tool("Run npm install zustand", "execute", "done", { input: { command: '"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -NoProfile -Command npm install zustand' } }), // i18n-ok: the agent's step title
@@ -149,7 +152,7 @@ const screens: Record<string, Line[]> = {
     tool("Run npm test -- cart", "execute", "running", { input: { command: "npm test -- cart" }, output: "PASS src/cart/add.test.ts\nPASS src/cart/qty.test.ts\nRUNS src/cart/total.test.ts" }), // i18n-ok: the agent's step title
   ],
   ai4: [
-    turn(2, [{ from: "system", text: `TASK-03 is yours and ready to start: ${tr("商品圖片", "Product images")}` }]), // i18n-ok: what Coucou tells a member
+    turn(2, [{ from: "system", text: `TASK-03 is yours and ready to start: ${tr("商品圖片", "Product images")}` }]), // i18n-ok: what Agent Center tells a member
     line("say", tr("六張商品圖都生成好了,放在 public/images:主圖 public/images/hero.png、情境圖 public/images/scene.jpg。", "All six product pictures are made, in public/images: the main one public/images/hero.png, the scene public/images/scene.jpg.")),
     tool("Generate an image", "other", "done"), // i18n-ok: the agent's step title
     tool("Read public/images/hero.png", "read", "done", { input: { path: "public/images/hero.png" } }),
@@ -175,8 +178,12 @@ export function demoSnapshot(): Snapshot {
     maxTurns: 60,
     startedAt: ago(18),
     finishedAt: 0,
+    timeLimitMin: 0,
+    timeReserveMin: 0,
+    timeWarned: false,
+    timeUp: false,
     members: [
-      { ...seat(0), isLeader: true, status: "working", task: "TASK-05", waiting: null, activity: "Reading docs/spec.md", turns: 4, permission: null, lostWhy: "", usage: [used("claude-sonnet-5-5", 41_200, 9_800, 612_000, 38_000)] },
+      { ...seat(0), isLeader: true, status: "working", task: "TASK-05", waiting: null, activity: "Reading docs/spec.md", turns: 4, workMs: 23 * 60_000, permission: null, lostWhy: "", usage: [used("claude-sonnet-5-5", 41_200, 9_800, 612_000, 38_000)] },
       {
         ...seat(1),
         isLeader: false,
@@ -185,13 +192,14 @@ export function demoSnapshot(): Snapshot {
         waiting: { on: "ai3", what: tr("購物車功能", "Cart"), task: "TASK-06" },
         activity: "",
         turns: 1,
+        workMs: 6 * 60_000,
         permission: null,
         lostWhy: "",
         usage: [used("gpt-6-mini", 150_000, 28_000, 42_000)],
       },
-      { ...seat(2), isLeader: false, status: "working", task: "TASK-04", waiting: null, activity: "Editing src/cart/CartPage.tsx", turns: 3, permission: null, lostWhy: "", usage: [used("glm-5.3-flash", 182_000, 21_400, 96_000)] },
-      { ...seat(3), isLeader: false, status: "done", task: null, waiting: null, activity: "", turns: 2, permission: null, lostWhy: "", usage: [used("gemini-3.8-flash", 23_000, 4_100)] },
-      ...config.members.slice(4).map((_, k) => ({ ...seat(4 + k), isLeader: false, status: (k % 2 ? "idle" : "working") as Snapshot["members"][number]["status"], task: null, waiting: null, activity: k % 2 ? "" : "Writing copy", turns: 1, permission: null, lostWhy: "" })), // i18n-ok: an agent's step title
+      { ...seat(2), isLeader: false, status: "working", task: "TASK-04", waiting: null, activity: "Editing src/cart/CartPage.tsx", turns: 3, workMs: 17 * 60_000 + 30_000, permission: null, lostWhy: "", usage: [used("glm-5.3-flash", 182_000, 21_400, 96_000)] },
+      { ...seat(3), isLeader: false, status: "done", task: null, waiting: null, activity: "", turns: 2, workMs: 9 * 60_000, permission: null, lostWhy: "", usage: [used("gemini-3.8-flash", 23_000, 4_100)] },
+      ...config.members.slice(4).map((_, k) => ({ ...seat(4 + k), isLeader: false, status: (k % 2 ? "idle" : "working") as Snapshot["members"][number]["status"], task: null, waiting: null, activity: k % 2 ? "" : "Writing copy", turns: 1, workMs: (k + 2) * 60_000, permission: null, lostWhy: "" })), // i18n-ok: an agent's step title
     ],
     tasks: [
       task(1, tr("需求拆解", "Break down the needs"), "ai1", "done", { note: tr("完成需求分析與任務分配", "Needs analysed and tasks assigned") }),
@@ -218,7 +226,7 @@ export function demoSnapshot(): Snapshot {
       { id: "D-3", task: "TASK-02", kind: "preview", locator: "http://localhost:5173/", summary: tr("購物網站首頁(開發中)", "Shopping site home page (in progress)"), by: "ai3", at: ago(6), accepted: true },
     ],
     messages: [
-      { id: "M-1", from: "system", to: "ai4", text: `TASK-03 is yours and ready to start: ${tr("商品圖片", "Product images")}`, task: "TASK-03", at: ago(17), heard: true }, // i18n-ok: what Coucou tells a member
+      { id: "M-1", from: "system", to: "ai4", text: `TASK-03 is yours and ready to start: ${tr("商品圖片", "Product images")}`, task: "TASK-03", at: ago(17), heard: true }, // i18n-ok: what Agent Center tells a member
       { id: "M-2", from: "ai4", to: "ai3", text: tr("這是 6 張商品圖,包含主圖、情境圖與細節圖,請用於購物車與商品頁面。", "Here are the 6 product pictures: main, scene and detail shots. Use them on the cart and product pages."), task: "TASK-03", at: ago(4), heard: true },
       { id: "M-3", from: "ai1", to: "ai3", text: tr("請完成購物車、數量調整與小計。", "Please finish the cart, quantity changes and the subtotal."), task: "TASK-04", at: ago(8), heard: true },
       { id: "M-4", from: "ai3", to: "ai1", text: tr("請問優惠券是否需要支援滿額折扣?以及是否需要會員限定的優惠?", "Should coupons support discounts above a spend? And do we need members-only offers?"), task: "TASK-04", at: ago(3), heard: true },
@@ -278,7 +286,7 @@ export function demoSnapshot(): Snapshot {
   if (new URLSearchParams(location.search).get("state") === "earlier") {
     snapshot.status = "paused";
     snapshot.detached = true;
-    snapshot.pausedWhy = "Coucou was closed while the team was running."; // i18n-ok: Rust's English, worded by said()
+    snapshot.pausedWhy = "Agent Center was closed while the team was running."; // i18n-ok: Rust's English, worded by said()
     snapshot.members = snapshot.members.map((m) => ({ ...m, status: m.status === "working" ? "idle" : m.status }));
     snapshot.members[0] = { ...snapshot.members[0], status: "lost", lostWhy: "It ended two turns in a row without a word about its open work." }; // i18n-ok: Rust's English, worded by said()
   }
@@ -415,7 +423,7 @@ export function demoReport(from: number, to: number): UsageReport {
       const mine = inRange.filter((r) => r.team === t.id && r.member === id);
       if (!mine.length) continue;
       const delivered = Math.max(1, Math.round(mine.length / 6));
-      activity.push({ team: t.id, member: id, memberName: name, role: "", leader: id === t.members[0][0], turns: mine.length, failedTurns: mine.length > 20 ? 1 : 0, delivered, rejected: id === "ai3" ? 2 : 0, accepted: delivered, reviews: id === t.members[0][0] ? delivered * 2 : 0, messages: delivered * 2 });
+      activity.push({ team: t.id, member: id, memberName: name, role: "", leader: id === t.members[0][0], turns: mine.length, failedTurns: mine.length > 20 ? 1 : 0, workMs: mine.length * 4 * 60_000, delivered, rejected: id === "ai3" ? 2 : 0, accepted: delivered, reviews: id === t.members[0][0] ? delivered * 2 : 0, messages: delivered * 2 });
     }
   }
   return {
@@ -423,7 +431,7 @@ export function demoReport(from: number, to: number): UsageReport {
     activity,
     models: [...seen].map(([model, found]) => ({ model, found })).sort((a, b) => a.model.localeCompare(b.model)),
     choices: structuredClone(demoChoices),
-    tableSource: tr("Coucou 內建的價目表 (LiteLLM)", "Coucou's built-in price list (LiteLLM)"),
+    tableSource: tr("Agent Center 內建的價目表 (LiteLLM)", "Agent Center's built-in price list (LiteLLM)"),
     tableFetchedAt: NOW - 3 * day,
     tableSize: 1329,
   };
@@ -446,10 +454,28 @@ export function demoKeySpend(): import("./types").KeySpend {
   return { spend: 15.55, maxBudget: 150, budgetDuration: "7d", budgetResetAt: new Date(NOW + 2 * 86_400_000).toISOString(), modelSpend: { "deepseek-v4-flash": 11.92, "glm-5.3-flash": 2.41, "gemini-3.8-flash": 1.22 }, askedAt: Date.now() };
 }
 
-/** The secretary in a browser: a canned answer, after a moment, with a card when asked for a team. */
-export async function demoSecretary(text: string): Promise<import("./types").SecretaryReply> {
-  await new Promise((r) => setTimeout(r, 900));
+/** Agent Center in a browser: a canned answer, after a moment, with a card when asked for a team. */
+export async function demoSecretary(text: string, step?: (s: import("./types").SecretaryStep) => void): Promise<import("./types").SecretaryReply> {
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  await wait(500);
+  if (/組合|which|哪/i.test(text)) {
+    return {
+      text: tr("這個團隊可以用兩種組合,差在成本和品質。你要哪一種?", "This team can be put together two ways, trading cost against quality. Which do you want?"),
+      steps: [{ tool: "list_agents", label: tr("查看可用的代理", "Looked at the available agents") }],
+      proposals: [],
+      choices: { question: tr("你要哪一種?", "Which do you want?"), options: [tr("省錢組合:Leader 用 Gemini,程式用 Deepseek", "Budget: Gemini leads, Deepseek codes"), tr("品質組合:Leader 用規劃大師,程式用 Codex Sol", "Quality: Planning master leads, Codex Sol codes"), tr("先列出兩種組合的預估成本", "Show the estimated cost of both first")], multiple: false },
+    };
+  }
   if (/開|建立|新團隊|new team|set up|create/i.test(text)) {
+    // Looking Agent Pool over, as a real model would: the agents, then a few of their models.
+    step?.({ tool: "list_agents", label: tr("查看可用的代理", "Looking at the available agents") });
+    for (const agent of ["ta-reviewer", "ta-painter", "ta-joker", "ta-local-coder"]) {
+      await wait(650);
+      step?.({ tool: "agent_models", label: trf("查詢「{agent}」提供的模型", "Checking the models \"{agent}\" offers", { agent }), agent });
+    }
+    await wait(700);
+    step?.({ tool: "propose_team", label: tr("擬好新團隊「官網改版」", "Drafted the new team “Website redesign”") });
+    await wait(400);
     return {
       text: tr("已擬好新團隊,**尚未建立**。按卡片上的「建立並啟動」才會執行。", "I've prepared a new team, **not created yet**. Nothing happens until you click “Create and start” on the card."),
       steps: [{ tool: "list_agents", label: tr("查看可用的代理", "Looked at the available agents") }, { tool: "propose_team", label: tr("擬好新團隊「官網改版」", "Prepared the new team “Website redesign”") }],
@@ -468,6 +494,11 @@ export async function demoSecretary(text: string): Promise<import("./types").Sec
           confirm: tr("建立並啟動", "Create and start"),
           state: "open",
           outcome: "",
+          picks: [
+            { agent: "ta-reviewer", name: "AI 1", role: tr("規劃", "Planning"), leader: true },
+            { agent: "ta-joker", name: "AI 2", role: tr("前端", "Front end"), leader: false },
+            { agent: "ta-painter", name: "AI 3", role: tr("文案", "Copy"), leader: false },
+          ],
         },
       ],
     };

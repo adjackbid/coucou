@@ -299,6 +299,11 @@ body {
   color: var(--ink);
 }
 
+/* 勿擾 lit: the moon in amber, so a glance says nothing will pop up. */
+.header-actions button.dnd.on {
+  color: #f5b63d;
+}
+
 #views {
   position: relative;
   flex: 1 1 auto;
@@ -812,6 +817,22 @@ body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
+  /* A headline that is a whole script must not push the body and the
+     buttons off the card: four lines, then it scrolls (like the body). */
+  flex: 0 0 auto;
+  max-height: 64px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+
+.code-head::-webkit-scrollbar {
+  width: 8px;
+}
+
+.code-head::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
 }
 
 /* The approval body: the whole request. It wraps rather than hides behind an
@@ -1729,7 +1750,7 @@ input[type="range"]::-webkit-slider-thumb {
   transform: scale(0.94);
 }
 
-/* 「Ask」: the secretary's reading of a waiting request, under it. */
+/* 「Ask」: Agent Center's reading of a waiting request, under it. */
 .explain {
   flex: 0 1 auto;
   min-height: 0;
@@ -1745,7 +1766,7 @@ input[type="range"]::-webkit-slider-thumb {
   user-select: text;
 }
 
-/* While the secretary explains, the request's headline keeps to two lines. */
+/* While Agent Center explains, the request's headline keeps to two lines. */
 .view.explaining .code-head {
   display: -webkit-box;
   -webkit-line-clamp: 2;

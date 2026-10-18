@@ -1,4 +1,4 @@
-/* Agent 設定 — team agents built on the native ones. */
+/* Agent Pool — team agents built on the native ones. */
 
 .ta {
   display: flex;
@@ -106,7 +106,7 @@
   gap: 5px;
   padding: 1px 8px 1px 6px;
   border-radius: 999px;
-  color: color-mix(in srgb, var(--k) 70%, white);
+  color: color-mix(in srgb, var(--k) 70%, var(--chip-mix, white));
   background: color-mix(in srgb, var(--k) 16%, transparent);
   font-weight: 600;
   white-space: nowrap;
@@ -243,7 +243,7 @@
   border-radius: 6px;
   font-size: 10.5px;
   font-weight: 600;
-  color: color-mix(in srgb, var(--c) 65%, white);
+  color: color-mix(in srgb, var(--c) 65%, var(--chip-mix, white));
   background: color-mix(in srgb, var(--c) 14%, transparent);
   white-space: nowrap;
 }
@@ -280,7 +280,7 @@
   flex-direction: row;
   gap: 8px;
   min-height: 120px;
-  border: 1.5px dashed rgba(255, 255, 255, 0.22);
+  border: 1.5px dashed rgba(var(--fg), 0.22);
   background: transparent;
   box-shadow: none;
   color: var(--ink-2);
@@ -320,6 +320,36 @@
 
 .ta-grid textarea {
   resize: vertical;
+}
+
+/* 測試: the button and its line, and the answer under them. */
+.ta-test {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ta-test .row .hint {
+  min-width: 0;
+}
+
+.ta-notice {
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.ta-notice.ok {
+  color: var(--green-2);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.ta-notice.err {
+  color: var(--red-text);
+  background: rgba(244, 80, 94, 0.13);
 }
 
 .ta-support {
@@ -411,7 +441,7 @@
   padding: 0;
   border: 0;
   border-radius: 6px;
-  color: #9398a1;
+  color: var(--dim);
   background: transparent;
   cursor: default;
 }
@@ -422,12 +452,725 @@
 }
 
 /* On the native agents: the team agents put away, and said so. */
-.ta-away {
+/* Cloud Agent / Local Agent: one panel each, under its mark. */
+.ta-section-title {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
 }
 
-.ta-away .hint {
+.ta-section > .hint {
+  margin: 0 0 10px;
+}
+
+/* Above the sections: the category chips, and grouped or in order. */
+.ta-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding: 0 2px;
+}
+
+.ta-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ta-filter {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 6px 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  font: 500 12.5px var(--font);
+  color: var(--dim);
+  background: var(--lift);
+  cursor: default;
+}
+
+.ta-filter:hover {
+  color: var(--ink);
+  background: var(--lift-2);
+}
+
+.ta-filter.on {
+  color: var(--ink);
+  font-weight: 600;
+  background: linear-gradient(180deg, rgba(var(--fg), 0.2), rgba(var(--fg), 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 0 0 1px rgba(var(--fg), 0.12);
+}
+
+.ta-filter .count {
+  margin-left: 6px;
+}
+
+.ta-bar-hint {
+  font-size: 12.5px;
+}
+
+.ta-bar-end {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.ta-state {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.ta-views {
+  flex: none;
+  min-width: 150px;
+}
+
+.ta-views button {
+  padding: 5px 14px;
+}
+
+/* A card's category, first on its kind row. */
+.ta-cat {
+  flex: none;
+  max-width: 45%;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  background: rgba(var(--fg), 0.08);
+  box-shadow: inset 0 0 0 1px rgba(var(--fg), 0.16);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── The ring: Agent Center in the middle, Local Agents round it, Cloud Agents further out ── */
+.ta-ring {
+  --hot: #ff7a59;
+  container-type: inline-size;
+  border-radius: 22px;
+  overflow: hidden;
+  background:
+    radial-gradient(45% 55% at 50% 48%, rgba(79, 179, 255, 0.07), transparent 70%),
+    rgba(var(--shade), 0.55);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.ta-ring-stage {
+  position: relative;
+  width: 100%;
+  height: max(560px, calc(100vh - 150px));
+  container-type: size;
+}
+
+/* A square in the middle of the stage, as big as it fits: the rings are round whatever the window's shape. */
+.ta-ring-field {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+  transform: translate(-50%, -50%);
+}
+
+.ta-ring-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.ta-ring-orbit {
+  fill: none;
+  stroke-width: 1.2;
+  stroke-dasharray: 3 7;
+  vector-effect: non-scaling-stroke;
+}
+
+.ta-ring-orbit.local {
+  stroke: rgba(52, 211, 153, 0.35);
+}
+
+.ta-ring-orbit.cloud {
+  stroke: rgba(79, 179, 255, 0.45);
+}
+
+/* Inside: the user's own machine or network, a green disc with a solid edge. */
+.ta-ring-inside {
+  fill: rgba(52, 211, 153, 0.06);
+  stroke: rgba(52, 211, 153, 0.55);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The words for inside and outside, on the edge and on the outer ring. */
+.ta-ring-zone {
+  position: absolute;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.ta-ring-zone.local {
+  color: #8ff0c8;
+  background: rgba(10, 30, 24, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.55);
+}
+
+.ta-ring-zone.cloud {
+  color: #a9d8ff;
+  background: rgba(10, 22, 36, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(79, 179, 255, 0.55);
+}
+
+.ta-ring-link {
+  stroke: var(--hot);
+  stroke-width: 2;
+  stroke-dasharray: 9 7;
+  opacity: 0.85;
+  vector-effect: non-scaling-stroke;
+}
+
+.ta-ring-knot {
+  fill: var(--hot);
+}
+
+.ta-ring-hub {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transform: translate(-50%, -46px);
+  pointer-events: none;
+}
+
+.ta-ring-core {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  color: var(--hot);
+  background: radial-gradient(circle, rgba(255, 122, 89, 0.2), rgba(var(--shade), 0.92) 70%);
+  box-shadow: inset 0 0 0 2px var(--hot), 0 0 32px rgba(255, 122, 89, 0.22);
+}
+
+.ta-ring-hub.on .ta-ring-core {
+  box-shadow: inset 0 0 0 2px var(--hot), 0 0 0 8px rgba(255, 122, 89, 0.1), 0 0 40px rgba(255, 122, 89, 0.4);
+}
+
+.ta-ring-hub b {
+  font-size: 14px;
+  color: var(--ink);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.ta-node {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 104px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  transform: translate(-50%, -25px);
+  transition: opacity 0.25s ease-out, filter 0.25s ease-out;
+  cursor: default;
+}
+
+.ta-node-ring {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(var(--shade), 0.9);
+  box-shadow: inset 0 0 0 2px var(--m), 0 0 16px color-mix(in srgb, var(--m) 28%, transparent);
+  transition: transform 0.15s ease-out, box-shadow 0.2s ease-out;
+}
+
+.ta-node:hover .ta-node-ring,
+.ta-node:focus-visible .ta-node-ring {
+  transform: scale(1.1);
+}
+
+.ta-node:focus-visible {
+  outline: none;
+}
+
+.ta-node-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 110px;
+  font-size: 12px;
+  font-weight: 600;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+
+.ta-node-name > svg {
+  flex: none;
+}
+
+.ta-node-name > span {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ta-node-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 104px;
+  font-size: 10.5px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ta-node-cat::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--m);
+}
+
+.ta-node-cat.none {
+  opacity: 0.7;
+}
+
+.ta-node.dim {
+  opacity: 0.25;
+  filter: grayscale(0.7);
+}
+
+.ta-node.lit .ta-node-ring {
+  box-shadow: inset 0 0 0 2px var(--hot), 0 0 0 5px rgba(255, 122, 89, 0.16), 0 0 0 10px rgba(255, 122, 89, 0.07), 0 0 26px rgba(255, 122, 89, 0.45);
+}
+
+.ta-node.lit .ta-node-name {
+  color: var(--ink);
+}
+
+.ta-node.editing .ta-node-ring {
+  box-shadow: inset 0 0 0 2px var(--m), 0 0 0 4px color-mix(in srgb, var(--m) 40%, transparent);
+}
+
+.ta-node.broken .ta-node-ring {
+  box-shadow: inset 0 0 0 2px rgba(244, 80, 94, 0.8);
+}
+
+/* Opening the ring: each agent flies out from Agent Center, one after another. */
+.ta-node.unfold {
+  animation: ta-unfold 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+  animation-delay: var(--d);
+}
+
+@keyframes ta-unfold {
+  from {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-25px + var(--dy))) scale(0.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ta-node.unfold {
+    animation: none;
+  }
+}
+
+.ta-ring-empty {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 70px);
+  transform: translateX(-50%);
+  color: var(--dim);
+}
+
+.ta-ring-legend,
+.ta-ring-list {
+  position: absolute;
+  z-index: 3;
+  border-radius: 16px;
+  background: rgba(var(--shade), 0.86);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+
+.ta-ring-legend {
+  left: 16px;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+}
+
+.ta-ring-legend b {
+  color: var(--dim);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ta-ring-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ta-ring-list {
+  right: 16px;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 270px;
+  max-height: calc(100% - 32px);
+  padding: 12px;
+  overflow: auto;
+}
+
+.ta-ring-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px 2px;
+}
+
+.ta-ring-list-head .count {
+  margin-left: 0;
+}
+
+.ta-ring-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 122, 89, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 122, 89, 0.45);
+}
+
+.ta-ring-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ta-ring-row-text b {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+}
+
+.ta-ring-row-text b span,
+.ta-ring-row-text small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ta-ring-row-text small {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.ta-ring-add {
+  position: absolute;
+  z-index: 3;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ta-ring-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 10px;
+  border: 0;
+  border-radius: 999px;
+  font: 500 12.5px var(--font);
+  color: var(--ink);
+  background: rgba(var(--shade), 0.86);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  cursor: default;
+}
+
+.ta-ring-add-btn:hover:not(:disabled) {
+  background: var(--lift-2);
+}
+
+.ta-ring-add-btn:disabled {
+  opacity: 0.45;
+}
+
+/* Editing or adding, cards or ring: the form over the page's right side, under the window's title row. */
+.ta-drawer {
+  position: fixed;
+  z-index: 20;
+  top: 58px;
+  right: 16px;
+  bottom: 12px;
+  width: min(580px, calc(100vw - 208px - 64px));
+  overflow: auto;
+  border-radius: 18px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--hairline);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--fg), 0.18) transparent;
+}
+
+.ta-drawer.opening {
+  animation: ta-slide 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--t);
+}
+
+@keyframes ta-slide {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ta-drawer.opening {
+    animation: none;
+  }
+}
+
+.ta-drawer .ta-editor {
+  min-height: 100%;
   margin: 0;
+  padding-top: 0;
+  background: rgba(var(--shade), 0.97);
+}
+
+/* Its head — title, 取消 and 儲存 — stays at the top while the fields scroll under it. */
+.ta-editor.pinned > .panel-head {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  align-items: center;
+  margin: 0 -14px 10px;
+  padding: 14px 14px 10px;
+  background: rgba(var(--shade), 0.98);
+  box-shadow: 0 1px 0 var(--hairline);
+}
+
+.ta-editor.pinned > .panel-head > .row {
+  margin: 0;
+}
+
+.ta-editor.pinned > .panel-head > .problem {
+  flex-basis: 100%;
+  margin: 0;
+  white-space: pre-line;
+}
+
+.ta-editor-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ta-node-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ta-card-title b {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ta-card-title b > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ta-card-title b > svg,
+.ta-kind > svg {
+  flex: none;
+}
+
+.ta-kind:has(> svg)::before {
+  display: none;
+}
+
+.ta-kind.n8n {
+  --k: #f472b6;
+}
+
+/* The light look: the words for inside and outside on pale pills, names without the shadow dark glass needed. */
+:root[data-theme="light"] .ta-ring-zone.local {
+  color: #0b7a53;
+  background: rgba(236, 250, 244, 0.96);
+}
+
+:root[data-theme="light"] .ta-ring-zone.cloud {
+  color: #1259a8;
+  background: rgba(234, 244, 255, 0.96);
+}
+
+:root[data-theme="light"] .ta-node-name,
+:root[data-theme="light"] .ta-ring-hub b {
+  text-shadow: none;
+}
+
+/* Effort: six levels in a row, wrapping on a narrow form. */
+.segmented.wrap.ta-effort {
+  grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+}
+
+.segmented.ta-effort button:disabled {
+  opacity: 0.4;
+}
+
+/* What the agent can do: price, context, vision, thinking, images (views/caps.ts). */
+.caps-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-height: 18px;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.caps-row.empty {
+  display: none;
+}
+
+.caps-tier b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.caps-tier span {
+  opacity: 0.35;
+}
+
+.caps-price {
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.caps-price.about {
+  color: var(--dim);
+}
+
+.caps-pill.warn {
+  color: #ffb86b;
+  background: rgba(255, 184, 107, 0.16);
+}
+
+.caps-tier,
+.caps-context {
+  white-space: nowrap;
+}
+
+.caps-tier + .caps-context::before,
+.caps-context + .caps-pill::before,
+.caps-tier + .caps-pill::before {
+  content: none;
+}
+
+.caps-pill {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: color-mix(in srgb, #8b7cff 70%, var(--chip-mix, white));
+  background: rgba(139, 124, 255, 0.16);
+}
+
+.caps-pill.image {
+  color: color-mix(in srgb, #f472b6 70%, var(--chip-mix, white));
+  background: rgba(244, 114, 182, 0.16);
+}
+
+.ta-model-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ✎ 編輯 / ＋ 新增 beside the Provider dropdown: small, so the dropdown keeps the room. */
+.ta-provider-btn {
+  padding: 5px 10px;
+  font-size: 12px;
+  flex: none;
+}
+
+/* 進階 in the editor: System prompt, MCP server and Skill wait behind one line. */
+.ta-advanced {
+  margin-top: 12px;
+  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  padding-top: 8px;
+}
+
+.ta-advanced > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font: 600 13px var(--font);
+  cursor: default;
+  list-style: none;
+}
+
+.ta-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ta-advanced > summary::before {
+  content: "›";
+  display: inline-block;
+  width: 10px;
+  opacity: 0.6;
+  transition: transform 0.12s ease-out;
+}
+
+.ta-advanced[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.ta-advanced > summary .hint {
+  font-weight: 400;
+}
+
+.ta-advanced > .ta-grid {
+  margin-top: 8px;
 }

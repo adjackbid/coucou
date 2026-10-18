@@ -4,7 +4,7 @@
 
 export type IconKey =
   | "overview" | "connect" | "install" | "chat" | "agents" | "integrations"
-  | "island" | "team" | "general" | "guide" | "language";
+  | "island" | "team" | "general" | "guide" | "language" | "skills";
 
 const ICONS: Record<IconKey, { a: string; svg: string }> = {
   overview: {
@@ -52,6 +52,13 @@ const ICONS: Record<IconKey, { a: string; svg: string }> = {
 <rect x="8" y="4" width="8" height="3.6" rx="1.8" fill="#fff" stroke="none"/>
 <circle cx="9.9" cy="5.8" r=".9" fill="#22C55E" stroke="none"/>
 <path d="M9 20.5h6M12 17v3.5" stroke="#9398a1"/>`,
+  },
+  skills: {
+    a: "#F5A524",
+    svg: `<path d="M5 4.5h9.5A2.5 2.5 0 0 1 17 7v13.5H7.5A2.5 2.5 0 0 0 5 22.5Z" fill="var(--s)" stroke="var(--a)"/>
+<path d="M5 4.5v18M7.5 20.5H17" stroke="var(--a)"/>
+<path d="M9 9.5h5M9 13h5" stroke="#fff"/>
+<path d="M19.5 2.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9Z" fill="#fff"/>`,
   },
   team: {
     a: "#F4505E",

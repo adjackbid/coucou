@@ -6,7 +6,10 @@
 // back as it comes, and reads the `usage` the endpoint puts in it (the final
 // `response.completed` of the Responses API, the last chunk of a chat
 // stream, or a plain JSON answer). Nothing is kept: the usage goes to the
-// member's team record, the rest only passes through.
+// member's team record, the rest only passes through. Two small things stay
+// per seat, for the person's eyes: the endpoint's last refusal (its status,
+// the path asked and its own words), and for an agent test (a `test:` key)
+// what its sentence used — so Settings can say what really went wrong.
 //
 // It listens on 127.0.0.1 only, each member's address carries a token
 // nobody can guess, and it forwards only to the endpoint the member was set
@@ -30,6 +33,19 @@ struct Route {
     key: String,
 }
 
+/// The seat keys of an agent test (Settings' and Agent Pool's 測試).
+pub const TEST: &str = "test:";
+
+/// The endpoint said no: what it was asked and what it answered.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Refused {
+    pub status: u16,
+    /// The path asked of the endpoint, after its base ("/v1/responses").
+    pub path: String,
+    /// The endpoint's own words, on one line, cut at 600 bytes.
+    pub words: String,
+}
+
 static GLOBAL: OnceLock<Arc<Meter>> = OnceLock::new();
 
 /// The app's meter, once it listens.
@@ -46,6 +62,8 @@ pub struct Meter {
     routes: Mutex<HashMap<String, Route>>,
     tokens: Mutex<HashMap<String, String>>,
     report: OnceLock<Report>,
+    refusals: Mutex<HashMap<String, Refused>>,
+    tested: Mutex<HashMap<String, Usage>>,
 }
 
 impl Meter {
@@ -53,7 +71,7 @@ impl Meter {
     pub async fn start() -> std::io::Result<Arc<Meter>> {
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let port = listener.local_addr()?.port();
-        let meter = Arc::new(Meter { port, routes: Mutex::new(HashMap::new()), tokens: Mutex::new(HashMap::new()), report: OnceLock::new() });
+        let meter = Arc::new(Meter { port, routes: Mutex::new(HashMap::new()), tokens: Mutex::new(HashMap::new()), report: OnceLock::new(), refusals: Mutex::new(HashMap::new()), tested: Mutex::new(HashMap::new()) });
         let m = meter.clone();
         tokio::spawn(async move {
             loop {
@@ -80,6 +98,35 @@ impl Meter {
         let token = self.tokens.lock().unwrap().entry(key.to_string()).or_insert_with(crate::team::orchestrator::fresh_token).clone();
         self.routes.lock().unwrap().insert(token.clone(), Route { upstream: upstream.trim_end_matches('/').to_string(), key: key.to_string() });
         format!("http://127.0.0.1:{}/m/{token}", self.port)
+    }
+
+    /// The endpoint's last refusal for the seat `key`, if it refused one.
+    pub fn last_refusal(&self, key: &str) -> Option<Refused> {
+        self.refusals.lock().unwrap().get(key).cloned()
+    }
+
+    /// A fresh start for the seat `key`: no refusal, nothing used.
+    pub fn forget(&self, key: &str) {
+        self.refusals.lock().unwrap().remove(key);
+        self.tested.lock().unwrap().remove(key);
+    }
+
+    /// What an agent test's calls used, added up (a `test:` key only).
+    pub fn used(&self, key: &str) -> Option<Usage> {
+        self.tested.lock().unwrap().get(key).cloned()
+    }
+
+    fn refused(&self, key: &str, status: u16, path: &str, words: &str) {
+        self.refusals.lock().unwrap().insert(key.to_string(), Refused { status, path: path.to_string(), words: words.trim().to_string() });
+    }
+
+    fn metered(&self, key: &str, u: Usage) {
+        if key.starts_with(TEST) {
+            self.tested.lock().unwrap().entry(key.to_string()).or_insert_with(|| Usage { model: u.model.clone(), ..Usage::default() }).add(&u);
+        }
+        if let Some(report) = self.report.get() {
+            report(key, u);
+        }
     }
 
     async fn serve(&self, mut conn: TcpStream) -> Result<(), String> {
@@ -116,7 +163,7 @@ impl Meter {
         let found = self.routes.lock().unwrap().get(&token).map(|r| (r.upstream.clone(), r.key.clone()));
         let Some((upstream, key)) = found else { return respond(&mut conn, 404, "unknown route").await };
         if header("upgrade").is_some() {
-            return respond(&mut conn, 501, "Coucou's meter does not carry upgraded connections").await;
+            return respond(&mut conn, 501, "Agent Center's meter does not carry upgraded connections").await;
         }
 
         // The body, as sent (by length, or chunked).
@@ -153,7 +200,7 @@ impl Meter {
         req = req.header("accept-encoding", "identity");
         let resp = match req.body(body).send().await {
             Ok(r) => r,
-            Err(e) => return respond(&mut conn, 502, &format!("Coucou's meter could not reach the endpoint: {e}")).await,
+            Err(e) => return respond(&mut conn, 502, &format!("Agent Center's meter could not reach the endpoint: {e}")).await,
         };
 
         // Its answer, passed back as it streams, read for usage on the way.
@@ -172,10 +219,17 @@ impl Meter {
         conn.write_all(out.as_bytes()).await.map_err(|e| e.to_string())?;
 
         let mut reader = Reader::default();
+        // A refusal's own words go to the log: the agent may sum one up
+        // wrongly (Copilot calls a gateway's "key not allowed to access
+        // model" 401 a failed authentication).
+        let mut refusal: Option<Vec<u8>> = (!status.is_success()).then(Vec::new);
         let mut resp = resp;
         loop {
             match resp.chunk().await {
                 Ok(Some(bytes)) => {
+                    if let Some(said) = refusal.as_mut().filter(|s| s.len() < 600) {
+                        said.extend_from_slice(&bytes[..bytes.len().min(600 - said.len())]);
+                    }
                     reader.feed(&bytes);
                     conn.write_all(format!("{:x}\r\n", bytes.len()).as_bytes()).await.map_err(|e| e.to_string())?;
                     conn.write_all(&bytes).await.map_err(|e| e.to_string())?;
@@ -190,11 +244,16 @@ impl Meter {
         }
         let _ = conn.write_all(b"0\r\n\r\n").await;
         let _ = conn.flush().await;
+        if let Some(said) = refusal {
+            let said = String::from_utf8_lossy(&said).replace(['\r', '\n'], " ");
+            log::line(format!("meter: {key} {upstream}{path} (model {model}) answered HTTP {}: {}", status.as_u16(), said.trim()));
+            // The path as the endpoint saw it, its base included ("/v1/responses").
+            let asked = reqwest::Url::parse(&format!("{upstream}{path}")).map(|u| u.path().to_string()).unwrap_or_else(|_| path.clone());
+            self.refused(&key, status.as_u16(), &asked, &said);
+        }
 
         if let Some(u) = reader.usage(&model) {
-            if let Some(report) = self.report.get() {
-                report(&key, u);
-            }
+            self.metered(&key, u);
         }
         Ok(())
     }
@@ -375,6 +434,68 @@ mod tests {
         assert!(got.iter().all(|u| u.model == "glm-5.3-flash" && u.input + u.cache_read > 0 && u.output > 0), "{got:?}");
         eprintln!("the agent's own report: {:?}", own.lock().unwrap());
     }
+    #[test]
+    fn a_refusal_is_kept_for_its_seat_and_a_test_s_usage_is_added_up() {
+        let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap();
+        runtime.block_on(async {
+            // The endpoint: no Responses API (404), then two chat answers.
+            let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let up_port = upstream.local_addr().unwrap().port();
+            tokio::spawn(async move {
+                for n in 0..3 {
+                    let (mut c, _) = upstream.accept().await.unwrap();
+                    let mut buf = vec![0u8; 65536];
+                    let mut got = Vec::new();
+                    loop {
+                        let k = c.read(&mut buf).await.unwrap();
+                        got.extend_from_slice(&buf[..k]);
+                        if let Some(i) = find(&got, b"\r\n\r\n") {
+                            let head = String::from_utf8_lossy(&got[..i]).to_lowercase();
+                            let len = head.lines().find_map(|l| l.strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap())).unwrap_or(0);
+                            if got.len() >= i + 4 + len {
+                                break;
+                            }
+                        }
+                    }
+                    let (status, body) = if n == 0 { ("404 Not Found", "{\"detail\":\"Not Found\"}") } else { ("200 OK", "{\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":1}}") };
+                    let reply = format!("HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{body}", body.len());
+                    c.write_all(reply.as_bytes()).await.unwrap();
+                }
+            });
+
+            let meter = Meter::start().await.unwrap();
+            let key = format!("{TEST}cg");
+            let base = meter.route(&format!("http://127.0.0.1:{up_port}/v1"), &key);
+            let ask = |path: &str| reqwest::Client::new().post(format!("{base}{path}")).json(&serde_json::json!({ "model": "m", "input": "hi" })).send();
+            assert_eq!(ask("/responses").await.unwrap().status().as_u16(), 404);
+            for _ in 0..100 {
+                if meter.last_refusal(&key).is_some() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            let refused = meter.last_refusal(&key).expect("the refusal is kept");
+            assert_eq!((refused.status, refused.path.as_str()), (404, "/v1/responses"));
+            assert!(refused.words.contains("Not Found"), "{refused:?}");
+            assert!(meter.last_refusal("team:shop:ai3").is_none());
+
+            for _ in 0..2 {
+                ask("/chat/completions").await.unwrap().text().await.unwrap();
+            }
+            for _ in 0..100 {
+                if meter.used(&key).is_some_and(|u| u.input == 20) {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            let used = meter.used(&key).expect("a test's usage is kept");
+            assert_eq!((used.input, used.output), (20, 2));
+            // A fresh test starts from nothing.
+            meter.forget(&key);
+            assert!(meter.last_refusal(&key).is_none() && meter.used(&key).is_none());
+        });
+    }
+
     /// A stand-in endpoint behind the meter: the request arrives as sent,
     /// the answer comes back whole, and its usage is reported for the seat.
     #[test]

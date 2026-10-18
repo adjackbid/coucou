@@ -44,6 +44,10 @@ pub struct Settings {
     /// Never hide: the island stays at least compact at the top of the screen.
     #[serde(default)]
     pub always_visible: bool,
+    /// 勿擾: the island does not pop up or sound on its own (a request waits
+    /// until the person opens it); the moon on its header switches it.
+    #[serde(default)]
+    pub do_not_disturb: bool,
     /// Copilot asks the island before every tool, --yolo or not (1.0.91 runs
     /// the PermissionRequest hook regardless). Off leaves that hook out, so a
     /// --yolo session runs without a card for each step.
@@ -69,6 +73,21 @@ pub struct Settings {
     /// the window then shows nothing of it, for a sober look.
     #[serde(default)]
     pub battle_mode: bool,
+    /// "dark" (the default) or "light": the settings window and Teamwork.
+    /// The island stays dark, as a notch is.
+    #[serde(default = "default_theme")]
+    pub theme: String,
+}
+
+fn default_theme() -> String {
+    "dark".into()
+}
+
+impl Settings {
+    /// Light only when asked for; anything else is the dark default.
+    pub fn light(&self) -> bool {
+        self.theme == "light"
+    }
 }
 
 /// The edge the island is docked to. The bottom one is the work area's: the
@@ -218,6 +237,7 @@ impl Default for Settings {
             active_provider: "anthropic".into(),
             max_session_cards: default_max_cards(),
             always_visible: false,
+            do_not_disturb: false,
             copilot_permission_cards: true,
             hide_after: default_hide_after(),
             agents: vec![AgentProfile::copilot()],
@@ -225,6 +245,7 @@ impl Default for Settings {
             dock: Dock::default(),
             language: default_language(),
             battle_mode: false,
+            theme: default_theme(),
         }
     }
 }
@@ -260,7 +281,7 @@ pub fn team_configs_dir() -> PathBuf {
 }
 
 /// %LOCALAPPDATA%\Coucou\secretary-uploads — files the person attached in
-/// the secretary's conversation, until a confirmed proposal copies them into
+/// Agent Center's conversation, until a confirmed proposal copies them into
 /// a team's knowledge base. Emptied when Coucou starts and when the
 /// conversation is cleared: the conversation itself is not kept.
 pub fn secretary_uploads_dir() -> PathBuf {
@@ -277,6 +298,13 @@ pub fn team_knowledge_dir() -> PathBuf {
 /// %LOCALAPPDATA%\Coucou\teams — one folder per team, holding its log.
 pub fn team_logs_dir() -> PathBuf {
     local_dir().join("teams")
+}
+
+/// %APPDATA%\Coucou\skills — the library a leader hands out to its team
+/// (`brief_member`): one folder per skill holding a SKILL.md, or one
+/// `<name>.md`, written by the person.
+pub fn team_skills_dir() -> PathBuf {
+    config_dir().join("skills")
 }
 
 fn settings_path() -> PathBuf {

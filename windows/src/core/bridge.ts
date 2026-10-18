@@ -5,10 +5,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import type { AgentCheck, AgentProfile, ModelChoice, Provider, Settings } from "./state";
+import type { AgentCheck, AgentProfile, ModelChoice, Provider, Settings, AgentCaps } from "./state";
 import type { Dock } from "./dock";
 import { tr } from "./i18n";
-import type { Constitution, ConstitutionLevel, Found, KnowledgeAdded, KnowledgeDoc, KnowledgeView, KnowledgeVisibility, SecretaryUpload, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
+import type { Constitution, ConstitutionLevel, Found, KnowledgeAdded, KnowledgeDoc, KnowledgeView, KnowledgeVisibility, LibrarySkill, SecretaryChat, SecretaryUpload, TeamAgent, TeamAgents, TeamAgentsView, KeySpend, PastRun, PricingChoices, SecretaryProposal, SecretaryReply, Snapshot, TeamConfig, TeamFile, UsageReport } from "../team/types";
 
 export const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -128,7 +128,7 @@ export const Bridge = {
   hooksApply: (agent: HookAgent, install: boolean, fingerprint: string) =>
     callOrThrow<string>("hooks_apply", { agentName: agent, install, fingerprint }),
 
-  /** 「Ask」: the secretary's model explains a waiting request (purpose, effect, risk). */
+  /** 「Ask」: Agent Center's model explains a waiting request (purpose, effect, risk). */
   explainRequest: (requestId: string) => callOrThrow<string>("explain_request", { requestId }),
   approvalDecision: (requestId: string, decision: "allow" | "deny") =>
     call<void>("approval_decision", { requestId, decision }),
@@ -149,7 +149,7 @@ export const Bridge = {
    * as the raw request body; the name, URL-encoded, in a header.
    */
   ingestBytes: (name: string, bytes: ArrayBuffer) => {
-    if (!IS_TAURI) throw new Error(tr("不是在 Coucou 裡執行", "not running inside Coucou"));
+    if (!IS_TAURI) throw new Error(tr("不是在 Agent Center 裡執行", "not running inside Agent Center"));
     return invoke<DroppedFile>("ingest_bytes", new Uint8Array(bytes), {
       headers: { "x-file-name": encodeURIComponent(name) },
     });
@@ -188,10 +188,14 @@ export const Bridge = {
   acpCancel: (agentId: string) => call<void>("acp_cancel", { agentId }),
   /** The next prompt starts a fresh session. */
   acpReset: (agentId: string) => call<void>("acp_reset", { agentId }),
-  /** Starts the agent as the form describes it, shakes hands, stops it. */
+  /** Starts the agent as the form describes it, shakes hands, sends it one real sentence (one tiny call), stops it. */
   acpTest: (profile: AgentProfile) => callOrThrow<string>("acp_test", { profile }),
+  /** Agent Pool's test: the team agent as the editor has it (saved or not), run on its Provider the way a team member would be, for one real sentence. */
+  teamAgentTest: (agent: TeamAgent) => callOrThrow<string>("team_agent_test", { agent }),
   /** The models an agent offers (a handshake, no prompt: nothing is spent). */
   agentModels: (profile: AgentProfile) => callOrThrow<ModelChoice[]>("agent_models", { profile }),
+  /** What each agent can do, by the id it was sent with (caps.rs). */
+  agentCaps: (profiles: AgentProfile[]) => call<Record<string, AgentCaps>>("agent_caps", { profiles }),
   /** 檢查代理: each profile's CLI looked up and asked for its version. */
   agentsDoctor: (profiles: AgentProfile[]) => callOrThrow<AgentCheck[]>("agents_doctor", { profiles }),
 
@@ -222,17 +226,28 @@ export const Bridge = {
   constitutionSave: (constitution: Constitution) => callOrThrow<void>("constitution_save", { constitution }),
   /** Which rule a command falls under, if any, and at what level. */
   constitutionTry: (command: string) => call<[ConstitutionLevel, string] | null>("constitution_try", { command }),
-  /** The team agents (Teamwork → Agent 設定), the secretary's switch, and what each native agent supports. */
+  /** The team agents (Teamwork → Agent Pool), Agent Center's switch, and what each native agent supports. */
   teamAgentsLoad: () => callOrThrow<TeamAgentsView>("team_agents_load"),
   teamAgentsSave: (doc: TeamAgents) => callOrThrow<void>("team_agents_save", { doc }),
   /** Each agent's own folder (agent id, path), for the team setup. */
   teamAgentFolders: () => call<[string, string][]>("team_agent_folders"),
-  /** The chat providers the secretary can think with: (id, name, model). */
+  /** The chat providers Agent Center can think with: (id, name, model). */
   secretaryProviders: () => call<[string, string, string][]>("secretary_providers"),
-  /** The person asks the secretary; its steps arrive as `secretary-step` while it works. */
-  secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string, uploads: string[] = []) =>
-    callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name, uploads }),
-  /** A file attached in the secretary's conversation, by its path (picked or dropped). */
+  /** The person asks Agent Center; its steps arrive as `secretary-step` while it works. */
+  secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string, uploads: string[] = [], instructions = "", skills: string[] = [], hiddenSkills: string[] = [], fast = false, root = "", speed = 3) =>
+    callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name, uploads, instructions, skills, hiddenSkills, fast, root, speed }),
+  /** A folder in Explorer: a full path that exists (Agent Center's root, a team's work folder). */
+  openFolder: (path: string) => callOrThrow<void>("open_folder", { path }),
+  /** Agent Center's skill library (%APPDATA%\\Coucou\\skills), made with its first skill when empty. */
+  teamSkillLibrary: () => call<LibrarySkill[]>("team_skill_library"),
+  teamOpenSkills: () => call<void>("team_open_skills"),
+  /** The Skill market: a skill's text, writing one, removing one, and the ones found elsewhere. */
+  skillRead: (name: string) => callOrThrow<string>("skill_read", { name }),
+  skillWrite: (name: string, text: string) => callOrThrow<LibrarySkill>("skill_write", { name, text }),
+  skillDelete: (name: string) => callOrThrow<void>("skill_delete", { name }),
+  skillsElsewhere: () => call<LibrarySkill[]>("skills_elsewhere"),
+  skillImport: (path: string) => callOrThrow<LibrarySkill>("skill_import", { path }),
+  /** A file attached in Agent Center's conversation, by its path (picked or dropped). */
   secretaryUploadPath: (path: string) => callOrThrow<SecretaryUpload>("secretary_upload_path", { path }),
   /** The same from its bytes (a paste). */
   secretaryUploadBytes: (name: string, bytes: ArrayBuffer) =>
@@ -245,7 +260,19 @@ export const Bridge = {
   /** The work folder a proposal needs that does not exist yet (null when there is none to create). */
   secretaryMissingFolder: (id: string) => call<string | null>("secretary_missing_folder", { id }),
   secretaryDecline: (id: string) => call<SecretaryProposal | null>("secretary_decline", { id }),
+  /** The person changed a proposed team's members on its card: `{agent, name, role, leader}` in their order. */
+  secretaryReviseTeam: (id: string, members: { agent: string; name: string; role: string; leader: boolean }[], tzMinutes: number) => callOrThrow<SecretaryProposal>("secretary_revise_team", { id, members, tzMinutes }),
   secretaryReset: () => call<void>("secretary_reset"),
+  /** 對話紀錄: the conversation on screen saved with the window's entries; null before anything was said. */
+  secretaryChatSave: (title: string, entries: string) => callOrThrow<SecretaryChat | null>("secretary_chat_save", { title, entries }),
+  secretaryChats: () => call<SecretaryChat[]>("secretary_chats"),
+  /** Brings a saved conversation back; the window's entries, as JSON. */
+  secretaryChatOpen: (id: string) => callOrThrow<string>("secretary_chat_open", { id }),
+  secretaryChatDelete: (id: string) => callOrThrow<void>("secretary_chat_delete", { id }),
+  /** What 清除歷史紀錄 would clear (null outside the app). */
+  historyStats: () => call<HistoryStats>("history_stats"),
+  /** Moves the teams' runs and costs — and with `all` the teams themselves — to the Recycle Bin; refused while a team is at work. */
+  historyClear: (all: boolean) => callOrThrow<HistoryStats>("history_clear", { all }),
   /** 安裝 CLI: the built-in table, nothing looked up. */
   cliList: () => call<CliInfo[]>("cli_list"),
   /** 安裝 CLI: each one looked up on PATH and asked its version. */
@@ -277,8 +304,10 @@ export const Bridge = {
    * Answers the oldest request a member's agent is holding with one of its own
    * options — or, with `all`, every request it holds, each the same way.
    */
-  teamPermit: (team: string, member: string, optionId: string | null, all = false) =>
-    callOrThrow<void>("team_permit", { team, member, optionId, all }),
+  teamPermit: (team: string, member: string, optionId: string | null, all = false, remember = false) =>
+    callOrThrow<void>("team_permit", { team, member, optionId, all, remember }),
+  /** Waives (on) or takes back one of the constitution's asks for a running team. */
+  teamWaive: (team: string, rule: string, on: boolean) => callOrThrow<void>("team_waive", { team, rule, on }),
   teamPause: (team: string) => callOrThrow<void>("team_pause", { team }),
   /** Ends the team now, done or not: every member's agent stops. */
   teamEnd: (team: string) => callOrThrow<void>("team_end", { team }),
@@ -293,6 +322,8 @@ export const Bridge = {
   /** Opens something a member handed in: a URL, or a path in Explorer. */
   teamOpen: (team: string, locator: string) => callOrThrow<void>("team_open", { team, locator }),
   /** A picture in the system's own viewer. */
+  /** A document a member made (page, PDF, Office file, text), in the program the system has for it. */
+  teamOpenFile: (team: string, locator: string) => callOrThrow<void>("team_open_file", { team, locator }),
   teamOpenImage: (team: string, locator: string) => callOrThrow<void>("team_open_image", { team, locator }),
   teamOpenConfigs: () => call<void>("team_open_configs"),
   /** Writes a team file from the form; the file is named after the team's id. */
@@ -395,8 +426,18 @@ export interface HookPreview {
 }
 
 /** Same as `call`, but surfaces the error so the UI can show what went wrong. */
+/** What there is to clear in Settings → 團隊與 Agent Center (history.rs Stats). */
+export interface HistoryStats {
+  teams: number;
+  deleted: number;
+  runs: number;
+  runBytes: number;
+  documents: number;
+  documentBytes: number;
+}
+
 async function callOrThrow<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (!IS_TAURI) throw new Error(tr("不是在 Coucou 裡執行", "not running inside Coucou"));
+  if (!IS_TAURI) throw new Error(tr("不是在 Agent Center 裡執行", "not running inside Agent Center"));
   return invoke<T>(cmd, args);
 }
 
@@ -417,6 +458,12 @@ export async function onDragDrop(handler: (e: DragDropPayload) => void) {
   return getCurrentWebview().onDragDropEvent((event) => {
     handler(event.payload as DragDropPayload);
   });
+}
+
+/** Where an agent test is: `stage` "sentence" once the handshake is done and the one sentence is on its way. */
+export interface AgentTestStage {
+  id: string;
+  stage: string;
 }
 
 export async function onEvent<T>(name: string, handler: (payload: T) => void) {

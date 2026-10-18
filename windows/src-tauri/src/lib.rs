@@ -10,6 +10,7 @@ mod codex;
 mod files;
 mod folder;
 mod glass;
+mod history;
 mod hooks;
 mod integrations;
 mod island;
@@ -18,6 +19,7 @@ mod log;
 mod meter;
 mod pipe;
 mod policy;
+mod caps;
 mod constitution;
 mod explain;
 mod cost;
@@ -27,6 +29,7 @@ mod secretary;
 mod settings;
 mod team;
 mod team_agents;
+mod n8n;
 mod tray;
 mod usage;
 mod win_user;
@@ -135,17 +138,41 @@ fn hotkey_status(shared: State<Shared>) -> Option<String> {
     shared.hotkey_error.lock().unwrap().clone()
 }
 
+/// The longest quitting waits for the agents to stop: their 4 s to close
+/// properly, side by side, and the kill after it.
+const QUIT_WAIT: std::time::Duration = std::time::Duration::from_secs(7);
+
+/// The app used to be called Coucou, and its sign-in entry (HKCU\…\Run) is
+/// named after the app: the old "Coucou" one would start whatever is still at
+/// its path. It is removed, and Agent Center's own is written when start at
+/// sign-in is on.
+fn renamed_autostart(app: &AppHandle, on: bool) {
+    #[cfg(windows)]
+    unsafe {
+        use windows::core::w;
+        use windows::Win32::System::Registry::{RegDeleteKeyValueW, HKEY_CURRENT_USER};
+        // Not there is the usual answer, and fine.
+        let _ = RegDeleteKeyValueW(HKEY_CURRENT_USER, w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run"), w!("Coucou"));
+    }
+    if on {
+        if let Err(err) = app.autolaunch().enable() {
+            log::line(format!("autostart under the new name: {err}"));
+        }
+    }
+}
+
 #[tauri::command]
 fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
-    let (settings, screen_changed, autostart_changed, hotkey_changed) = {
+    let (settings, screen_changed, autostart_changed, hotkey_changed, theme_changed) = {
         let mut current = shared.settings.lock().unwrap();
         // The page's copy of the dock is stale next to a drag: Rust's is kept.
         let settings = current.from_page(settings);
         let screen_changed = current.screen != settings.screen;
         let autostart_changed = current.autostart != settings.autostart;
         let hotkey_changed = current.hotkey != settings.hotkey;
+        let theme_changed = current.light() != settings.light();
         *current = settings.clone();
-        (settings, screen_changed, autostart_changed, hotkey_changed)
+        (settings, screen_changed, autostart_changed, hotkey_changed, theme_changed)
     };
     let lang_changed = i18n::set(&settings.language);
     // A new language also rewrites why the shortcut is not active.
@@ -172,8 +199,27 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
         let collapsed = shared.gate.collapsed.load(Ordering::Relaxed);
         island::apply_geometry(&app, &settings, collapsed);
     }
+    if theme_changed {
+        apply_theme(&app, settings.light());
+    }
     // Keep the other window in step (island ⇄ settings window).
     let _ = app.emit("settings-changed", settings);
+}
+
+/// Light or dark, for what Windows draws: the settings window's title bar,
+/// and the tint of Teamwork's glass. The pages switch their own colours.
+fn apply_theme(app: &AppHandle, light: bool) {
+    if let Some(win) = app.get_webview_window("settings") {
+        let _ = win.set_theme(Some(if light { tauri::Theme::Light } else { tauri::Theme::Dark }));
+    }
+    if let Some(win) = app.get_webview_window("team") {
+        glass::apply(&win, if light { GLASS_TINT_LIGHT } else { GLASS_TINT });
+    }
+}
+
+/// Whether the person picked the light look (read before the windows exist, too).
+fn light_theme(app: &AppHandle) -> bool {
+    app.try_state::<Shared>().map(|s| s.settings.lock().unwrap().light()).unwrap_or_else(|| settings::load().light())
 }
 
 /// Puts the island on another edge. A drag writes the dock itself (island.rs);
@@ -457,7 +503,7 @@ fn is_pty_pipe(name: &str) -> bool {
 fn pty_send(pipe: String, text: String) -> Result<(), String> {
     use std::io::Write;
     if !is_pty_pipe(&pipe) {
-        return Err(tr!("這不是 Coucou 的終端機。", "That is not a Coucou terminal."));
+        return Err(tr!("這不是 Agent Center 的終端機。", "That is not a Agent Center terminal."));
     }
     // A bare "\r" is a deliberate Enter (accept the highlighted choice,
     // skip an optional field); anything else is typed, trimmed.
@@ -525,11 +571,37 @@ async fn acp_reset(agents: State<'_, Arc<Agents>>, agent_id: String) -> Result<(
     Ok(())
 }
 
+/// Where an agent test is: "sentence" once the handshake is done and the one
+/// real sentence is on its way. `id` is the agent's (or team agent's) id.
+#[derive(Serialize, Clone)]
+struct TestStage {
+    id: String,
+    stage: String,
+}
+
 /// The settings window's "Test": start the agent as the form describes it,
-/// shake hands, open a session, stop it.
+/// shake hands, open a session, then send one real sentence, and stop it.
 #[tauri::command]
-async fn acp_test(agents: State<'_, Arc<Agents>>, profile: AgentProfile) -> Result<String, String> {
-    agents.test(&profile).await
+async fn acp_test(app: AppHandle, agents: State<'_, Arc<Agents>>, profile: AgentProfile) -> Result<String, String> {
+    let id = profile.id.clone();
+    agents.test(&profile, &move |stage| {
+        let _ = app.emit("agent-test-stage", TestStage { id: id.clone(), stage: stage.to_string() });
+    }).await
+}
+
+/// Agent Pool's "Test": the team agent as its editor has it now, saved or
+/// not, run on its base the way a team member would be, for one sentence.
+#[tauri::command]
+async fn team_agent_test(app: AppHandle, shared: State<'_, Shared>, agents: State<'_, Arc<Agents>>, agent: team_agents::TeamAgent) -> Result<String, String> {
+    let natives = shared.settings.lock().unwrap().agents.clone();
+    let profile = team_agents::profile_of(&agent, &natives).ok_or_else(|| -> String {
+        let base = &agent.base;
+        tr!(format!("「設定 → Agent Provider」裡沒有「{base}」這個 Provider。"), format!("There is no Provider '{base}' in Settings → Agent Provider."))
+    })?;
+    let id = agent.id.clone();
+    agents.test(&profile, &move |stage| {
+        let _ = app.emit("agent-test-stage", TestStage { id: id.clone(), stage: stage.to_string() });
+    }).await
 }
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
@@ -572,7 +644,7 @@ fn read_team_file(file: &str) -> Result<TeamConfig, String> {
     let bytes = std::fs::read(team_file_path(file)?).map_err(|e| -> String { tr!(format!("讀不到 {file}：{e}"), format!("Could not read {file}: {e}")) })?;
     // PowerShell 5 and Notepad both write a BOM; it is not part of the JSON.
     let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(&bytes);
-    serde_json::from_slice(bytes).map_err(|e| tr!(format!("{file} 不是 Coucou 讀得懂的團隊檔：{e}"), format!("{file} is not a team file Coucou can read: {e}")))
+    serde_json::from_slice(bytes).map_err(|e| tr!(format!("{file} 不是 Agent Center 讀得懂的團隊檔：{e}"), format!("{file} is not a team file Agent Center can read: {e}")))
 }
 
 /// An example to start from, written once into an empty teams folder.
@@ -626,8 +698,8 @@ async fn team_start(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, fil
     let profiles = runnable(&shared);
     if !settings::team_mcp_exe_path().is_file() {
         return Err(tr!(
-            "Coucou 的 bin 資料夾裡少了 coucou-team-mcp.exe，成員沒辦法回報。請重新安裝或重新建置 Coucou。",
-            "coucou-team-mcp.exe is missing from Coucou's bin folder, so members could not report. Reinstall or rebuild Coucou."
+            "Agent Center 的 bin 資料夾裡少了 coucou-team-mcp.exe，成員沒辦法回報。請重新安裝或重新建置 Agent Center。",
+            "coucou-team-mcp.exe is missing from Agent Center's bin folder, so members could not report. Reinstall or rebuild Agent Center."
         ));
     }
     teams.start(config, &profiles)
@@ -639,7 +711,9 @@ async fn team_instruct(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, 
     // A finished team is not closed: the person's next words start it again.
     if teams.is_finished(&team) {
         let profiles = runnable(&shared);
-        return teams.reopen(&team, &to, &text, request.as_deref(), &profiles);
+        // Members added to the team file since it finished join as it starts again.
+        let wanted = read_team_file(&format!("{team}.json")).ok();
+        return teams.reopen(&team, &to, &text, request.as_deref(), &profiles, wanted.as_ref());
     }
     teams.instruct(&team, &to, &text, request.as_deref())
 }
@@ -652,8 +726,14 @@ fn team_answer(teams: State<Arc<Teams>>, team: String, question: String, text: S
 /// The person's answer to the card a member's agent is holding: one of the
 /// agent's own options, or nothing for "cancelled".
 #[tauri::command]
-async fn team_permit(teams: State<'_, Arc<Teams>>, team: String, member: String, option_id: Option<String>, all: Option<bool>) -> Result<(), String> {
-    teams.permit(&team, &member, option_id, all.unwrap_or(false)).await
+async fn team_permit(teams: State<'_, Arc<Teams>>, team: String, member: String, option_id: Option<String>, all: Option<bool>, remember: Option<bool>) -> Result<(), String> {
+    teams.permit_remembering(&team, &member, option_id, all.unwrap_or(false), remember.unwrap_or(false)).await
+}
+
+/// Waives, or takes back, one of the constitution's asks for a running team.
+#[tauri::command]
+fn team_waive(teams: State<Arc<Teams>>, team: String, rule: String, on: bool) -> Result<(), String> {
+    teams.waive(&team, &rule, on)
 }
 
 #[tauri::command]
@@ -787,6 +867,29 @@ fn team_open(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<
     cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// A document a member made (a web page, a PDF, an Office file, text), in the program
+/// the system has for it, as a double-click would. Only those kinds: a locator comes
+/// from an agent, and never a program, a script or a shortcut.
+#[tauri::command]
+fn team_open_file(teams: State<Arc<Teams>>, team: String, locator: String) -> Result<(), String> {
+    if !is_document(&locator) {
+        return Err(tr!("這種檔案只會在檔案總管中顯示。", "This kind of file is only shown in Explorer."));
+    }
+    let work_dir = teams.get(&team).and_then(|t| t.config()).map(|c| c.work_dir).ok_or_else(no_such_team)?;
+    let path = std::path::Path::new(locator.trim());
+    let full = if path.is_absolute() { path.to_path_buf() } else { std::path::Path::new(&work_dir).join(path) };
+    if !full.is_file() {
+        return Err(tr!(format!("{} 已經不在了。", full.display()), format!("{} is no longer there.", full.display())));
+    }
+    Command::new("explorer").arg(&full).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// A deliverable the system can show with a viewer: a page, a PDF, an Office file, text or data.
+fn is_document(locator: &str) -> bool {
+    let lower = locator.trim().to_ascii_lowercase();
+    ["html", "htm", "pdf", "md", "txt", "docx", "xlsx", "pptx", "csv", "json", "svg", "mp4", "mp3", "wav"].iter().any(|ext| lower.ends_with(&format!(".{ext}")))
+}
+
 /// A picture a member made, in the system's own viewer. Only pictures:
 /// a locator comes from an agent, and opening it starts whatever is
 /// registered for its kind of file.
@@ -857,7 +960,8 @@ fn team_new(shared: State<Shared>) -> Result<String, String> {
         .find(|id| !dir.join(format!("{id}.json")).exists())
         .ok_or_else(|| -> String { tr!("團隊檔太多了。", "There are too many team files.") })?;
     let natives = shared.settings.lock().unwrap().agents.clone();
-    let agent = team_agents::current().choices(&natives).first().map(|a| a.id.clone()).unwrap_or_default();
+    // The leader: the first team agent that can lead (an n8n node cannot).
+    let agent = team_agents::current().choices(&natives).iter().find(|a| a.protocol != acp::Protocol::N8n).map(|a| a.id.clone()).unwrap_or_default();
     let config = serde_json::json!({
         "id": id, "name": "", "goal": "", "workDir": "", "leader": "ai1", "autoApprove": true,
         "members": [{ "id": "ai1", "name": "AI 1", "role": "", "duty": "", "agent": agent, "color": "" }],
@@ -1101,8 +1205,8 @@ fn team_knowledge_open(team: String, doc: String) -> Result<(), String> {
     let (found, path) = knowledge_file(&team, &doc)?;
     if knowledge::is_program(&found.name) {
         return Err(tr!(
-            "Coucou 不會打開程式、指令碼或捷徑。請改用「在檔案總管中顯示」。",
-            "Coucou does not open programs, scripts or shortcuts. Show it in Explorer instead."
+            "Agent Center 不會打開程式、指令碼或捷徑。請改用「在檔案總管中顯示」。",
+            "Agent Center does not open programs, scripts or shortcuts. Show it in Explorer instead."
         ));
     }
     Command::new("explorer").arg(&path).spawn().map(|_| ()).map_err(|e| e.to_string())
@@ -1151,12 +1255,72 @@ fn team_window(app: AppHandle, action: String) {
     };
 }
 
+/// Opens a folder of the person's choosing in Explorer (Agent Center's root folder, a
+/// team's work folder): a full path to a folder that exists, and nothing else.
+#[tauri::command]
+fn open_folder(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(path.trim());
+    if !p.is_absolute() || !p.is_dir() {
+        return Err(tr!(format!("{} 不是現有的資料夾。", path.trim()), format!("{} is not an existing folder.", path.trim())));
+    }
+    Command::new("explorer").arg(p).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 /// Opens the folder the team files live in.
 #[tauri::command]
 fn team_open_configs() {
     let dir = settings::team_configs_dir();
     let _ = std::fs::create_dir_all(&dir);
     let _ = Command::new("explorer").arg(dir).spawn();
+}
+
+/// Agent Center's skill library (settings::team_skills_dir), made with its first skill when empty.
+#[tauri::command]
+fn team_skill_library() -> Vec<team_agents::LibrarySkill> {
+    team_agents::ensure_library();
+    team_agents::library()
+}
+
+/// Opens the skill library folder in Explorer.
+#[tauri::command]
+fn team_open_skills() {
+    let dir = team_agents::ensure_library();
+    let _ = Command::new("explorer").arg(dir).spawn();
+}
+
+/// A library skill's text, for the Skill market's editor.
+#[tauri::command]
+fn skill_read(name: String) -> Result<String, String> {
+    team_agents::skill_read(&name)
+}
+
+/// Writes a skill into the library (new or over the old); every window hears `skills-changed`.
+#[tauri::command]
+fn skill_write(app: AppHandle, name: String, text: String) -> Result<team_agents::LibrarySkill, String> {
+    let s = team_agents::skill_write(&name, &text)?;
+    let _ = app.emit("skills-changed", ());
+    Ok(s)
+}
+
+#[tauri::command]
+fn skill_delete(app: AppHandle, name: String) -> Result<(), String> {
+    team_agents::skill_delete(&name)?;
+    let _ = app.emit("skills-changed", ());
+    Ok(())
+}
+
+/// Skills in the usual places outside the library, not in it yet.
+#[tauri::command]
+fn skills_elsewhere() -> Vec<team_agents::LibrarySkill> {
+    team_agents::skills_elsewhere()
+}
+
+/// Copies a skill found elsewhere into the library.
+#[tauri::command]
+fn skill_import(app: AppHandle, path: String) -> Result<team_agents::LibrarySkill, String> {
+    let s = team_agents::skill_import(&path)?;
+    let _ = app.emit("skills-changed", ());
+    Ok(s)
 }
 
 /// Usage and its estimated cost between two moments (ms), across every team log.
@@ -1224,7 +1388,7 @@ async fn endpoint_spend(shared: State<'_, Shared>, agent: String) -> Result<cost
     cost::key_spend(&base, key).await
 }
 
-/// The chat providers the secretary can think with: (id, name, model), the
+/// The chat providers Agent Center can think with: (id, name, model), the
 /// one in use for the island's chat first.
 #[tauri::command]
 fn secretary_providers(shared: State<Shared>) -> Vec<(String, String, String)> {
@@ -1238,10 +1402,10 @@ fn secretary_providers(shared: State<Shared>) -> Vec<(String, String, String)> {
 }
 
 fn needs_chat_model() -> String {
-    tr!("秘書需要一個聊天模型：請先在 設定 → 聊天模型 加入。", "The secretary needs a chat model: add one in Settings → Chat models.")
+    tr!("Agent Center 需要一個聊天模型：請先在 設定 → 聊天模型 加入。", "Agent Center needs a chat model: add one in Settings → Chat models.")
 }
 
-/// 「Ask」on a permission card: the secretary's model explains what the
+/// 「Ask」on a permission card: Agent Center's model explains what the
 /// waiting request is for and what it risks. No tools, nothing is decided.
 #[tauri::command]
 async fn explain_request(
@@ -1271,7 +1435,7 @@ async fn explain_request(
     explain::explain(&provider, &payload, &teams.snapshots()).await
 }
 
-/// The person asks the secretary something. Steps are told to the Teamwork
+/// The person asks Agent Center something. Steps are told to the Teamwork
 /// window as they happen (`secretary-step`).
 #[tauri::command]
 async fn secretary_ask(
@@ -1285,6 +1449,12 @@ async fn secretary_ask(
     tz_minutes: i64,
     name: Option<String>,
     uploads: Option<Vec<String>>,
+    instructions: Option<String>,
+    skills: Option<Vec<String>>,
+    hidden_skills: Option<Vec<String>>,
+    fast: Option<bool>,
+    root: Option<String>,
+    speed: Option<u8>,
 ) -> Result<secretary::Reply, String> {
     let (provider, profiles) = {
         let settings = shared.settings.lock().unwrap();
@@ -1299,7 +1469,13 @@ async fn secretary_ask(
         (found, settings.agents.clone())
     };
     let provider = provider.ok_or_else(needs_chat_model)?;
-    let office = secretary::Office::new(teams.inner().clone(), &profiles, agents.inner().clone(), tz_minutes, name.unwrap_or_default());
+    let mut office = secretary::Office::new(teams.inner().clone(), &profiles, agents.inner().clone(), tz_minutes, name.unwrap_or_default());
+    office.instructions = instructions.unwrap_or_default();
+    office.skills = skills.unwrap_or_default();
+    office.hidden_skills = hidden_skills.unwrap_or_default();
+    office.speed = speed.unwrap_or(3).clamp(1, 5);
+    office.fast = fast.unwrap_or(false) || office.speed >= 4;
+    office.root = root.unwrap_or_default();
     let window = app.clone();
     secretary
         .ask(&provider, &office, &text, &uploads.unwrap_or_default(), &move |step| {
@@ -1308,7 +1484,7 @@ async fn secretary_ask(
         .await
 }
 
-/// The person clicked 確認 on one of the secretary's proposals — the only way any of them happens.
+/// The person clicked 確認 on one of Agent Center's proposals — the only way any of them happens.
 #[tauri::command]
 async fn secretary_confirm(
     app: AppHandle,
@@ -1330,7 +1506,7 @@ async fn secretary_confirm(
     done
 }
 
-/// A file attached in the secretary's conversation, by its path (picked or dropped).
+/// A file attached in Agent Center's conversation, by its path (picked or dropped).
 #[tauri::command]
 fn secretary_upload_path(secretary: State<Arc<secretary::Secretary>>, path: String) -> Result<secretary::UploadView, String> {
     let (name, bytes) = knowledge::read_source(std::path::Path::new(&path))?;
@@ -1368,6 +1544,22 @@ fn secretary_decline(secretary: State<Arc<secretary::Secretary>>, id: String) ->
     secretary.decline(&id)
 }
 
+/// The person changed a proposed team's members on its card (the Agent Pool picker).
+#[tauri::command]
+fn secretary_revise_team(
+    shared: State<'_, Shared>,
+    teams: State<'_, Arc<Teams>>,
+    agents: State<'_, Arc<Agents>>,
+    secretary: State<'_, Arc<secretary::Secretary>>,
+    id: String,
+    members: Vec<serde_json::Value>,
+    tz_minutes: i64,
+) -> Result<secretary::Proposal, String> {
+    let profiles = shared.settings.lock().unwrap().agents.clone();
+    let office = secretary::Office::new(teams.inner().clone(), &profiles, agents.inner().clone(), tz_minutes, String::new());
+    secretary.revise_team(&id, &members, &office)
+}
+
 /// 安裝 CLI: the table, without looking anything up.
 #[tauri::command]
 fn cli_list() -> Vec<cli_install::Cli> {
@@ -1398,6 +1590,61 @@ fn secretary_reset(secretary: State<Arc<secretary::Secretary>>) {
     secretary.reset();
 }
 
+/// Saves the conversation on screen (對話紀錄), with the window's drawing of it.
+#[tauri::command]
+fn secretary_chat_save(secretary: State<Arc<secretary::Secretary>>, title: String, entries: String) -> Result<Option<secretary::ChatInfo>, String> {
+    secretary.chat_save(&title, &entries)
+}
+
+/// The saved conversations, newest first.
+#[tauri::command]
+fn secretary_chats(secretary: State<Arc<secretary::Secretary>>) -> Vec<secretary::ChatInfo> {
+    secretary.chats()
+}
+
+/// Brings a saved conversation back; returns the window's entries to draw.
+#[tauri::command]
+fn secretary_chat_open(secretary: State<Arc<secretary::Secretary>>, id: String) -> Result<String, String> {
+    secretary.chat_open(&id)
+}
+
+#[tauri::command]
+fn secretary_chat_delete(secretary: State<Arc<secretary::Secretary>>, id: String) -> Result<(), String> {
+    secretary.chat_delete(&id)
+}
+
+/// What there is to clear in Settings → 團隊與 Agent Center → 清除歷史紀錄.
+#[tauri::command]
+fn history_stats() -> history::Stats {
+    history::stats()
+}
+
+/// Clears the teams' runs and what they cost, and with `all` the teams
+/// themselves and Agent Center's conversation — only ever from an explicit
+/// click, never while a team is at work. Agent Pool, the agents, the chat
+/// models, the prices and the constitution stay. What goes is moved to the
+/// Recycle Bin.
+#[tauri::command]
+fn history_clear(app: AppHandle, teams: State<Arc<Teams>>, secretary: State<Arc<secretary::Secretary>>, all: bool) -> Result<history::Stats, String> {
+    let known = teams.ids();
+    if known.iter().any(|id| teams.is_live(id)) {
+        return Err(tr!(
+            "還有團隊在執行或暫停中。請先在 Teamwork 停止所有團隊，再清除。",
+            "A team is still running or paused. Stop every team in Teamwork first, then clear."
+        ));
+    }
+    history::clear(all)?;
+    for id in known {
+        teams.forget(&id);
+    }
+    if all {
+        secretary.reset();
+    }
+    log::line(if all { "history: teams, runs and Agent Center's conversation moved to the Recycle Bin" } else { "history: team runs moved to the Recycle Bin" });
+    let _ = app.emit_to("team", "history-cleared", all);
+    Ok(history::stats())
+}
+
 /// The person's constitution (Coucou's starting one until they save their own).
 #[tauri::command]
 fn constitution_load() -> constitution::Constitution {
@@ -1419,14 +1666,14 @@ fn constitution_try(command: String) -> Option<(constitution::Level, String)> {
     constitution::current().judge(&request, &home).map(|(level, rule)| (level, rule.text))
 }
 
-/// Every agent a team may run as: Settings → Agents, and the team agents built on them.
+/// Every agent a team may run as: Settings → Agent Provider, and the team agents built on them.
 fn runnable(shared: &Shared) -> Vec<AgentProfile> {
     let natives = shared.settings.lock().unwrap().agents.clone();
     team_agents::current().runnable(&natives)
 }
 
-/// The team agents (Teamwork → Agent 設定), the secretary's switch, and what
-/// each native agent's protocol can take of a team agent.
+/// The team agents (Teamwork → Agent Pool), and what each native agent's
+/// protocol can take of a team agent.
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TeamAgentsView {
@@ -1438,7 +1685,7 @@ struct TeamAgentsView {
 #[tauri::command]
 fn team_agents_load(shared: State<Shared>) -> TeamAgentsView {
     let natives = shared.settings.lock().unwrap().agents.clone();
-    let supports = natives.iter().map(|a| (a.id.clone(), team_agents::supports(a.protocol))).collect();
+    let supports = natives.iter().map(|a| (a.id.clone(), team_agents::supports_profile(a))).collect();
     TeamAgentsView { doc: team_agents::current(), supports }
 }
 
@@ -1466,6 +1713,36 @@ async fn agents_doctor(profiles: Vec<AgentProfile>) -> Result<Vec<acp::AgentChec
 #[tauri::command]
 async fn agent_models(agents: State<'_, Arc<Agents>>, profile: AgentProfile) -> Result<Vec<claude::ModelChoice>, String> {
     agents.models(&profile).await
+}
+
+/// Codex's model lists, by how Codex is started: asked once per run of the app (it starts an app server).
+static CODEX_LISTS: std::sync::LazyLock<Mutex<std::collections::BTreeMap<String, Vec<claude::ModelChoice>>>> = std::sync::LazyLock::new(Default::default);
+
+/// What each agent can do (caps.rs), by the id it was sent with: a provider, a team agent, or a form not yet saved.
+#[tauri::command]
+async fn agent_caps(agents: State<'_, Arc<Agents>>, profiles: Vec<AgentProfile>) -> Result<std::collections::BTreeMap<String, caps::Caps>, String> {
+    let choices = pricing::load_choices();
+    let table = pricing::cached_table();
+    let mut out = std::collections::BTreeMap::new();
+    for p in &profiles {
+        // Codex says what each of its models takes and how it thinks: ask it, once.
+        let offered = if p.protocol == acp::Protocol::Codex {
+            let key = format!("{}|{:?}|{:?}", p.command, p.args, p.env);
+            let had = CODEX_LISTS.lock().unwrap().get(&key).cloned();
+            Some(match had {
+                Some(list) => list,
+                None => {
+                    let list = agents.models(p).await.unwrap_or_default();
+                    CODEX_LISTS.lock().unwrap().insert(key, list.clone());
+                    list
+                }
+            })
+        } else {
+            None
+        };
+        out.insert(p.id.clone(), caps::of(p, &choices, &table, offered.as_deref()));
+    }
+    Ok(out)
 }
 
 #[tauri::command]
@@ -1616,9 +1893,9 @@ fn create_settings_window(app: &AppHandle) {
     match WebviewWindowBuilder::new(app, "settings", url)
         .additional_browser_args(BROWSER_ARGS)
         .title(settings_title())
-        // The page is dark whatever Windows is set to; the title bar Windows
-        // draws around it has to be told, or it comes up white.
-        .theme(Some(tauri::Theme::Dark))
+        // The page is dark (or light) whatever Windows is set to; the title
+        // bar Windows draws around it has to be told the same.
+        .theme(Some(if light_theme(app) { tauri::Theme::Light } else { tauri::Theme::Dark }))
         .inner_size(width, height)
         .min_inner_size(460.0, 480.0)
         .resizable(true)
@@ -1702,7 +1979,7 @@ mod settings_place {
 }
 
 fn settings_title() -> String {
-    tr!("設定 — Coucou", "Settings — Coucou")
+    tr!("設定 — Agent Center", "Settings — Agent Center")
 }
 
 /// The settings window's title (taskbar, Alt+Tab) in the language of the
@@ -1744,6 +2021,10 @@ fn open_settings_page(app: AppHandle, page: String, anchor: Option<String>, acti
 /// a white window behind, thin enough that the desktop still shows.
 const GLASS_TINT: u32 = 0x730E_0C0B;
 
+/// The light look's glass: #F3F4F6 at 65 %, light enough that dark text reads
+/// over a black window behind.
+const GLASS_TINT_LIGHT: u32 = 0xA6F6_F4F3;
+
 /// The Teamwork window: like the settings window, made hidden before the
 /// island's webview exists and only shown and hidden afterwards.
 fn create_team_window(app: &AppHandle) {
@@ -1774,7 +2055,7 @@ fn create_team_window(app: &AppHandle) {
         .unwrap_or((1280.0, 820.0));
     let mut builder = WebviewWindowBuilder::new(app, "team", url)
         .additional_browser_args(BROWSER_ARGS)
-        .title("Teamwork — Coucou")
+        .title("Teamwork — Agent Center")
         .inner_size(width, height)
         .min_inner_size(720.0, 520.0)
         .resizable(true)
@@ -1782,7 +2063,12 @@ fn create_team_window(app: &AppHandle) {
         // its own), and nothing painted behind the page.
         .decorations(false)
         .transparent(true)
-        .shadow(true)
+        // Windows 11 draws the shadow around the page. Windows 10 does not
+        // (the window is cut to its rounded corners, which takes it away),
+        // and the shadow would only leave a frame of resize borders outside
+        // the page, which the blur makes visible: there the page is all of
+        // the window, and its edges are what resizes it.
+        .shadow(!glass::win10())
         .visible(false)
         // Files are dropped through the page's own HTML5 drag and drop, as on
         // the island: WebView2 keeps the window OLE finds first in its own
@@ -1799,7 +2085,8 @@ fn create_team_window(app: &AppHandle) {
     match builder.build() {
         Ok(win) => {
             // Coucou's black, thin enough for the desktop to show through.
-            glass::apply(&win, GLASS_TINT);
+            glass::apply(&win, if light_theme(app) { GLASS_TINT_LIGHT } else { GLASS_TINT });
+            glass::drop_caption(&win);
             glass::round_corners(&win);
             let hidden = win.clone();
             win.on_window_event(move |event| match event {
@@ -1807,7 +2094,11 @@ fn create_team_window(app: &AppHandle) {
                     api.prevent_close();
                     let _ = hidden.hide();
                 }
-                tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => glass::round_corners(&hidden),
+                // Maximized or restored, the window's styles were just rewritten.
+                tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => {
+                    glass::drop_caption(&hidden);
+                    glass::round_corners(&hidden);
+                }
                 _ => {}
             });
         }
@@ -1822,6 +2113,8 @@ pub fn show_team_window(app: &AppHandle) {
     };
     let _ = win.unminimize();
     let _ = win.show();
+    // Shown, its styles were rewritten: no caption again (glass.rs).
+    glass::drop_caption(&win);
     let _ = win.set_focus();
 }
 
@@ -1912,6 +2205,7 @@ pub fn run() {
             acp_cancel,
             acp_reset,
             acp_test,
+            team_agent_test,
             agent_models,
             agents_doctor,
             team_files,
@@ -1924,6 +2218,7 @@ pub fn run() {
             team_attach_path,
             team_answer,
             team_permit,
+            team_waive,
             team_pause,
             team_end,
             team_resume,
@@ -1958,13 +2253,30 @@ pub fn run() {
             cli_check_official,
             cli_run_install,
             secretary_decline,
+            secretary_revise_team,
+            open_folder,
+            team_open_file,
             secretary_upload_path,
             secretary_upload_bytes,
             secretary_upload_force,
             secretary_upload_remove,
             secretary_reset,
+            secretary_chat_save,
+            secretary_chats,
+            secretary_chat_open,
+            secretary_chat_delete,
+            agent_caps,
+            history_stats,
+            history_clear,
             team_past,
             team_open_configs,
+            team_skill_library,
+            team_open_skills,
+            skill_read,
+            skill_write,
+            skill_delete,
+            skills_elsewhere,
+            skill_import,
             team_save,
             team_new,
             pick_folder,
@@ -1986,6 +2298,9 @@ pub fn run() {
         .setup(move |app| {
             let handle = app.handle().clone();
             tray::build(&handle)?;
+            // The skill library, with Agent Center's own skill and the
+            // market's presets, is there from the first start.
+            team_agents::ensure_library();
             // Before the island: see create_settings_window.
             create_settings_window(&handle);
             create_team_window(&handle);
@@ -2038,6 +2353,7 @@ pub fn run() {
 
             log::line(format!("--- Coucou {} started ---", env!("CARGO_PKG_VERSION")));
             apply_hotkey(&handle, &loaded.hotkey);
+            renamed_autostart(&handle, loaded.autostart);
             hooks::ensure_hook_exe(&handle);
             pipe::start(handle.clone());
             integrations::start(handle.clone());
@@ -2048,11 +2364,27 @@ pub fn run() {
         .run(|app, event| {
             // Agents the island started must not outlive it.
             if let tauri::RunEvent::Exit = event {
-                if let Some(teams) = app.try_state::<Arc<Teams>>() {
-                    tauri::async_runtime::block_on(teams.shutdown());
+                // This runs on the windows' own thread, and stopping agents
+                // takes a moment: the windows go first, or the wait shows as
+                // a frozen island marked "not responding".
+                for window in app.webview_windows().values() {
+                    let _ = window.hide();
                 }
-                let agents = app.state::<Arc<Agents>>();
-                tauri::async_runtime::block_on(agents.shutdown());
+                let teams = app.try_state::<Arc<Teams>>().map(|t| t.inner().clone());
+                let agents = app.state::<Arc<Agents>>().inner().clone();
+                tauri::async_runtime::block_on(async move {
+                    let all = async {
+                        if let Some(teams) = teams {
+                            teams.shutdown().await;
+                        }
+                        agents.shutdown().await;
+                    };
+                    // Every agent gets its moment side by side; quitting
+                    // never waits past this, whatever an agent does.
+                    if tokio::time::timeout(QUIT_WAIT, all).await.is_err() {
+                        log::line("quit: some agents did not stop in time; leaving anyway");
+                    }
+                });
             }
         });
 }

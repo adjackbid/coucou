@@ -46,7 +46,7 @@ const GATE_KEY: &str = "coucou-team-gate";
 
 /// What the driver adds to the profile's own arguments. `-p=` comes last:
 /// agy would read the next argument as the prompt.
-pub fn args(model: Option<&str>, gated: bool) -> Vec<String> {
+pub fn args(model: Option<&str>, effort: Option<&str>, gated: bool) -> Vec<String> {
     let mut out: Vec<String> = ["--input-format", "stream-json", "--output-format", "stream-json", "--print-timeout", "12h"]
         .iter()
         .map(|s| s.to_string())
@@ -57,6 +57,10 @@ pub fn args(model: Option<&str>, gated: bool) -> Vec<String> {
     if let Some(m) = model.filter(|m| !m.trim().is_empty()) {
         out.push("--model".into());
         out.push(m.trim().to_string());
+    }
+    if let Some(e) = effort.filter(|e| !e.trim().is_empty()) {
+        out.push("--effort".into());
+        out.push(e.trim().to_string());
     }
     out.push("-p=".into());
     out
@@ -123,7 +127,7 @@ pub async fn prompt(running: &Running, text: String, timeout: Duration) -> Resul
         return Err(e);
     }
     match tokio::time::timeout(timeout, rx).await {
-        Ok(Ok(result)) => result.map(|stop_reason| AcpOutcome { stop_reason }),
+        Ok(Ok(result)) => result.map(|stop_reason| AcpOutcome { stop_reason, ..Default::default() }),
         Ok(Err(_)) => Err(tr!("Antigravity 已經結束了。", "Antigravity went away.")),
         Err(_) => Err(tr!("Antigravity 沒有及時完成這一輪。", "Antigravity did not finish the turn in time.")),
     }
@@ -149,7 +153,7 @@ pub async fn models(command: &str) -> Result<Vec<ModelChoice>, String> {
         .filter_map(|l| {
             let (id, name) = l.split_once('\t')?;
             let id = id.trim();
-            (!id.is_empty() && !id.contains(' ')).then(|| ModelChoice { id: id.to_string(), label: name.trim().to_string() })
+            (!id.is_empty() && !id.contains(' ')).then(|| ModelChoice { id: id.to_string(), label: name.trim().to_string(), ..Default::default() })
         })
         .collect();
     if list.is_empty() {
@@ -362,11 +366,12 @@ mod tests {
 
     #[test]
     fn the_prompt_flag_comes_last_and_checks_are_off_only_behind_the_gate() {
-        let team = args(Some("gemini-3.8-flash-high"), true);
+        let team = args(Some("gemini-3.8-flash-high"), Some("low"), true);
+        assert!(team.windows(2).any(|w| w == ["--effort", "low"]));
         assert_eq!(team.last().unwrap(), "-p=");
         assert!(team.contains(&"--dangerously-skip-permissions".to_string()));
         assert!(team.windows(2).any(|w| w == ["--model", "gemini-3.8-flash-high"]));
-        assert!(!args(None, false).contains(&"--dangerously-skip-permissions".to_string()));
+        assert!(!args(None, None, false).contains(&"--dangerously-skip-permissions".to_string()));
     }
 
     #[test]

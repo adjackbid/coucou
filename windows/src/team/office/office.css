@@ -46,7 +46,7 @@
 /* The room, scaled to the column it is given. */
 .office-frame {
   /* Never taller than the window leaves room for: the roster stays in view. */
-  width: min(100%, calc((100vh - 300px) * 1220 / 990));
+  width: min(100%, calc((100vh - 330px) * 1220 / 990));
   margin: 0 auto;
   border-radius: 18px;
   overflow: hidden;
@@ -297,7 +297,7 @@
 }
 
 .office-label .who b {
-  color: color-mix(in srgb, var(--c) 70%, white);
+  color: color-mix(in srgb, var(--c) 70%, var(--chip-mix, white));
 }
 
 .office-label .role {
@@ -419,7 +419,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #ff8d97;
+  color: var(--red-text);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -569,10 +569,10 @@
 }
 
 .office-pill i { font-style: normal; }
-.office-pill.work { color: #8cc4ff; background: rgba(59, 158, 255, 0.16); }
-.office-pill.wait { color: #f5c768; background: rgba(245, 165, 36, 0.16); }
-.office-pill.alert { color: #ff9a9f; background: rgba(244, 80, 94, 0.18); }
-.office-pill.done { color: #6ee7b7; background: rgba(52, 211, 153, 0.16); }
+.office-pill.work { color: var(--st-work); background: rgba(59, 158, 255, 0.16); }
+.office-pill.wait { color: var(--st-wait); background: rgba(245, 165, 36, 0.16); }
+.office-pill.alert { color: var(--st-alert); background: rgba(244, 80, 94, 0.18); }
+.office-pill.done { color: var(--st-done); background: rgba(52, 211, 153, 0.16); }
 .office-pill.quiet { color: var(--dim); }
 
 /* The company at a glance, when no room is picked. */
@@ -600,16 +600,16 @@
   font-size: 12px;
 }
 
-.office-stat.work b { color: #8cc4ff; }
-.office-stat.alert b { color: #ff9a9f; }
-.office-stat.done b { color: #6ee7b7; }
+.office-stat.work b { color: var(--st-work); }
+.office-stat.alert b { color: var(--st-alert); }
+.office-stat.done b { color: var(--st-done); }
 .office-stat.quiet b { color: var(--dim-glass); }
 
 .office-demo {
   padding: 2px 8px;
   border-radius: 8px;
   background: rgba(245, 165, 36, 0.16);
-  color: #f5c768;
+  color: var(--st-wait);
   font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
@@ -625,7 +625,7 @@
 
 .office-progress b {
   font-size: 18px;
-  color: #8cc4ff;
+  color: var(--st-work);
 }
 
 .office-progress .bar {
@@ -661,7 +661,7 @@
   padding: 8px 12px;
   border-radius: 12px;
   background: rgba(245, 165, 36, 0.14);
-  color: #f5c768;
+  color: var(--st-wait);
 }
 
 .office-notice {
@@ -677,12 +677,12 @@
   padding: 8px 8px 8px 14px;
   border-radius: 14px;
   background: rgba(167, 139, 250, 0.16);
-  color: #d9ccff;
+  color: var(--st-violet);
   box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.35);
 }
 
 .office-history-bar b {
-  color: #ede7ff;
+  color: var(--st-violet-2);
 }
 
 .office-member-row.here {
@@ -918,7 +918,7 @@
 }
 
 .office-criteria li.ok {
-  color: #6ee7b7;
+  color: var(--st-done);
 }
 
 .office-criteria i {
@@ -962,11 +962,11 @@
 }
 
 .office-sendstate {
-  color: #8cc4ff;
+  color: var(--st-work);
 }
 
 .office-sendstate.bad {
-  color: #ff9a9f;
+  color: var(--st-alert);
 }
 
 .office-thumb {
@@ -1032,7 +1032,7 @@
     padding: 14px;
     overflow: auto;
     border-radius: 18px;
-    background: rgba(18, 19, 22, 0.97);
+    background: rgba(var(--shade), 0.97);
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45), var(--edge);
   }
 }
@@ -1189,7 +1189,7 @@
 }
 
 .office-teams tbody tr:hover td {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--fg), 0.04);
 }
 
 .office-dot {
@@ -1251,4 +1251,460 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--dim-glass);
+}
+
+/* ── 無邊界: one card per team around Agent Center, in one dashed ring ──────── */
+
+.office-map-viewport.space {
+  background: radial-gradient(ellipse at 50% 45%, #161a2c 0, #0c0f1c 55%, #07091a 100%);
+  color: #e8ecf5;
+}
+
+.office-space {
+  position: relative;
+  transform-origin: 0 0;
+}
+
+.office-space-stars {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  border-radius: 50%;
+  background: transparent;
+  pointer-events: none;
+}
+
+.office-space-paths {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.office-space-rim {
+  fill: none;
+  stroke: #ff5a4e;
+  stroke-opacity: 0.75;
+  stroke-width: 4;
+  stroke-dasharray: 22 18;
+  stroke-linecap: round;
+}
+
+.office-space-path {
+  fill: none;
+  stroke: var(--tone, #6f93ff);
+  stroke-opacity: 0.55;
+  stroke-width: 3;
+  stroke-dasharray: 2 12;
+  stroke-linecap: round;
+}
+
+.office-space-path.live {
+  stroke-opacity: 0.95;
+  animation: office-space-flow 1.2s linear infinite;
+}
+
+@keyframes office-space-flow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+.office-space-bead {
+  fill: var(--tone);
+  filter: drop-shadow(0 0 6px var(--tone));
+}
+
+/* A team's card: a tinted frame, its name and state, the flow, the bar. */
+.sp-card {
+  position: absolute;
+  width: 320px;
+  transform: translate(-50%, -50%);
+  border-radius: 16px;
+  background: rgba(22, 24, 40, 0.92);
+  box-shadow: 0 0 0 2.5px var(--tone), 0 0 28px color-mix(in srgb, var(--tone) 35%, transparent), 0 18px 40px rgba(0, 0, 0, 0.5);
+  color: #eef0f7;
+  transition: box-shadow 0.15s ease-out, transform 0.15s ease-out;
+}
+
+.sp-card:hover {
+  box-shadow: 0 0 0 2.5px var(--tone), 0 0 40px color-mix(in srgb, var(--tone) 55%, transparent), 0 20px 44px rgba(0, 0, 0, 0.55);
+}
+
+.sp-card.on {
+  transform: translate(-50%, -50%) scale(1.04);
+  box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--tone), 0 0 48px color-mix(in srgb, var(--tone) 60%, transparent);
+}
+
+.sp-card-pick {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px 12px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sp-card-pick:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.sp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sp-head b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.sp-badge {
+  flex: none;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0b0f1c;
+  background: #8fb4ff;
+}
+
+.sp-badge.work {
+  background: #6f93ff;
+  color: #fff;
+}
+
+.sp-badge.done {
+  background: #34d399;
+  color: #06251a;
+}
+
+.sp-badge.alert {
+  background: #ff5a4e;
+  color: #fff;
+  animation: office-live 1.6s ease-in-out infinite;
+}
+
+.sp-badge.quiet {
+  background: rgba(255, 255, 255, 0.18);
+  color: #e8ecf5;
+}
+
+/* Left to right: what was asked, Agent Center, the agents. */
+.sp-flow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 86px;
+}
+
+.sp-talk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.sp-talk p {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 11px;
+  line-height: 1.35;
+  color: #cfd5e4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sp-wire {
+  flex: none;
+  width: 18px;
+  height: 2px;
+  background: repeating-linear-gradient(to right, var(--tone) 0 3px, transparent 3px 7px);
+  opacity: 0.8;
+}
+
+.sp-wire.fan {
+  width: 22px;
+}
+
+.sp-center {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: #ff5a4e;
+  background: rgba(255, 90, 78, 0.12);
+  box-shadow: 0 0 0 2px #ff5a4e, 0 0 16px rgba(255, 90, 78, 0.5);
+}
+
+.sp-center svg {
+  width: 22px;
+  height: 22px;
+}
+
+.sp-agents {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 30px;
+}
+
+.sp-agents small {
+  font-size: 10px;
+  color: #a5adbf;
+}
+
+/* A Mochi, small: a ring in its colour with two eyes. */
+.sp-face {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--c);
+  background:
+    radial-gradient(circle at 36% 48%, #fff 0 1.6px, transparent 1.9px),
+    radial-gradient(circle at 64% 48%, #fff 0 1.6px, transparent 1.9px),
+    rgba(12, 14, 26, 0.9);
+  opacity: 0.55;
+}
+
+.sp-face.you {
+  width: 30px;
+  height: 30px;
+  opacity: 1;
+  box-shadow: 0 0 10px var(--c);
+}
+
+.sp-face.busy {
+  opacity: 1;
+  box-shadow: 0 0 8px var(--c);
+}
+
+.sp-bar {
+  position: relative;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.sp-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tone);
+  box-shadow: 0 0 10px var(--tone);
+  transition: width 0.4s ease-out;
+}
+
+/* Agent Center at the centre: rings that breathe and the hexagon. */
+.office-hub {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.office-hub-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 120, 110, 0.25);
+  animation: office-hub-breathe 4s ease-in-out infinite;
+}
+
+.office-hub-ring.r2 {
+  inset: 30px;
+  animation-delay: -2s;
+}
+
+@keyframes office-hub-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+.office-hub-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 128px;
+  height: 128px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  color: #ff5a4e;
+  background: radial-gradient(circle at 50% 45%, #1b1420, #0c0d1a 70%);
+  box-shadow: 0 0 0 4px #ff5a4e, 0 0 40px rgba(255, 90, 78, 0.55), inset 0 0 30px rgba(255, 90, 78, 0.15);
+}
+
+.office-hub-core svg {
+  width: 70px;
+  height: 70px;
+}
+
+.office-hub-label {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 78px);
+  transform: translateX(-50%);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+}
+
+.office-hub:hover .office-hub-core {
+  box-shadow: 0 0 0 4px #ff7a70, 0 0 56px rgba(255, 90, 78, 0.8), inset 0 0 30px rgba(255, 90, 78, 0.2);
+}
+
+.office-hub:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+}
+
+/* The company's numbers in the corners, and the chart. */
+.sp-stat {
+  position: absolute;
+  display: grid;
+  gap: 2px;
+  pointer-events: none;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+}
+
+.sp-stat b {
+  font-size: 38px;
+  font-weight: 800;
+  line-height: 1;
+  color: #34d399;
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-stat.alert b {
+  color: #ff5a4e;
+}
+
+.sp-stat small {
+  font-size: 12px;
+  font-weight: 600;
+  color: #d5dae6;
+}
+
+.sp-stat.tl {
+  left: 18px;
+  top: 14px;
+}
+
+.sp-stat.tr {
+  right: 18px;
+  top: 14px;
+  text-align: right;
+}
+
+.sp-stat.bl {
+  left: 18px;
+  bottom: 14px;
+}
+
+.sp-stat.br {
+  right: 18px;
+  bottom: 14px;
+  text-align: right;
+}
+
+.sp-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #ff5a4e;
+}
+
+.sp-title svg {
+  width: 26px;
+  height: 26px;
+}
+
+.sp-title b {
+  font-size: 26px;
+  color: #fff;
+}
+
+.office-minimap {
+  position: absolute;
+  right: 18px;
+  bottom: 64px;
+  padding: 6px;
+  border-radius: 10px;
+  background: rgba(10, 12, 26, 0.75);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+}
+
+.office-minimap-sky {
+  position: relative;
+  width: 110px;
+  height: 70px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.office-minimap-dot,
+.office-minimap-hub {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  transform: translate(-50%, -50%);
+}
+
+.office-minimap-dot.on {
+  box-shadow: 0 0 0 2px white;
+}
+
+.office-minimap-hub {
+  border-radius: 50%;
+  background: #ff5a4e;
+  box-shadow: 0 0 6px #ff5a4e;
+}
+
+.bt-mode button.on.bt-space {
+  background: linear-gradient(135deg, #ff5a4e, #f5a524);
 }
