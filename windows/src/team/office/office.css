@@ -46,7 +46,7 @@
 /* The room, scaled to the column it is given. */
 .office-frame {
   /* Never taller than the window leaves room for: the roster stays in view. */
-  width: min(100%, calc((100vh - 300px) * 1220 / 990));
+  width: min(100%, calc((100vh - 330px) * 1220 / 990));
   margin: 0 auto;
   border-radius: 18px;
   overflow: hidden;

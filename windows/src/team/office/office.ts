@@ -646,15 +646,20 @@ export class Office {
     return h("span", { class: `bt-hero ${c}`, title: tr("戰鬥模式的職業外觀:只是外觀,不改變工作", "Your class in Battle mode: just a look, the work stays the same"), text: HERO_LABELS[c] });
   }
 
-  /** Office, 中二模式 or 星域: the same work, told three ways. */
-  private modeSwitch(): HTMLElement {
+  /**
+   * Office, 中二模式, Space or Standard: the same work, told four ways. A
+   * team's own page offers only Office and 中二模式 (Space and Standard are
+   * company-wide pictures), and no switch at all when that leaves one.
+   */
+  private modeSwitch(team = false): HTMLElement | null {
     const opt = (mode: PresentationMode, label: string, title: string) =>
       h("button", { class: `bt-${mode}${this.mode === mode ? " on" : ""}`, type: "button", "aria-pressed": this.mode === mode ? "true" : "false", title, onClick: () => this.setMode(mode) }, label);
+    if (team && !this.battleAllowed) return null;
     return h("div", { class: "bt-mode", role: "group", "aria-label": tr("畫面模式", "View mode") },
       opt("office", "Office", tr("一般辦公室畫面", "The usual office view")), // i18n-ok: the view's name, the same in both languages
       this.battleAllowed ? opt("battle", tr("戰鬥模式", "Battle mode"), tr("同一份工作,看成團隊討伐需求魔王:只改變畫面,不影響工作", "The same work, told as your team's raid on the Requirements Overlord: only the picture changes, never the work")) : null,
-      opt("orbit", "Space", tr("同一份工作,看成 Agent 在同一個宇宙裡的光環與協作連線:只改變畫面,不影響工作", "The same work, told as your agents' light rings and the lines between them, all in one universe: only the picture changes, never the work")), // i18n-ok: Space is the view's name in both languages
-      opt("space", tr("無邊界", "Boundless"), tr("每個團隊的辦公室漂在同一片星空裡,圍著 Agent Center;只改變畫面,不影響工作", "Every team's office floats in one sky around Agent Center: only the picture changes, never the work")));
+      team ? null : opt("orbit", "Space", tr("同一份工作,看成 Agent 在同一個宇宙裡的光環與協作連線:只改變畫面,不影響工作", "The same work, told as your agents' light rings and the lines between them, all in one universe: only the picture changes, never the work")), // i18n-ok: Space is the view's name in both languages
+      team ? null : opt("space", "Standard", tr("每個團隊的辦公室漂在同一片星空裡,圍著 Agent Center;只改變畫面,不影響工作", "Every team's office floats in one sky around Agent Center: only the picture changes, never the work"))); // i18n-ok: Standard is the view's name in both languages
   }
 
   /** 團隊設定 picked another battlefield: the old one's moves stop where they are. */
@@ -1202,10 +1207,8 @@ export class Office {
     // The company's numbers in the corners, over the sky and not scaled with it.
     const stat = (where: string, big: string, small: string, tone = "") =>
       h("div", { class: `sp-stat ${where} ${tone}` }, h("b", { text: big }), h("small", { text: small }));
+    // The company's name and size are in the page head already: only the numbers here.
     const corners = [
-      h("div", { class: "sp-stat tl" },
-        h("span", { class: "sp-title", html: Office.HEX }, h("b", { text: companyName() || tr("我的公司", "My Company") })),
-        h("small", { text: `${tr("一個 Agent Center", "One Agent Center")} · ${trf("{n} 支團隊", n === 1 ? "{n} team" : "{n} teams", { n })} · ${trf("{n} 位 Agent", count.seats === 1 ? "{n} agent" : "{n} agents", { n: count.seats })}${away ? trf(" · {n} 個已封存", " · {n} archived", { n: away }) : ""}` })),
       stat("tr", String(done), tr("個任務 · 已完成", "tasks · done"), "ok"),
       stat("bl", String(online), tr("位 Agent · 同時在線", "agents · at work now"), "ok"),
       stat("br", String(decisions), decisions === 1 ? tr("個決定等你", "decision waits for you") : tr("個決定等你", "decisions wait for you"), decisions ? "alert" : ""),
@@ -1464,9 +1467,9 @@ export class Office {
     if (this.sel && this.sel.teamId !== teamId) this.sel = null;
     const run = this.store.run(team.currentRunId);
     const members = this.store.members(teamId);
-    const orbit = this.mode === "orbit";
-    // In the 星域 the room is a cluster of rings; the Mochi scene is not built.
-    const scene = orbit ? null : this.scene(teamId);
+    // Space and Standard are the company's pictures: a team's page is its office, or its battle.
+    const orbit = false;
+    const scene = this.scene(teamId);
     const past = !!this.viewing;
     const battle = this.mode === "battle";
     const vm = battle ? this.boss(teamId) : null;
@@ -1527,7 +1530,7 @@ export class Office {
         h("div", { class: "office-head-main" }, this.runLabel(run), this.progressBar(teamId), past ? null : this.figures(teamId, "office-figures inline"), this.demoTag()),
         toggles,
         pauseBtn,
-        this.modeSwitch()),
+        this.modeSwitch(true)),
       past
         ? h("div", { class: "office-history-bar", role: "status" },
             h("span", { class: "grow" }, h("b", { text: tr("你正在看之前的一輪", "You're looking at an earlier run") }), trf(" · {when} 收起的紀錄,只能查看,不會影響現在的團隊", " · the record put away {when}, to look at only: it doesn't touch the team now", { when: this.when(this.store.run(team.currentRunId) ? pick!.at : pick!.at) })),

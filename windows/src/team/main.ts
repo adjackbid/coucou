@@ -1854,7 +1854,7 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
       "div",
       { class: "top-title", "data-drag": "" },
       h("h1", { "data-drag": "" }, name, snap ? h("span", { class: `state ${snap.status}${snap.ended ? " ended" : ""}`, text: teamStatus(snap) }) : null),
-      h("p", { class: "dim", "data-drag": "", text: goal ? `${goal} · ${aiMembers(count)}` : aiMembers(count) }),
+      h("p", { class: "dim", "data-drag": "", title: goal, text: goal ? `${goal} · ${aiMembers(count)}` : aiMembers(count) }),
       snap?.status === "paused" && snap.pausedWhy
         ? h("p", {
             class: "paused-why",
