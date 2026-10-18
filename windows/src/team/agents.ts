@@ -836,12 +836,12 @@ function drawer(form: HTMLElement): HTMLElement {
 }
 
 /** Agent Center at the ring's centre: a hexagon around a small orbit. */
-const HUB =
+export const HUB =
   '<svg viewBox="0 0 64 64" width="46" height="46" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><path d="M32 5 55.4 18.5v27L32 59 8.6 45.5v-27Z"/><circle cx="32" cy="32" r="11.5" stroke-width="1.6" opacity=".7"/><circle cx="32" cy="32" r="4.6" fill="currentColor" stroke="none"/><circle cx="32" cy="20.5" r="2.1" fill="currentColor" stroke="none"/><circle cx="42" cy="37.8" r="2.1" fill="currentColor" stroke="none"/><circle cx="22" cy="37.8" r="2.1" fill="currentColor" stroke="none"/></svg>';
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-function svgEl(tag: string, attrs: Record<string, string | number>): SVGElement {
+export function svgEl(tag: string, attrs: Record<string, string | number>): SVGElement {
   const el = document.createElementNS(SVG_NS, tag);
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
   return el;

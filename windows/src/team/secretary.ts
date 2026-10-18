@@ -14,10 +14,9 @@ import { tr, trf } from "../core/i18n";
 import { h } from "../views/dom";
 import { dropdown, editableText } from "./ui";
 import { kbSaid, sizeText } from "./knowledge";
-import { FACES, teamAgents } from "./agents";
-import { capsView } from "../views/caps";
-import { kindIcon, markOf } from "../views/agent-kind";
-import type { AgentProfile } from "../core/state";
+import { FACES, HUB, svgEl, teamAgents } from "./agents";
+import { kindIcon, markColor, markHint, markOf } from "../views/agent-kind";
+import { locationOf, type AgentProfile } from "../core/state";
 import type { LibrarySkill, SecretaryChat, SecretaryChoices, SecretaryProposal, SecretaryReply, SecretaryStep, SecretaryUpload } from "./types";
 
 export interface SecretaryHost {
@@ -791,7 +790,151 @@ function startPick(host: SecretaryHost, p: SecretaryProposal) {
   });
   for (const k of picks) if (!drafts.some((d) => d.agent === k.agent)) drafts.push({ agent: k.agent, name: k.name, role: k.role, leader: k.leader, on: true });
   picking.set(p.id, drafts);
+  openPickModal(host, p);
   host.render();
+}
+
+/** The picker window, one at a time; it draws itself again on every tick. */
+let pickModal: { id: string; el: HTMLElement; draw: () => void; close: () => void } | null = null;
+
+function closePickModal() {
+  pickModal?.close();
+}
+
+/**
+ * The picker, over the whole window: Agent Pool's ring on the left — the
+ * Local Agents inside the company's edge, the Cloud Agents outside, Agent
+ * Center in the middle — where a click puts an agent in or out of the team;
+ * on the right, who is in, with a role and the Leader. 套用人選 asks Agent
+ * Center to redo the plan with them.
+ */
+function openPickModal(host: SecretaryHost, p: SecretaryProposal) {
+  closePickModal();
+  const el = h("div", { class: "sec-pick-overlay", role: "dialog", "aria-modal": "true", "aria-label": tr("調整人選", "Change members") });
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") cancel();
+  };
+  const close = () => {
+    el.remove();
+    document.removeEventListener("keydown", onKey);
+    if (pickModal?.id === p.id) pickModal = null;
+  };
+  const cancel = () => {
+    if (doing.has(p.id)) return;
+    picking.delete(p.id);
+    close();
+    host.render();
+  };
+  const draw = () => {
+    const drafts = picking.get(p.id) ?? [];
+    const chosen = drafts.filter((d) => d.on);
+    const leader = chosen.find((d) => d.leader) ?? chosen[0];
+    const busy = doing.has(p.id);
+    const natives = host.profiles();
+    const agents = teamAgents();
+    const baseOf = (d: PickDraft) => {
+      const a = agents.find((x) => x.id === d.agent);
+      return { a, base: a ? natives.find((n) => n.id === a.base) : natives.find((n) => n.id === d.agent) };
+    };
+    // Rings as Agent Pool draws them: Local inside the company's edge, Cloud outside.
+    const placed = drafts.map((d, i) => ({ d, i, ...baseOf(d) }));
+    const whereOf = (x: { base: AgentProfile | undefined }) => (x.base ? locationOf(x.base) : "cloud");
+    const rings = (["local", "cloud"] as const).map((where) => ({ where, list: placed.filter((x) => whereOf(x) === where) })).filter((r) => r.list.length);
+    const room = (n: number) => (n * 104) / (2 * Math.PI);
+    const local = rings.find((r) => r.where === "local");
+    const cloud = rings.find((r) => r.where === "cloud");
+    const rLocal = local ? Math.max(170, room(local.list.length)) : 0;
+    const edge = local ? rLocal + 70 : 120;
+    const rCloud = cloud ? Math.max(edge + 90, 240, room(cloud.list.length)) : 0;
+    const R = Math.max(edge, rCloud);
+    const S = 2 * R + 190;
+    const cx = S / 2, cy = S / 2 - 8;
+    const lines = svgEl("svg", { class: "ta-ring-lines", viewBox: `0 0 ${S} ${S}`, "aria-hidden": "true" });
+    lines.append(svgEl("circle", { class: "ta-ring-inside", cx, cy, r: edge }));
+    for (const r of rings) lines.append(svgEl("circle", { class: `ta-ring-orbit ${r.where}`, cx, cy, r: r.where === "local" ? rLocal : rCloud }));
+    const nodes: HTMLElement[] = [];
+    for (const r of rings) {
+      const radius = r.where === "local" ? rLocal : rCloud;
+      const step = (2 * Math.PI) / r.list.length;
+      r.list.forEach((x, j) => {
+        const t = -Math.PI / 2 + j * step + (r.where === "local" ? step / 2 : 0);
+        const px = cx + radius * Math.cos(t), py = cy + radius * Math.sin(t);
+        if (x.d.on) {
+          lines.append(svgEl("line", { class: "ta-ring-link", x1: cx, y1: cy, x2: px, y2: py }));
+          lines.append(svgEl("circle", { class: "ta-ring-knot", cx: (cx + px) / 2, cy: (cy + py) / 2, r: 4 }));
+        }
+        const mark = x.base ? markOf(x.base) : "cloud";
+        const face = FACES[x.i % FACES.length];
+        const model = x.a?.model || x.base?.model || "";
+        const tip = [x.a?.name || x.base?.name || x.d.agent, `${x.base ? `${x.base.name}` : tr("Provider 不存在", "Provider missing")}${model ? ` · ${model}` : ""}`, x.a?.description, x.d.on ? tr("按一下移出團隊", "Click to take it out") : tr("按一下加入團隊", "Click to put it in")].filter(Boolean).join("\n");
+        nodes.push(h(
+          "button",
+          {
+            type: "button",
+            class: `ta-node sec-ring-node${x.base ? "" : " broken"}${x.d.on ? " lit on" : ""}${x.d.leader ? " leader" : ""}`,
+            style: `left:${(px / S) * 100}%;top:${(py / S) * 100}%;--c:${face};--m:${markColor(mark)}`,
+            title: tip,
+            "aria-pressed": String(x.d.on),
+            disabled: busy,
+            onClick: () => {
+              x.d.on = !x.d.on;
+              if (!x.d.on) x.d.leader = false;
+              draw();
+            },
+          },
+          h("span", { class: "ta-node-ring" }, h("i", { class: "blob", style: `--c:${face};--s:26px`, "aria-hidden": "true" }), h("i", { class: "sec-ring-tick", "aria-hidden": "true", text: x.d.leader ? "★" : "✓" })),
+          h("span", { class: "ta-node-name" }, kindIcon(mark, 12), h("span", { text: x.a?.name || x.base?.name || x.d.agent })),
+          h("span", { class: `ta-node-cat${x.a?.category.trim() ? "" : " none"}`, text: x.a?.category.trim() || (x.a ? tr("未分類", "Uncategorized") : tr("Provider", "Provider")) }), // i18n-ok: the same in both
+        ));
+      });
+    }
+    const zone = (r: number, where: "local" | "cloud") => h("span", { class: `ta-ring-zone ${where}`, style: `left:${((cx + r * Math.cos(Math.PI / 2)) / S) * 100}%;top:${((cy + r * Math.sin(Math.PI / 2)) / S) * 100}%`, title: markHint(where) }, kindIcon(where, 14), h("span", { text: where === "local" ? tr("內部 · 地端服務", "Inside · on-premises") : tr("外部 · 雲端服務", "Outside · cloud services") }));
+    const stage = h("div", { class: "ta-ring sec-pick-ring" },
+      h("div", { class: "ta-ring-stage" },
+        h("div", { class: "ta-ring-field" },
+          lines,
+          h("div", { class: `ta-ring-hub${chosen.length ? " on" : ""}`, style: `left:${(cx / S) * 100}%;top:${(cy / S) * 100}%` }, h("span", { class: "ta-ring-core", html: HUB }), h("b", { text: "Agent Center" })), // i18n-ok: the same in both
+          zone(edge, "local"),
+          cloud ? zone(rCloud, "cloud") : null,
+          ...nodes,
+          drafts.length ? null : h("p", { class: "ta-ring-empty", text: tr("Agent Pool 還沒有 Agent。", "Agent Pool has no agents yet.") }))));
+    const row = (d: PickDraft) => {
+      const { a, base } = baseOf(d);
+      const face = FACES[drafts.indexOf(d) % FACES.length];
+      return h("div", { class: `sec-pick-row${d.leader ? " leader" : ""}`, style: `--c:${face}` },
+        h("i", { class: "blob", style: `--c:${face};--s:24px`, "aria-hidden": "true" }),
+        h("div", { class: "sec-pick-row-text" },
+          h("b", {}, base ? kindIcon(markOf(base), 13) : null, h("span", { text: a?.name || base?.name || d.agent })),
+          h("div", { class: "sec-pick-role" },
+            h("input", { type: "text", value: d.role, placeholder: tr("角色(選填)", "Role (optional)"), maxlength: "20", disabled: busy, onInput: (e: Event) => { d.role = (e.target as HTMLInputElement).value; } }),
+            h("label", { class: `sec-pick-lead${d.leader ? " on" : ""}` },
+              h("input", { type: "radio", name: `sec-lead-${p.id}`, checked: d.leader, disabled: busy, onChange: () => { for (const x of drafts) x.leader = false; d.leader = true; draw(); } }),
+              "Leader"))), // i18n-ok: the same in both
+        h("button", { type: "button", class: "sec-pick-out", title: tr("移出團隊", "Take out of the team"), "aria-label": trf("移出 {name}", "Take {name} out", { name: a?.name || d.agent }), disabled: busy, onClick: () => { d.on = false; d.leader = false; draw(); } }, "✕"));
+    };
+    const side = h("aside", { class: "sec-pick-side" },
+      h("div", { class: "sec-pick-side-head" }, h("b", { text: tr("這次的團隊", "This team") }), h("span", { class: "count", text: `${chosen.length} / ${drafts.length}` })),
+      chosen.length
+        ? h("div", { class: "sec-pick-rows" }, ...chosen.map(row))
+        : h("p", { class: "hint", text: tr("還沒有人。點左邊環上的 Agent 加入。", "No one yet. Click an agent on the ring to put it in.") }),
+      h("p", { class: "hint", text: tr("可以填角色、指定 Leader;沒選的不會進團隊。套用後 Agent Center 會照這份名單重擬計畫。", "Give them a role and pick the Leader; unpicked ones stay out. Agent Center redoes the plan with this list.") }));
+    el.replaceChildren(
+      h("div", { class: "sec-pick-modal" },
+        h("div", { class: "sec-pick-modal-head" },
+          h("div", {}, h("h2", { text: tr("調整人選", "Change members") }), h("p", { class: "hint", text: trf("「{team}」:Agent Center 先選了 {n} 位,你可以改。", "“{team}”: Agent Center picked {n}; change it as you like.", { team: p.title, n: (p.picks ?? []).length }) })),
+          h("button", { type: "button", class: "sec-pick-close", "aria-label": tr("關閉", "Close"), disabled: busy, onClick: cancel }, "✕")),
+        h("div", { class: "sec-pick-modal-body" }, stage, side),
+        h("div", { class: "sec-pick-modal-foot" },
+          h("span", { class: "hint", text: p.outcome && p.state === "open" && picking.has(p.id) ? p.outcome : chosen.length ? trf("{n} 位,Leader:{who}", "{n} members, Leader: {who}", { n: chosen.length, who: leader?.name ?? "" }) : tr("還沒有選任何人", "No one is picked yet") }),
+          h("span", { style: "flex:1" }),
+          h("button", { class: "btn plain", type: "button", disabled: busy, onClick: cancel }, tr("取消", "Cancel")),
+          h("button", { class: "btn primary", type: "button", disabled: busy || !chosen.length, onClick: () => void applyPick(host, p) }, busy ? tr("處理中…", "Working…") : tr("套用人選", "Use these members")))));
+  };
+  el.addEventListener("click", (e) => { if (e.target === el) cancel(); });
+  document.addEventListener("keydown", onKey);
+  document.body.append(el);
+  pickModal = { id: p.id, el, draw, close };
+  draw();
 }
 
 async function applyPick(host: SecretaryHost, p: SecretaryProposal) {
@@ -800,6 +943,7 @@ async function applyPick(host: SecretaryHost, p: SecretaryProposal) {
   if (!members.length) return;
   if (!members.some((m) => m.leader)) members[0].leader = true;
   doing.add(p.id);
+  pickModal?.draw();
   host.render();
   try {
     const revised = IS_TAURI
@@ -807,89 +951,15 @@ async function applyPick(host: SecretaryHost, p: SecretaryProposal) {
       : { ...p, picks: members, lines: p.lines.filter((l) => !/ · /.test(l)).concat(members.map((m) => `${m.name}${m.leader ? tr("(Leader)", " (Leader)") : ""} · ${m.role || "—"} · ${m.agent}`)) };
     replace(revised);
     picking.delete(p.id);
+    doing.delete(p.id);
+    closePickModal();
   } catch (err) {
     replace({ ...p, outcome: String(err instanceof Error ? err.message : err) });
+    doing.delete(p.id);
+    pickModal?.draw();
   }
-  doing.delete(p.id);
   host.render();
   void persist();
-}
-
-function pickCard(host: SecretaryHost, p: SecretaryProposal, d: PickDraft, at: number): HTMLElement {
-  const natives = host.profiles();
-  const a = teamAgents().find((x) => x.id === d.agent);
-  const base = a ? natives.find((n) => n.id === a.base) : natives.find((n) => n.id === d.agent);
-  const face = FACES[at % FACES.length];
-  const model = a?.model || base?.model || "";
-  const drafts = picking.get(p.id) ?? [];
-  return h(
-    "div",
-    { class: `sec-pick${d.on ? " on" : ""}${base ? "" : " broken"}`, style: `--c:${face}` },
-    h(
-      "label",
-      { class: "sec-pick-head" },
-      h("input", {
-        type: "checkbox",
-        checked: d.on,
-        onChange: (e: Event) => {
-          d.on = (e.target as HTMLInputElement).checked;
-          if (!d.on) d.leader = false;
-          host.render();
-        },
-      }),
-      h("i", { class: "blob", style: `--c:${face};--s:28px`, "aria-hidden": "true" }),
-      h(
-        "div",
-        { class: "sec-pick-title" },
-        h("b", {}, base ? kindIcon(markOf(base), 14) : null, h("span", { text: a?.name || base?.name || d.agent })),
-        h("small", { text: [a?.category.trim(), base ? base.name : tr("Provider 不存在", "Provider missing"), model].filter(Boolean).join(" · ") }),
-      ),
-    ),
-    base ? capsView({ ...base, id: d.agent, model }) : null,
-    a?.description ? h("p", { class: "sec-pick-desc", text: a.description }) : null,
-    d.on
-      ? h(
-          "div",
-          { class: "sec-pick-role" },
-          h("input", { type: "text", value: d.role, placeholder: tr("角色(選填)", "Role (optional)"), maxlength: "20", onInput: (e: Event) => { d.role = (e.target as HTMLInputElement).value; } }),
-          h(
-            "label",
-            { class: `sec-pick-lead${d.leader ? " on" : ""}` },
-            h("input", {
-              type: "radio",
-              name: `sec-lead-${p.id}`,
-              checked: d.leader,
-              onChange: () => {
-                for (const x of drafts) x.leader = false;
-                d.leader = true;
-                host.render();
-              },
-            }),
-            "Leader", // i18n-ok: the same in both
-          ),
-        )
-      : null,
-  );
-}
-
-function picker(host: SecretaryHost, p: SecretaryProposal): HTMLElement {
-  const drafts = picking.get(p.id) ?? [];
-  const chosen = drafts.filter((d) => d.on);
-  const leader = chosen.find((d) => d.leader) ?? chosen[0];
-  const busy = doing.has(p.id);
-  return h(
-    "div",
-    { class: "sec-pick-box" },
-    h("p", { class: "sec-pick-hint", text: tr("勾選要加入的 Agent,可以填角色、指定 Leader;沒勾的不會進團隊。", "Tick the agents to put in the team, give them a role and pick the Leader; unticked ones stay out.") }),
-    h("div", { class: "sec-pick-grid" }, ...drafts.map((d, i) => pickCard(host, p, d, i))),
-    h(
-      "div",
-      { class: "sec-card-actions" },
-      h("button", { class: "btn primary", type: "button", disabled: busy || !chosen.length, onClick: () => void applyPick(host, p) }, busy ? tr("處理中…", "Working…") : tr("套用人選", "Use these members")),
-      h("button", { class: "btn plain", type: "button", disabled: busy, onClick: () => { picking.delete(p.id); host.render(); } }, tr("取消", "Cancel")),
-      h("span", { class: "hint", text: chosen.length ? trf("{n} 位,Leader:{who}", "{n} members, Leader: {who}", { n: chosen.length, who: leader?.name ?? "" }) : tr("還沒有勾選任何人", "No one is ticked yet") }),
-    ),
-  );
 }
 
 async function decline(host: SecretaryHost, p: SecretaryProposal, why = "") {
@@ -987,7 +1057,13 @@ function card(host: SecretaryHost, p: SecretaryProposal): HTMLElement {
         : p.state === "failed"
           ? h("div", { class: "sec-card-state failed", text: trf("沒有成功:{why}", "Didn't work: {why}", { why: p.outcome }) })
           : picking.has(p.id)
-            ? picker(host, p)
+            ? h(
+                "div",
+                { class: "sec-card-actions" },
+                h("button", { class: "btn primary", type: "button", disabled: busy, onClick: () => openPickModal(host, p) }, tr("打開挑人視窗", "Open the picker")),
+                h("button", { class: "btn plain", type: "button", disabled: busy, onClick: () => { closePickModal(); picking.delete(p.id); host.render(); } }, tr("取消", "Cancel")),
+                h("span", { class: "hint", text: tr("正在調整人選", "Changing the members") }),
+              )
             : h(
                 "div",
                 { class: "sec-card-actions" },
