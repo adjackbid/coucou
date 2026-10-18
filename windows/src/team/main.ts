@@ -24,7 +24,8 @@ import { savedWorld, saveWorld, WORLD_IDS, WORLDS } from "./office/battle/worlds
 import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCompanyFps, type Tempo } from "./office/battle/session";
 import { costPage, fmtMoney, fmtTokens, refreshSoon, usageSummary, type CostHost } from "./cost";
 import { skillChips } from "./skill-lib";
-import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, pickShowOn, previewPickShow, refreshProviders, secretaryRoot, setSecretaryRoot, secretarySpeed, speedName, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setCenterReads, setMembersGet, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
+import { openSkillModal, redrawSkillModal } from "./skill-modal";
+import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, pickShowOn, previewPickShow, refreshProviders, secretaryRoot, setSecretaryRoot, secretarySpeed, speedName, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
 import { agentLabel, agentsPage, baseOf, loadTeamAgents, memberChoices, poolForShow, teamAgentCounts, teamAgents, teamProfiles, type AgentsHost } from "./agents";
@@ -79,7 +80,8 @@ let tab: "setup" | "links" | "monitor" | "log" = "setup";
 /** 檢查代理 results, while the setup tab shows them. */
 let doctor: import("../core/state").AgentCheck[] | "running" | string | null = null;
 /** The little gear beside Agent Center or 公司總覽: which panel is open, and where. */
-let sidePop: { which: "secretary" | "company"; top: number } | null = null;
+/** The settings panel over the content area (⚙ beside Agent Center or the company): which one, or none. */
+let sidePop: { which: "secretary" | "company" } | null = null;
 /** The monitor as a board, or as the team's office. */
 let monitorMode: "board" | "office" = "board";
 /** The company map instead of one team; or the office of a team that has no file here (示範資料). */
@@ -537,24 +539,20 @@ function sidebar(): HTMLElement {
     if (showArchived) for (const file of away) list.append(row(file, true));
   }
 
-  // Agent Center's skill library, one row each: who gets it.
+  // Agent Center's skills: how many go where, and the picker over the window.
   const skillRows = (): HTMLElement => {
     const lib = skillLibrary();
     if (!lib) {
       loadSkillLibrary(render);
       return h("p", { class: "hint", text: tr("讀取中…", "Loading…") });
     }
-    if (!lib.length) return h("p", { class: "hint", text: tr("資料夾裡還沒有 skill。", "No skills in the folder yet.") });
-    return h("div", { class: "side-pop-skills" }, ...lib.map((skill) =>
-      h("div", { class: "side-pop-skill", title: skill.path },
-        h("div", { class: "side-pop-skill-name" }, h("b", { text: skill.name }), skill.description ? h("span", { class: "hint", title: skill.description, text: skill.description }) : null),
-        h("div", { class: "side-pop-skill-checks" },
-        h("label", { class: "side-pop-check" },
-          h("input", { type: "checkbox", checked: centerReads(skill), onChange: (e: Event) => { setCenterReads(skill, (e.target as HTMLInputElement).checked); } }),
-          h("span", { text: tr("Agent Center 讀", "Agent Center reads it") })),
-        h("label", { class: "side-pop-check", title: skill.forCenter ? tr("front matter 寫了 for: agent-center,是 Agent Center 自己的", "Its front matter says for: agent-center: Agent Center's own") : "" },
-          h("input", { type: "checkbox", checked: membersGet(skill), disabled: skill.forCenter, onChange: (e: Event) => { setMembersGet(skill, (e.target as HTMLInputElement).checked); } }),
-          h("span", { text: tr("可派給組長／成員", "Members may get it") }))))));
+    const members = lib.filter(membersGet).length;
+    const center = lib.filter(centerReads).length;
+    return h("div", { class: "side-pop-skills-summary" },
+      h("p", { class: "hint", text: lib.length
+        ? trf("市集 {n} 份:{m} 份可派給組長／成員,{c} 份 Agent Center 自己讀。", "{n} in the market: {m} members may get, {c} Agent Center reads itself.", { n: lib.length, m: members, c: center })
+        : tr("市集還是空的。", "The market is empty.") }),
+      h("button", { class: "btn primary", type: "button", onClick: () => openSkillModal(render) }, tr("挑選 Skill…", "Pick skills…")));
   };
 
   // A small gear on the row: the panel beside it holds the quieter settings.
@@ -564,9 +562,7 @@ function sidebar(): HTMLElement {
       html: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
       onClick: (e: Event) => {
         e.stopPropagation();
-        const at = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        // Agent Center's panel is the taller one (its instructions box).
-        sidePop = sidePop?.which === which ? null : { which, top: Math.max(12, Math.min(at.top, window.innerHeight - (which === "secretary" ? 520 : 280))) };
+        sidePop = sidePop?.which === which ? null : { which };
         render();
       },
     });
@@ -574,12 +570,13 @@ function sidebar(): HTMLElement {
     ? null
     : h(
         "div",
-        { class: "side-pop", role: "dialog", "aria-label": sidePop.which === "secretary" ? tr("Agent Center 設定", "Agent Center settings") : tr("公司設定", "Company settings"), style: `top:${sidePop.top}px;max-height:calc(100vh - ${sidePop.top + 12}px)` },
+        { class: "side-pop", role: "dialog", "aria-label": sidePop.which === "secretary" ? tr("Agent Center 設定", "Agent Center settings") : tr("公司設定", "Company settings") },
         h("div", { class: "side-pop-head" },
           h("b", { text: sidePop.which === "secretary" ? tr("Agent Center 設定", "Agent Center settings") : tr("公司設定", "Company settings") }),
           h("button", { class: "side-pop-close", type: "button", "aria-label": tr("關閉", "Close"), onClick: () => { sidePop = null; render(); } }, "✕")),
         sidePop.which === "secretary"
           ? h("div", { class: "side-pop-body" },
+              h("section", { class: "side-pop-sec" },
               h("label", { text: tr("顯示名稱", "Display name") }),
               h("input", {
                 value: secretaryName(), placeholder: "Agent Center",
@@ -606,6 +603,8 @@ function sidebar(): HTMLElement {
                 count,
               ])(h("span", { class: "side-pop-count", text: `${secretaryInstructions().length} / ${MAX_INSTRUCTIONS}` })),
               h("p", { class: "hint", text: tr("每次問 Agent Center 都會接在它的系統提示後面,下一個問題就生效。可以調它的做法、口吻和偏好;它還是不會不經你按確認就做事。", "Added after Agent Center's own system prompt each time you ask; it applies from your next question. Shape how it works, its tone and what it prefers; it still never acts without your click.") }),
+              ),
+              h("section", { class: "side-pop-sec" },
               h("label", { text: tr("根目錄", "Root folder") }),
               h("input", {
                 value: secretaryRoot(), placeholder: "D:\\ai", spellcheck: "false",
@@ -618,33 +617,43 @@ function sidebar(): HTMLElement {
                 })() }, tr("選擇資料夾…", "Choose a folder…")),
                 h("button", { class: "btn plain", type: "button", disabled: !secretaryRoot(), onClick: () => void Bridge.openFolder(secretaryRoot()).catch((err) => alert(String(err))) }, tr("開啟", "Open"))),
               h("p", { class: "hint", text: tr("你沒指定工作資料夾時,Agent Center 不會再問,直接在這底下開一個以團隊為名的資料夾;你指定的完整路徑照舊。", "When you name no work folder, Agent Center no longer asks: it opens a folder named after the team under this one. A full path you name is used as it is.") }),
+              ),
+              h("section", { class: "side-pop-sec" },
               h("label", { text: tr("任務完成速度", "Speed of the work") }),
               h("p", { class: "hint", text: trf("現在是「{level}」。用聊天框旁的 ⚡ 拉桿調整:愈左愈仔細(多一層審查、可以來回),愈右愈快(最小團隊、一次審查、不來回);拉到「快」以上就是強制快速模式。每個團隊的設定頁也能單獨開關快速模式。", "Now \"{level}\". Set it with the ⚡ slider by the chat box: left is thorough (an extra review, work may go back), right is fast (the smallest team, one review, no second round); \"Fast\" and beyond force fast mode. Each team's settings page has its own fast-mode switch too.", { level: speedName(secretarySpeed()) }) }),
+              ),
+              h("section", { class: "side-pop-sec" },
               h("label", { text: "Skills" }), // i18n-ok: the same in both
               skillRows(),
               h("div", { class: "side-pop-row" },
-                h("button", { class: "btn primary", type: "button", onClick: () => void Bridge.openSettingsPage("skills") }, tr("管理 Skill 市集", "Manage the skill market")),
+                h("button", { class: "btn plain", type: "button", onClick: () => void Bridge.openSettingsPage("skills") }, tr("管理 Skill 市集", "Manage the skill market")),
                 h("button", { class: "btn plain", type: "button", onClick: () => void Bridge.teamOpenSkills() }, tr("開啟資料夾", "Open the folder")),
                 h("button", { class: "btn plain", type: "button", onClick: () => loadSkillLibrary(render) }, tr("重新整理", "Refresh"))),
               h("p", { class: "hint", text: tr("每份 skill 是資料夾裡的 <名稱>\\SKILL.md 或 <名稱>.md。「Agent Center 讀」的會接在它的系統提示後面,讓它知道這類題目怎麼分大小、挑人、切工;「可派給成員」的它擬團隊時可以指定給組長或成員,成員開工時會拿到全文。front matter 寫 for: agent-center 的是它自己的,不會派給成員。", "Each skill is <name>\\SKILL.md or <name>.md in the folder. One Agent Center reads goes after its system prompt, so it knows how to size, staff and split that kind of request; one members may get it can give to the leader or a member when it proposes a team, and they get its text as they start. A skill whose front matter says for: agent-center is its own and is never handed out.") }),
+              ),
+              h("section", { class: "side-pop-sec" },
               h("label", { text: tr("組隊動畫", "Team-picking animation") }),
               h("label", { class: "side-pop-check" },
                 h("input", { type: "checkbox", checked: pickShowOn(), onChange: (e: Event) => { setPickShowOn((e.target as HTMLInputElement).checked); render(); } }),
                 h("span", { text: tr("提出新團隊時,播放從 Agent Pool 挑人的動畫", "Show Agent Center picking from Agent Pool when it proposes a team") })),
               h("button", { class: "btn plain", type: "button", onClick: () => { sidePop = null; place = "secretary"; previewPickShow(secretaryHost); } }, tr("預覽動畫", "Preview")),
+              ),
+              h("section", { class: "side-pop-sec" },
               h("label", { text: tr("開團隊使用的 Agent", "Agents for new teams") }),
               h("p", { class: "hint" },
                 tr("Agent Center 開團隊、你新增團隊成員時,只從 ", "When Agent Center starts a team or you add a member, agents come only from the team agents in "),
                 h("button", { class: "link", type: "button", onClick: () => { sidePop = null; place = "agents"; render(); } }, "Agent Pool"),
-                tr(" 裡的團隊 Agent(Cloud Agent 與 Local Agent)挑,Agent Center 會照每個 Agent 的說明選人。以前設定好、直接用 Agent Provider 的團隊照樣能啟動。", " (Cloud Agents and Local Agents), and Agent Center picks each one by its description. Teams set up earlier that use an Agent Provider directly still start.")))
+                tr(" 裡的團隊 Agent(Cloud Agent 與 Local Agent)挑,Agent Center 會照每個 Agent 的說明選人。以前設定好、直接用 Agent Provider 的團隊照樣能啟動。", " (Cloud Agents and Local Agents), and Agent Center picks each one by its description. Teams set up earlier that use an Agent Provider directly still start."))))
           : h("div", { class: "side-pop-body" },
+              h("section", { class: "side-pop-sec" },
               h("label", { text: tr("公司名稱", "Company name") }),
               h("input", {
                 value: companyName(), placeholder: tr("我的公司", "My company"),
                 onChange: (e: Event) => { setCompanyName((e.target as HTMLInputElement).value); render(); },
               }),
+              ),
               // 中二模式's own knobs, only while 設定 → 團隊與 Agent Center offers it at all.
-              ...(office.battleAllowed ? [
+              ...(office.battleAllowed ? [h("section", { class: "side-pop-sec" },
               h("label", { text: tr("戰鬥動畫流暢度(戰鬥模式)", "Animation frame rate (Battle mode)") }),
               h("div", { class: "segmented" },
                 ...[20, 30, 60].map((n) =>
@@ -653,7 +662,8 @@ function sidebar(): HTMLElement {
                     onClick: () => { office.companyFps = n; saveCompanyFps(n); render(); },
                   }, `${n} FPS`))),
               h("p", { class: "hint", text: tr("公司總覽裡每間辦公室戰鬥動畫的更新頻率。團隊多的時候調低比較省效能,只有一兩個團隊時可以調高。", "How often each office's battle animation updates in the company overview. Turn it down when you have many teams, to save power; with one or two teams you can turn it up.") }),
-              ] : []),
+              )] : []),
+              h("section", { class: "side-pop-sec" },
               h("label", { text: tr("玻璃濃度", "Glass opacity") }),
               (() => {
                 const shown = h("b", { class: "sheet-value", text: `${sheet()}%` });
@@ -675,7 +685,8 @@ function sidebar(): HTMLElement {
                   h("div", { class: "segmented" }, preset(tr("玻璃", "Glass"), SHEET_DEFAULT), preset(tr("加深", "Darker"), 80), preset(tr("不透明", "Opaque"), 100)));
               })(),
               h("p", { class: "hint", text: tr("越低,模糊的桌面透出越多;越高越接近實色。模糊本身的強度由 Windows 決定,無法調整。拖動時視窗會即時變化。", "Lower lets more of the blurred desktop show through; higher gets closer to a solid color. Windows sets how strong the blur is, and that can't be changed. The window changes as you drag.") }),
-              ...(office.battleAllowed ? [
+              ),
+              ...(office.battleAllowed ? [h("section", { class: "side-pop-sec" },
               h("label", { text: tr("戰鬥節奏(戰鬥模式)", "Battle pace (Battle mode)") }),
               h("div", { class: "segmented" },
                 ...([["calm", tr("平靜", "Calm")], ["normal", tr("一般", "Normal")], ["fierce", tr("激烈", "Fierce")]] as [Tempo, string][]).map(([v, label]) =>
@@ -685,7 +696,7 @@ function sidebar(): HTMLElement {
                 h("input", { type: "checkbox", checked: ambientMotion(), onChange: (e: Event) => { saveAmbientMotion((e.target as HTMLInputElement).checked); render(); } }),
                 tr("場地微動(戰鬥模式)", "Ambient motion (Battle mode)")),
               h("p", { class: "hint", text: tr("戰場上的餘燼、雪花、落葉、電花、星塵。只是氣氛,減少動態時一律停止。", "Embers, snow, falling leaves, sparks and stardust on the battlefield. Just atmosphere; it always stops when motion is reduced.") }),
-              ] : [])),
+              )] : [])),
       );
   return h(
     "aside",
@@ -1176,7 +1187,7 @@ function setup(file: TeamFile): HTMLElement {
           // The skills this member starts with, from the market: Agent Center's picks lit, the rest a click away.
           h("div", { class: "member-skills", title: tr("成員開工時會拿到這些 skill 的全文(SKILL.md);Agent Center 擬團隊時挑的會先亮著", "The member gets the full text of these skills (SKILL.md) as it starts; the ones Agent Center picked are lit already") },
             h("span", { class: "member-skills-label", text: "Skill" }), // i18n-ok: the same in both
-            skillChips(m.skills ?? [], (next) => { m.skills = next.length ? next : undefined; unsaved = true; }, render)),
+            skillChips(m.skills ?? [], (next) => { m.skills = next.length ? next : undefined; unsaved = true; }, render, m.name)),
           advanced(config, m, at),
         ),
         h(
@@ -1836,6 +1847,39 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
   const name = snap?.name || editing?.name || file.config?.name || tr("未命名的團隊", "Untitled team");
   const goal = (snap?.goal ?? editing?.goal ?? "").split("\n")[0];
   const count = snap?.members.length ?? editing?.members.length ?? 0;
+  return h(
+    "header",
+    { class: "top", "data-drag": "" },
+    h(
+      "div",
+      { class: "top-title", "data-drag": "" },
+      h("h1", { "data-drag": "" }, name, snap ? h("span", { class: `state ${snap.status}${snap.ended ? " ended" : ""}`, text: teamStatus(snap) }) : null),
+      h("p", { class: "dim", "data-drag": "", text: goal ? `${goal} · ${aiMembers(count)}` : aiMembers(count) }),
+      snap?.status === "paused" && snap.pausedWhy
+        ? h("p", {
+            class: "paused-why",
+            text: snap.detached
+              ? trf("{why} · 按「從中斷處繼續」接著做,或到「團隊設定」重新開始", "{why} · Press \"Resume where it stopped\" to carry on, or start again from Team setup", { why: said(snap.pausedWhy) })
+              : snap.members.some((m) => m.status === "working")
+                ? trf(
+                    "{why} · 不再開始新的回合;還在做的成員會把這一輪做完,要馬上停請按「立刻停下」",
+                    "{why} · No new turns start; members still at work finish the turn they're on. To stop them at once, press \"Stop now\"",
+                    { why: said(snap.pausedWhy) },
+                  )
+                : said(snap.pausedWhy),
+          })
+        : null,
+    ),
+    windowButtons(),
+  );
+}
+
+/**
+ * The team's tools (folder, pause, interrupt, end): one row of icons with a
+ * small word each, at the right end of the tab row, so the title and goal
+ * above keep the whole width.
+ */
+function teamTools(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
   // The team's tools in one row: an icon over a small word each, never stacked.
   const actions = h("div", { class: "team-tools", role: "toolbar", "aria-label": tr("團隊操作", "Team actions") });
   const workDir = snap?.workDir ?? editing?.workDir ?? file.config?.workDir ?? "";
@@ -1860,32 +1904,7 @@ function header(file: TeamFile, snap: Snapshot | undefined): HTMLElement {
     }
     actions.append(endButton(snap));
   }
-  return h(
-    "header",
-    { class: "top", "data-drag": "" },
-    h(
-      "div",
-      { class: "top-title", "data-drag": "" },
-      h("h1", { "data-drag": "" }, name, snap ? h("span", { class: `state ${snap.status}${snap.ended ? " ended" : ""}`, text: teamStatus(snap) }) : null),
-      h("p", { class: "dim", "data-drag": "", text: goal ? `${goal} · ${aiMembers(count)}` : aiMembers(count) }),
-      snap?.status === "paused" && snap.pausedWhy
-        ? h("p", {
-            class: "paused-why",
-            text: snap.detached
-              ? trf("{why} · 按「從中斷處繼續」接著做,或到「團隊設定」重新開始", "{why} · Press \"Resume where it stopped\" to carry on, or start again from Team setup", { why: said(snap.pausedWhy) })
-              : snap.members.some((m) => m.status === "working")
-                ? trf(
-                    "{why} · 不再開始新的回合;還在做的成員會把這一輪做完,要馬上停請按「立刻停下」",
-                    "{why} · No new turns start; members still at work finish the turn they're on. To stop them at once, press \"Stop now\"",
-                    { why: said(snap.pausedWhy) },
-                  )
-                : said(snap.pausedWhy),
-          })
-        : null,
-    ),
-    actions,
-    windowButtons(),
-  );
+  return actions;
 }
 
 function tabs(snap: Snapshot | undefined): HTMLElement {
@@ -1997,7 +2016,7 @@ function main(): HTMLElement {
     "main",
     { class: "main pane" },
     header(file, snap),
-    tabs(snap),
+    h("div", { class: "tab-row" }, tabs(snap), teamTools(file, snap)),
     trouble ? h("div", { class: "problem", role: "alert", text: trouble.split("\n").map(said).join("\n") }) : null,
     h("div", { class: "scroll" }, view),
   );
@@ -2348,7 +2367,7 @@ async function start() {
   await onEvent<{ team: string }>("team-knowledge-changed", ({ team }) => knowledgeChanged(team, knowledgeHost));
   // Team agents saved: what teams can start with may have changed.
   // The Skill market (Settings) wrote or removed a skill: every chip row and Agent Center's list follow.
-  await onEvent("skills-changed", () => loadSkillLibrary(render));
+  await onEvent("skills-changed", () => loadSkillLibrary(() => { redrawSkillModal(); render(); }));
   await onEvent("team-agents-changed", () => {
     void load().then(() => {
       if (!unsaved) render();

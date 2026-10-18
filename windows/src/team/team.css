@@ -865,6 +865,19 @@ h2 {
   font-weight: 600;
 }
 
+/* The tab strip and, at its right end, the team's tools. */
+.tab-row {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.tab-row .team-tools {
+  margin-left: auto;
+}
+
 .tabs {
   display: flex;
   flex: none;
@@ -2973,15 +2986,17 @@ h2 {
 }
 
 .side-pop {
+  /* Over the whole content area beside the sidebar: no narrow column, no sideways scroll. */
   position: fixed;
-  left: 258px;
+  left: 270px;
+  right: 12px;
+  top: 12px;
+  bottom: 12px;
   z-index: 90;
-  width: 300px;
-  /* The room below its top (main.ts sets the exact value), so it scrolls to its very end. */
-  max-height: calc(100vh - 24px);
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
-  padding: 12px 14px 14px;
+  padding: 14px 20px 18px;
   border-radius: 14px;
   background: var(--panel, #16171c);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), var(--edge);
@@ -3009,9 +3024,37 @@ h2 {
 }
 
 .side-pop-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 10px 32px;
+  align-items: start;
+}
+
+/* One subject of the panel (name, root folder, skills…); the grid lays them out in columns when there is room. */
+.side-pop-sec {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
+}
+
+.side-pop-sec > input,
+.side-pop-sec > textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.side-pop-skills-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.side-pop-skills-summary .hint {
+  flex: 1;
+  min-width: 160px;
+  margin: 0;
 }
 
 .side-pop-body label {
@@ -3183,6 +3226,7 @@ h2 {
 
 .side-pop-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 4px 0;
 }
@@ -3327,6 +3371,17 @@ h2 {
 
 .skill-chip.stray {
   border-style: dashed;
+}
+
+/* ＋: opens the picker over the window to add from the market. */
+.skill-chip.add {
+  border-style: dashed;
+  color: var(--dim);
+}
+
+.skill-chip.add:hover {
+  color: var(--ink);
+  border-color: rgba(245, 165, 36, 0.65);
 }
 
 .skill-chips .link {
