@@ -2977,8 +2977,10 @@ h2 {
   left: 258px;
   z-index: 90;
   width: 300px;
+  /* The room below its top (main.ts sets the exact value), so it scrolls to its very end. */
   max-height: calc(100vh - 24px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 12px 14px 14px;
   border-radius: 14px;
   background: var(--panel, #16171c);

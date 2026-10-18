@@ -558,7 +558,7 @@ function sidebar(): HTMLElement {
     ? null
     : h(
         "div",
-        { class: "side-pop", role: "dialog", "aria-label": sidePop.which === "secretary" ? tr("Agent Center 設定", "Agent Center settings") : tr("公司設定", "Company settings"), style: `top:${sidePop.top}px` },
+        { class: "side-pop", role: "dialog", "aria-label": sidePop.which === "secretary" ? tr("Agent Center 設定", "Agent Center settings") : tr("公司設定", "Company settings"), style: `top:${sidePop.top}px;max-height:calc(100vh - ${sidePop.top + 12}px)` },
         h("div", { class: "side-pop-head" },
           h("b", { text: sidePop.which === "secretary" ? tr("Agent Center 設定", "Agent Center settings") : tr("公司設定", "Company settings") }),
           h("button", { class: "side-pop-close", type: "button", "aria-label": tr("關閉", "Close"), onClick: () => { sidePop = null; render(); } }, "✕")),
