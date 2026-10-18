@@ -171,11 +171,26 @@ pub async fn setup(running: &mut Running, key: &str, launch: &Launch, timeout: D
                     let resolved = m.get("resolvedModel").and_then(Value::as_str).unwrap_or("");
                     let id = if resolved.is_empty() { alias.clone() } else { resolved.to_string() };
                     let label = if alias == id { name } else { format!("{name} ({alias})") };
-                    Some(ModelChoice { id, label, ..Default::default() })
+                    Some(ModelChoice { id, label, default: alias == "default", ..Default::default() })
                 })
                 .collect()
         })
         .unwrap_or_default();
+    // "default" resolves to a model that is listed under its own name too:
+    // one entry per model, the named one, marked as the default.
+    let mut seen: Vec<ModelChoice> = Vec::new();
+    for m in models {
+        match seen.iter_mut().find(|s| s.id == m.id) {
+            Some(had) => {
+                had.default |= m.default;
+                if had.label.ends_with("(default)") {
+                    had.label = m.label;
+                }
+            }
+            None => seen.push(m),
+        }
+    }
+    let models = seen;
     *running.claude.models.lock().unwrap() = models;
     // Its models are listed either way; its turns need an account or a key.
     let signed_out = init.pointer("/account/tokenSource").and_then(Value::as_str) == Some("none");
@@ -549,7 +564,7 @@ mod tests {
                         "control_request" if msg["request"]["subtype"] == "initialize" => out.push(json!({
                             "type": "control_response",
                             "response": { "subtype": "success", "request_id": msg["request_id"], "response": {
-                                "models": [{ "value": "sonnet", "resolvedModel": "claude-sonnet-5-5", "displayName": "Sonnet" }] } } })),
+                                "models": [{ "value": "default", "resolvedModel": "claude-sonnet-5-5", "displayName": "Default (recommended)" }, { "value": "sonnet", "resolvedModel": "claude-sonnet-5-5", "displayName": "Sonnet" }] } } })),
                         "user" => {
                             asked += 1;
                             let command = msg["message"]["content"][0]["text"].as_str().unwrap().to_string();
@@ -633,7 +648,7 @@ mod tests {
 
             // The handshake's model list is what the drop-down offers: the full id, with the alias beside it.
             let listed = agents.models(&claude_profile()).await.unwrap();
-            assert_eq!(listed, vec![ModelChoice { id: "claude-sonnet-5-5".into(), label: "Sonnet (sonnet)".into(), ..Default::default() }]);
+            assert_eq!(listed, vec![ModelChoice { id: "claude-sonnet-5-5".into(), label: "Sonnet (sonnet)".into(), default: true, ..Default::default() }]);
         });
     }
 
