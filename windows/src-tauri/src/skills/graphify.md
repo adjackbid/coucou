@@ -1,6 +1,7 @@
 ---
 name: graphify
 role: 專案知識圖譜
+category: 研究分析
 description: 把程式碼、SQL Schema、設定與文件轉成可查詢的知識圖譜，用查圖代替 grep。 Turns a codebase with its docs, SQL schemas, configs and PDFs into a queryable knowledge graph, parsed locally with tree-sitter and with every edge explained.
 source: https://github.com/Graphify-Labs/graphify
 stars: 127.8k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/Graphify-Labs/graphify
 - GitHub ★ 127.8k（2026-10-18）
+- 分類：研究分析
 - 用途：把程式碼、SQL Schema、設定與文件轉成可查詢的知識圖譜，用查圖代替 grep。
 
 ## Getting the real thing

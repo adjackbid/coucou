@@ -1,6 +1,7 @@
 ---
 name: caveman
 role: Token 精簡
+category: 工具自動化
 description: 砍掉客套與冗長解釋，回答只留重點，輸出 Token 大約省六成。 Makes replies terse: no greetings, hedging or filler, lists over prose, while code, commands and error text stay exact; cuts output tokens by roughly 65%.
 source: https://github.com/JuliusBrussee/caveman
 stars: 103.3k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/JuliusBrussee/caveman
 - GitHub ★ 103.3k（2026-10-18）
+- 分類：工具自動化
 - 用途：砍掉客套與冗長解釋，回答只留重點，輸出 Token 大約省六成。
 
 ## Getting the real thing

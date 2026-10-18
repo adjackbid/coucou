@@ -453,6 +453,8 @@ export interface LibrarySkill {
   starsAt: string;
   /** `role:` of its front matter: what the market calls it (開發總監), or "". */
   role: string;
+  /** `category:` of its front matter (程式開發, UI/UX 設計…), the words Agent Pool groups by; "" for none. */
+  category: string;
 }
 
 export interface SecretaryReply {

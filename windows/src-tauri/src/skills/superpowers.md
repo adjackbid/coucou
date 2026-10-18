@@ -1,6 +1,7 @@
 ---
 name: superpowers
 role: 開發總監
+category: 程式開發
 description: 先釐清需求再動手：腦力激盪→寫計畫→TDD→Code Review→收尾的完整開發流程。 A structured software workflow for coding agents: brainstorm, write a plan, test-driven implementation, systematic debugging, code review, then finish the branch.
 source: https://github.com/obra/superpowers
 stars: 299.8k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/obra/superpowers
 - GitHub ★ 299.8k（2026-10-18）
+- 分類：程式開發
 - 用途：先釐清需求再動手：腦力激盪→寫計畫→TDD→Code Review→收尾的完整開發流程。
 
 ## Getting the real thing

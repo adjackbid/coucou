@@ -1,6 +1,7 @@
 ---
 name: addy-osmani-skills
 role: 工程師技能包
+category: 程式開發
 description: 涵蓋開發規劃、程式碼審查、效能與安全檢查的 25 個工程實務 skill。 Twenty-five production-grade engineering skills across the lifecycle: define, plan, build, verify, review and ship, with quality gates for performance and security.
 source: https://github.com/addyosmani/agent-skills
 stars: 105.9k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/addyosmani/agent-skills
 - GitHub ★ 105.9k（2026-10-18）
+- 分類：程式開發
 - 用途：涵蓋開發規劃、程式碼審查、效能與安全檢查的 25 個工程實務 skill。
 
 ## Getting the real thing

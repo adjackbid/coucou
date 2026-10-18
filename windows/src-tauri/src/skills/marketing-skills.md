@@ -1,6 +1,7 @@
 ---
 name: marketing-skills
 role: 行銷顧問
+category: 文案製作
 description: 寫 SEO 與廣告文案、做轉換率優化、規劃並跑 A/B Testing、Email 與定價等約 50 種行銷工作流程。 About fifty marketing workflows for agents: copywriting, SEO, conversion optimisation, paid ads, A/B testing, email, pricing and analytics.
 source: https://github.com/coreyhaines31/marketingskills
 stars: 55.3k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/coreyhaines31/marketingskills
 - GitHub ★ 55.3k（2026-10-18）
+- 分類：文案製作
 - 用途：寫 SEO 與廣告文案、做轉換率優化、規劃並跑 A/B Testing、Email 與定價等約 50 種行銷工作流程。
 
 ## Getting the real thing

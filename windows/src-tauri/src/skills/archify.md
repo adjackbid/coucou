@@ -1,6 +1,7 @@
 ---
 name: archify
 role: 架構圖設計師
+category: 文件簡報
 description: 給一段文字描述、計畫或程式碼，就生成架構圖、時序圖、流程圖、ER 圖與心智圖。 Turns a description, a plan or a codebase into interactive diagrams: architecture, sequence, flowchart, entity-relationship and mind map.
 source: https://github.com/tt-a1i/archify
 stars: 83.4k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/tt-a1i/archify
 - GitHub ★ 83.4k（2026-10-18）
+- 分類：文件簡報
 - 用途：給一段文字描述、計畫或程式碼，就生成架構圖、時序圖、流程圖、ER 圖與心智圖。
 
 ## Getting the real thing

@@ -1,6 +1,7 @@
 ---
 name: pptx
 role: 簡報設計師
+category: 文件簡報
 description: 整理內容、排版投影片，也能讀取並修改現成的 .pptx。 Reads, creates and edits PowerPoint decks: outline first, consistent layouts, design rules for readable slides, python-pptx or html-to-pptx tooling, and a render check before delivery.
 source: https://github.com/anthropics/skills
 stars: 180.3k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/anthropics/skills
 - GitHub ★ 180.3k（2026-10-18）
+- 分類：文件簡報
 - 用途：整理內容、排版投影片，也能讀取並修改現成的 .pptx。（在 anthropics/skills 這個官方倉庫裡的 pptx 資料夾）
 
 ## Getting the real thing

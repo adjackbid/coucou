@@ -1,6 +1,7 @@
 ---
 name: understand-anything
 role: 程式碼分析師
+category: 研究分析
 description: 分析大型 Codebase，把檔案、函式、類別與依賴建成可互動的知識圖譜。 Maps a codebase's files, functions, classes and dependencies into a knowledge graph with a dashboard, so questions about how it works are answered by tracing the graph.
 source: https://github.com/Lum1104/Understand-Anything
 stars: 86.8k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/Lum1104/Understand-Anything
 - GitHub ★ 86.8k（2026-10-18）
+- 分類：研究分析
 - 用途：分析大型 Codebase，把檔案、函式、類別與依賴建成可互動的知識圖譜。
 
 ## Getting the real thing

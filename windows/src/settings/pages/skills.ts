@@ -7,6 +7,7 @@
 import { Bridge, IS_TAURI } from "../../core/bridge";
 import { tr, trf } from "../../core/i18n";
 import type { LibrarySkill } from "../../team/types";
+import { noCategory, offeredCategories, skillGroups } from "../../team/categories";
 import { h, clear } from "../../views/dom";
 import type { Page } from "../nav";
 import { card, errText, field, notice, pageHeader, row } from "../ui";
@@ -14,8 +15,8 @@ import { card, errText, field, notice, pageHeader, row } from "../ui";
 type Kind = "member" | "center";
 
 /** What a new skill starts as: front matter Agent Center reads, then the instructions. */
-function template(name: string, description: string, kind: Kind): string {
-  const head = ["---", `name: ${name}`, `description: ${description}`, kind === "center" ? "for: agent-center" : "", "---"].filter(Boolean).join("\n");
+function template(name: string, description: string, kind: Kind, category: string): string {
+  const head = ["---", `name: ${name}`, `description: ${description}`, category ? `category: ${category}` : "", kind === "center" ? "for: agent-center" : "", "---"].filter(Boolean).join("\n");
   const body = kind === "center"
     ? tr("# {name}\n\n## 什麼時候用\n收到哪一類請求時,照這份 skill 分大小、挑人、切工。\n\n## 怎麼做\n1. …\n2. …", "# {name}\n\n## When\nFor which kind of request to size, staff and split the work this way.\n\n## How\n1. …\n2. …")
     : tr("# {name}\n\n## 什麼時候用\n做哪一類工作時用這份 skill。\n\n## 怎麼做\n1. …\n2. …\n\n## 交付\n做完要交出什麼、放在哪。", "# {name}\n\n## When\nWhich kind of work this skill is for.\n\n## How\n1. …\n2. …\n\n## Hand in\nWhat to deliver when done, and where.");
@@ -30,7 +31,7 @@ export const skillsPage: Page = {
     const root = h("div", { class: "stack" });
     let lib: LibrarySkill[] | null = null;
     let elsewhere: LibrarySkill[] = [];
-    let editing: { name: string; text: string; isNew: boolean; description: string; kind: Kind } | null = null;
+    let editing: { name: string; text: string; isNew: boolean; description: string; kind: Kind; category: string } | null = null;
     let confirming: string | null = null;
     let busy = false;
     let said: { kind: "ok" | "err"; text: string } | null = null;
@@ -47,7 +48,7 @@ export const skillsPage: Page = {
     };
 
     const startNew = () => {
-      editing = { name: "", text: "", isNew: true, description: "", kind: "member" };
+      editing = { name: "", text: "", isNew: true, description: "", kind: "member", category: "" };
       said = null;
       draw();
       requestAnimationFrame(() => (root.querySelector(".skill-name") as HTMLInputElement | null)?.focus());
@@ -57,7 +58,7 @@ export const skillsPage: Page = {
       said = null;
       try {
         const text = await Bridge.skillRead(s.name);
-        editing = { name: s.name, text, isNew: false, description: s.description, kind: s.forCenter ? "center" : "member" };
+        editing = { name: s.name, text, isNew: false, description: s.description, kind: s.forCenter ? "center" : "member", category: s.category };
       } catch (err) {
         said = { kind: "err", text: errText(err) };
       }
@@ -68,7 +69,7 @@ export const skillsPage: Page = {
       if (!editing || busy) return;
       const e = editing;
       const name = e.name.trim();
-      const text = e.isNew && !e.text.trim() ? template(name, e.description.trim(), e.kind) : e.text;
+      const text = e.isNew && !e.text.trim() ? template(name, e.description.trim(), e.kind, e.kind === "center" ? "" : e.category.trim()) : e.text;
       busy = true;
       draw();
       try {
@@ -152,6 +153,12 @@ export const skillsPage: Page = {
           : null,
         e.isNew ? field(tr("一句說明", "One line about it"), h("input", { type: "text", value: e.description, placeholder: tr("Agent Center 挑 skill 時看這一句", "Agent Center reads this line when it picks skills"), oninput: (ev: Event) => { e.description = (ev.target as HTMLInputElement).value; } })) : null,
         e.isNew ? field(tr("給誰", "Who it is for"), kindPick, tr("給成員的會寫進成員的開場說明;Agent Center 自己讀的(front matter for: agent-center)只影響它怎麼分大小、挑人、切工。", "A member skill goes into the member's opening brief; one for Agent Center (front matter for: agent-center) only shapes how it sizes, staffs and splits work.")) : null,
+        e.isNew && e.kind === "member"
+          ? field(tr("分類", "Category"), [
+              h("input", { type: "text", value: e.category, list: "skill-cats", autocomplete: "off", placeholder: tr("例如:程式開發、UI/UX 設計、文案製作", "e.g. Coding, UI/UX design, Copywriting"), oninput: (ev: Event) => { e.category = (ev.target as HTMLInputElement).value; } }),
+              h("datalist", { id: "skill-cats" }, ...offeredCategories().map((c) => h("option", { value: c }))),
+            ], tr("和 Agent Pool 的分類用同一套字,挑 skill 時照它分組;也可以自己寫。", "The same words Agent Pool groups by; the picker groups by it. Write any other."))
+          : null,
         field(e.isNew ? tr("內容", "Text") : tr("SKILL.md", "SKILL.md"), textarea, tr("Markdown。前面的 --- 區塊是給 Agent Center 看的 name / description / for;後面是給成員的做法。", "Markdown. The --- block at the top is name / description / for, for Agent Center; the rest is the how-to for members.")),
         row(
           h("button", { type: "button", class: "primary", disabled: busy || (e.isNew && !e.name.trim()), onclick: () => void saveEdit(), text: busy ? tr("儲存中…", "Saving…") : tr("儲存", "Save") }),
@@ -164,7 +171,7 @@ export const skillsPage: Page = {
         anchor: `skill-${s.name}`,
         title: s.name,
         meta: s.role || undefined,
-        badge: kindTag(s.forCenter),
+        badge: h("span", { class: "skill-badges" }, s.forCenter ? null : h("span", { class: "skill-cat", text: s.category.trim() || noCategory() }), kindTag(s.forCenter)),
         lead: s.description || tr("(沒有說明:在 SKILL.md 的 front matter 加一行 description)", "(No description: add a description line to the SKILL.md front matter)"),
         body: [
           provenance(s),
@@ -195,7 +202,7 @@ export const skillsPage: Page = {
         lib === null
           ? h("p", { class: "hint", text: tr("讀取中…", "Loading…") })
           : lib.length
-            ? h("div", { class: "stack" }, ...lib.map(skillCard))
+            ? h("div", { class: "stack" }, ...skillGroups(lib).flatMap((g) => [h("h3", { class: "skill-group-head", text: trf("{title}({n})", "{title} ({n})", { title: g.title, n: g.items.length }) }), ...g.items.map(skillCard)]))
             : h("p", { class: "kind-empty", text: tr("市集還是空的。按上面的「新增 Skill」寫第一份。", "The market is empty. Write the first one with New skill above.") }),
         elsewhere.length
           ? card({

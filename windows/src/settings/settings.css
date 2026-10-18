@@ -1540,6 +1540,29 @@ input.short {
   color: var(--dim-2);
 }
 
+.skill-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.skill-cat {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dim-2);
+  box-shadow: inset 0 0 0 1px var(--hairline, rgba(255, 255, 255, 0.14));
+}
+
+.skill-group-head {
+  margin: 10px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--dim-2);
+}
+
 .skill-text {
   width: 100%;
   min-height: 320px;

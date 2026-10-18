@@ -1,6 +1,7 @@
 ---
 name: agent-browser
 role: 瀏覽器操作員
+category: 工具自動化
 description: 自動開網站、點按鈕、填表單、截圖抓資料的命令列瀏覽器。 A browser automation CLI for agents: open pages, read an accessibility-tree snapshot with element refs, click, fill, press keys, take screenshots and keep sessions.
 source: https://github.com/vercel-labs/agent-browser
 stars: 41.1k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/vercel-labs/agent-browser
 - GitHub ★ 41.1k（2026-10-18）
+- 分類：工具自動化
 - 用途：自動開網站、點按鈕、填表單、截圖抓資料的命令列瀏覽器。
 
 ## Getting the real thing

@@ -279,14 +279,24 @@ pub struct LibrarySkill {
     pub stars_at: String,
     /// `role:` of its front matter: what the market calls it (開發總監), or nothing.
     pub role: String,
+    /// `category:` of its front matter (程式開發, UI/UX 設計…), the same words
+    /// Agent Pool groups agents by; a preset copied before it had one takes
+    /// the preset's. Empty for none.
+    pub category: String,
 }
 
 /// A skill as the market lists it, from its SKILL.md front matter.
 fn library_skill(name: String, md: PathBuf) -> LibrarySkill {
     let front = |k: &str| skill_front(&md, k).unwrap_or_default();
     let (description, source, stars, stars_at, role) = (front("description"), front("source"), front("stars"), front("stars-at"), front("role"));
+    let mut category = front("category");
+    if category.is_empty() {
+        if let Some((_, preset)) = PRESET_SKILLS.iter().find(|(n, _)| n.eq_ignore_ascii_case(&name)) {
+            category = front_of(preset, "category").unwrap_or_default();
+        }
+    }
     let for_center = skill_front(&md, "for").is_some_and(|f| f.eq_ignore_ascii_case("agent-center"));
-    LibrarySkill { name, description, path: md, for_center, source, stars, stars_at, role }
+    LibrarySkill { name, description, path: md, for_center, source, stars, stars_at, role, category }
 }
 
 /// Skills the market starts with (src/skills/*.md): well-known skills from
@@ -516,7 +526,11 @@ fn skill_description(skill_md: &std::path::Path) -> Option<String> {
 
 /// One key of a SKILL.md's front matter (`description:`, `for:`), or nothing.
 fn skill_front(skill_md: &std::path::Path, key: &str) -> Option<String> {
-    let text = std::fs::read_to_string(skill_md).ok()?;
+    front_of(&std::fs::read_to_string(skill_md).ok()?, key)
+}
+
+/// The same, from the text of a SKILL.md.
+fn front_of(text: &str, key: &str) -> Option<String> {
     let body = text.trim_start_matches('\u{feff}').strip_prefix("---")?;
     let head = &body[..body.find("\n---")?];
     let prefix = format!("{key}:");
@@ -608,14 +622,20 @@ mod tests {
             assert!(p.is_file(), "{name}");
             assert_eq!(super::skill_front(&p, "name").as_deref(), Some(*name), "{name}");
             assert!(super::skill_front(&p, "source").is_some_and(|u| u.starts_with("https://github.com/")), "{name}");
-            for key in ["description", "stars", "stars-at", "role"] {
+            for key in ["description", "stars", "stars-at", "role", "category"] {
                 assert!(super::skill_front(&p, key).is_some(), "{name} lacks {key}");
             }
             // Presets are for members: never Agent Center's own.
             assert!(!md.contains("for: agent-center"), "{name}");
             let got = super::library_skill(name.to_string(), p.clone());
-            assert!(!got.for_center && got.source.contains("github.com") && !got.stars.is_empty() && !got.role.is_empty(), "{name}");
+            assert!(!got.for_center && got.source.contains("github.com") && !got.stars.is_empty() && !got.role.is_empty() && !got.category.is_empty(), "{name}");
         }
+        // A preset copied before it had a category takes the preset's.
+        let bare = dir.join("bare");
+        std::fs::create_dir_all(&bare).unwrap();
+        std::fs::write(bare.join("SKILL.md"), "---\nname: caveman\ndescription: x\n---\nBody").unwrap();
+        assert_eq!(super::library_skill("caveman".into(), bare.join("SKILL.md")).category, "工具自動化");
+        assert_eq!(super::library_skill("bare".into(), bare.join("SKILL.md")).category, "");
         // Deleted by the person: not put back on the next start.
         std::fs::remove_dir_all(dir.join("caveman")).unwrap();
         super::seed_presets(&dir);

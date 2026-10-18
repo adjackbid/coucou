@@ -1,6 +1,7 @@
 ---
 name: ui-ux-pro-max
 role: 設計顧問
+category: UI/UX 設計
 description: 內建配色、字體配對與各平台的 UI 規範，讓介面風格一致、更專業。 Design intelligence for building UI: style directions, colour palettes, font pairings, spacing tokens, UX states and framework-specific rules, so screens come out consistent.
 source: https://github.com/nextlevelbuilder/ui-ux-pro-max-skill
 stars: 136.8k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/nextlevelbuilder/ui-ux-pro-max-skill
 - GitHub ★ 136.8k（2026-10-18）
+- 分類：UI/UX 設計
 - 用途：內建配色、字體配對與各平台的 UI 規範，讓介面風格一致、更專業。
 
 ## Getting the real thing

@@ -1,6 +1,7 @@
 ---
 name: impeccable
 role: UI 品質
+category: UI/UX 設計
 description: 修掉介面的 AI 味：調字體、排版、層次與留白，讓畫面像設計師做的。 A design language for AI-built front ends: typography, hierarchy, spacing and colour rules, plus commands and deterministic checks that catch the common AI-generated look.
 source: https://github.com/pbakaus/impeccable
 stars: 82.2k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/pbakaus/impeccable
 - GitHub ★ 82.2k（2026-10-18）
+- 分類：UI/UX 設計
 - 用途：修掉介面的 AI 味：調字體、排版、層次與留白，讓畫面像設計師做的。
 
 ## Getting the real thing

@@ -1,6 +1,7 @@
 ---
 name: awesome-claude-skills
 role: 技能資源庫
+category: 工具自動化
 description: 收集各種用途的 Skills 的合集與索引，用來找、評估並安裝合適的 skill，本身不是單一技能。 A curated catalogue of a thousand-plus Claude skills, plugins and tools by category: use it to find, vet and install a skill for a need; it is a list, not a skill.
 source: https://github.com/ComposioHQ/awesome-claude-skills
 stars: 77.0k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/ComposioHQ/awesome-claude-skills
 - GitHub ★ 77.0k（2026-10-18）
+- 分類：工具自動化
 - 用途：收集各種用途的 Skills 的合集與索引，用來找、評估並安裝合適的 skill，本身不是單一技能。
 
 ## Getting the real thing

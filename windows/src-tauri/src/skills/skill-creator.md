@@ -1,6 +1,7 @@
 ---
 name: skill-creator
 role: 技能製造機
+category: 工具自動化
 description: 把一套工作 SOP 寫成 agent 可重複使用的 skill（SKILL.md 資料夾），並測試它會在對的時候被用到。 Turns a working procedure into a reusable agent skill: a SKILL.md folder with front matter, progressive disclosure into references/ and scripts/, then testing that it triggers and works.
 source: https://github.com/anthropics/skills
 stars: 180.3k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/anthropics/skills
 - GitHub ★ 180.3k（2026-10-18）
+- 分類：工具自動化
 - 用途：把一套工作 SOP 寫成 agent 可重複使用的 skill（SKILL.md 資料夾），並測試它會在對的時候被用到。（在 anthropics/skills 這個官方倉庫裡的 skill-creator 資料夾）
 
 ## Getting the real thing

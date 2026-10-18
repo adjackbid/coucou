@@ -1,6 +1,7 @@
 ---
 name: remotion-skills
 role: 影片製作師
+category: 圖片影音
 description: 用 React 程式做影片：動態字幕、動畫、轉場與效果，並能預覽與輸出。 Remotion's own best-practice skills for making videos in React: compositions, frame-based animation, sequences and transitions, captions, media and rendering.
 source: https://github.com/remotion-dev/skills
 stars: 5.2k
@@ -11,6 +12,7 @@ stars-at: 2026-10-18
 
 - 來源：https://github.com/remotion-dev/skills
 - GitHub ★ 5.2k（2026-10-18）
+- 分類：圖片影音
 - 用途：用 React 程式做影片：動態字幕、動畫、轉場與效果，並能預覽與輸出。
 
 ## Getting the real thing
