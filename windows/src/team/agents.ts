@@ -426,7 +426,7 @@ function modelField(a: TeamAgent, base: AgentProfile | undefined): HTMLElement {
   input.addEventListener("focus", () => {
     if (!base || node || modelLists.has(base.id)) return;
     if (!IS_TAURI) {
-      modelLists.set(base.id, (base.protocol === "codex" ? ["gpt-5.6-sol", "gpt-5.6-luna"] : base.protocol === "claude" ? ["opus", "sonnet", "haiku"] : ["deepseek-v4-flash", "glm-5.3-flash"]).map((id) => ({ id, label: id })));
+      modelLists.set(base.id, (base.protocol === "codex" ? ["gpt-5.6-sol", "gpt-5.6-luna"] : base.protocol === "claude" ? ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"] : ["deepseek-v4-flash", "glm-5.3-flash"]).map((id) => ({ id, label: id })));
       refreshSuggestions(input);
       return;
     }

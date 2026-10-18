@@ -162,10 +162,15 @@ pub async fn setup(running: &mut Running, key: &str, launch: &Launch, timeout: D
         .map(|list| {
             list.iter()
                 .filter_map(|m| {
-                    let id = m.get("value").and_then(Value::as_str)?.to_string();
-                    let name = m.get("displayName").and_then(Value::as_str).unwrap_or(&id).to_string();
+                    // Claude Code offers aliases ("opus") that resolve to a full
+                    // model id ("claude-opus-5-5"). The full id is what is kept:
+                    // it is what the price list and the usage records name, so
+                    // an agent set up from this list is priced from the start.
+                    let alias = m.get("value").and_then(Value::as_str)?.to_string();
+                    let name = m.get("displayName").and_then(Value::as_str).unwrap_or(&alias).to_string();
                     let resolved = m.get("resolvedModel").and_then(Value::as_str).unwrap_or("");
-                    let label = if resolved.is_empty() || resolved == id { name } else { format!("{name} ({resolved})") };
+                    let id = if resolved.is_empty() { alias.clone() } else { resolved.to_string() };
+                    let label = if alias == id { name } else { format!("{name} ({alias})") };
                     Some(ModelChoice { id, label, ..Default::default() })
                 })
                 .collect()
@@ -626,9 +631,9 @@ mod tests {
             assert!(used.iter().all(|u| u.model == "claude-sonnet-5-5" && u.input == 100 && u.cache_read == 500 && u.output == 10));
             assert!((used[1].cost_usd.unwrap() - 0.1).abs() < 1e-9);
 
-            // The handshake's model list is what the drop-down offers.
+            // The handshake's model list is what the drop-down offers: the full id, with the alias beside it.
             let listed = agents.models(&claude_profile()).await.unwrap();
-            assert_eq!(listed, vec![ModelChoice { id: "sonnet".into(), label: "Sonnet (claude-sonnet-5-5)".into(), ..Default::default() }]);
+            assert_eq!(listed, vec![ModelChoice { id: "claude-sonnet-5-5".into(), label: "Sonnet (sonnet)".into(), ..Default::default() }]);
         });
     }
 
@@ -640,6 +645,7 @@ mod tests {
         let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
         let models = runtime.block_on(Agents::default().models(&claude_profile()));
         let models = models.expect("handshake");
-        assert!(models.iter().any(|m| m.id == "sonnet" || m.id == "opus"), "{models:?}");
+        eprintln!("{models:#?}");
+        assert!(models.iter().any(|m| m.id.starts_with("claude-") && (m.label.contains("(sonnet)") || m.label.contains("(opus)"))), "{models:?}");
     }
 }
