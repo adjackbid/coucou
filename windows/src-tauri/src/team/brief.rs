@@ -6,7 +6,7 @@
 // line saying which language to write to the person in is added where the
 // first-turn brief is put together (orchestrator.rs `next_turns`).
 
-use super::state::{Message, State, Task, TaskStatus};
+use super::state::{Message, SpecPhase, State, Task, TaskStatus};
 use super::{LinkKind, TeamConfig, SYSTEM, YOU};
 
 /// `AI 3 (ai3)` — the name a person reads and the id a tool call needs.
@@ -102,6 +102,9 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
              - Review against the criteria you wrote. Send back once with every fix listed; accepted is final, no follow-up checks by message. If a task comes back a second time, move it with `task_assign` or do it yourself. Spot-check two or three items rather than redoing a member's work.\n\
              - A member out of quota, missing a tool, or blocked for more than a turn: move its remaining work with `task_assign` at once.\n",
         );
+        if config.openspec.is_some() {
+            out.push_str(&format!("\n{}\n", spec_rules(config)));
+        }
         if config.fast {
             out.push_str(&format!("\n{}\n", fast_rules()));
         }
@@ -117,6 +120,9 @@ pub fn role(config: &TeamConfig, me: &str) -> String {
         }
     } else {
         out.push_str("- The leader hands out tasks. You are told when one is yours and ready; until then there is nothing to do.\n");
+        if config.openspec.is_some() {
+            out.push_str("- The team follows the OpenSpec flow: what to build is written up as a change under openspec/changes/ (proposal, specs with scenarios, tasks), approved by the user. Read it for your task's context and check your work against its scenarios. Only the leader edits the change's files; you change the code.\n");
+        }
     }
     out.push_str(
         "- When you start a task: `task_update` with status `doing`. As you meet its criteria: `task_update` with `done_criteria`.\n\
@@ -156,6 +162,9 @@ pub fn unread(n: usize) -> String {
 /// The leader's first message.
 // i18n: model-facing
 pub fn kickoff(config: &TeamConfig) -> String {
+    if config.openspec.is_some() {
+        return spec_kickoff(config);
+    }
     let plan = if config.kickoff.trim().is_empty() {
         String::new()
     } else {
@@ -166,6 +175,112 @@ pub fn kickoff(config: &TeamConfig) -> String {
     format!(
         "The team has started. Plan the work for this goal and create the tasks now:\n{}\nUse `team_status` to see your teammates and `task_create` for each task.{plan}{fast}{timed}",
         config.goal.trim()
+    )
+}
+
+/// The leader's first message in the OpenSpec flow: the change first, the tasks
+/// after the person approved it; Agent Center's plan is for then.
+// i18n: model-facing
+fn spec_kickoff(config: &TeamConfig) -> String {
+    let plan = if config.kickoff.trim().is_empty() {
+        String::new()
+    } else {
+        format!("\n\nAgent Center's plan for this team, from the user's request: who does what and who reviews. Use it when you create the implementation tasks, after the user has approved the change:\n{}", config.kickoff.trim())
+    };
+    let fast = if config.fast { format!("\n\n{}", fast_rules()) } else { String::new() };
+    let timed = if config.time_limit_min > 0 { format!("\n\n{}", time_rules(config)) } else { String::new() };
+    format!(
+        "The team has started with the OpenSpec flow on. Do not plan implementation tasks yet: first look at the project, talk the change over with the user, write it up as an OpenSpec change and hand it in with `spec_submit`. The goal:\n{}\n\n{}{plan}{fast}{timed}",
+        config.goal.trim(),
+        spec_rules(config),
+    )
+}
+
+/// What the OpenSpec flow asks of the leader (TeamConfig::openspec), after
+/// OpenSpec's own advice for an existing project: explore, talk it over,
+/// propose, have it reviewed, then apply; archive once merged. Said with the
+/// kickoff and again in the leader's role.
+// i18n: model-facing
+pub fn spec_rules(config: &TeamConfig) -> String {
+    let Some(spec) = config.openspec.as_ref() else { return String::new() };
+    let carry_on = if spec.change.trim().is_empty() {
+        String::new()
+    } else {
+        format!(" The user asked to carry on with the change `{0}`: start from `openspec status --change {0} --json` and keep what is already written.", spec.change.trim())
+    };
+    let design = if spec.full && !config.fast {
+        "design.md (the technical approach, the options and why this one)"
+    } else {
+        "design.md only if the change cuts across modules or holds a real technical choice (keep it lite: short requirements, a few scenarios each)"
+    };
+    format!(
+        "OPENSPEC FLOW is on: the user wants what will be built written up as an OpenSpec change (github.com/Fission-AI/openspec) and approved by them before anything is built. Agent Center enforces it: until the user approves the change, `task_create` only takes spec tasks (`kind` \"spec\") and the team cannot close. Use the `openspec` command line, not slash commands; add `--json` where you read its output.\n\
+         0. Set up. No openspec/ folder in the work folder: `openspec init --tools <your CLI: claude, codex, gemini, github-copilot…>` (or `--tools none`). No `openspec` command: it needs Node.js 20.19+ and `npm install -g @fission-ai/openspec@latest`; installing asks the user's permission, so say why.{carry_on}\n\
+         1. Explore. Read the parts of the code the goal touches and the current specs (`openspec list --specs`, `openspec show <spec>`). Write no code. A teammate may explore a part for you: a task with `kind` \"spec\", handed in as notes.\n\
+         2. Talk it over. Ask what only the user can decide in one `ask_human` with `questions`: the scope and what is left out, the options you see and their trade-offs, how they will know it works. Give `options` where there are clear choices. One to three rounds are usually enough; when the goal is already precise, go straight to 3.\n\
+         3. Propose. `openspec new change <kebab-name>`, then for each artifact `openspec status --change <name> --json` (the first \"ready\" one is next) and `openspec instructions <artifact> --change <name> --json` (its template and rules): proposal.md (why, what changes, which capabilities), the delta specs in specs/<capability>/spec.md (ADDED / MODIFIED / REMOVED Requirements with SHALL or MUST, each with `#### Scenario:` WHEN / THEN), {design}, tasks.md (checkbox groups, each small enough for one member). Then `openspec validate <name>` and fix what it reports.\n\
+         4. Review. `spec_submit` with the change's name, a summary for the user and what validate said, then end your turn. The user approves it or sends it back with what to change; then update the files, validate and `spec_submit` again. Only their approval on the review card unlocks implementation: if they answer in a message instead, ask them to approve or send it back on the card.\n\
+         5. Implement. Once approved: `openspec instructions apply --change <name> --json`, then create the tasks from tasks.md, one per group, `criteria` from the scenarios it must meet, owners and reviewers as usual. You alone edit openspec/changes/<name>/ (one change, one owner); members change the code. Tick a box in tasks.md when you accept the work that does it.\n\
+         6. Verify. Review against the change's scenarios, not only the task text. If the requirements must change, update the change and `spec_submit` again: new implementation tasks wait for the user's approval.\n\
+         7. Finish. Report as usual and say the change can be archived (`openspec archive <name>`) once the work is merged. Do not archive it unless the user asks.",
+    )
+}
+
+/// Why `task_create` refused an implementation task before the change was approved.
+// i18n: model-facing
+pub fn spec_locked(state: &State) -> String {
+    if state.spec_phase() == Some(SpecPhase::Review) {
+        return format!("The change `{}` is with the user for review. Until they approve it, only spec tasks can be created (`kind` \"spec\"). End your turn; their answer starts your next one.", state.spec.change);
+    }
+    "The OpenSpec flow is on and the user has not approved a change yet, so only spec tasks can be created (`kind` \"spec\": exploring the code, drafting a part of the change). Carry on with the flow: ask the user with `ask_human`, write the change under openspec/changes/, then hand it in with `spec_submit`."
+        .to_string()
+}
+
+/// Where the OpenSpec flow stands, for `team_status`; nothing for a team not in it.
+// i18n: model-facing
+pub fn spec_status(state: &State) -> Option<String> {
+    let spec = &state.spec;
+    Some(match state.spec_phase()? {
+        SpecPhase::Exploring if spec.rounds == 0 => "OpenSpec flow: no change handed in yet. Only spec tasks until the user approves one.".to_string(),
+        SpecPhase::Exploring => format!("OpenSpec flow: the user sent the change `{}` back: {}. Update it and `spec_submit` again.", spec.change, spec.note),
+        SpecPhase::Review => format!("OpenSpec flow: the change `{}` is with the user for review.", spec.change),
+        SpecPhase::Approved => format!("OpenSpec flow: the user approved the change `{}`; the team implements it.", spec.change),
+        SpecPhase::Archiving => format!("OpenSpec flow: the user asked to archive the change `{}`.", spec.change),
+    })
+}
+
+/// The leader ended a turn in the OpenSpec flow with nothing under way: no
+/// question for the user, no change handed in, no task. Nothing when it is
+/// fine to wait.
+// i18n: model-facing
+pub fn spec_nudge(state: &State) -> Option<String> {
+    match state.spec_phase()? {
+        SpecPhase::Exploring if state.tasks.iter().all(|t| t.status == TaskStatus::Done) => Some(
+            "You ended your turn without a step of the OpenSpec flow, and nobody is working. Carry on: ask the user with `ask_human`, or write the change and hand it in with `spec_submit`.".to_string(),
+        ),
+        SpecPhase::Approved if !state.tasks.iter().any(|t| !t.spec) => Some(format!(
+            "The user approved the change `{0}`, but no implementation task exists yet. Read `openspec instructions apply --change {0} --json` and create the tasks from tasks.md with `task_create` now.",
+            state.spec.change
+        )),
+        _ => None,
+    }
+}
+
+/// The person approved the change: the leader plans the implementation.
+// i18n: model-facing
+pub fn spec_approved(change: &str, note: &str) -> String {
+    let note = if note.trim().is_empty() { String::new() } else { format!(" They added: {}", note.trim()) };
+    format!(
+        "The user approved the change `{change}`.{note}\nImplement it now: read `openspec instructions apply --change {change} --json`, then create the tasks from tasks.md with `task_create`, one per group, with `criteria` from the scenarios each must meet. Only you edit openspec/changes/{change}/; tick tasks.md as you accept the work."
+    )
+}
+
+/// The person sent the change back.
+// i18n: model-facing
+pub fn spec_returned(change: &str, note: &str) -> String {
+    format!(
+        "The user sent the change `{change}` back: {}\nUpdate it (proposal, specs, design, tasks as needed), run `openspec validate {change}`, and `spec_submit` again. If something is unclear, ask with `ask_human` first.",
+        note.trim()
     )
 }
 
@@ -325,8 +440,15 @@ pub fn nudge_leader_no_tasks() -> String {
 // i18n: model-facing
 pub fn wrap_up(state: &State) -> String {
     let handed: Vec<String> = state.deliverables.iter().filter(|d| d.accepted == Some(true)).map(|d| format!("- {}: {} ({})", d.task, d.locator, d.summary)).collect();
+    let spec = match state.spec_phase() {
+        Some(_) => format!(
+            "\nOpenSpec: tick every box of openspec/changes/{0}/tasks.md that the accepted work does, run `openspec validate {0}`, and tell the user in the report that the change can be archived (`openspec archive {0}`) once the work is merged.",
+            state.spec.change
+        ),
+        None => String::new(),
+    };
     format!(
-        "Every task has been accepted. Write the final report for the user with `message_send` (to \"you\"): what was built, where it is, how to run or open it, and anything left undone. Then call `team_finish` to close the team. If something is still missing, create the tasks for it instead.\nAccepted so far:\n{}",
+        "Every task has been accepted. Write the final report for the user with `message_send` (to \"you\"): what was built, where it is, how to run or open it, and anything left undone. Then call `team_finish` to close the team. If something is still missing, create the tasks for it instead.{spec}\nAccepted so far:\n{}",
         handed.join("\n")
     )
 }

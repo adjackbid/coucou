@@ -321,6 +321,9 @@ if (IS_TAURI) queueMicrotask(() => loadSkillLibrary(() => {}));
 /** Agent Center's picking shown as it proposes a team (pick-show.ts): off unless the person turns it on. */
 let pickShowing = stored("coucou.secretary.pickShow") === "1";
 
+/** The OpenSpec flow on for every team Agent Center proposes (its ⚙): off unless the person turns it on. */
+let openspecDefault = stored("coucou.secretary.openspec") === "1";
+
 /** Fast mode: the speed slider at 快 or 極速 (the earlier ⚙ switch is folded into it). */
 
 /**
@@ -395,6 +398,15 @@ export function pickShowOn(): boolean {
 export function setPickShowOn(v: boolean) {
   pickShowing = v;
   store("coucou.secretary.pickShow", v ? "1" : "0");
+}
+
+export function openspecOn(): boolean {
+  return openspecDefault;
+}
+
+export function setOpenspecOn(v: boolean) {
+  openspecDefault = v;
+  store("coucou.secretary.openspec", v ? "1" : "0");
 }
 
 /**
@@ -627,7 +639,7 @@ async function ask(host: SecretaryHost, text: string, withFiles = true) {
   host.render();
   try {
     const reply: SecretaryReply = IS_TAURI
-      ? await Bridge.secretaryAsk(words, provider || null, tz(), name, files.map((f) => f.id), instructions.trim(), skillChoices().skills, skillChoices().hidden, speed >= 4, rootFolder, speed)
+      ? await Bridge.secretaryAsk(words, provider || null, tz(), name, files.map((f) => f.id), instructions.trim(), skillChoices().skills, skillChoices().hidden, speed >= 4, rootFolder, speed, openspecDefault)
       : await (await import("./demo")).demoSecretary(words, (step) => onStep(step, host));
     const unused = unusedUploads(files, reply.proposals);
     entries.push({ who: "secretary", text: reply.text, steps: reply.steps, proposals: reply.proposals, unused: unused.length ? unused : undefined, choices: reply.choices ?? guessChoices(reply.text) });
@@ -945,6 +957,20 @@ function openPickModal(host: SecretaryHost, p: SecretaryProposal) {
   draw();
 }
 
+/** The OpenSpec switch on a proposed team's card: the card is redrawn from Agent Center's answer. */
+async function setOpenspec(host: SecretaryHost, p: SecretaryProposal, on: boolean) {
+  doing.add(p.id);
+  host.render();
+  try {
+    replace(IS_TAURI ? await Bridge.secretarySetOpenspec(p.id, on) : { ...p, openspec: on });
+  } catch (err) {
+    replace({ ...p, outcome: String(err instanceof Error ? err.message : err) });
+  }
+  doing.delete(p.id);
+  host.render();
+  void persist();
+}
+
 async function applyPick(host: SecretaryHost, p: SecretaryProposal) {
   const drafts = picking.get(p.id) ?? [];
   const members = drafts.filter((d) => d.on).map(({ agent, name, role, leader }) => ({ agent, name, role: role.trim(), leader }));
@@ -1086,6 +1112,19 @@ function card(host: SecretaryHost, p: SecretaryProposal): HTMLElement {
     { class: `sec-card ${p.state}` },
     h("div", { class: "sec-card-head" }, h("span", { class: "sec-card-kind", text: p.kind === "team" ? tr("新團隊", "New team") : p.kind === "instruction" ? tr("指令", "Instruction") : tr("操作", "Action") }), h("b", { text: p.title })),
     h("ul", { class: "sec-card-lines" }, ...p.lines.map((l) => h("li", { text: l }))),
+    // The OpenSpec flow, switched on the card itself before it is confirmed.
+    p.kind === "team" && p.state === "open" && !folder && !picking.has(p.id)
+      ? h(
+          "label",
+          { class: "side-pop-check sec-card-switch" },
+          h("input", { type: "checkbox", checked: !!p.openspec, disabled: busy, onChange: (e: Event) => void setOpenspec(host, p, (e.target as HTMLInputElement).checked) }),
+          h("span", {
+            text: speed >= 4 && p.openspec
+              ? tr("組長先走 OpenSpec 流程(看專案 → 討論 → 提案 → 你審核 → 才實作)。現在是快速模式:規格寫精簡版,但會多花一些時間", "The leader runs the OpenSpec flow first (look at the project → talk it over → propose → you review → then build). Fast mode is on: the change is kept lite, but it takes longer")
+              : tr("組長先走 OpenSpec 流程(看專案 → 討論 → 提案 → 你審核 → 才實作)", "The leader runs the OpenSpec flow first (look at the project → talk it over → propose → you review → then build)"),
+          }),
+        )
+      : null,
     state,
     team ? h("button", { class: "link", type: "button", onClick: () => host.openTeam(team) }, tr("打開這個團隊 →", "Open this team →")) : null,
   );

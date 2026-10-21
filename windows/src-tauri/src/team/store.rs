@@ -159,6 +159,7 @@ mod tests {
             depends_on: vec![],
             deliver_to: Some("ai3".into()),
             by: "ai1".into(),
+            spec: false,
         });
         store.append(Event::TurnEnded { member: "ai1".into(), ok: true, outcome: "end_turn".into() });
         store.append(Event::TurnStarted { member: "ai4".into() });

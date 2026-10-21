@@ -7,7 +7,7 @@
 //
 //   state.rs         what happened (events) and what follows from it (state)
 //   store.rs         the events on disk, one line each, replayed at start
-//   tools.rs         what a member can say and do: the eight team tools
+//   tools.rs         what a member can say and do: the team tools
 //   brief.rs         the words a member is given: its role, a task, a nudge
 //   knowledge.rs     the documents the person gave the team, and who may read them
 //   mcp.rs           the tools as an MCP server, behind coucou-team-mcp.exe
@@ -97,6 +97,28 @@ pub struct TeamConfig {
     /// done or not (brief.rs time_rules, orchestrator.rs check_time).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub time_limit_min: u32,
+    /// The OpenSpec flow, as the person set it: the leader looks at the project,
+    /// talks the change over with the person and writes it up as an OpenSpec
+    /// change, and no implementation task can be created until the person has
+    /// approved it (brief.rs spec_rules, tools.rs task_create and spec_submit).
+    /// None: the usual flow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub openspec: Option<OpenSpec>,
+}
+
+/// How a team runs the OpenSpec flow (https://github.com/Fission-AI/openspec).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenSpec {
+    /// A change already under `openspec/changes/` to carry on with; empty: the
+    /// leader names a new one.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub change: String,
+    /// Full: a design document too, and every requirement with its scenarios.
+    /// Off (lite): proposal, delta specs and tasks; a design only when the change
+    /// needs one. Fast mode keeps it lite.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub full: bool,
 }
 
 fn is_zero(n: &u32) -> bool {
@@ -344,6 +366,7 @@ pub(crate) mod fixtures {
             kickoff: String::new(),
             fast: false,
             time_limit_min: 0,
+            openspec: None,
         }
     }
 }

@@ -723,6 +723,20 @@ fn team_answer(teams: State<Arc<Teams>>, team: String, question: String, text: S
     teams.answer(&team, &question, &text)
 }
 
+/// The person's review of the OpenSpec change a leader handed in: approved,
+/// or sent back with what to change. Only ever called from an explicit click.
+#[tauri::command]
+fn team_spec_review(teams: State<Arc<Teams>>, team: String, approve: bool, note: Option<String>) -> Result<(), String> {
+    teams.review_spec(&team, approve, note.as_deref().unwrap_or(""))
+}
+
+/// The person asks a finished team's leader to archive its OpenSpec change.
+#[tauri::command]
+async fn team_spec_archive(shared: State<'_, Shared>, teams: State<'_, Arc<Teams>>, team: String) -> Result<String, String> {
+    let profiles = runnable(&shared);
+    teams.archive_spec(&team, &profiles)
+}
+
 /// The person's answer to the card a member's agent is holding: one of the
 /// agent's own options, or nothing for "cancelled".
 #[tauri::command]
@@ -1455,6 +1469,7 @@ async fn secretary_ask(
     fast: Option<bool>,
     root: Option<String>,
     speed: Option<u8>,
+    openspec: Option<bool>,
 ) -> Result<secretary::Reply, String> {
     let (provider, profiles) = {
         let settings = shared.settings.lock().unwrap();
@@ -1476,6 +1491,7 @@ async fn secretary_ask(
     office.speed = speed.unwrap_or(3).clamp(1, 5);
     office.fast = fast.unwrap_or(false) || office.speed >= 4;
     office.root = root.unwrap_or_default();
+    office.openspec = openspec.unwrap_or(false);
     let window = app.clone();
     secretary
         .ask(&provider, &office, &text, &uploads.unwrap_or_default(), &move |step| {
@@ -1558,6 +1574,12 @@ fn secretary_revise_team(
     let profiles = shared.settings.lock().unwrap().agents.clone();
     let office = secretary::Office::new(teams.inner().clone(), &profiles, agents.inner().clone(), tz_minutes, String::new());
     secretary.revise_team(&id, &members, &office)
+}
+
+/// The person turned the OpenSpec flow on or off on a proposed team's card.
+#[tauri::command]
+fn secretary_set_openspec(secretary: State<'_, Arc<secretary::Secretary>>, id: String, on: bool) -> Result<secretary::Proposal, String> {
+    secretary.set_openspec(&id, on)
 }
 
 /// 安裝 CLI: the table, without looking anything up.
@@ -2217,6 +2239,8 @@ pub fn run() {
             team_delete,
             team_attach_path,
             team_answer,
+            team_spec_review,
+            team_spec_archive,
             team_permit,
             team_waive,
             team_pause,
@@ -2254,6 +2278,7 @@ pub fn run() {
             cli_run_install,
             secretary_decline,
             secretary_revise_team,
+            secretary_set_openspec,
             open_folder,
             team_open_file,
             secretary_upload_path,

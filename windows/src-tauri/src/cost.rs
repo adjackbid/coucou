@@ -377,7 +377,7 @@ mod tests {
         // What each did: a turn, a hand-in sent back, then accepted.
         let mut third = Store::fresh(&dir).unwrap();
         third.append(Event::Started { config: shop("D:\\shop") });
-        third.append(Event::TaskCreated { id: "TASK-01".into(), title: "圖".into(), detail: String::new(), owner: "ai4".into(), priority: crate::team::state::Priority::Medium, criteria: vec![], depends_on: vec![], deliver_to: None, by: "ai1".into() });
+        third.append(Event::TaskCreated { id: "TASK-01".into(), title: "圖".into(), detail: String::new(), owner: "ai4".into(), priority: crate::team::state::Priority::Medium, criteria: vec![], depends_on: vec![], deliver_to: None, by: "ai1".into(), spec: false });
         third.append(Event::TurnStarted { member: "ai4".into() });
         third.append(Event::Delivered { id: "D-1".into(), task: "TASK-01".into(), kind: "image".into(), locator: "a.png".into(), summary: "x".into(), by: "ai4".into() });
         third.append(Event::TurnEnded { member: "ai4".into(), ok: true, outcome: "end_turn".into() });

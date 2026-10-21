@@ -135,8 +135,14 @@ function teamWords(snap: Snapshot | undefined, l: Line): string {
         : trf("退回 {task}:{reason}", "Send back {task}: {reason}", { task: task(a("task")), reason: short(a("reason"), 60) });
     case "message_send":
       return trf("傳訊息給 {to}:{text}", "Message {to}: {text}", { to: nameOf(snap, a("to")), text: short(a("text"), 80) });
-    case "ask_human":
-      return trf("問你:{q}", "Ask you: {q}", { q: short(a("question"), 80) });
+    case "ask_human": {
+      const many = (l.input as { questions?: unknown[] } | null)?.questions;
+      if (Array.isArray(many) && many.length > 1) return trf("問你 {n} 件事", "Ask you {n} things", { n: many.length });
+      const first = Array.isArray(many) && many.length ? arg(many[0], "question") || (typeof many[0] === "string" ? many[0] : "") : "";
+      return trf("問你:{q}", "Ask you: {q}", { q: short(a("question") || first, 80) });
+    }
+    case "spec_submit":
+      return trf("送出規格審核:{change}", "Hand in the change for review: {change}", { change: a("change") });
     default:
       return l.text;
   }
@@ -169,7 +175,11 @@ const TOOL_MARK: Record<string, string> = {
 /** What a member heard at the start of a turn (Coucou tells members in English), in the window's words. */
 export function heardWords(text: string): string {
   const rules: [RegExp, (m: RegExpMatchArray) => string][] = [
+    [/^The team has started with the OpenSpec flow on/, () => tr("團隊開始了:先看專案、跟你討論、寫 OpenSpec 變更提案", "The team has started: look at the project, talk it over, write the OpenSpec change")],
     [/^The team has started\./, () => tr("團隊開始了:規劃工作並建立任務", "The team has started: plan the work and create tasks")],
+    [/^The user approved the change `(.+?)`/, (m) => trf("你核准了規格 {change},開始實作", "You approved the change {change}: build it", { change: m[1] })],
+    [/^The user sent the change `(.+?)` back: ([\s\S]+?)\n/, (m) => trf("你退回了規格 {change}:{why}", "You sent the change {change} back: {why}", { change: m[1], why: m[2] })],
+    [/^You ended your turn without a step of the OpenSpec flow/, () => tr("提醒:OpenSpec 流程要接著走(問你或送審)", "Reminder: carry on with the OpenSpec flow (ask you, or hand the change in)")],
     [/^(TASK-\d+) is yours and ready to start: (.+)/, (m) => trf("{task}「{title}」交給你了", "{task} “{title}” is yours", { task: m[1], title: m[2] })],
     [/^(.+?) handed in (TASK-\d+) \((.+?)\), which is meant for you/, (m) => trf("{who} 交付了 {task}「{title}」給你", "{who} handed in {task} “{title}” for you", { who: m[1], task: m[2], title: m[3] })],
     [/^(.+?) handed in (TASK-\d+) \((.+?)\)/, (m) => trf("{who} 交付了 {task}「{title}」,請驗收", "{who} handed in {task} “{title}”: please review it", { who: m[1], task: m[2], title: m[3] })],

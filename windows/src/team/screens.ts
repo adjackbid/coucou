@@ -467,6 +467,9 @@ function eventWord(kind: FeedItem["kind"]): string | undefined {
     case "answered": return tr("你的回覆", "answered");
     case "lost": return tr("失聯", "lost contact");
     case "joined": return tr("加入團隊", "joined the team");
+    case "specSubmitted": return tr("送出規格審核", "handed the change in for review");
+    case "specApproved": return tr("核准了規格", "approved the change");
+    case "specReturned": return tr("退回了規格", "sent the change back");
     default: return undefined;
   }
 }

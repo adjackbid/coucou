@@ -25,12 +25,12 @@ import { ambientMotion, battleTempo, saveAmbientMotion, saveBattleTempo, saveCom
 import { costPage, fmtMoney, fmtTokens, fmtWork, refreshSoon, usageSummary, type CostHost } from "./cost";
 import { skillChips } from "./skill-lib";
 import { openSkillModal, redrawSkillModal } from "./skill-modal";
-import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, pickShowOn, previewPickShow, refreshProviders, secretaryRoot, setSecretaryRoot, secretarySpeed, speedName, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
+import { MAX_INSTRUCTIONS, centerReads, loadSkillLibrary, membersGet, onStep as secretaryStep, openspecOn, pickShowOn, previewPickShow, refreshProviders, secretaryRoot, setSecretaryRoot, secretarySpeed, speedName, secretaryAttachFiles, secretaryInstructions, secretaryName, secretaryPage, secretaryTitle, setOpenspecOn, setPickShowOn, setSecretaryDragging, setSecretaryInstructions, setSecretaryName, skillLibrary, type SecretaryHost } from "./secretary";
 import { constitutionPage } from "./constitution";
 import { isImage, openImage, thumbImg, thumbsFor } from "./images";
 import { agentLabel, agentsPage, baseOf, loadTeamAgents, memberChoices, poolForShow, teamAgentCounts, teamAgents, teamProfiles, type AgentsHost } from "./agents";
 import { addFiles as addKnowledgeFiles, dropTarget, knowledgeChanged, knowledgePanel, setDragging, type KnowledgeHost } from "./knowledge";
-import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, Permission, ScreenPatch, SecretaryStep, Snapshot, Task, TeamConfig, TeamFile } from "./types";
+import type { Danger, Deliverable, FeedItem, MemberStatus, MemberView, Permission, Question, ScreenPatch, SecretaryStep, Snapshot, Spec, SpecPhase, Task, TeamConfig, TeamFile } from "./types";
 
 const root = document.getElementById("team-root")!;
 
@@ -639,6 +639,13 @@ function sidebar(): HTMLElement {
               h("button", { class: "btn plain", type: "button", onClick: () => { sidePop = null; place = "secretary"; previewPickShow(secretaryHost); } }, tr("預覽動畫", "Preview")),
               ),
               h("section", { class: "side-pop-sec" },
+              h("label", { text: tr("OpenSpec 流程", "OpenSpec flow") }),
+              h("label", { class: "side-pop-check" },
+                h("input", { type: "checkbox", checked: openspecOn(), onChange: (e: Event) => { setOpenspecOn((e.target as HTMLInputElement).checked); render(); } }),
+                h("span", { text: tr("新團隊預設勾選「組長先走 OpenSpec 流程」", "Turn on \"The leader runs the OpenSpec flow first\" for every new team") })),
+              h("p", { class: "hint", text: tr("組長會先看專案、跟你討論、寫成 OpenSpec 變更提案,你在規格審核卡按通過後才開始實作。每張建團隊卡片上都還能單獨關掉;沒勾時,你跟 Agent Center 說要走 OpenSpec,它也會幫你打開。", "The leader first looks at the project, talks it over with you and writes an OpenSpec change; building starts only once you approve it on the review card. Each new-team card can still turn it off; when this is off, ask Agent Center for OpenSpec and it turns it on for that team.") }),
+              ),
+              h("section", { class: "side-pop-sec" },
               h("label", { text: tr("開團隊使用的 Agent", "Agents for new teams") }),
               h("p", { class: "hint" },
                 tr("Agent Center 開團隊、你新增團隊成員時,只從 ", "When Agent Center starts a team or you add a member, agents come only from the team agents in "),
@@ -981,6 +988,28 @@ function bound<K extends "input" | "textarea">(tag: K, key: string, value: strin
   return el as HTMLElementTagNameMap[K];
 }
 
+/** The setup form's OpenSpec switch, and what goes with it when it is on. */
+function openspecFields(config: TeamConfig): (HTMLElement | null)[] {
+  const spec = config.openspec;
+  return [
+    h("label", { text: tr("OpenSpec 流程", "OpenSpec flow") }),
+    h("label", { class: "trusted-check" },
+      h("input", { type: "checkbox", checked: !!spec, onChange: (e: Event) => { config.openspec = (e.target as HTMLInputElement).checked ? (config.openspec ?? {}) : undefined; unsaved = true; render(); } }),
+      h("span", { text: tr("組長先看專案、跟你討論、寫成 OpenSpec 變更提案;你在規格審核卡按通過後,才開始建實作任務", "The leader first looks at the project, talks it over with you and writes an OpenSpec change; implementation tasks start only once you approve it on the review card") })),
+    spec
+      ? bound("input", "openspecChange", spec.change ?? "", (v) => (spec.change = v.trim() || undefined), { placeholder: tr("接著做已有的變更:openspec/changes/ 下的資料夾名稱;留空由組長新開", "Carry on with an existing change: its folder name under openspec/changes/; empty for a new one") })
+      : null,
+    spec
+      ? h("label", { class: "trusted-check" },
+          h("input", { type: "checkbox", checked: !!spec.full, onChange: (e: Event) => { spec.full = (e.target as HTMLInputElement).checked || undefined; unsaved = true; render(); } }),
+          h("span", { text: tr("完整規格:一定寫 design.md 與完整情境(關掉就寫精簡版,快速模式也是精簡版)", "Full change: always a design.md and complete scenarios (off keeps it lite, as fast mode does)") }))
+      : null,
+    spec
+      ? h("p", { class: "hint", text: tr("工作資料夾要能執行 openspec(Node.js 20.19+);沒裝時組長會先請你核准安裝。流程會多一兩輪討論與一次審核。", "The work folder needs the openspec command (Node.js 20.19+); if it is missing the leader asks you to approve installing it. The flow adds a round or two of questions and one review.") })
+      : null,
+  ];
+}
+
 /** Something in the form changed: the save button says so, without a redraw. */
 function touched() {
   unsaved = true;
@@ -1050,6 +1079,7 @@ function setup(file: TeamFile): HTMLElement {
     h("label", { text: tr("時限(分鐘)", "Time limit (minutes)") }),
     bound("input", "timeLimitMin", config.timeLimitMin ? String(config.timeLimitMin) : "", (v) => (config.timeLimitMin = Math.max(0, Math.min(1440, Math.floor(Number(v) || 0))) || undefined), { type: "number", min: "0", max: "1440", placeholder: tr("留空就不限時", "Empty for no limit") }),
     h("p", { class: "hint", text: tr("有時限時,組長會把最後一段(四分之一,至少 2 分鐘)留著彙整:時間一到就把手上有的整理成成果交出,沒做完也交。例如 10 分鐘:做 8 分鐘、留 2 分鐘彙整。", "With a limit, the leader keeps the last part (a quarter, at least 2 minutes) for assembling: when it comes, what is in is written up and delivered, done or not. For 10 minutes: 8 of work, 2 to assemble.") }),
+    ...openspecFields(config),
     h("label", { text: tr("工作資料夾", "Work folder") }),
     h(
       "div",
@@ -1498,8 +1528,11 @@ function asks(snap: Snapshot, m: MemberView): HTMLElement[] {
       ),
     );
   }
+  if (m.isLeader && snap.spec?.phase === "review") out.push(specReview(snap, snap.spec));
   const question = snap.questions.find((q) => q.by === m.id && q.answer === null);
-  if (question) {
+  if (question?.items?.length) {
+    out.push(questionCard(snap, question));
+  } else if (question) {
     out.push(
       h(
         "div",
@@ -1516,6 +1549,114 @@ function asks(snap: Snapshot, m: MemberView): HTMLElement[] {
     );
   }
   return out;
+}
+
+/**
+ * Several questions at once, or one with choices (ask_human `questions` / `options`):
+ * a choice fills its answer, which can still be typed over; one send answers them all.
+ */
+function questionCard(snap: Snapshot, question: Question): HTMLElement {
+  const items = question.items ?? [];
+  const key = (i: number) => `answer:${snap.id}:${question.id}:${i}`;
+  const send = () => {
+    const answers = items.map((_, i) => (drafts.get(key(i)) ?? "").trim() || tr("你決定", "You decide"));
+    const text = items.length === 1 ? answers[0] : answers.map((a, i) => `${i + 1}. ${a}`).join("\n");
+    void act(
+      () => Bridge.teamAnswer(snap.id, question.id, text),
+      () => items.forEach((_, i) => drafts.delete(key(i))),
+    );
+  };
+  const rows = items.map((item, i) => {
+    const input = h("input", { type: "text", class: "field", placeholder: tr("你的回答;留空就讓它決定", "Your answer; empty lets it decide"), "data-key": key(i), spellcheck: "false" }) as HTMLInputElement;
+    input.value = drafts.get(key(i)) ?? "";
+    input.addEventListener("input", () => drafts.set(key(i), input.value));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing) send();
+    });
+    const chosen = drafts.get(key(i)) ?? "";
+    return h(
+      "div",
+      { class: "ask-item" },
+      h("div", { class: "ask-what", text: items.length === 1 ? item.question : `${i + 1}. ${item.question}` }),
+      item.options?.length
+        ? h("div", { class: "row ask-options" }, ...item.options.map((o) => button(o, o === chosen ? "primary" : "plain", () => (drafts.set(key(i), o), render()))))
+        : null,
+      input,
+    );
+  });
+  const intro = items.length > 1 ? question.question.split("\n")[0] : "";
+  return h(
+    "div",
+    { class: "ask" },
+    h("div", { class: "ask-why", text: items.length > 1 ? trf("問你 {n} 件事", "Asks you {n} things", { n: items.length }) : tr("問你", "Asks you") }),
+    intro && !/^1\. /.test(intro) ? h("div", { class: "ask-what", text: intro }) : null,
+    ...rows,
+    h("div", { class: "row" }, button(tr("送出回答", "Send answers"), "primary", send)),
+  );
+}
+
+/**
+ * The OpenSpec change the leader handed in, for the person to review: its files
+ * open in their programs; approving unlocks implementation, sending it back
+ * needs what to change.
+ */
+function specReview(snap: Snapshot, spec: Spec): HTMLElement {
+  const key = `spec:${snap.id}:${spec.rounds}`;
+  const note = () => (drafts.get(key) ?? "").trim();
+  const back = () => {
+    if (!note()) {
+      trouble = tr("退回時請寫下要改什麼。", "Say what to change when you send it back.");
+      render();
+      return;
+    }
+    void act(() => Bridge.teamSpecReview(snap.id, false, note()), () => drafts.delete(key));
+  };
+  return h(
+    "div",
+    { class: "ask spec-review" },
+    h("div", { class: "ask-why", text: spec.rounds > 1 ? trf("規格審核(第 {n} 版)", "Review the change (version {n})", { n: spec.rounds }) : tr("規格審核", "Review the change") }),
+    h("div", { class: "ask-what" }, h("b", { class: "mono", text: spec.change }), h("div", { text: spec.summary })),
+    spec.validation ? h("div", { class: "dim", text: trf("openspec validate:{v}", "openspec validate: {v}", { v: spec.validation }) }) : null,
+    h(
+      "div",
+      { class: "spec-files" },
+      ...spec.files.map((f) => h("button", { type: "button", class: "btn plain mono", title: trf("用系統的程式打開 {path}", "Open {path} with its program", { path: f }), onClick: () => void act(() => Bridge.teamOpenFile(snap.id, f)) }, f.split("/").slice(3).join("/") || f)), // i18n-ok: CSS classes
+    ),
+    h("div", { class: "hint", text: tr("建議照 proposal → specs → tasks 的順序看。", "Read proposal → specs → tasks, in that order.") }),
+    field(key, tr("意見(退回時必填;按 Enter 退回)", "Notes (needed to send it back; Enter sends it back)"), back),
+    h(
+      "div",
+      { class: "row" },
+      button(tr("通過,開始實作", "Approve and build"), "primary", () => void act(() => Bridge.teamSpecReview(snap.id, true, note()), () => drafts.delete(key))),
+      button(tr("退回修改", "Send back"), "plain", back),
+    ),
+  );
+}
+
+/** Where the OpenSpec flow stands, on the progress row; the archive request once the team is done. */
+function specChip(snap: Snapshot): HTMLElement | null {
+  const spec = snap.spec;
+  if (!spec) return null;
+  const words: Record<SpecPhase, string> = {
+    exploring: spec.rounds ? tr("規格已退回,組長修改中", "Change sent back, being revised") : tr("規格:探索與討論中", "Change: exploring and talking it over"),
+    review: tr("規格:等你審核", "Change: waiting for your review"),
+    approved: tr("規格已核准,實作中", "Change approved, being built"),
+    archiving: tr("已請組長歸檔規格", "The leader was asked to archive the change"),
+  };
+  const tone = spec.phase === "review" ? "pending" : spec.phase === "approved" || spec.phase === "archiving" ? "ok" : "";
+  const chip = h("span", { class: `chip ${tone}`.trim(), title: spec.change ? `openspec/changes/${spec.change}` : "", text: spec.change ? `${words[spec.phase]} · ${spec.change}` : words[spec.phase] }); // i18n-ok: a path
+  if (snap.status !== "finished" || spec.phase !== "approved" || snap.detached) return chip;
+  return h(
+    "span",
+    { class: "row nowrap" },
+    chip,
+    h("button", {
+      type: "button",
+      class: "btn plain",
+      title: tr("請組長執行 openspec archive:把這次的規格併進 openspec/specs/。建議在 PR 合併後再按。", "Ask the leader to run openspec archive: the change's specs go into openspec/specs/. Best after the work is merged."),
+      onClick: () => void act(() => Bridge.teamSpecArchive(snap.id)),
+    }, tr("歸檔規格", "Archive the change")),
+  );
 }
 
 /** Everyone at their desks: the leader first, then as the team lists them. */
@@ -1565,6 +1706,7 @@ function taskCard(snap: Snapshot, t: Task): HTMLElement {
       : t.note || t.detail.split("\n")[0];
   if (sub) card.append(h("div", { class: t.blocked ? "task-sub warn" : "task-sub", text: sub }));
   const marks = h("div", { class: "task-marks" });
+  if (t.spec) marks.append(h("span", { class: "chip", title: tr("寫 OpenSpec 規格的任務,不是實作", "Work on the OpenSpec change, not on building it"), text: tr("規格", "Spec") }));
   if (t.status === "delivered") marks.append(h("span", { class: "chip pending", text: tr("已交付,待驗收", "Handed in, awaiting review") }));
   if (t.criteria.length && t.status !== "done") marks.append(h("span", { class: "chip", title: t.criteria.map((c) => `${c.claimed ? "☑" : "☐"} ${c.text}`).join("\n"), text: trf("完成條件 {met} / {n}", "Criteria {met} / {n}", { met, n: t.criteria.length }) }));
   if (t.rejections) marks.append(h("span", { class: "chip warn", text: t.rejections === 1 ? tr("退回 1 次", "Sent back once") : trf("退回 {n} 次", "Sent back {n} times", { n: t.rejections }) }));
@@ -1605,6 +1747,9 @@ function feedTitle(kind: FeedItem["kind"]): string {
     ended: tr("由你結束", "Ended by you"),
     joined: tr("加入團隊", "Joined the team"),
     reopened: tr("再次開工", "Back at work"),
+    specSubmitted: tr("送出規格審核", "Change handed in for review"),
+    specApproved: tr("規格核准", "Change approved"),
+    specReturned: tr("規格退回", "Change sent back"),
   };
   return titles[kind];
 }
@@ -1826,6 +1971,7 @@ function monitor(snap: Snapshot): HTMLElement {
       h("span", { class: "dim", text: trf("{used} / {max} 回合", "{used} / {max} turns", { used: snap.totalTurns, max: snap.maxTurns }) }),
       h("span", { class: "dim", text: trf("已執行 {n} 分鐘", "Running for {n} min", { n: minutes }) }),
       timeLeft(snap),
+      specChip(snap),
       spend(snap.members.flatMap((m) => m.usage ?? []), tr("全隊這一輪用掉的 token", "Tokens the whole team used this run")),
       worked(snap.members.reduce((a, m) => a + (m.workMs ?? 0), 0), tr("全隊這一輪在回合裡工作的時間加總(成員同時工作時會比已執行的時間長)", "Every member's time in its turns this run, added up (longer than the run when members work at once)")),
     ),

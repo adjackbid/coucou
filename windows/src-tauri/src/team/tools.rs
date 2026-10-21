@@ -1,4 +1,4 @@
-// What a member can say and do: the eight team tools.
+// What a member can say and do: the team tools.
 //
 // Each call is checked against the state, and answers with a line of text for
 // the member and the events to record. Nothing here touches a process or the
@@ -14,7 +14,7 @@ use std::path::Path;
 use serde_json::{json, Value};
 
 use super::brief;
-use super::state::{Event, Priority, State, TaskStatus, TeamStatus};
+use super::state::{Ask, Event, Priority, SpecPhase, State, TaskStatus, TeamStatus};
 use super::{TeamConfig, SYSTEM, YOU};
 
 pub struct Outcome {
@@ -134,6 +134,11 @@ pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Out
                 Some(r) => Some(reviewer_id(config, &r, &owner)?),
                 None => None,
             };
+            let spec = config.openspec.is_some() && text(args, "kind").is_some_and(|k| k.eq_ignore_ascii_case("spec"));
+            // The OpenSpec flow: nothing is built before the person approved what to build.
+            if state.spec_locked() && !spec {
+                return Err(brief::spec_locked(state));
+            }
             let id = state.next_task_id();
             let mut events = vec![Event::TaskCreated {
                 id: id.clone(),
@@ -145,6 +150,7 @@ pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Out
                 depends_on: deps,
                 deliver_to,
                 by: member.to_string(),
+                spec,
             }];
             if let Some(r) = reviewer.clone() {
                 events.push(Event::ReviewerSet { id: id.clone(), reviewer: Some(r), by: member.to_string() });
@@ -214,6 +220,9 @@ pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Out
             }
             if !open.is_empty() {
                 return Err(format!("Not every task is accepted yet: {}. Close the team once they are.", open.join(", ")));
+            }
+            if state.spec_locked() {
+                return Err("The OpenSpec flow is on and the user has not approved a change yet, so there is nothing implemented to close on. Carry on with the flow; if the request needs no change after all, tell the user with `message_send` (to \"you\"): they can end the team.".into());
             }
             Ok(Outcome {
                 text: "The team closes as soon as nobody is still working and every message has been read. If you asked a teammate something, their answer reaches you first.".into(),
@@ -292,7 +301,7 @@ pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Out
             let mut events = vec![Event::TaskBlocked { id: task.id.clone(), reason: reason.clone(), on: on.clone(), by: member.to_string() }];
             // Whoever is waited on has to hear about it.
             if on == YOU {
-                events.push(Event::Asked { id: state.next_question_id(), by: member.to_string(), question: reason, task: Some(task.id.clone()) });
+                events.push(Event::Asked { id: state.next_question_id(), by: member.to_string(), question: reason, task: Some(task.id.clone()), items: vec![] });
             } else {
                 let body = format!("{} is stopped on {} ({}) and waiting for you: {}", brief::who(config, member), task.id, task.title, reason);
                 events.push(message(&mut ids, SYSTEM, &on, body, Some(&task.id)));
@@ -412,13 +421,39 @@ pub fn call(state: &State, member: &str, tool: &str, args: &Value) -> Result<Out
         }
 
         "ask_human" => {
-            let question = need(args, "question")?;
+            let (question, items) = asks(args)?;
             let task = match text(args, "task") {
                 Some(t) => Some(state.task(&t).ok_or_else(|| format!("'{t}' is not a task."))?.id.clone()),
                 None => None,
             };
-            let events = vec![Event::Asked { id: state.next_question_id(), by: member.to_string(), question, task }];
+            let events = vec![Event::Asked { id: state.next_question_id(), by: member.to_string(), question, task, items }];
             Ok(Outcome { text: "The user has been asked. End your turn; the answer starts your next one.".into(), events })
+        }
+
+        "spec_submit" => {
+            if !is_leader {
+                return Err("Only the leader hands the change in for review.".into());
+            }
+            if config.openspec.is_none() {
+                return Err("This team is not in the OpenSpec flow.".into());
+            }
+            if state.spec_phase() == Some(SpecPhase::Review) {
+                return Err(format!("The change `{}` is already with the user for review. End your turn; their answer starts your next one.", state.spec.change));
+            }
+            let given = need(args, "change")?;
+            let slash = |c: char| c == '/' || c == '\\';
+            let change = given.trim_end_matches(slash).rsplit(slash).next().unwrap_or_default().to_string();
+            if !super::is_plain_id(&change) {
+                return Err(format!("'{given}' is not a change name. Give the folder name under openspec/changes/, e.g. add-dark-mode."));
+            }
+            let summary = need(args, "summary")?;
+            let validation = text(args, "validation").ok_or_else(|| format!("`validation` is missing. Run `openspec validate {change}` and say what it reported (or why it could not run)."))?;
+            let files = spec_files(&config.work_dir, &change)?;
+            let events = vec![Event::SpecSubmitted { change: change.clone(), summary, validation, files, by: member.to_string() }];
+            Ok(Outcome {
+                text: format!("The change `{change}` is with the user for review. End your turn; their answer starts your next one. Until they approve it, only spec tasks can be created."),
+                events,
+            })
         }
 
         other => Err(format!("There is no tool called '{other}'.")),
@@ -432,6 +467,71 @@ fn find_task<'a>(state: &'a State, args: &Value) -> Result<&'a super::state::Tas
         let known: Vec<&str> = state.tasks.iter().map(|t| t.id.as_str()).collect();
         format!("'{id}' is not a task. Tasks: {}.", if known.is_empty() { "none yet".to_string() } else { known.join(", ") })
     })
+}
+
+/// The questions of an `ask_human`: one (`question`, maybe with `options`) or
+/// several (`questions`, each a string or `{question, options}`; `question` is
+/// then said before them). Returns the whole of it as the member reads it back,
+/// and the questions one by one — none for one plain question.
+// i18n: model-facing
+fn asks(args: &Value) -> Result<(String, Vec<Ask>), String> {
+    let intro = text(args, "question");
+    let mut items: Vec<Ask> = Vec::new();
+    for q in args.get("questions").and_then(Value::as_array).into_iter().flatten() {
+        let item = match q {
+            Value::String(s) => Ask { question: s.trim().to_string(), options: vec![] },
+            Value::Object(_) => Ask { question: text(q, "question").unwrap_or_default(), options: list(q, "options") },
+            _ => continue,
+        };
+        if !item.question.is_empty() {
+            items.push(item);
+        }
+    }
+    let several = !items.is_empty();
+    if !several {
+        let Some(q) = intro.clone() else { return Err("`question` is missing: ask one question with `question`, or several at once with `questions`.".into()) };
+        items.push(Ask { question: q, options: list(args, "options") });
+    }
+    if items.len() > 12 {
+        return Err("Ask at most 12 questions at once; ask the most important ones first.".into());
+    }
+    let line = |a: &Ask| if a.options.is_empty() { a.question.clone() } else { format!("{} (options: {})", a.question, a.options.join(" | ")) };
+    if !several {
+        let whole = line(&items[0]);
+        let items = if items[0].options.is_empty() { vec![] } else { items };
+        return Ok((whole, items));
+    }
+    let mut whole: Vec<String> = intro.into_iter().collect();
+    whole.extend(items.iter().enumerate().map(|(i, a)| format!("{}. {}", i + 1, line(a))));
+    Ok((whole.join("\n"), items))
+}
+
+/// The files of an OpenSpec change in the work folder, relative to it: its
+/// proposal and tasks must be there.
+// i18n: model-facing
+fn spec_files(work_dir: &str, change: &str) -> Result<Vec<String>, String> {
+    let rel = format!("openspec/changes/{change}");
+    let dir = Path::new(work_dir).join("openspec").join("changes").join(change);
+    if !dir.is_dir() {
+        return Err(format!("There is no change at {rel} in the work folder. Create it with `openspec new change {change}` (after `openspec init` if there is no openspec/ folder yet), then write it."));
+    }
+    for (file, what) in [("proposal.md", "proposal"), ("tasks.md", "tasks")] {
+        if !dir.join(file).is_file() {
+            return Err(format!("{rel}/{file} is missing. Write it first: `openspec instructions {what} --change {change}` says what it needs."));
+        }
+    }
+    let mut out: Vec<String> = ["proposal.md", "design.md", "tasks.md"].iter().filter(|f| dir.join(f).is_file()).map(|f| format!("{rel}/{f}")).collect();
+    // The delta specs: specs/<capability>/spec.md.
+    if let Ok(entries) = std::fs::read_dir(dir.join("specs")) {
+        let mut specs: Vec<String> = entries
+            .flatten()
+            .filter(|e| e.path().join("spec.md").is_file())
+            .map(|e| format!("{rel}/specs/{}/spec.md", e.file_name().to_string_lossy()))
+            .collect();
+        specs.sort();
+        out.extend(specs.into_iter().take(40));
+    }
+    Ok(out)
 }
 
 // i18n: model-facing
@@ -457,6 +557,9 @@ fn status_text(state: &State, config: &TeamConfig, member: &str) -> String {
         state.tasks.iter().filter(|t| t.status == TaskStatus::Done).count(),
         state.tasks.len(),
     );
+    if let Some(line) = brief::spec_status(state) {
+        out.push_str(&format!("{line}\n"));
+    }
 
     let inbox = state.unheard(member);
     if !inbox.is_empty() {
@@ -464,7 +567,7 @@ fn status_text(state: &State, config: &TeamConfig, member: &str) -> String {
     }
 
     let line = |t: &super::state::Task| {
-        let mut l = format!("- {} [{}] {}", t.id, status_word(t.status), t.title);
+        let mut l = format!("- {} [{}]{} {}", t.id, status_word(t.status), if t.spec { " (spec)" } else { "" }, t.title);
         if t.owner != member {
             l.push_str(&format!(" — {}", brief::who(config, &t.owner)));
         }
@@ -538,10 +641,11 @@ pub fn react(state: &State) -> Vec<Event> {
         }
     }
 
-    if state.all_done() && !state.wrapping {
+    // In the OpenSpec flow the change being written is not the work being done.
+    if state.work_done() && !state.wrapping {
         events.push(Event::Wrapping { on: true });
         events.push(message(&mut ids, SYSTEM, &config.leader, brief::wrap_up(state), None));
-    } else if state.wrapping && !state.all_done() {
+    } else if state.wrapping && !state.work_done() {
         events.push(Event::Wrapping { on: false });
     }
     events
@@ -567,19 +671,23 @@ pub fn describe(config: &TeamConfig, member: &str) -> Vec<Value> {
         &[],
     )];
     if member == config.leader {
+        let mut create = json!({
+            "title": { "type": "string" },
+            "detail": { "type": "string", "description": "What to do, in enough words for someone who has not seen the goal." },
+            "owner": { "type": "string", "description": format!("The member who does it: {members}.") },
+            "criteria": { "type": "array", "items": { "type": "string" }, "description": "What must be true for the task to be done, one item each." },
+            "depends_on": { "type": "array", "items": { "type": "string" }, "description": "Ids of tasks whose result this one needs." },
+            "deliver_to": { "type": "string", "description": "The member who receives the result, if any." },
+            "reviewer": { "type": "string", "description": "The member who accepts it, if not you. Spread reviews so you are not the bottleneck." },
+            "priority": { "type": "string", "enum": ["high", "medium", "low"] },
+        });
+        if config.openspec.is_some() {
+            create["kind"] = json!({ "type": "string", "enum": ["spec", "build"], "description": "\"spec\" for work on the OpenSpec change itself (exploring the code, drafting a part of it): the only kind allowed until the user approves the change. \"build\" (the default) for implementing it." });
+        }
         tools.push(tool(
             "task_create",
             "Leader only. Creates a task for one member. Agent Center hands it to its owner as soon as everything in depends_on has been handed in.",
-            json!({
-                "title": { "type": "string" },
-                "detail": { "type": "string", "description": "What to do, in enough words for someone who has not seen the goal." },
-                "owner": { "type": "string", "description": format!("The member who does it: {members}.") },
-                "criteria": { "type": "array", "items": { "type": "string" }, "description": "What must be true for the task to be done, one item each." },
-                "depends_on": { "type": "array", "items": { "type": "string" }, "description": "Ids of tasks whose result this one needs." },
-                "deliver_to": { "type": "string", "description": "The member who receives the result, if any." },
-                "reviewer": { "type": "string", "description": "The member who accepts it, if not you. Spread reviews so you are not the bottleneck." },
-                "priority": { "type": "string", "enum": ["high", "medium", "low"] },
-            }),
+            create,
             &["title", "owner"],
         ));
         tools.push(tool(
@@ -616,6 +724,18 @@ pub fn describe(config: &TeamConfig, member: &str) -> Vec<Value> {
             json!({}),
             &[],
         ));
+        if config.openspec.is_some() {
+            tools.push(tool(
+                "spec_submit",
+                "Leader only, OpenSpec flow. Hands the written change (openspec/changes/<name>/: proposal.md, delta specs, tasks.md, design.md if any) to the user for review. Implementation tasks can be created once they approve it. End your turn after this.",
+                json!({
+                    "change": { "type": "string", "description": "The change's folder name under openspec/changes/, e.g. add-dark-mode." },
+                    "summary": { "type": "string", "description": "For the user, in a few sentences: why, what changes, which capabilities, what is left out." },
+                    "validation": { "type": "string", "description": "What `openspec validate <name>` reported, or why it could not run." },
+                }),
+                &["change", "summary", "validation"],
+            ));
+        }
     }
     tools.push(tool(
         "task_update",
@@ -680,9 +800,18 @@ pub fn describe(config: &TeamConfig, member: &str) -> Vec<Value> {
     ));
     tools.push(tool(
         "ask_human",
-        "Asks the user something only they can decide. End your turn after this.",
-        json!({ "question": { "type": "string" }, "task": { "type": "string", "description": "The task it is about, if any." } }),
-        &["question"],
+        "Asks the user something only they can decide: one question, or several at once (`questions`) that they answer on one card. Offer choices when there are clear ones. End your turn after this.",
+        json!({
+            "question": { "type": "string", "description": "One question; with `questions`, a line said before them." },
+            "options": { "type": "array", "items": { "type": "string" }, "description": "Choices for the one question, if there are clear ones. The user may still answer in their own words." },
+            "questions": {
+                "type": "array",
+                "description": "Several questions at once, up to 12, each with its own choices if any.",
+                "items": { "type": "object", "properties": { "question": { "type": "string" }, "options": { "type": "array", "items": { "type": "string" } } }, "required": ["question"] },
+            },
+            "task": { "type": "string", "description": "The task it is about, if any." },
+        }),
+        &[],
     ));
     tools
 }
@@ -727,6 +856,18 @@ mod tests {
 
         fn ok(&mut self, member: &str, tool: &str, args: Value) -> String {
             self.call(member, tool, args).unwrap_or_else(|e| panic!("{member} {tool}: {e}"))
+        }
+
+        /// Something the person did, followed by whatever Coucou does about it.
+        fn record(&mut self, event: Event) {
+            self.store.append(event);
+            loop {
+                let more = react(self.store.state());
+                if more.is_empty() {
+                    break;
+                }
+                self.store.append_all(more);
+            }
         }
 
         fn status(&self, member: &str) -> (MemberStatus, Option<String>) {
@@ -993,6 +1134,110 @@ mod tests {
         assert!(run.inbox("ai2").contains("TASK-02 is yours and ready"));
     }
 
+    /// The shop team, in the OpenSpec flow.
+    fn spec_run(name: &str) -> Run {
+        let mut run = Run::new(name);
+        let mut config = shop(&run.dir.to_string_lossy());
+        config.openspec = Some(super::super::OpenSpec::default());
+        run.store = Store::memory();
+        run.store.append(Event::Started { config });
+        run
+    }
+
+    #[test]
+    fn in_the_openspec_flow_nothing_is_built_before_the_user_approves_the_change() {
+        let mut run = spec_run("openspec");
+        let config = run.store.state().config.clone().unwrap();
+        assert!(brief::kickoff(&config).contains("OPENSPEC FLOW") && brief::role(&config, "ai1").contains("OPENSPEC FLOW"));
+        assert!(!brief::role(&config, "ai3").contains("OPENSPEC FLOW") && brief::role(&config, "ai3").contains("Only the leader edits the change"));
+        assert!(brief::spec_nudge(run.store.state()).is_some(), "a leader with nothing under way is told to carry on");
+
+        // Before approval: only spec tasks.
+        let err = run.call("ai1", "task_create", json!({ "title": "購物車", "owner": "ai3" })).unwrap_err();
+        assert!(err.contains("only spec tasks"), "{err}");
+        run.ok("ai1", "task_create", json!({ "title": "查現有購物流程", "owner": "ai2", "kind": "spec" }));
+        assert!(run.store.state().task("TASK-01").unwrap().spec);
+        assert!(run.inbox("ai2").contains("TASK-01 is yours"));
+        assert!(brief::spec_nudge(run.store.state()).is_none(), "a teammate is exploring for the leader");
+        run.ok("ai2", "deliver", json!({ "task": "TASK-01", "locator": "http://localhost/notes", "summary": "筆記" }));
+        run.ok("ai1", "review", json!({ "task": "TASK-01", "accept": true }));
+        // Every task accepted is not the work done: no wrap-up, no closing.
+        assert!(!run.store.state().wrapping);
+        assert!(run.call("ai1", "team_finish", json!({})).unwrap_err().contains("OpenSpec"));
+
+        // The change must be in the work folder, and validated.
+        let err = run.call("ai1", "spec_submit", json!({ "change": "add-cart", "summary": "s", "validation": "ok" })).unwrap_err();
+        assert!(err.contains("openspec new change add-cart"), "{err}");
+        run.make("openspec/changes/add-cart/proposal.md");
+        let err = run.call("ai1", "spec_submit", json!({ "change": "add-cart", "summary": "s", "validation": "ok" })).unwrap_err();
+        assert!(err.contains("tasks.md is missing"), "{err}");
+        run.make("openspec/changes/add-cart/tasks.md");
+        run.make("openspec/changes/add-cart/specs/cart/spec.md");
+        assert!(run.call("ai1", "spec_submit", json!({ "change": "add-cart", "summary": "s" })).unwrap_err().contains("openspec validate add-cart"));
+        assert!(run.call("ai3", "spec_submit", json!({ "change": "add-cart", "summary": "s", "validation": "ok" })).is_err());
+        run.ok("ai1", "spec_submit", json!({ "change": "openspec/changes/add-cart/", "summary": "購物車與結帳", "validation": "Change 'add-cart' is valid" }));
+        let spec = &run.store.state().spec;
+        assert_eq!((spec.phase, spec.change.as_str(), spec.rounds), (SpecPhase::Review, "add-cart", 1));
+        assert_eq!(spec.files, ["openspec/changes/add-cart/proposal.md", "openspec/changes/add-cart/tasks.md", "openspec/changes/add-cart/specs/cart/spec.md"]);
+        assert_eq!(run.status("ai1"), (MemberStatus::WaitingYou, Some(YOU.into())));
+        assert!(brief::spec_nudge(run.store.state()).is_none(), "waiting for the person is not a stall");
+        assert!(run.call("ai1", "spec_submit", json!({ "change": "add-cart", "summary": "s", "validation": "ok" })).unwrap_err().contains("already with the user"));
+        assert!(run.call("ai1", "task_create", json!({ "title": "購物車", "owner": "ai3" })).unwrap_err().contains("with the user for review"));
+        let snap = run.store.state().snapshot(&BTreeMap::new()).unwrap();
+        assert_eq!(snap.spec.map(|s| s.phase), Some(SpecPhase::Review));
+
+        // Sent back, handed in again, approved: implementation may start, and the work ends as usual.
+        run.record(Event::SpecReviewed { approved: false, note: "加上優惠券".into() });
+        assert_eq!(run.store.state().spec.phase, SpecPhase::Exploring);
+        assert!(run.ok("ai1", "team_status", json!({})).contains("加上優惠券"));
+        run.ok("ai1", "spec_submit", json!({ "change": "add-cart", "summary": "含優惠券", "validation": "ok" }));
+        assert_eq!(run.store.state().spec.rounds, 2);
+        run.record(Event::SpecReviewed { approved: true, note: String::new() });
+        assert!(!run.store.state().wrapping, "the change is approved, not built");
+        assert!(brief::spec_nudge(run.store.state()).unwrap().contains("no implementation task"));
+        run.ok("ai1", "task_create", json!({ "title": "購物車", "owner": "ai3", "criteria": ["Scenario: 加入商品"] }));
+        assert!(run.inbox("ai3").contains("TASK-02 is yours"));
+        run.ok("ai3", "deliver", json!({ "task": "TASK-02", "locator": "http://localhost/", "summary": "s" }));
+        run.ok("ai1", "review", json!({ "task": "TASK-02", "accept": true }));
+        assert!(run.store.state().wrapping);
+        assert!(run.inbox("ai1").contains("openspec archive add-cart"), "{}", run.inbox("ai1"));
+        run.ok("ai1", "team_finish", json!({}));
+    }
+
+    #[test]
+    fn a_team_not_in_the_openspec_flow_has_no_gate_and_no_kind() {
+        let mut run = Run::new("no-openspec");
+        // `kind` means nothing here: a task is a task.
+        run.ok("ai1", "task_create", json!({ "title": "a", "owner": "ai2", "kind": "spec" }));
+        assert!(!run.store.state().task("TASK-01").unwrap().spec);
+        assert!(run.call("ai1", "spec_submit", json!({ "change": "x", "summary": "s", "validation": "ok" })).unwrap_err().contains("not in the OpenSpec flow"));
+        assert!(brief::spec_nudge(run.store.state()).is_none() && brief::spec_status(run.store.state()).is_none());
+        assert!(run.store.state().snapshot(&BTreeMap::new()).unwrap().spec.is_none());
+    }
+
+    #[test]
+    fn several_questions_go_to_the_user_on_one_card() {
+        let mut run = Run::new("questions");
+        assert!(run.call("ai1", "ask_human", json!({})).unwrap_err().contains("`question` is missing"));
+        run.ok(
+            "ai1",
+            "ask_human",
+            json!({ "question": "先確認幾件事:", "questions": [{ "question": "要支援手機版嗎?", "options": ["要", "先不用"] }, "優惠券這版做嗎?"] }),
+        );
+        let q = &run.store.state().questions[0];
+        assert_eq!(q.items.len(), 2);
+        assert_eq!(q.items[0].options, ["要", "先不用"]);
+        assert_eq!(q.question, "先確認幾件事:\n1. 要支援手機版嗎? (options: 要 | 先不用)\n2. 優惠券這版做嗎?");
+        // One plain question stays one plain question; one with choices keeps them.
+        run.ok("ai2", "ask_human", json!({ "question": "用哪個框架?" }));
+        assert!(run.store.state().questions[1].items.is_empty());
+        run.ok("ai3", "ask_human", json!({ "question": "用哪個框架?", "options": ["React", "Vue"] }));
+        assert_eq!(run.store.state().questions[2].question, "用哪個框架? (options: React | Vue)");
+        assert_eq!(run.store.state().questions[2].items.len(), 1);
+        let too_many: Vec<String> = (1..=13).map(|i| format!("q{i}")).collect();
+        assert!(run.call("ai4", "ask_human", json!({ "questions": too_many })).unwrap_err().contains("at most 12"));
+    }
+
     #[test]
     fn only_the_leader_is_offered_the_planning_tools() {
         let config = shop("D:\\x");
@@ -1006,5 +1251,13 @@ mod tests {
             assert_eq!(tool["inputSchema"]["type"], "object");
             assert!(tool["description"].as_str().unwrap().len() > 20);
         }
+        assert!(describe(&config, "ai1").iter().all(|t| t["inputSchema"]["properties"].get("kind").is_none() || t["name"] == "deliver"));
+        // The OpenSpec flow adds the hand-in for review, and the kind of a task.
+        let mut spec = config.clone();
+        spec.openspec = Some(super::super::OpenSpec::default());
+        let leader = describe(&spec, "ai1");
+        assert!(leader.iter().any(|t| t["name"] == "spec_submit"));
+        assert!(leader.iter().find(|t| t["name"] == "task_create").unwrap()["inputSchema"]["properties"]["kind"].is_object());
+        assert!(!describe(&spec, "ai3").iter().any(|t| t["name"] == "spec_submit"));
     }
 }

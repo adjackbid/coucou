@@ -62,6 +62,10 @@ pub enum Event {
         depends_on: Vec<String>,
         deliver_to: Option<String>,
         by: String,
+        /// Part of writing the OpenSpec change (exploring the code, drafting),
+        /// not of implementing it: the only kind allowed before it is approved.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        spec: bool,
     },
     TaskAssigned { id: String, owner: String, by: String },
     /// The leader named who accepts a task (`None` goes back to the rule:
@@ -87,8 +91,26 @@ pub enum Event {
     /// These messages reached the member (at the start of a turn, or when it
     /// read its inbox).
     Heard { member: String, ids: Vec<String> },
-    Asked { id: String, by: String, question: String, task: Option<String> },
+    /// `question` is the whole of it as the member reads it back; `items` are
+    /// its questions one by one, with the choices offered, when it asked several
+    /// or gave choices.
+    Asked {
+        id: String,
+        by: String,
+        question: String,
+        task: Option<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        items: Vec<Ask>,
+    },
     Answered { id: String, text: String },
+    /// The leader handed the OpenSpec change in for the person's review
+    /// (`spec_submit`): `files` are the change's files found in the work folder.
+    SpecSubmitted { change: String, summary: String, validation: String, files: Vec<String>, by: String },
+    /// The person approved the change (implementation may start) or sent it
+    /// back with what to change.
+    SpecReviewed { approved: bool, note: String },
+    /// The person asked the leader to archive the change (`openspec archive`).
+    SpecArchiving,
     TurnStarted { member: String },
     TurnEnded { member: String, ok: bool, outcome: String },
     Lost { member: String, why: String },
@@ -159,6 +181,8 @@ pub struct Task {
     pub blocked: Option<Block>,
     pub note: String,
     pub rejections: u32,
+    /// Part of writing the OpenSpec change, not of implementing it.
+    pub spec: bool,
     pub dispatched: bool,
     pub created_at: u64,
     pub updated_at: u64,
@@ -200,6 +224,54 @@ pub struct Question {
     pub task: Option<String>,
     pub at: u64,
     pub answer: Option<String>,
+    /// The questions one by one, with their choices, when there are several or
+    /// choices were given; empty for one plain question.
+    pub items: Vec<Ask>,
+}
+
+/// One question of an `ask_human`, and the answers the member offers.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Ask {
+    pub question: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<String>,
+}
+
+/// Where a team in the OpenSpec flow (TeamConfig::openspec) stands.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SpecPhase {
+    /// The leader looks at the project, talks it over with the person and
+    /// writes the change. Only spec tasks may be created.
+    #[default]
+    Exploring,
+    /// The change is handed in and waits for the person's review.
+    Review,
+    /// The person approved it: the team implements it.
+    Approved,
+    /// The person asked the leader to archive it.
+    Archiving,
+}
+
+/// The OpenSpec change of a team in the flow.
+#[derive(Debug, Clone, Serialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Spec {
+    pub phase: SpecPhase,
+    /// Its name, under `openspec/changes/`, once the leader handed it in.
+    pub change: String,
+    /// What the leader said it changes.
+    pub summary: String,
+    /// What the leader reported from `openspec validate`.
+    pub validation: String,
+    /// Its files when it was handed in, relative to the work folder.
+    pub files: Vec<String>,
+    /// What the person said with their last review.
+    pub note: String,
+    /// How many times it was handed in.
+    pub rounds: u32,
+    pub submitted_at: u64,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Default)]
@@ -283,6 +355,8 @@ pub struct State {
     pub briefs: BTreeMap<String, Vec<String>>,
     /// Constitution asks the person waived for this team, by rule id.
     pub waived: std::collections::BTreeSet<String>,
+    /// The OpenSpec change, for a team in the flow.
+    pub spec: Spec,
 }
 
 impl State {
@@ -326,6 +400,23 @@ impl State {
         !self.tasks.is_empty() && self.tasks.iter().all(|t| t.status == TaskStatus::Done)
     }
 
+    /// Where the OpenSpec flow stands; `None` for a team not in it.
+    pub fn spec_phase(&self) -> Option<SpecPhase> {
+        self.config.as_ref().and_then(|c| c.openspec.as_ref()).map(|_| self.spec.phase)
+    }
+
+    /// The OpenSpec change is not approved yet: only spec tasks may be created,
+    /// and the team cannot wrap up.
+    pub fn spec_locked(&self) -> bool {
+        matches!(self.spec_phase(), Some(SpecPhase::Exploring | SpecPhase::Review))
+    }
+
+    /// Every task is accepted and the work is the whole of it: in the OpenSpec
+    /// flow, the change is approved and implemented, not only written.
+    pub fn work_done(&self) -> bool {
+        self.all_done() && (self.spec_phase().is_none() || (!self.spec_locked() && self.tasks.iter().any(|t| !t.spec)))
+    }
+
     /// The team can close: every task accepted, the leader asked for its
     /// report and done with it — and nobody still at work or with a message
     /// waiting, such as the answers the leader just asked its team for.
@@ -333,7 +424,7 @@ impl State {
         let Some(config) = self.config.as_ref() else { return false };
         self.status != TeamStatus::Finished
             && self.wrapping
-            && self.all_done()
+            && self.work_done()
             && !self.turns.values().any(|t| t.active)
             && self.messages.iter().all(|m| m.heard || !config.has_member(&m.to) || self.lost.contains_key(&m.to))
     }
@@ -421,7 +512,7 @@ impl State {
                 self.paused_why.clear();
                 self.say(at, "ended", YOU, "", why, None);
             }
-            Event::TaskCreated { id, title, detail, owner, priority, criteria, depends_on, deliver_to, by } => {
+            Event::TaskCreated { id, title, detail, owner, priority, criteria, depends_on, deliver_to, by, spec } => {
                 self.tasks.push(Task {
                     id: id.clone(),
                     title: title.clone(),
@@ -436,6 +527,7 @@ impl State {
                     blocked: None,
                     note: String::new(),
                     rejections: 0,
+                    spec: *spec,
                     dispatched: false,
                     created_at: at,
                     updated_at: at,
@@ -575,7 +667,7 @@ impl State {
                     }
                 }
             }
-            Event::Asked { id, by, question, task } => {
+            Event::Asked { id, by, question, task, items } => {
                 self.questions.push(Question {
                     id: id.clone(),
                     by: by.clone(),
@@ -583,6 +675,7 @@ impl State {
                     task: task.clone(),
                     at,
                     answer: None,
+                    items: items.clone(),
                 });
                 self.moved(by);
                 self.say(at, "asked", by, YOU, question, task.as_deref());
@@ -594,6 +687,26 @@ impl State {
                     by = q.by.clone();
                 }
                 self.say(at, "answered", YOU, &by, text, None);
+            }
+            Event::SpecSubmitted { change, summary, validation, files, by } => {
+                self.spec.phase = SpecPhase::Review;
+                self.spec.change = change.clone();
+                self.spec.summary = summary.clone();
+                self.spec.validation = validation.clone();
+                self.spec.files = files.clone();
+                self.spec.rounds += 1;
+                self.spec.submitted_at = at;
+                self.moved(by);
+                self.say(at, "specSubmitted", by, YOU, change, None);
+            }
+            Event::SpecReviewed { approved, note } => {
+                self.spec.phase = if *approved { SpecPhase::Approved } else { SpecPhase::Exploring };
+                self.spec.note = note.clone();
+                let leader = self.leader().to_string();
+                self.say(at, if *approved { "specApproved" } else { "specReturned" }, YOU, &leader, note, None);
+            }
+            Event::SpecArchiving => {
+                self.spec.phase = SpecPhase::Archiving;
             }
             Event::TurnStarted { member } => {
                 self.turn_usage.turn_started(member);
@@ -810,6 +923,9 @@ pub struct Snapshot {
     pub feed: Vec<FeedItem>,
     /// Constitution asks the person waived for this team, by rule id.
     pub waived: Vec<String>,
+    /// The OpenSpec change, for a team in the flow; nothing otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spec: Option<Spec>,
 }
 
 impl State {
@@ -843,6 +959,11 @@ impl State {
         }
         if let Some(q) = self.open_question(member) {
             let waiting = Waiting { on: YOU.into(), what: q.question.clone(), task: q.task.clone() };
+            return (MemberStatus::WaitingYou, current, Some(waiting));
+        }
+        let working = self.turns.get(member).map(|t| t.active).unwrap_or(false);
+        if member == self.leader() && self.spec_phase() == Some(SpecPhase::Review) && !working {
+            let waiting = Waiting { on: YOU.into(), what: self.spec.change.clone(), task: None };
             return (MemberStatus::WaitingYou, current, Some(waiting));
         }
         if self.turns.get(member).map(|t| t.active).unwrap_or(false) {
@@ -940,6 +1061,7 @@ impl State {
             questions: self.questions.clone(),
             feed: self.feed.clone(),
             waived: self.waived.iter().cloned().collect(),
+            spec: config.openspec.as_ref().map(|_| self.spec.clone()),
         })
     }
 }

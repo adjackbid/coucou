@@ -47,6 +47,19 @@ export interface TeamConfig {
   fast?: boolean;
   /** A time limit in minutes from the start (0 or absent for none); the leader keeps the end of it for assembling. */
   timeLimitMin?: number;
+  /**
+   * The OpenSpec flow: the leader explores, talks it over, writes an OpenSpec change,
+   * and nothing is built until the person approves it. Absent for the usual flow.
+   */
+  openspec?: OpenSpec | null;
+}
+
+/** How a team runs the OpenSpec flow — mirror of team::OpenSpec. */
+export interface OpenSpec {
+  /** A change under openspec/changes/ to carry on with; empty for a new one. */
+  change?: string;
+  /** A design document and full requirements too; off keeps the change lite. */
+  full?: boolean;
 }
 
 export interface TeamFile {
@@ -159,6 +172,8 @@ export interface Task {
   blocked: { reason: string; on: string } | null;
   note: string;
   rejections: number;
+  /** Part of writing the OpenSpec change, not of implementing it. */
+  spec?: boolean;
   dispatched: boolean;
   createdAt: number;
   updatedAt: number;
@@ -192,6 +207,24 @@ export interface Question {
   task: string | null;
   at: number;
   answer: string | null;
+  /** Its questions one by one, with the choices offered, when there are several or choices were given. */
+  items?: { question: string; options?: string[] }[];
+}
+
+export type SpecPhase = "exploring" | "review" | "approved" | "archiving";
+
+/** The OpenSpec change of a team in the flow — mirror of team::state::Spec. */
+export interface Spec {
+  phase: SpecPhase;
+  change: string;
+  summary: string;
+  validation: string;
+  /** Its files when it was handed in, relative to the work folder. */
+  files: string[];
+  /** What the person said with their last review. */
+  note: string;
+  rounds: number;
+  submittedAt: number;
 }
 
 export interface FeedItem {
@@ -210,7 +243,10 @@ export interface FeedItem {
     | "finished"
     | "ended"
     | "joined"
-    | "reopened";
+    | "reopened"
+    | "specSubmitted"
+    | "specApproved"
+    | "specReturned";
   from: string;
   to: string;
   text: string;
@@ -259,6 +295,8 @@ export interface Snapshot {
   feed: FeedItem[];
   /** Constitution asks the person waived for this team, by rule id. */
   waived?: string[];
+  /** The OpenSpec change, for a team in the flow; absent otherwise. */
+  spec?: Spec;
 }
 
 // ── Usage and cost — mirrors of usage::Usage, pricing.rs and cost.rs ──────────
@@ -419,6 +457,8 @@ export interface SecretaryProposal {
   uses?: string[];
   /** A new team's members as picked from Agent Pool (secretary.rs Pick), for the picking animation. */
   picks?: { agent: string; name: string; role: string; leader: boolean }[];
+  /** A new team's OpenSpec switch (secretary.rs Proposal::openspec); absent for other cards. */
+  openspec?: boolean;
 }
 
 /** A saved Agent Center conversation (secretary.rs ChatInfo). */

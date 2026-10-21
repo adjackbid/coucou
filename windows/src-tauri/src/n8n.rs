@@ -335,6 +335,7 @@ mod tests {
             depends_on: vec![],
             deliver_to: None,
             by: "lead".into(),
+            spec: false,
         });
         apply(state, TeamEvent::Dispatched { task: "T1".into() });
     }

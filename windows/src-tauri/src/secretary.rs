@@ -66,6 +66,9 @@ pub struct Proposal {
     /// A new team's members as picked from Agent Pool, for the window's picking animation.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub picks: Vec<Pick>,
+    /// A new team's OpenSpec switch, as its card shows it; nothing for other cards.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub openspec: Option<bool>,
     /// What confirming it does; kept out of what the window sees, saved with the conversation.
     #[serde(skip)]
     payload: Value,
@@ -217,6 +220,9 @@ pub struct Office {
     /// The person's root folder for new teams (its ⚙ → 根目錄): a team the person
     /// gave no folder works in a new subfolder of it. Empty: the folder is asked for.
     pub root: String,
+    /// The OpenSpec flow on for every team Agent Center proposes (its ⚙): the
+    /// card's switch starts on. Off: only when the user asks for it.
+    pub openspec: bool,
 }
 
 impl Office {
@@ -237,6 +243,7 @@ impl Office {
             fast: false,
             speed: 3,
             root: String::new(),
+            openspec: false,
         }
     }
 
@@ -675,6 +682,7 @@ impl Secretary {
         let mut all = self.proposals.lock().unwrap();
         let uses = payload["knowledge"].as_array().into_iter().flatten().filter_map(|k| k["upload"].as_str()).filter(|u| !u.is_empty()).map(str::to_string).collect();
         let picks = picks_of(&payload["config"]);
+        let openspec = (kind == "team").then(|| payload["config"]["openspec"].is_object());
         let p = Proposal {
             id: format!("P-{}", all.len() + 1),
             kind: kind.into(),
@@ -685,6 +693,7 @@ impl Secretary {
             outcome: String::new(),
             uses,
             picks,
+            openspec,
             payload,
         };
         all.push(p.clone());
@@ -767,6 +776,9 @@ impl Secretary {
         let time_limit = a.get("time_limit_minutes").and_then(Value::as_u64).unwrap_or(0).min(24 * 60) as u32;
         // A short limit is a fast team by nature.
         let fast = office.fast || office.speed >= 4 || a.get("fast").and_then(Value::as_bool).unwrap_or(false) || (1..=15).contains(&time_limit);
+        // The OpenSpec flow: on by the person's ⚙, or when Agent Center was asked for it.
+        let openspec = office.openspec || a.get("openspec").and_then(Value::as_bool).unwrap_or(false) || text(a, "openspec_change").is_some();
+        let openspec = openspec.then(|| json!({ "change": text(a, "openspec_change").unwrap_or_default() }));
         let config = json!({
             "id": "draft",
             "name": name,
@@ -779,6 +791,7 @@ impl Secretary {
             "kickoff": kickoff,
             "fast": fast,
             "timeLimitMin": time_limit,
+            "openspec": openspec,
         });
         let draft: TeamConfig = serde_json::from_value(config.clone()).map_err(|e| e.to_string())?;
         let mut lines: Vec<String> = vec![tr!(format!("目標:{goal}"), format!("Goal: {goal}"))];
@@ -808,6 +821,7 @@ impl Secretary {
             ));
         }
         lines.extend(tail.iter().cloned());
+        lines.extend(spec_lines(&draft));
         let confirm: &str = if start { tr!("建立並啟動", "Create and start") } else { tr!("建立團隊", "Create team") };
         let knowledge = serde_json::to_value(&items).map_err(|e| e.to_string())?;
         let from = from.map(|(id, _, _)| id).unwrap_or_default();
@@ -880,11 +894,44 @@ impl Secretary {
         let mut lines = strings(&p.payload["linesHead"]);
         lines.extend(member_lines(&draft));
         lines.extend(strings(&p.payload["linesTail"]));
+        lines.extend(spec_lines(&draft));
         p.lines = lines;
         p.picks = picks_of(&p.payload["config"]);
         let who: Vec<String> = draft.members.iter().map(|m| format!("{}{} ({}, {})", m.name, if m.id == draft.leader { " [leader]" } else { "" }, m.agent, if m.role.is_empty() { "-" } else { &m.role })).collect();
         // i18n: model-facing
         self.notes.lock().unwrap().push(format!("[Agent Center] The user changed the members of {} ({}) by hand; it is now: {}. Follow this taste in later proposals.", p.id, p.title, who.join("; ")));
+        Ok(p.clone())
+    }
+
+    /// The person turned the OpenSpec flow on or off on a proposed team's card.
+    /// The card is redrawn, and Agent Center is told.
+    pub fn set_openspec(&self, id: &str, on: bool) -> Result<Proposal, String> {
+        let mut all = self.proposals.lock().unwrap();
+        let p = all.iter_mut().find(|p| p.id == id).ok_or_else(|| -> String { tr!("沒有這張提案卡。", "There is no such proposal.") })?;
+        if p.kind != "team" || p.state != "open" {
+            return Err(tr!("這張卡已經不能改了。", "This card can no longer be changed."));
+        }
+        let was = p.payload["config"]["openspec"].clone();
+        p.payload["config"]["openspec"] = match (on, was.is_object()) {
+            (true, true) => was,
+            (true, false) => json!({}),
+            (false, _) => Value::Null,
+        };
+        let draft: TeamConfig = serde_json::from_value(p.payload["config"].clone()).map_err(|e| e.to_string())?;
+        let strings = |v: &Value| v.as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>();
+        let mut lines = strings(&p.payload["linesHead"]);
+        lines.extend(member_lines(&draft));
+        lines.extend(strings(&p.payload["linesTail"]));
+        lines.extend(spec_lines(&draft));
+        p.lines = lines;
+        p.openspec = Some(on);
+        // i18n: model-facing
+        self.notes.lock().unwrap().push(format!(
+            "[Agent Center] The user turned the OpenSpec flow {} on the card {} ({}).",
+            if on { "on" } else { "off" },
+            p.id,
+            p.title
+        ));
         Ok(p.clone())
     }
 
@@ -1205,6 +1252,27 @@ fn folder_name(name: &str) -> String {
 }
 
 /// A team card's member lines: one per member, the leader marked.
+/// The card's line for the OpenSpec flow, when the team is in it.
+fn spec_lines(draft: &TeamConfig) -> Vec<String> {
+    let Some(spec) = draft.openspec.as_ref() else { return Vec::new() };
+    let change = spec.change.trim();
+    let mut line: String = if change.is_empty() {
+        tr!(
+            "OpenSpec 流程:開(組長先看專案、跟你討論、寫成變更提案,你在規格審核卡按通過後才開始實作)",
+            "OpenSpec flow: on (the leader looks at the project, talks it over with you and writes a change proposal; implementation starts only once you approve it on the review card)"
+        )
+    } else {
+        tr!(
+            format!("OpenSpec 流程:開,接著做變更 {change}(你在規格審核卡按通過後才開始實作)"),
+            format!("OpenSpec flow: on, carrying on with the change {change} (implementation starts only once you approve it on the review card)")
+        )
+    };
+    if draft.fast {
+        line.push_str(tr!("。快速模式下規格寫精簡版,但討論與審核仍會多花一些時間", ". In fast mode the change is kept lite, but the talk and the review still take some time"));
+    }
+    vec![line]
+}
+
 fn member_lines(draft: &TeamConfig) -> Vec<String> {
     draft
         .members
@@ -1267,8 +1335,15 @@ fn list_teams(office: &Office, include_archived: bool) -> String {
                     when(n(&p, "startedAt"), office.tz_minutes),
                     if n(&p, "finishedAt") > 0 { format!(", finished {}", when(n(&p, "finishedAt"), office.tz_minutes)) } else { String::new() },
                 ));
-                if waiting + open_q > 0 {
+                let spec_review = s(&p["spec"], "phase") == "review";
+                if waiting + open_q > 0 || spec_review {
                     line.push_str(&format!(", WAITING FOR THE USER: {waiting} permission card(s), {open_q} question(s)"));
+                    if spec_review {
+                        line.push_str(&format!(", the OpenSpec change {} to review on its card", s(&p["spec"], "change")));
+                    }
+                }
+                if p["spec"].is_object() && !spec_review {
+                    line.push_str(&format!(", OpenSpec flow: {}", s(&p["spec"], "phase")));
                 }
                 if !s(&p, "pausedWhy").is_empty() {
                     line.push_str(&format!(", paused because: {}", s(&p, "pausedWhy")));
@@ -1350,6 +1425,15 @@ fn team_detail(office: &Office, given: &str) -> Result<String, String> {
     if !open.is_empty() {
         out.push("Questions waiting for the user:".into());
         out.extend(open);
+    }
+    if p["spec"].is_object() {
+        let spec = &p["spec"];
+        out.push(match s(spec, "phase") {
+            "review" => format!("OpenSpec change {} WAITING FOR THE USER's review on its card: {}", s(spec, "change"), cut(s(spec, "summary"), 200)),
+            "" => "OpenSpec flow: no change yet.".to_string(),
+            phase if s(spec, "change").is_empty() => format!("OpenSpec flow: {phase}, no change handed in yet."),
+            phase => format!("OpenSpec flow: change {} is {phase}.", s(spec, "change")),
+        });
     }
     let handed: Vec<String> = p["deliverables"].as_array().into_iter().flatten().map(|d| format!("- {} {}: {} ({})", s(d, "task"), s(d, "locator"), cut(s(d, "summary"), 100), match d["accepted"].as_bool() { Some(true) => "accepted", Some(false) => "sent back", None => "not reviewed" })).collect();
     if !handed.is_empty() {
@@ -1795,6 +1879,7 @@ How you work:\n\
 - For a new team: pick agents from list_agents; each runs the model the user set on it (shown in list_agents), so leave `model` empty unless the agent has none (then agent_models lists what it offers) or the user asked for another. Independent review means a different agent, never the same agent on another model. Give the leader the agent with the strongest model; give each member a short role (2-6 characters) and a one-line duty; keep the team small (2-5 members) unless asked.{}\n\
 - Size the request before you shape the team (quick: the leader alone; medium: one does, one on another model reviews once; large: split by scope), and say which size in `kickoff`; your skills below, when you have them, say how in detail. Every coding CLI agent (Claude Code, Codex, Gemini CLI, Copilot, Antigravity) browses the web and runs code through its own tools, and its `can:` line says so; only an n8n workflow cannot. Never tell the user the agents cannot go online unless no agent's `can:` line says it browses. Pick an agent for images only when its `can:` line says it makes them.\n\
 - When the user names a time (\"within 10 minutes\", \"I need it in an hour\"), pass `time_limit_minutes`: the leader then reserves the end of it for assembling and delivers on time, complete or not; plan the kickoff around early, assemblable batches.\n\
+- The OpenSpec flow (`openspec: true` on propose_team): the leader first looks at the project, talks the change over with the user and writes it up as an OpenSpec change (proposal, specs with scenarios, tasks); implementation tasks start only after the user approves it on a review card. Turn it on when the user asks for OpenSpec, for specs, or for a proposal to approve before work starts; it suits a sizeable change to an existing codebase, not a quick question. The card has a switch, so the user can turn it on or off before confirming. When it is on, write in `kickoff` only who does what and who reviews what, not a first batch of tasks: the leader plans the tasks from the approved change. When the user names an existing change to carry on with, pass it in `openspec_change`.{}\n\
 - In `kickoff` tell the leader: the size, the split, who reviews what (so reviews are not all on the leader), the first batch each member delivers, and the rules of the work (sources, formats, what counts as done). Give a member its own rules in `brief`. Members read messages only when a turn starts, so rules belong in the tasks and briefs, not in later messages.{}\n\
 {}- A team has a knowledge base: documents (design notes, specs, pictures, any file) its members work from. When the user attaches files or mentions design documents, specs or reference material for a team, put them in `knowledge` (propose_team for a new team, propose_knowledge for one that exists): attached files by their id (u…), or full paths the user wrote — never a path you guessed. Each is for the leader only unless the user says the whole team should see it (then visibility \"shared\"). You only see the files' names, never what is in them.\n\
 - Answer in the language named on the last line of this prompt, short and concrete: a few lines or a short list. Point out anything waiting for the user (permission cards, questions) first.\n\
@@ -1808,6 +1893,7 @@ Now: {} (the user's local time).\n\
         },
         root_line(&office.root),
         " The user builds teams from their own team agents only: list_agents lists them with what each is good for, whether it is a Cloud Agent or a Local Agent, and what it costs; choose members by those descriptions, and never name an agent that is not listed. When the user wants it cheap, on a budget, or asks which costs less (or wants the best whatever it costs), compare the agents by the prices and recent spend list_agents gives, not only by what their descriptions say, and tell the user the prices you compared; a description is the user's own note, the price is the fact, so when they disagree say so. An agent on a subscription plan costs nothing extra per token. When you talk to the user, call a team agent by its name, never by its id (ta-…).",
+        if office.openspec { " The user turned it on for every new team in your settings: it is on whatever you pass." } else { "" },
         library_line(office),
         speed_line(office.speed, office.fast),
         when(crate::team::store::now_ms(), office.tz_minutes),
@@ -1949,6 +2035,8 @@ fn describe() -> Vec<Tool> {
                 "model_change_asked": { "type": "boolean", "description": "True only when the user themselves asked for a member to run a model other than the one set on its agent." },
                 "fast": { "type": "boolean", "description": "Fast mode: the leader takes the smallest team that does the job, one review per task, no second round. Set it when the user asks for speed or a quick answer." },
                 "time_limit_minutes": { "type": "integer", "description": "A time limit in minutes when the user names one (\"in 10 minutes\", \"by the hour\"): the leader keeps the last part of it to assemble what is in and deliver, done or not. 0 or absent for none." },
+                "openspec": { "type": "boolean", "description": "The OpenSpec flow: the leader explores the project, talks the change over with the user and writes an OpenSpec change; nothing is implemented until the user approves it. Set it when the user asks for OpenSpec, specs, or a proposal to approve first." },
+                "openspec_change": { "type": "string", "description": "An existing OpenSpec change (its folder name under openspec/changes/) the team carries on with, when the user names one. Turns the OpenSpec flow on." },
                 "start": { "type": "boolean", "description": "Start it as soon as it is created (default true)." },
                 "knowledge": knowledge.clone(),
                 "knowledge_from": { "type": "string", "description": "Another team (id or name) whose knowledge base the new team starts with, each document as it was shared." },
@@ -2166,6 +2254,46 @@ mod tests {
         assert_eq!(p.payload["config"]["fast"], false);
         let p = sec.propose_team(&ask(0), &office).unwrap();
         assert!(!p.lines.iter().any(|l| l.contains("時限") || l.contains("Time limit")));
+    }
+
+    #[test]
+    fn the_openspec_flow_is_a_switch_on_the_card_and_in_the_settings() {
+        let mut planner = crate::acp::AgentProfile::copilot();
+        planner.id = "ta-plan".into();
+        planner.protocol = crate::acp::Protocol::Claude;
+        let driver = Arc::new(crate::acp::Agents::default());
+        let teams = Arc::new(crate::team::orchestrator::Teams::new(Arc::new(crate::team::orchestrator::AcpDrive(driver.clone())), Arc::new(|_| {}), Some(std::env::temp_dir().join(format!("coucou-secretary-openspec-{}", std::process::id()))), settings::team_mcp_exe_path()));
+        let mut office = Office::new(teams, &[], driver, 480, String::new());
+        office.choices = vec![planner];
+        let sec = Secretary::default();
+        let ask = |more: Value| {
+            let mut a = json!({ "name": "t", "goal": "g", "work_dir": "D:\\x", "kickoff": "go", "members": [{ "name": "規劃", "role": "規劃", "agent": "ta-plan" }] });
+            a.as_object_mut().unwrap().extend(more.as_object().unwrap().clone());
+            a
+        };
+        let on = |p: &Proposal| p.payload["config"]["openspec"].is_object();
+        let says = |p: &Proposal| p.lines.iter().any(|l| l.contains("OpenSpec"));
+        // Off unless asked for.
+        let p = sec.propose_team(&ask(json!({})), &office).unwrap();
+        assert!(!on(&p) && !says(&p));
+        let p = sec.propose_team(&ask(json!({ "openspec": true })), &office).unwrap();
+        assert!(on(&p) && says(&p), "{:?}", p.lines);
+        let p = sec.propose_team(&ask(json!({ "openspec_change": "add-dark-mode" })), &office).unwrap();
+        assert_eq!(p.payload["config"]["openspec"]["change"], "add-dark-mode");
+        assert!(p.lines.iter().any(|l| l.contains("add-dark-mode")));
+        // The card's switch, both ways; the team file follows.
+        let off = sec.set_openspec(&p.id, false).unwrap();
+        assert!(!on(&off) && !says(&off) && off.lines.last().unwrap().contains("go"), "{:?}", off.lines);
+        let config: TeamConfig = serde_json::from_value(off.payload["config"].clone()).unwrap();
+        assert!(config.openspec.is_none());
+        let back = sec.set_openspec(&p.id, true).unwrap();
+        assert!(on(&back) && says(&back));
+        assert!(sec.notes.lock().unwrap().last().unwrap().contains("OpenSpec flow on"));
+        // The ⚙ default turns it on for every team, and the prompt says so.
+        office.openspec = true;
+        let p = sec.propose_team(&ask(json!({ "openspec": false })), &office).unwrap();
+        assert!(on(&p));
+        assert!(system_prompt(&office).contains("turned it on for every new team"));
     }
 
     #[test]

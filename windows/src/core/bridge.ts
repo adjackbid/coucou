@@ -234,8 +234,8 @@ export const Bridge = {
   /** The chat providers Agent Center can think with: (id, name, model). */
   secretaryProviders: () => call<[string, string, string][]>("secretary_providers"),
   /** The person asks Agent Center; its steps arrive as `secretary-step` while it works. */
-  secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string, uploads: string[] = [], instructions = "", skills: string[] = [], hiddenSkills: string[] = [], fast = false, root = "", speed = 3) =>
-    callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name, uploads, instructions, skills, hiddenSkills, fast, root, speed }),
+  secretaryAsk: (text: string, provider: string | null, tzMinutes: number, name: string, uploads: string[] = [], instructions = "", skills: string[] = [], hiddenSkills: string[] = [], fast = false, root = "", speed = 3, openspec = false) =>
+    callOrThrow<SecretaryReply>("secretary_ask", { text, provider, tzMinutes, name, uploads, instructions, skills, hiddenSkills, fast, root, speed, openspec }),
   /** A folder in Explorer: a full path that exists (Agent Center's root, a team's work folder). */
   openFolder: (path: string) => callOrThrow<void>("open_folder", { path }),
   /** Agent Center's skill library (%APPDATA%\\Coucou\\skills), made with its first skill when empty. */
@@ -262,6 +262,8 @@ export const Bridge = {
   secretaryDecline: (id: string) => call<SecretaryProposal | null>("secretary_decline", { id }),
   /** The person changed a proposed team's members on its card: `{agent, name, role, leader}` in their order. */
   secretaryReviseTeam: (id: string, members: { agent: string; name: string; role: string; leader: boolean }[], tzMinutes: number) => callOrThrow<SecretaryProposal>("secretary_revise_team", { id, members, tzMinutes }),
+  /** The OpenSpec flow switch on a proposed team's card. */
+  secretarySetOpenspec: (id: string, on: boolean) => callOrThrow<SecretaryProposal>("secretary_set_openspec", { id, on }),
   secretaryReset: () => call<void>("secretary_reset"),
   /** 對話紀錄: the conversation on screen saved with the window's entries; null before anything was said. */
   secretaryChatSave: (title: string, entries: string) => callOrThrow<SecretaryChat | null>("secretary_chat_save", { title, entries }),
@@ -300,6 +302,10 @@ export const Bridge = {
   /** The same for a file dragged onto the window, by its path. */
   teamAttachPath: (team: string, path: string) => callOrThrow<string>("team_attach_path", { team, path }),
   teamAnswer: (team: string, question: string, text: string) => callOrThrow<void>("team_answer", { team, question, text }),
+  /** The person's review of the OpenSpec change a leader handed in: approved, or sent back with what to change. */
+  teamSpecReview: (team: string, approve: boolean, note: string) => callOrThrow<void>("team_spec_review", { team, approve, note }),
+  /** A finished team's leader is asked to archive its OpenSpec change (the team runs again for it). */
+  teamSpecArchive: (team: string) => callOrThrow<string>("team_spec_archive", { team }),
   /**
    * Answers the oldest request a member's agent is holding with one of its own
    * options — or, with `all`, every request it holds, each the same way.

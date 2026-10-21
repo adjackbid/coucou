@@ -685,8 +685,11 @@ impl Team {
                 } else if state.status != TeamStatus::Finished && state.unheard(&member).is_empty() && state.open_question(&member).is_none() {
                     // Work it was given, has not handed in, and is not waiting on anyone for.
                     let open: Vec<_> = state.open_tasks(&member).into_iter().filter(|t| t.blocked.is_none()).collect();
-                    let no_plan = is_leader && state.tasks.is_empty();
-                    if open.is_empty() && !no_plan {
+                    // In the OpenSpec flow a leader with no tasks may be writing the
+                    // change, or waiting for the person's review (brief::spec_nudge).
+                    let spec = if is_leader { brief::spec_nudge(state) } else { None };
+                    let no_plan = is_leader && state.tasks.is_empty() && state.spec_phase().is_none();
+                    if open.is_empty() && !no_plan && spec.is_none() {
                         vec![]
                     } else if state.turns.get(&member).map(|t| t.silent).unwrap_or(0) >= MAX_SILENT_TURNS {
                         vec![Event::Lost {
@@ -694,7 +697,11 @@ impl Team {
                             why: "It ended two turns in a row without a word about its open work.".into(), // i18n-ok: said() in team/main.ts translates it
                         }]
                     } else {
-                        let text = if no_plan { brief::nudge_leader_no_tasks() } else { brief::nudge(&open) };
+                        let text = match spec {
+                            Some(text) => text,
+                            None if no_plan => brief::nudge_leader_no_tasks(),
+                            None => brief::nudge(&open),
+                        };
                         vec![Event::Message { id: state.next_message_id(), from: SYSTEM.into(), to: member.clone(), text, task: None }]
                     }
                 } else {
@@ -1049,7 +1056,9 @@ impl Teams {
                 let open = state.open_tasks(&member.id);
                 let to_review: Vec<&super::state::Task> =
                     if is_leader { state.tasks.iter().filter(|t| t.status == TaskStatus::Delivered).collect() } else { Vec::new() };
-                let text = if is_leader && state.tasks.is_empty() {
+                // A leader that has not handed a change in yet starts the flow again.
+                let fresh = state.spec_phase().is_none() || (state.spec.rounds == 0 && state.spec_phase() == Some(super::state::SpecPhase::Exploring));
+                let text = if is_leader && state.tasks.is_empty() && fresh {
                     brief::kickoff(&config)
                 } else if is_leader || !open.is_empty() {
                     brief::revived(&open, &to_review)
@@ -1370,6 +1379,45 @@ impl Teams {
             Event::Message { id, from: YOU.into(), to: by, text: format!("You asked: {asked}\nThe user answers: {}", text.trim()), task },
         ]);
         Ok(())
+    }
+
+    /// The person approves the OpenSpec change the leader handed in, or sends it
+    /// back with what to change (`note`). Either way the leader hears it next.
+    pub fn review_spec(&self, team: &str, approve: bool, note: &str) -> Result<(), String> {
+        let team = self.team(team)?;
+        let note = note.trim();
+        let found = team.with_state(|s| (s.spec_phase(), s.spec.change.clone(), s.leader().to_string(), s.next_message_id()));
+        let (phase, change, leader, id) = found;
+        if phase != Some(super::state::SpecPhase::Review) {
+            return Err(tr!("這份規格現在不在等你審核。", "That change is not waiting for your review."));
+        }
+        if !approve && note.is_empty() {
+            return Err(tr!("退回時請寫下要改什麼。", "Say what to change when you send it back."));
+        }
+        let text = if approve { brief::spec_approved(&change, note) } else { brief::spec_returned(&change, note) };
+        team.record(vec![
+            Event::SpecReviewed { approved: approve, note: note.to_string() },
+            Event::Message { id, from: SYSTEM.into(), to: leader, text, task: None },
+        ]);
+        Ok(())
+    }
+
+    /// The person asks the leader of a finished team in the OpenSpec flow to
+    /// archive its change: the team runs again for it (as `reopen` does).
+    pub fn archive_spec(&self, id: &str, profiles: &[AgentProfile]) -> Result<String, String> {
+        let old = self.team(id)?;
+        let (phase, change) = old.with_state(|s| (s.spec_phase(), s.spec.change.clone()));
+        if phase != Some(super::state::SpecPhase::Approved) || change.is_empty() {
+            return Err(tr!("這個團隊沒有已核准、可歸檔的規格。", "This team has no approved change to archive."));
+        }
+        // The person's own request, as if they had written it.
+        let text: String = tr!(
+            format!("請把 OpenSpec 變更 {change} 歸檔:openspec archive {change} --yes,確認 openspec/specs/ 更新得對,再回報給我。"),
+            format!("Please archive the OpenSpec change {change}: openspec archive {change} --yes, check that openspec/specs/ was updated as it should be, and report back.")
+        );
+        let message = self.reopen(id, "", &text, None, profiles, None)?;
+        self.team(id)?.record(vec![Event::SpecArchiving]);
+        Ok(message)
     }
 
     /// The person answers the oldest request a member's agent is holding —
@@ -1993,6 +2041,63 @@ mod tests {
             let turns = bench.turns_of("ai1");
             assert_eq!(turns.len(), 2);
             assert!(turns[1].contains("No task exists yet"));
+        });
+    }
+
+    /// The OpenSpec flow from the leader's first turn to the report: questions
+    /// first, the change handed in, approved on its card, then built.
+    #[test]
+    fn in_the_openspec_flow_the_leader_asks_proposes_and_builds_only_once_approved() {
+        run(async {
+            let dir = std::env::temp_dir().join(format!("coucou-openspec-flow-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            let change = dir.join("openspec").join("changes").join("add-cart");
+            std::fs::create_dir_all(&change).unwrap();
+            let folder = change.clone();
+            let script: Script = Arc::new(move |mate, text| {
+                if text.contains("The team has started with the OpenSpec flow on") {
+                    // Building straight away is refused (tools.rs tests say how).
+                    mate.tool("task_create", json!({ "title": "購物車", "owner": "ai3" }));
+                    mate.tool("ask_human", json!({ "questions": [{ "question": "要優惠券嗎?", "options": ["要", "不要"] }, "要手機版嗎?"] }));
+                } else if text.contains("The user answers:") {
+                    std::fs::write(folder.join("proposal.md"), "## Why").unwrap();
+                    std::fs::write(folder.join("tasks.md"), "- [ ] 1.1 購物車").unwrap();
+                    mate.tool("spec_submit", json!({ "change": "add-cart", "summary": "購物車", "validation": "valid" }));
+                } else if text.contains("The user approved the change `add-cart`") {
+                    mate.tool("task_create", json!({ "title": "購物車", "owner": "ai3" }));
+                }
+                if let Some(at) = text.find(" is yours and ready to start") {
+                    let task = text[at - 7..at].to_string();
+                    mate.tool("deliver", json!({ "task": task, "locator": "http://localhost:5173/", "summary": "完成" }));
+                }
+                if let Some(task) = task_in(text, "handed in ").filter(|_| text.contains("call `review`")) {
+                    mate.tool("review", json!({ "task": task, "accept": true }));
+                }
+                if text.contains("Write the final report") {
+                    mate.tool("message_send", json!({ "to": "you", "text": "完成" }));
+                    mate.tool("team_finish", json!({}));
+                }
+                Ok("end_turn".into())
+            });
+            let bench = bench(script);
+            let mut config = shop(&dir.to_string_lossy());
+            config.openspec = Some(super::super::OpenSpec::default());
+            bench.start(config);
+            let asked = bench.until("the leader asks", |s| s.questions.len() == 1).await;
+            assert_eq!(asked.questions[0].items.len(), 2);
+            assert!(bench.teams.review_spec("shop", true, "").is_err(), "nothing to review yet");
+            bench.teams.answer("shop", "Q-1", "1. 要\n2. 先不用").unwrap();
+            let review = bench.until("the change is handed in", |s| s.spec.as_ref().is_some_and(|x| x.phase == super::super::state::SpecPhase::Review)).await;
+            assert_eq!(review.spec.unwrap().files, ["openspec/changes/add-cart/proposal.md", "openspec/changes/add-cart/tasks.md"]);
+            // No reminder while it waits for the person's review.
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            assert_eq!(bench.turns_of("ai1").len(), 2);
+            assert!(bench.teams.review_spec("shop", false, " ").is_err(), "sent back needs a reason");
+            bench.teams.review_spec("shop", true, "先做桌機版").unwrap();
+            let done = bench.until("the team finishes", |s| s.status == TeamStatus::Finished).await;
+            assert_eq!((done.done, done.total), (1, 1));
+            assert!(bench.turns_of("ai1").iter().any(|t| t.contains("They added: 先做桌機版")));
+            let _ = std::fs::remove_dir_all(&dir);
         });
     }
 
